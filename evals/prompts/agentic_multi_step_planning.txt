@@ -1,0 +1,3 @@
+# One prompt per line for now
+Plan a multi-step debugging workflow for a Python CLI that intermittently loses authentication state after restart. Return concise numbered steps.
+Design an investigation plan for a local model server that fails after large context requests. Include instrumentation and rollback steps.

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "model-forge"
+version = "0.1.0"
+description = "Reusable post-training pipelines for fine-tuning, abliteration, and evaluation of open models."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "pyyaml>=6.0",
+  "rich>=13.7",
+]
+
+[project.scripts]
+model-forge-eval = "model_forge.evals.run_eval:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

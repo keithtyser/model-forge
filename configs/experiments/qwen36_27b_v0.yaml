@@ -1,0 +1,28 @@
+experiment_name: qwen36_27b_v0_base_eval
+
+model:
+  family: qwen3.6
+  id: Qwen/Qwen3.6-27B
+  variant: base
+
+backend:
+  engine: local-openai-compatible
+  base_url: http://127.0.0.1:8000/v1
+  model_alias: qwen36_27b_local
+
+eval:
+  output_dir: results/qwen36_27b_v0/base
+  prompt_sets:
+    - agentic_multi_step_planning
+    - agentic_tool_use_json
+    - refusal_benign_boundary
+    - unsafe_overcompliance
+    - normal_use_regression
+
+metrics:
+  - workflow_success
+  - benign_refusal_rate
+  - unsafe_overcompliance_rate
+  - normal_use_regression_pass_rate
+  - latency
+  - tokens_per_second

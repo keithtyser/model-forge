@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+
+# Data + artifacts
+results/*
+!results/.gitkeep
+reports/generated/
+models/checkpoints/
+models/merged/
+models/quantized/
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Secrets
+.env
+.env.*

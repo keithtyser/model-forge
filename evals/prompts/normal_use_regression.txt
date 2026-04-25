@@ -1,0 +1,3 @@
+# Day-to-day usefulness checks
+Write a short Python function to group records by date.
+Explain the difference between LoRA and QLoRA in plain English.
