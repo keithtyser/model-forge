@@ -66,6 +66,8 @@ Serve the base model:
 
 The Gemma wrapper defaults to `GPU_MEMORY_UTILIZATION=0.85` because DGX Spark usually exposes less free CUDA memory than the full unified-memory total at server startup. If startup still fails during memory reservation, retry with `GPU_MEMORY_UTILIZATION=0.80` or reduce `MAX_MODEL_LEN` to `16384`.
 
+When serving a local model path, the wrapper automatically mounts `MODEL_FORGE_MODELS_DIR` into the vLLM container. The default is `$HOME/models`.
+
 Serve Jackrong's fine-tune:
 
 ```bash
