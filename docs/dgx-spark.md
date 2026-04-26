@@ -26,7 +26,83 @@ Start with:
 - serving stack: `spark-vllm-docker`
 - eval config: `configs/experiments/qwen35_9b_v0.yaml`
 
-That is current enough to matter and small enough to keep the first run from turning into infrastructure bullshit.
+That is current enough to matter and small enough to keep the first run focused on serving and evaluation rather than infrastructure debugging.
+
+## Gemma 4 26B-A4B target
+
+Gemma 4 26B-A4B is a good second target for DGX Spark because it is a MoE model with roughly 26B total parameters and roughly 4B active parameters per token. Use it to compare:
+
+- base: `google/gemma-4-26B-A4B-it`
+- fine-tune: `Jackrong/Gemopus-4-26B-A4B-it`
+- ablation: `huihui-ai/Huihui-gemma-4-26B-A4B-it-abliterated`
+
+For fair benchmark comparisons, start with the HF safetensors/BF16 models on the same vLLM stack. Quantized GGUF or NVFP4 runs are useful for throughput testing, but they add a quantization variable and should be compared separately.
+
+Serve the base model:
+
+```bash
+./scripts/dgx_spark_serve_gemma4_26b_a4b.sh
+```
+
+Serve Jackrong's fine-tune:
+
+```bash
+MODEL_FORGE_MODEL=Jackrong/Gemopus-4-26B-A4B-it \
+MODEL_FORGE_SERVED_MODEL_NAME=Jackrong/Gemopus-4-26B-A4B-it \
+./scripts/dgx_spark_serve_gemma4_26b_a4b.sh
+```
+
+Serve Huihui's ablated model:
+
+```bash
+MODEL_FORGE_MODEL=huihui-ai/Huihui-gemma-4-26B-A4B-it-abliterated \
+MODEL_FORGE_SERVED_MODEL_NAME=huihui-ai/Huihui-gemma-4-26B-A4B-it-abliterated \
+./scripts/dgx_spark_serve_gemma4_26b_a4b.sh
+```
+
+Then run the matching eval wrapper in another terminal:
+
+```bash
+./scripts/dgx_spark_smoke_eval_gemma4_26b_a4b.sh
+./scripts/dgx_spark_full_eval_gemma4_26b_a4b.sh
+./scripts/dgx_spark_artifact_eval_gemma4_26b_a4b.sh
+```
+
+For non-base variants, set the same model alias and variant name used by the server:
+
+```bash
+MODEL_FORGE_VARIANT=ft \
+MODEL_FORGE_MODEL=Jackrong/Gemopus-4-26B-A4B-it \
+./scripts/dgx_spark_full_eval_gemma4_26b_a4b.sh
+
+MODEL_FORGE_VARIANT=abli \
+MODEL_FORGE_MODEL=huihui-ai/Huihui-gemma-4-26B-A4B-it-abliterated \
+./scripts/dgx_spark_full_eval_gemma4_26b_a4b.sh
+```
+
+Use a distinct run name when running variants back-to-back through the lower-level runner:
+
+```bash
+MODEL_FORGE_VARIANT=ft \
+MODEL_FORGE_MODEL=Jackrong/Gemopus-4-26B-A4B-it \
+./scripts/run_dgx_spark_eval.sh configs/experiments/gemma4_26b_a4b_v0.yaml gemma4_26b_a4b_ft
+```
+
+Compare completed Gemma 4 runs:
+
+```bash
+model-forge-compare \
+  --base results/gemma4_26b_a4b_v0/base/gemma4_26b_a4b_base_dgx_spark \
+  --ft results/gemma4_26b_a4b_v0/base/gemma4_26b_a4b_ft_dgx_spark \
+  --abli results/gemma4_26b_a4b_v0/base/gemma4_26b_a4b_abli_dgx_spark \
+  --output-dir reports/generated/gemma4_26b_a4b_comparison
+```
+
+Expected result shape:
+
+- Jackrong should show stronger workflow, structure, reasoning-style, or artifact quality without critical regressions.
+- Huihui should show lower benign-refusal rate while keeping normal-use pass rate and workflow success close to base.
+- Any unsafe-overcompliance increase should be treated as a regression, even if false refusals improve.
 
 ## 1. Clone both repos
 
@@ -231,4 +307,4 @@ Do the first run in two stages:
 1. smoke run with 4 cases
 2. full base eval
 
-That catches dumb serving failures immediately and keeps the first iteration honest.
+That catches serving failures immediately and keeps the first iteration honest.
