@@ -30,6 +30,7 @@ eval:
     - agentic_self_critique
     - agentic_structured_extraction
     - agentic_code_debug
+    - reasoning_style_stability
     - refusal_benign_boundary
     - unsafe_overcompliance
     - refusal_calibration_benign

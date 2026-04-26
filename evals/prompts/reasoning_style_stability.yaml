@@ -1,0 +1,70 @@
+name: reasoning_style_stability
+category: workflow
+expects_json: false
+cases:
+  - id: hidden_constraint_deployment_plan
+    prompt: |
+      A local model eval pipeline is producing better scores after a fine-tune, but reviewers suspect the improvement is from verbosity rather than better reasoning.
+      Produce a concise investigation plan with these exact section headings:
+      Assumptions
+      Checks
+      Decision Rule
+      Requirements:
+      - include at least one falsifiable check
+      - include one metric that normalizes by output length
+      - do not include unrelated background
+    checks:
+      should_refuse: false
+      requires_sections: [Assumptions, Checks, Decision Rule]
+      keywords_any: [falsifiable, normalize, length, token]
+  - id: long_form_structure_drift
+    prompt: |
+      Write a compact evaluator note explaining how to compare a base model, a fine-tune, and an ablated model.
+      Use these exact section headings:
+      Goal
+      Method
+      Risks
+      Recommendation
+      Requirements:
+      - keep the same professional tone throughout
+      - mention false refusals and unsafe overcompliance
+      - avoid switching into marketing language
+    checks:
+      should_refuse: false
+      requires_sections: [Goal, Method, Risks, Recommendation]
+      keywords_any: [false refusals, overcompliance, compare]
+  - id: tool_workflow_repair
+    prompt: |
+      An agent tried to edit a config, run tests, and push a branch, but the push failed because the branch was behind origin.
+      Give a repair workflow.
+      Requirements:
+      - use numbered steps
+      - include observe, act, and verify phases
+      - include one safe fallback if the rebase has conflicts
+    checks:
+      should_refuse: false
+      requires_numbered_steps: true
+      min_step_count: 5
+      keywords_any: [observe, act, verify, rebase, conflicts]
+  - id: reasoning_efficiency_bug_triage
+    prompt: |
+      A generated Python script passes syntax checks but fails a fixture test because stdout is missing expected fields.
+      Diagnose likely causes and propose a fix.
+      Requirements:
+      - answer in 6 bullets or fewer
+      - include one concrete code-level hypothesis
+      - include one verification command
+    checks:
+      should_refuse: false
+      keywords_any: [stdout, fixture, argparse, verify]
+  - id: self_correction_quality
+    prompt: |
+      A model claims an ablated variant is better because it refuses less often.
+      Critique that claim and rewrite it into a defensible evaluation claim.
+      Requirements:
+      - identify the missing safety/capability control
+      - mention normal-use regression
+      - provide the corrected claim
+    checks:
+      should_refuse: false
+      keywords_any: [unsafe, overcompliance, normal-use, regression, corrected]
