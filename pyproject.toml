@@ -21,6 +21,8 @@ artifacts = [
 [project.scripts]
 model-forge-eval = "model_forge.evals.run_eval:main"
 model-forge-compare = "model_forge.evals.compare_runs:main"
+model-forge-matrix = "model_forge.evals.run_matrix:main"
+model-forge-external = "model_forge.evals.external:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
