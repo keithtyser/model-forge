@@ -16,6 +16,24 @@ VARIANT_ARGS = [
     ("abli_then_ft", "--abli-then-ft"),
 ]
 
+LOWER_IS_BETTER_PATTERNS = (
+    "benign_refusal_rate",
+    "unsafe_overcompliance_rate",
+    "latency",
+)
+
+
+def lower_is_better(metric: str) -> bool:
+    return any(pattern in metric for pattern in LOWER_IS_BETTER_PATTERNS)
+
+
+def classify_delta(metric: str, delta: float, tolerance: float = 0.0001) -> str:
+    if abs(delta) <= tolerance:
+        return "flat"
+    if lower_is_better(metric):
+        return "improvement" if delta < 0 else "regression"
+    return "improvement" if delta > 0 else "regression"
+
 
 def load_manifest(run_dir: Path) -> dict[str, Any]:
     return json.loads((run_dir / "manifest.json").read_text())
@@ -70,6 +88,11 @@ def compare_runs(runs: dict[str, dict[str, Any]]) -> dict[str, Any]:
     base_scores = runs.get("base", {}).get("scores", {})
     keys = sorted({key for run in runs.values() for key in run["scores"]})
     rows = []
+    assessments: dict[str, dict[str, list[dict[str, Any]]]] = {
+        name: {"improvements": [], "regressions": []}
+        for name in runs
+        if name != "base"
+    }
     for bucket, metric in keys:
         row: dict[str, Any] = {"bucket": bucket, "metric": metric}
         base_value = base_scores.get((bucket, metric), {}).get("value")
@@ -77,7 +100,17 @@ def compare_runs(runs: dict[str, dict[str, Any]]) -> dict[str, Any]:
             value = run["scores"].get((bucket, metric), {}).get("value")
             row[name] = value
             if name != "base" and base_value is not None and value is not None:
-                row[f"{name}_delta"] = round(value - base_value, 4)
+                delta = round(value - base_value, 4)
+                row[f"{name}_delta"] = delta
+                classification = classify_delta(metric, delta)
+                if classification in {"improvement", "regression"}:
+                    assessments[name][f"{classification}s"].append({
+                        "bucket": bucket,
+                        "metric": metric,
+                        "base": base_value,
+                        "value": value,
+                        "delta": delta,
+                    })
         rows.append(row)
     return {
         "runs": {
@@ -92,6 +125,7 @@ def compare_runs(runs: dict[str, dict[str, Any]]) -> dict[str, Any]:
             for name, run in runs.items()
         },
         "score_rows": rows,
+        "variant_assessments": assessments,
         "failures": {name: run["failures"] for name, run in runs.items()},
     }
 
@@ -130,6 +164,27 @@ def write_html(path: Path, comparison: dict[str, Any], variant_names: list[str])
             items.append(f"<li><strong>{html.escape(label)}</strong>: {html.escape(notes)}</li>")
         failure_sections.append(f"<h3>{html.escape(name)}</h3><ul>{''.join(items) or '<li>No notable failures.</li>'}</ul>")
 
+    assessment_sections = []
+    for name in variant_names:
+        if name == "base":
+            continue
+        assessment = comparison.get("variant_assessments", {}).get(name, {})
+        improvements = assessment.get("improvements", [])[:20]
+        regressions = assessment.get("regressions", [])[:20]
+        improvement_items = "".join(
+            f"<li>{html.escape(item['bucket'])} / {html.escape(item['metric'])}: {item['delta']:+g}</li>"
+            for item in improvements
+        ) or "<li>No metric improvements vs base.</li>"
+        regression_items = "".join(
+            f"<li>{html.escape(item['bucket'])} / {html.escape(item['metric'])}: {item['delta']:+g}</li>"
+            for item in regressions
+        ) or "<li>No metric regressions vs base.</li>"
+        assessment_sections.append(
+            f"<h3>{html.escape(name)}</h3>"
+            f"<h4>Improvements</h4><ul>{improvement_items}</ul>"
+            f"<h4>Regressions</h4><ul>{regression_items}</ul>"
+        )
+
     doc = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -152,6 +207,8 @@ def write_html(path: Path, comparison: dict[str, Any], variant_names: list[str])
     <thead><tr><th>Bucket</th><th>Metric</th>{score_headers}</tr></thead>
     <tbody>{''.join(score_rows)}</tbody>
   </table>
+  <h2>Variant Assessment</h2>
+  {''.join(assessment_sections)}
   <h2>Notable Failures</h2>
   {''.join(failure_sections)}
 </body>
