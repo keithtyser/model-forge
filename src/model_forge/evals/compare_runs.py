@@ -4,6 +4,7 @@ import argparse
 import csv
 import html
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -74,6 +75,41 @@ def load_failures(run_dir: Path) -> list[dict[str, Any]]:
     return failures
 
 
+def response_key(item: dict[str, Any]) -> str:
+    key = f"{item.get('bucket')}/{item.get('case_id')}"
+    trial = item.get("trial_index", 1)
+    if trial and trial > 1:
+        key = f"{key}#trial{trial}"
+    return key
+
+
+def load_artifacts(run_dir: Path) -> dict[str, dict[str, Any]]:
+    path = run_dir / "responses.jsonl"
+    if not path.exists():
+        return {}
+    artifacts = {}
+    for line in path.read_text().splitlines():
+        item = json.loads(line)
+        artifact_path = item.get("artifact_path")
+        if not artifact_path:
+            continue
+        artifact_file = run_dir / artifact_path
+        validation = item.get("artifact_validation") or {}
+        screenshot_name = validation.get("browser", {}).get("screenshot_path")
+        screenshot_file = artifact_file.parent / screenshot_name if screenshot_name else None
+        artifacts[response_key(item)] = {
+            "bucket": item.get("bucket"),
+            "case_id": item.get("case_id"),
+            "trial_index": item.get("trial_index", 1),
+            "artifact_path": str(artifact_file),
+            "artifact_exists": artifact_file.exists(),
+            "validation_ok": validation.get("ok"),
+            "validation_errors": validation.get("errors", []),
+            "screenshot_path": str(screenshot_file) if screenshot_file and screenshot_file.exists() else None,
+        }
+    return artifacts
+
+
 def load_run(name: str, run_dir: Path) -> dict[str, Any]:
     return {
         "name": name,
@@ -81,6 +117,7 @@ def load_run(name: str, run_dir: Path) -> dict[str, Any]:
         "manifest": load_manifest(run_dir),
         "scores": load_scores(run_dir),
         "failures": load_failures(run_dir),
+        "artifacts": load_artifacts(run_dir),
     }
 
 
@@ -127,6 +164,7 @@ def compare_runs(runs: dict[str, dict[str, Any]]) -> dict[str, Any]:
         "score_rows": rows,
         "variant_assessments": assessments,
         "failures": {name: run["failures"] for name, run in runs.items()},
+        "artifacts": {name: run["artifacts"] for name, run in runs.items()},
     }
 
 
@@ -185,6 +223,34 @@ def write_html(path: Path, comparison: dict[str, Any], variant_names: list[str])
             f"<h4>Regressions</h4><ul>{regression_items}</ul>"
         )
 
+    artifact_keys = sorted({key for artifacts in comparison.get("artifacts", {}).values() for key in artifacts})
+    artifact_rows = []
+    for key in artifact_keys:
+        cells = [f"<td>{html.escape(key)}</td>"]
+        for name in variant_names:
+            item = comparison.get("artifacts", {}).get(name, {}).get(key)
+            if not item:
+                cells.append("<td></td>")
+                continue
+            links = []
+            artifact_path = item.get("artifact_path")
+            if artifact_path:
+                artifact_href = os.path.relpath(artifact_path, start=path.parent)
+                links.append(f'<a href="{html.escape(artifact_href)}">artifact</a>')
+            screenshot_path = item.get("screenshot_path")
+            if screenshot_path:
+                screenshot_href = os.path.relpath(screenshot_path, start=path.parent)
+                links.append(f'<a href="{html.escape(screenshot_href)}">screenshot</a>')
+                links.append(f'<br><img src="{html.escape(screenshot_href)}" style="max-width:240px; border:1px solid #ddd; margin-top:6px;">')
+            validation = "unknown"
+            if item.get("validation_ok") is True:
+                validation = "pass"
+            elif item.get("validation_ok") is False:
+                validation = "fail"
+            errors = ", ".join(item.get("validation_errors") or [])
+            cells.append(f"<td>{validation}<br>{'<br>'.join(links)}<br><small>{html.escape(errors)}</small></td>")
+        artifact_rows.append("<tr>" + "".join(cells) + "</tr>")
+
     doc = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -209,6 +275,11 @@ def write_html(path: Path, comparison: dict[str, Any], variant_names: list[str])
   </table>
   <h2>Variant Assessment</h2>
   {''.join(assessment_sections)}
+  <h2>Artifact Review</h2>
+  <table>
+    <thead><tr><th>Case</th>{''.join(f'<th>{html.escape(name)}</th>' for name in variant_names)}</tr></thead>
+    <tbody>{''.join(artifact_rows) or '<tr><td>No artifacts found.</td></tr>'}</tbody>
+  </table>
   <h2>Notable Failures</h2>
   {''.join(failure_sections)}
 </body>
