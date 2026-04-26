@@ -55,6 +55,15 @@ See `docs/dgx-spark.md` for a concrete DGX Spark workflow using `spark-vllm-dock
 
 See `docs/evaluation-strategy.md` for the reproducible comparison plan across base, fine-tuned, ablated, and combined post-training variants.
 
+Core eval commands:
+
+```bash
+model-forge-eval --config configs/experiments/qwen35_9b_v0.yaml --dry-run
+model-forge-compare --base <base-results> --ft <ft-results>
+model-forge-matrix --config configs/experiments/qwen35_9b_v0.yaml --variant base=<model> --variant ft=<model> --output-prefix qwen35
+model-forge-external lm-eval --dry-run
+```
+
 ## Initial experiment matrix
 
 - `base`

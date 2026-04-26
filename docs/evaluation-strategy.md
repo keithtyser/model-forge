@@ -153,6 +153,24 @@ For each candidate model family:
 
 If compute is limited, run the fast suite first, then artifact suite only for promising variants.
 
+Run a matrix directly:
+
+```bash
+model-forge-matrix \
+  --config configs/experiments/qwen35_9b_v0.yaml \
+  --variant base=Qwen/Qwen3.5-9B \
+  --variant ft=/models/qwen35-ft \
+  --variant abli=/models/qwen35-abli \
+  --variant ft_then_abli=/models/qwen35-ft-abli \
+  --output-prefix qwen35_9b
+```
+
+Run repeated trials for sampled long-form tasks:
+
+```bash
+MODEL_FORGE_TRIALS=3 ./scripts/dgx_spark_artifact_eval_qwen35_9b.sh
+```
+
 ## Promotion Criteria
 
 A post-trained variant should not be considered better than base unless it satisfies all of the following:
@@ -181,3 +199,35 @@ Each comparison report should include:
 - final recommendation: promote, reject, or rerun with adjusted settings
 
 The report should make it easy for another person to reproduce the run from the repository and inspect the raw outputs.
+
+Generate a comparison report:
+
+```bash
+model-forge-compare \
+  --base results/qwen35_9b_v0/base/qwen35_9b_base \
+  --ft results/qwen35_9b_v0/base/qwen35_9b_ft \
+  --abli results/qwen35_9b_v0/base/qwen35_9b_abli \
+  --ft-then-abli results/qwen35_9b_v0/base/qwen35_9b_ft_then_abli \
+  --output-dir reports/generated/qwen35_9b_comparison
+```
+
+The report includes:
+
+- score deltas
+- improvement/regression classification
+- promotion recommendation
+- notable failures
+- artifact links and screenshots when available
+
+## External Benchmark Bridges
+
+model-forge owns post-training comparison. External benchmark tools should be used for broad benchmark coverage.
+
+Check or run an external tool:
+
+```bash
+model-forge-external lm-eval --dry-run
+model-forge-external promptfoo --dry-run
+```
+
+If the external tool is installed, arguments after `--` are passed through to that tool. Each run writes `external_run.json` plus captured stdout/stderr when executed.
