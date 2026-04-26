@@ -7,10 +7,14 @@ shift $(( $# >= 2 ? 2 : $# ))
 BASE_URL=${MODEL_FORGE_BASE_URL:-http://127.0.0.1:8000/v1}
 MODEL_ALIAS=${MODEL_FORGE_MODEL:-Qwen/Qwen3.5-9B}
 MAX_CASES=${MODEL_FORGE_MAX_CASES:-}
+TRIALS=${MODEL_FORGE_TRIALS:-}
 EXTRA_ARGS=()
 
 if [[ -n "$MAX_CASES" ]]; then
   EXTRA_ARGS+=(--max-cases "$MAX_CASES")
+fi
+if [[ -n "$TRIALS" ]]; then
+  EXTRA_ARGS+=(--trials "$TRIALS")
 fi
 
 export MODEL_FORGE_BASE_URL="$BASE_URL"

@@ -160,6 +160,12 @@ Full artifact run:
 
 On DGX Spark with Qwen/Qwen3.5-9B BF16, expect long runtime for this suite. A single HTML artifact can take several minutes at roughly 10-12 generated tokens/sec.
 
+For sampled long-form/artifact comparisons, run repeated trials:
+
+```bash
+MODEL_FORGE_TRIALS=3 ./scripts/dgx_spark_artifact_eval_qwen35_9b.sh
+```
+
 For non-base variants, set `MODEL_FORGE_VARIANT` and a distinct output suffix:
 
 ```bash

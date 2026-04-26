@@ -72,6 +72,7 @@ class EvalResult:
     usage: dict[str, Any]
     scores: dict[str, float]
     notes: list[str]
+    trial_index: int = 1
     parsed_json: Any = None
     raw_response: dict[str, Any] | None = None
 
@@ -432,7 +433,7 @@ def collect_runtime_metadata(cfg: EvalConfig, dry_run: bool) -> dict[str, Any]:
     return runtime
 
 
-def build_manifest(cfg: EvalConfig, cases: list[EvalCase], dry_run: bool) -> dict[str, Any]:
+def build_manifest(cfg: EvalConfig, cases: list[EvalCase], dry_run: bool, trials: int = 1) -> dict[str, Any]:
     bucket_counts: dict[str, int] = {}
     for case in cases:
         bucket_counts[case.bucket] = bucket_counts.get(case.bucket, 0) + 1
@@ -442,7 +443,9 @@ def build_manifest(cfg: EvalConfig, cases: list[EvalCase], dry_run: bool) -> dic
         "variant": cfg.variant,
         "backend": cfg.backend,
         "prompt_counts": bucket_counts,
-        "total_cases": len(cases),
+        "total_prompts": len(cases),
+        "trials": trials,
+        "total_cases": len(cases) * trials,
         "metrics": cfg.metrics,
         "dry_run": dry_run,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -499,8 +502,17 @@ def summarize_scores(results: list[EvalResult]) -> list[dict[str, Any]]:
 
 def safe_artifact_name(result: EvalResult, extension: str) -> str:
     raw = f"{result.case.bucket}__{result.case.case_id}"
+    if result.trial_index > 1:
+        raw = f"{raw}__trial{result.trial_index}"
     safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", raw).strip("_")
     return f"{safe}.{extension}"
+
+
+def result_key(result: EvalResult) -> str:
+    key = f"{result.case.bucket}/{result.case.case_id}"
+    if result.trial_index > 1:
+        key = f"{key}#trial{result.trial_index}"
+    return key
 
 
 def validate_html_artifact(path: Path) -> dict[str, Any]:
@@ -740,7 +752,7 @@ def write_artifacts(root: Path, results: list[EvalResult]) -> tuple[dict[str, st
         filename = safe_artifact_name(result, extension)
         path = artifact_dir / filename
         path.write_text(extract_code_artifact(result.response_text, artifact_type).strip() + "\n")
-        key = f"{result.case.bucket}/{result.case.case_id}"
+        key = result_key(result)
         artifact_paths[key] = f"artifacts/{filename}"
         artifact_validations[key] = validate_artifact(path, artifact_type, result.case.checks)
     if artifact_validations:
@@ -757,7 +769,7 @@ def write_artifact_report(
 ) -> None:
     rows = []
     for result in results:
-        key = f"{result.case.bucket}/{result.case.case_id}"
+        key = result_key(result)
         artifact_path = artifact_paths.get(key)
         validation = artifact_validations.get(key)
         validation_label = ""
@@ -831,11 +843,12 @@ def write_outputs(root: Path, manifest: dict[str, Any], results: list[EvalResult
 
     with (root / "responses.jsonl").open("w") as fh:
         for result in results:
-            key = f"{result.case.bucket}/{result.case.case_id}"
+            key = result_key(result)
             fh.write(json.dumps({
                 "bucket": result.case.bucket,
                 "case_id": result.case.case_id,
                 "category": result.case.category,
+                "trial_index": result.trial_index,
                 "prompt": result.case.prompt,
                 "response_text": result.response_text,
                 "latency_seconds": round(result.latency_seconds, 4),
@@ -870,7 +883,7 @@ def write_outputs(root: Path, manifest: dict[str, Any], results: list[EvalResult
     (root / "examples.md").write_text("\n".join(example_sections).strip() + "\n")
 
 
-def run_case(case: EvalCase, cfg: EvalConfig, dry_run: bool) -> EvalResult:
+def run_case(case: EvalCase, cfg: EvalConfig, dry_run: bool, trial_index: int = 1) -> EvalResult:
     if dry_run:
         response_text = f"DRY RUN for {case.case_id}: {case.prompt.splitlines()[0]}"
         usage = {}
@@ -892,6 +905,7 @@ def run_case(case: EvalCase, cfg: EvalConfig, dry_run: bool) -> EvalResult:
         usage=usage,
         scores=scores,
         notes=notes,
+        trial_index=trial_index,
         parsed_json=parsed,
         raw_response=raw,
     )
@@ -903,8 +917,11 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="Validate config and emit placeholder outputs")
     parser.add_argument("--bucket", action="append", default=None, help="Limit to one or more prompt buckets")
     parser.add_argument("--max-cases", type=int, default=None, help="Limit the number of eval cases")
+    parser.add_argument("--trials", type=int, default=env_int("MODEL_FORGE_TRIALS", 1), help="Number of trials to run per eval case")
     parser.add_argument("--output-suffix", default=None, help="Append a suffix under the configured output directory")
     args = parser.parse_args()
+    if args.trials < 1:
+        parser.error("--trials must be >= 1")
 
     config_path = Path(args.config).resolve()
     repo_root = config_path.parents[2]
@@ -912,8 +929,12 @@ def main() -> None:
     prompt_root = repo_root / "evals" / "prompts"
     cases = collect_cases(prompt_root, cfg.prompt_sets)
     cases = filter_cases(cases, buckets=args.bucket, max_cases=args.max_cases)
-    manifest = build_manifest(cfg, cases, dry_run=args.dry_run)
-    results = [run_case(case, cfg, dry_run=args.dry_run) for case in cases]
+    manifest = build_manifest(cfg, cases, dry_run=args.dry_run, trials=args.trials)
+    results = [
+        run_case(case, cfg, dry_run=args.dry_run, trial_index=trial_index)
+        for case in cases
+        for trial_index in range(1, args.trials + 1)
+    ]
     output_root = repo_root / cfg.output_dir
     write_outputs(output_root, manifest, results)
 
@@ -921,7 +942,9 @@ def main() -> None:
         "ok": True,
         "config": str(config_path),
         "output_dir": str(output_root),
-        "total_cases": len(cases),
+        "total_prompts": len(cases),
+        "trials": args.trials,
+        "total_cases": manifest["total_cases"],
         "prompt_counts": manifest["prompt_counts"],
         "dry_run": args.dry_run,
         "runtime": manifest["runtime"],
