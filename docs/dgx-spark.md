@@ -38,6 +38,26 @@ Gemma 4 26B-A4B is a good second target for DGX Spark because it is a MoE model 
 
 For fair benchmark comparisons, start with the HF safetensors/BF16 models on the same vLLM stack. Quantized GGUF or NVFP4 runs are useful for throughput testing, but they add a quantization variable and should be compared separately.
 
+The simplest workflow is the convenience wrapper:
+
+```bash
+./scripts/gemma4_dgx.sh serve base
+./scripts/gemma4_dgx.sh smoke base
+./scripts/gemma4_dgx.sh full base
+
+./scripts/gemma4_dgx.sh serve ft
+./scripts/gemma4_dgx.sh smoke ft
+./scripts/gemma4_dgx.sh full ft
+
+./scripts/gemma4_dgx.sh serve abli
+./scripts/gemma4_dgx.sh smoke abli
+./scripts/gemma4_dgx.sh full abli
+
+./scripts/gemma4_dgx.sh compare
+```
+
+Run `serve` in one terminal. Run `smoke`, `full`, or `artifact` in another terminal while that server is running. Stop the server with `Ctrl-C` before switching variants.
+
 Serve the base model:
 
 ```bash
