@@ -58,6 +58,23 @@ The simplest workflow is the convenience wrapper:
 
 Run `serve` in one terminal. Run `smoke`, `full`, or `artifact` in another terminal while that server is running. Stop the server with `Ctrl-C` before switching variants.
 
+External benchmark checks use `lm-evaluation-harness` against the same vLLM OpenAI-compatible endpoint:
+
+```bash
+./scripts/gemma4_dgx.sh external-install
+
+./scripts/gemma4_dgx.sh serve base
+MODEL_FORGE_EXTERNAL_LIMIT=20 ./scripts/gemma4_dgx.sh external base ifeval
+
+./scripts/gemma4_dgx.sh serve ft
+MODEL_FORGE_EXTERNAL_LIMIT=20 ./scripts/gemma4_dgx.sh external ft ifeval
+
+./scripts/gemma4_dgx.sh serve abli
+MODEL_FORGE_EXTERNAL_LIMIT=20 ./scripts/gemma4_dgx.sh external abli ifeval
+```
+
+Remove `MODEL_FORGE_EXTERNAL_LIMIT` for a full external run. The default external task is `ifeval` because it works through chat-completions generation. You can pass other generation-compatible lm-eval tasks as the third argument, for example `ifeval,gsm8k`. Avoid loglikelihood-only tasks through `local-chat-completions`; those need a different backend path.
+
 Serve the base model:
 
 ```bash

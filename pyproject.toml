@@ -18,7 +18,9 @@ artifacts = [
   "playwright>=1.45",
 ]
 external = [
+  "immutabledict>=4.2",
   "inspect-ai>=0.3",
+  "langdetect>=1.0.9",
   "lighteval>=0.10",
   "lm-eval>=0.4",
 ]
