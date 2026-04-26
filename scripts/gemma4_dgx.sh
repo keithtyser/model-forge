@@ -8,6 +8,10 @@ ACTION=${1:-help}
 VARIANT=${2:-base}
 
 MODELS_DIR=${MODEL_FORGE_MODELS_DIR:-$HOME/models}
+PYTHON=${PYTHON:-$REPO_DIR/.venv/bin/python}
+if [[ ! -x "$PYTHON" ]]; then
+  PYTHON=$(command -v python3)
+fi
 
 usage() {
   cat <<'USAGE'
@@ -82,7 +86,7 @@ case "$ACTION" in
     run_eval ./scripts/dgx_spark_artifact_eval_gemma4_26b_a4b.sh "$VARIANT"
     ;;
   compare)
-    model-forge-compare \
+    "$PYTHON" -m model_forge.evals.compare_runs \
       --base results/gemma4_26b_a4b_v0/base/gemma4_26b_a4b_base_dgx_spark \
       --ft results/gemma4_26b_a4b_v0/base/gemma4_26b_a4b_ft_dgx_spark \
       --abli results/gemma4_26b_a4b_v0/base/gemma4_26b_a4b_abli_dgx_spark \
