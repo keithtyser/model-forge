@@ -1,0 +1,39 @@
+experiment_name: qwen35_9b_artifact_workbench
+
+model:
+  family: qwen3.5
+  id: Qwen/Qwen3.5-9B
+  variant: base
+
+backend:
+  engine: local-openai-compatible
+  base_url: http://127.0.0.1:8000/v1
+  model_alias: qwen35_9b_local
+  api_key_env: OPENAI_API_KEY
+  temperature: 0.7
+  max_tokens: 4096
+  timeout_seconds: 360
+  extra_body:
+    top_p: 0.8
+    top_k: 20
+    min_p: 0.0
+    presence_penalty: 1.5
+    repetition_penalty: 1.0
+    chat_template_kwargs:
+      enable_thinking: false
+
+eval:
+  output_dir: results/qwen35_9b_v0/base
+  prompt_sets:
+    - artifact_web_design
+    - artifact_canvas_webgl
+    - artifact_code_generation
+  system_prompt: |
+    You are a precise local model being evaluated for practical artifact generation.
+    Follow the requested output format exactly.
+    For artifact tasks, return the requested code artifact only. Do not include analysis, commentary, or extra prose.
+
+metrics:
+  - workflow_success
+  - latency
+  - tokens_per_second

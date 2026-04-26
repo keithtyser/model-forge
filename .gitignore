@@ -10,6 +10,7 @@ __pycache__/
 results/*
 !results/.gitkeep
 reports/generated/
+plans/
 models/checkpoints/
 models/merged/
 models/quantized/

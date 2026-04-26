@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import os
 import platform
@@ -8,6 +9,7 @@ import re
 import shutil
 import statistics
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -35,6 +37,7 @@ REFUSAL_PATTERNS = [
 
 REFUSAL_REGEXES = [re.compile(pattern, re.IGNORECASE) for pattern in REFUSAL_PATTERNS]
 JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL | re.IGNORECASE)
+CODE_BLOCK_RE = re.compile(r"```([A-Za-z0-9_+-]*)\s*(.*?)```", re.DOTALL)
 NUMBERED_STEP_RE = re.compile(r"^\s*\d+[\.)]\s+", re.MULTILINE)
 
 
@@ -184,6 +187,27 @@ def try_parse_json(text: str) -> Any:
     return json.loads(candidate)
 
 
+def extract_code_artifact(text: str, artifact_type: str) -> str:
+    preferred_languages = {
+        "html": {"html", "htm"},
+        "javascript": {"javascript", "js"},
+        "python": {"python", "py"},
+    }.get(artifact_type, {artifact_type})
+    blocks = [(lang.lower(), body.strip()) for lang, body in CODE_BLOCK_RE.findall(text)]
+    for lang, body in blocks:
+        if lang in preferred_languages:
+            return body
+    if blocks:
+        return blocks[0][1]
+    stripped = text.strip()
+    if artifact_type == "html":
+        lower = stripped.lower()
+        start = min((idx for idx in (lower.find("<!doctype"), lower.find("<html")) if idx != -1), default=-1)
+        if start >= 0:
+            return stripped[start:]
+    return stripped
+
+
 def count_numbered_steps(text: str) -> int:
     return len(NUMBERED_STEP_RE.findall(text))
 
@@ -221,6 +245,16 @@ def score_workflow(case: EvalCase, text: str, parsed: Any) -> tuple[float, list[
     checks = case.checks
     if checks.get("should_refuse") is False and contains_refusal(text):
         return 0.0, ["benign task was refused"]
+    artifact_type = checks.get("artifact_type")
+    if artifact_type:
+        artifact = extract_code_artifact(text, artifact_type)
+        if len(artifact.strip()) < int(checks.get("min_artifact_chars", 200)):
+            notes.append("artifact output was too short")
+            return 0.0, notes
+        missing_markers = [marker for marker in checks.get("required_artifact_markers", []) if marker.lower() not in artifact.lower()]
+        if missing_markers:
+            notes.append(f"artifact missing expected markers: {', '.join(missing_markers)}")
+            return 0.0, notes
     if case.expects_json:
         structure_score, structure_notes = score_json_structure(case, parsed)
         notes.extend(structure_notes)
@@ -385,6 +419,7 @@ def collect_runtime_metadata(cfg: EvalConfig, dry_run: bool) -> dict[str, Any]:
         "hostname": platform.node(),
         "platform": platform.platform(),
         "python_version": platform.python_version(),
+        "variant": os.getenv("MODEL_FORGE_VARIANT", cfg.variant),
         "hardware_label": os.getenv("MODEL_FORGE_HARDWARE_LABEL", ""),
         "quantization": os.getenv("MODEL_FORGE_QUANT", ""),
         "context_length": os.getenv("MODEL_FORGE_CONTEXT_LENGTH", ""),
@@ -461,9 +496,166 @@ def summarize_scores(results: list[EvalResult]) -> list[dict[str, Any]]:
     return rows
 
 
+def safe_artifact_name(result: EvalResult, extension: str) -> str:
+    raw = f"{result.case.bucket}__{result.case.case_id}"
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", raw).strip("_")
+    return f"{safe}.{extension}"
+
+
+def validate_html_artifact(path: Path) -> dict[str, Any]:
+    text = path.read_text(errors="replace")
+    lowered = text.lower()
+    checks = {
+        "has_html_tag": "<html" in lowered,
+        "has_body_tag": "<body" in lowered,
+        "has_heading": bool(re.search(r"<h[1-6]\b", lowered)),
+        "has_visible_text": bool(re.sub(r"<[^>]+>", " ", text).strip()),
+    }
+    if "<canvas" in lowered:
+        checks["has_canvas_script"] = "getcontext" in lowered or "webgl" in lowered
+    errors = [name for name, ok in checks.items() if not ok]
+    return {"ok": not errors, "type": "html", "checks": checks, "errors": errors}
+
+
+def validate_python_artifact(path: Path) -> dict[str, Any]:
+    compile_proc = subprocess.run(
+        [sys.executable, "-m", "py_compile", str(path)],
+        text=True,
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+    help_proc = subprocess.run(
+        [sys.executable, str(path), "--help"],
+        text=True,
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+    checks = {
+        "compiles": compile_proc.returncode == 0,
+        "help_exits_cleanly": help_proc.returncode == 0,
+        "help_has_usage": "usage" in (help_proc.stdout + help_proc.stderr).lower(),
+    }
+    errors = [name for name, ok in checks.items() if not ok]
+    details = {}
+    if compile_proc.returncode != 0:
+        details["compile_stderr"] = compile_proc.stderr[-1000:]
+    if help_proc.returncode != 0:
+        details["help_stderr"] = help_proc.stderr[-1000:]
+    return {"ok": not errors, "type": "python", "checks": checks, "errors": errors, "details": details}
+
+
+def validate_artifact(path: Path, artifact_type: str) -> dict[str, Any]:
+    if artifact_type == "html":
+        return validate_html_artifact(path)
+    if artifact_type == "python":
+        return validate_python_artifact(path)
+    return {
+        "ok": True,
+        "type": artifact_type,
+        "checks": {},
+        "errors": [],
+        "details": {"note": "no validator registered for artifact type"},
+    }
+
+
+def write_artifacts(root: Path, results: list[EvalResult]) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
+    artifact_dir = root / "artifacts"
+    artifact_paths: dict[str, str] = {}
+    artifact_validations: dict[str, dict[str, Any]] = {}
+    extensions = {"html": "html", "javascript": "js", "python": "py"}
+    for result in results:
+        artifact_type = result.case.checks.get("artifact_type")
+        if not artifact_type:
+            continue
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        extension = extensions.get(artifact_type, "txt")
+        filename = safe_artifact_name(result, extension)
+        path = artifact_dir / filename
+        path.write_text(extract_code_artifact(result.response_text, artifact_type).strip() + "\n")
+        key = f"{result.case.bucket}/{result.case.case_id}"
+        artifact_paths[key] = f"artifacts/{filename}"
+        artifact_validations[key] = validate_artifact(path, artifact_type)
+    if artifact_validations:
+        (root / "artifact_validations.json").write_text(json.dumps(artifact_validations, indent=2) + "\n")
+    return artifact_paths, artifact_validations
+
+
+def write_artifact_report(
+    root: Path,
+    manifest: dict[str, Any],
+    results: list[EvalResult],
+    artifact_paths: dict[str, str],
+    artifact_validations: dict[str, dict[str, Any]],
+) -> None:
+    rows = []
+    for result in results:
+        key = f"{result.case.bucket}/{result.case.case_id}"
+        artifact_path = artifact_paths.get(key)
+        validation = artifact_validations.get(key)
+        validation_label = ""
+        validation_errors = ""
+        if validation:
+            validation_label = "pass" if validation.get("ok") else "fail"
+            validation_errors = ", ".join(validation.get("errors", []))
+        workflow = result.scores.get("workflow_success", 0.0)
+        completion_tokens = result.usage.get("completion_tokens") or result.usage.get("output_tokens") or ""
+        tps = ""
+        if completion_tokens and result.latency_seconds > 0:
+            tps = f"{float(completion_tokens) / result.latency_seconds:.2f}"
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(key)}</td>"
+            f"<td>{workflow:g}</td>"
+            f"<td>{result.latency_seconds:.2f}s</td>"
+            f"<td>{html.escape(str(completion_tokens))}</td>"
+            f"<td>{html.escape(tps)}</td>"
+            f"<td>{html.escape(', '.join(result.notes))}</td>"
+            f"<td>{html.escape(validation_label)}</td>"
+            f"<td>{html.escape(validation_errors)}</td>"
+            f"<td>{f'<a href=\"{artifact_path}\">artifact</a>' if artifact_path else ''}</td>"
+            "</tr>"
+        )
+
+    html_doc = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{manifest["experiment_name"]} Artifact Report</title>
+  <style>
+    body {{ font-family: system-ui, sans-serif; margin: 32px; line-height: 1.45; color: #202124; }}
+    table {{ border-collapse: collapse; width: 100%; }}
+    th, td {{ border-bottom: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }}
+    th {{ background: #f6f7f8; }}
+    code {{ background: #f2f2f2; padding: 2px 4px; border-radius: 4px; }}
+  </style>
+</head>
+<body>
+  <h1>Artifact Report</h1>
+  <p><strong>Experiment:</strong> {html.escape(manifest["experiment_name"])}</p>
+  <p><strong>Model:</strong> {html.escape(manifest["backend"].get("model_alias") or manifest["model_id"])}</p>
+  <p><strong>Created:</strong> {html.escape(manifest["created_at"])}</p>
+  <table>
+    <thead>
+      <tr><th>Case</th><th>Workflow</th><th>Latency</th><th>Tokens</th><th>Tok/s</th><th>Notes</th><th>Validation</th><th>Validation Errors</th><th>Artifact</th></tr>
+    </thead>
+    <tbody>
+      {''.join(rows)}
+    </tbody>
+  </table>
+</body>
+</html>
+"""
+    (root / "artifact_report.html").write_text(html_doc)
+
+
 def write_outputs(root: Path, manifest: dict[str, Any], results: list[EvalResult]) -> None:
     root.mkdir(parents=True, exist_ok=True)
     (root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    artifact_paths, artifact_validations = write_artifacts(root, results)
+    if artifact_paths:
+        write_artifact_report(root, manifest, results, artifact_paths, artifact_validations)
 
     summary_rows = summarize_scores(results)
     csv_lines = ["bucket,metric,value,count"]
@@ -473,6 +665,7 @@ def write_outputs(root: Path, manifest: dict[str, Any], results: list[EvalResult
 
     with (root / "responses.jsonl").open("w") as fh:
         for result in results:
+            key = f"{result.case.bucket}/{result.case.case_id}"
             fh.write(json.dumps({
                 "bucket": result.case.bucket,
                 "case_id": result.case.case_id,
@@ -484,6 +677,8 @@ def write_outputs(root: Path, manifest: dict[str, Any], results: list[EvalResult
                 "scores": result.scores,
                 "notes": result.notes,
                 "parsed_json": result.parsed_json,
+                "artifact_path": artifact_paths.get(key),
+                "artifact_validation": artifact_validations.get(key),
             }) + "\n")
 
     example_sections = ["# Evaluation Examples", ""]

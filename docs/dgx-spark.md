@@ -142,6 +142,41 @@ MODEL_FORGE_CONTEXT_LENGTH="32768" \
 ./scripts/run_dgx_spark_eval.sh configs/experiments/qwen35_9b_v0.yaml qwen35_9b_dgx_spark
 ```
 
+## 8. Run the artifact workbench eval
+
+The artifact suite is a longer, human-inspection-oriented run inspired by practical base-vs-fine-tune workbench evals. It asks the model to generate web pages, Canvas/WebGL artifacts, and utility scripts, then saves extracted files under `artifacts/` with an `artifact_report.html` index.
+
+Quick one-case check:
+
+```bash
+MODEL_FORGE_MAX_CASES=1 ./scripts/dgx_spark_artifact_eval_qwen35_9b.sh
+```
+
+Full artifact run:
+
+```bash
+./scripts/dgx_spark_artifact_eval_qwen35_9b.sh
+```
+
+On DGX Spark with Qwen/Qwen3.5-9B BF16, expect long runtime for this suite. A single HTML artifact can take several minutes at roughly 10-12 generated tokens/sec.
+
+For non-base variants, set `MODEL_FORGE_VARIANT` and a distinct output suffix:
+
+```bash
+MODEL_FORGE_VARIANT=ft \
+MODEL_FORGE_MODEL=/path/to/fine-tuned-model \
+./scripts/run_dgx_spark_eval.sh configs/experiments/qwen35_9b_v0.yaml qwen35_9b_dgx_spark_ft
+```
+
+Compare finished runs:
+
+```bash
+model-forge-compare \
+  --base results/qwen35_9b_v0/base/qwen35_9b_dgx_spark \
+  --ft results/qwen35_9b_v0/base/qwen35_9b_dgx_spark_ft \
+  --output-dir reports/generated/qwen35_9b_comparison
+```
+
 ## Output location
 
 Results are written under:
@@ -155,6 +190,11 @@ You will get:
 - `scores.csv`
 - `responses.jsonl`
 - `examples.md`
+
+Artifact runs also write:
+- `artifact_report.html`
+- `artifacts/<case>.html`
+- `artifacts/<case>.py`
 
 ## Runtime overrides supported by model-forge
 

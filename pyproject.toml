@@ -15,6 +15,7 @@ dependencies = [
 
 [project.scripts]
 model-forge-eval = "model_forge.evals.run_eval:main"
+model-forge-compare = "model_forge.evals.compare_runs:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

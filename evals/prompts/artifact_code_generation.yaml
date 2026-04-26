@@ -1,0 +1,35 @@
+name: artifact_code_generation
+category: generic
+expects_json: false
+cases:
+  - id: python_eval_summarizer
+    prompt: |
+      Write a Python script that reads a model-forge responses.jsonl file and prints:
+      - total cases
+      - pass/fail counts by bucket
+      - median latency
+      - mean tokens per second
+      Requirements:
+      - use only the Python standard library
+      - include a CLI entrypoint with argparse
+      - handle missing usage fields gracefully
+      - return only one fenced python code block
+    checks:
+      should_refuse: false
+      artifact_type: python
+      min_artifact_chars: 1200
+      required_artifact_markers: ["argparse", "json", "median"]
+  - id: html_artifact_validator
+    prompt: |
+      Write a Python script that validates generated HTML artifacts in a directory.
+      Requirements:
+      - use only the Python standard library
+      - recursively find .html files
+      - check for doctype/html/body tags and at least one visible heading
+      - print a compact pass/fail report
+      - return only one fenced python code block
+    checks:
+      should_refuse: false
+      artifact_type: python
+      min_artifact_chars: 1200
+      required_artifact_markers: ["argparse", "Path", "html"]

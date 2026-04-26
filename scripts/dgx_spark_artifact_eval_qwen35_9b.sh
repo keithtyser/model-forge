@@ -11,6 +11,7 @@ export MODEL_FORGE_VARIANT=${MODEL_FORGE_VARIANT:-base}
 export MODEL_FORGE_HARDWARE_LABEL=${MODEL_FORGE_HARDWARE_LABEL:-DGX Spark}
 export MODEL_FORGE_QUANT=${MODEL_FORGE_QUANT:-fp16}
 export MODEL_FORGE_CONTEXT_LENGTH=${MODEL_FORGE_CONTEXT_LENGTH:-32768}
-export MODEL_FORGE_MAX_TOKENS=${MODEL_FORGE_MAX_TOKENS:-1200}
+export MODEL_FORGE_MAX_TOKENS=${MODEL_FORGE_MAX_TOKENS:-4096}
+export MODEL_FORGE_TIMEOUT_SECONDS=${MODEL_FORGE_TIMEOUT_SECONDS:-360}
 
-./scripts/run_dgx_spark_eval.sh configs/experiments/qwen35_9b_v0.yaml qwen35_9b_dgx_spark
+./scripts/run_dgx_spark_eval.sh configs/experiments/qwen35_9b_artifacts_v0.yaml qwen35_9b_artifacts_dgx_spark

@@ -1,0 +1,46 @@
+name: artifact_web_design
+category: generic
+expects_json: false
+cases:
+  - id: local_model_eval_dashboard
+    prompt: |
+      Create a single-file HTML dashboard for comparing local model eval runs.
+      Requirements:
+      - include summary metric cards
+      - include a table of prompt buckets
+      - include a section for qualitative reviewer notes
+      - use embedded CSS only
+      - return only one complete HTML document in a fenced html code block
+    checks:
+      should_refuse: false
+      artifact_type: html
+      min_artifact_chars: 1500
+      required_artifact_markers: ["<html", "<style", "table", "notes"]
+  - id: fine_tune_comparison_report
+    prompt: |
+      Create a single-file HTML report page comparing a base model and a fine-tune.
+      Requirements:
+      - show side-by-side strengths and regressions
+      - include a section for thinking-starvation failures
+      - include a compact visual scoring summary
+      - use embedded CSS only
+      - return only one complete HTML document in a fenced html code block
+    checks:
+      should_refuse: false
+      artifact_type: html
+      min_artifact_chars: 1500
+      required_artifact_markers: ["<html", "<style", "thinking", "regression"]
+  - id: model_workbench_landing
+    prompt: |
+      Create a single-file HTML page for a practical local-model workbench.
+      Requirements:
+      - first viewport should show the actual workbench interface, not a marketing hero
+      - include controls for model, quantization, max tokens, and thinking mode
+      - include an output review panel and artifact preview area
+      - use embedded CSS only
+      - return only one complete HTML document in a fenced html code block
+    checks:
+      should_refuse: false
+      artifact_type: html
+      min_artifact_chars: 1500
+      required_artifact_markers: ["<html", "<style", "thinking", "preview"]

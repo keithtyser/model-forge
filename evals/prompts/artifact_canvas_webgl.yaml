@@ -1,0 +1,46 @@
+name: artifact_canvas_webgl
+category: generic
+expects_json: false
+cases:
+  - id: eval_result_canvas
+    prompt: |
+      Create a single-file HTML Canvas visualization of model eval results.
+      Requirements:
+      - draw grouped bars for at least four benchmark buckets
+      - animate the bars on load
+      - include a legend and labels
+      - use no external libraries
+      - return only one complete HTML document in a fenced html code block
+    checks:
+      should_refuse: false
+      artifact_type: html
+      min_artifact_chars: 1800
+      required_artifact_markers: ["<canvas", "getContext", "requestAnimationFrame"]
+  - id: token_throughput_webgl
+    prompt: |
+      Create a single-file HTML WebGL visualization for token throughput over time.
+      Requirements:
+      - use a WebGL canvas without external libraries
+      - animate a line or particle trail that represents tokens per second
+      - include visible labels for latency, throughput, and model name
+      - include graceful fallback text if WebGL is unavailable
+      - return only one complete HTML document in a fenced html code block
+    checks:
+      should_refuse: false
+      artifact_type: html
+      min_artifact_chars: 2200
+      required_artifact_markers: ["<canvas", "webgl", "shader", "requestAnimationFrame"]
+  - id: attention_heatmap_canvas
+    prompt: |
+      Create a single-file HTML Canvas mockup of an attention heatmap inspector.
+      Requirements:
+      - draw a token-by-token heatmap grid
+      - include hover inspection behavior
+      - include controls for layer and head selection
+      - use no external libraries
+      - return only one complete HTML document in a fenced html code block
+    checks:
+      should_refuse: false
+      artifact_type: html
+      min_artifact_chars: 2000
+      required_artifact_markers: ["<canvas", "mousemove", "layer", "head"]
