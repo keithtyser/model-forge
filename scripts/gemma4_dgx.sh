@@ -181,7 +181,11 @@ case "$ACTION" in
     run_lm_eval_external "$VARIANT" "$EXTERNAL_TASKS" true
     ;;
   external-install)
-    "$PYTHON" -m pip install -e ".[external]"
+    if command -v uv >/dev/null 2>&1; then
+      uv pip install -e ".[external]"
+    else
+      "$PYTHON" -m pip install -e ".[external]"
+    fi
     ;;
   help|-h|--help)
     usage

@@ -29,7 +29,11 @@ else
 fi
 
 if [[ "${MODEL_FORGE_SKIP_HF_INSTALL:-0}" != "1" ]]; then
-  "$PYTHON" -m pip install -U "huggingface_hub[hf_xet]"
+  if command -v uv >/dev/null 2>&1; then
+    uv pip install -U "huggingface_hub[hf_xet]"
+  else
+    "$PYTHON" -m pip install -U "huggingface_hub[hf_xet]"
+  fi
 fi
 
 if [[ -x "$REPO_DIR/.venv/bin/hf" ]]; then
