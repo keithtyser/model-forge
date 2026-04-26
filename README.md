@@ -1,107 +1,63 @@
 # model-forge
 
-model-forge is a reproducible post-training evaluation workbench for open
-models. It is designed to compare a base model against fine-tuned, ablated, and
-combined variants using the same serving stack, prompts, runtime metadata,
-external benchmarks, and reports.
+model-forge is a reproducible post-training workbench for open models.
 
-The immediate focus is Gemma 4 on DGX Spark:
+It helps answer one question: did a fine-tune, ablation, or combined
+post-training workflow make the model better without breaking something else?
 
-- base: `google/gemma-4-26B-A4B-it`
-- fine-tune: `Jackrong/Gemopus-4-26B-A4B-it`
-- ablation: `huihui-ai/Huihui-gemma-4-26B-A4B-it-abliterated`
+The repo is evaluation-first today. Fine-tuning and ablation workflows will use
+the same family registry and result structure as they are added.
 
-Qwen experiment configs are also present. The reusable family runner is
-config-driven, but the first fully populated family registry is Gemma 4.
+## Current Focus
 
-## What It Measures
+The first supported family is Gemma 4 on DGX Spark:
 
-model-forge is meant to answer practical post-training questions:
+- `google/gemma-4-26B-A4B-it`
+- `Jackrong/Gemopus-4-26B-A4B-it`
+- `huihui-ai/Huihui-gemma-4-26B-A4B-it-abliterated`
 
-- Did the fine-tune improve reasoning structure, workflow quality, or long-form stability?
-- Did the ablation reduce false refusals?
-- Did either variant regress normal-use capability?
-- Did unsafe overcompliance increase?
-- Do external benchmark signals agree with the local workbench?
-- Are raw outputs and artifacts preserved so humans can inspect failures?
+Qwen configs are included for lower-level experiments, but the simple workflow
+currently targets Gemma 4.
 
-The in-repo evals are a fast screening harness. They are not a replacement for
-external benchmarks or human review.
+## Quick Start
 
-## Install
-
-Use `uv` for reproducible setup.
+Install with `uv`:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone https://github.com/keithtyser/model-forge.git
 cd model-forge
-./scripts/setup.sh
+./forge setup all
 ```
 
-Optional extras:
+Download models:
 
 ```bash
-./scripts/setup.sh external
-./scripts/setup.sh artifacts
-./scripts/setup.sh all
+./forge download gemma4_26b_a4b all
 ```
 
-Profiles:
-
-- `base`: core model-forge CLI and eval harness
-- `external`: `lm-evaluation-harness`, LightEval, Inspect AI dependencies
-- `artifacts`: Playwright browser validation for generated HTML/Canvas/WebGL
-- `all`: external plus artifact dependencies
-
-## Gemma 4 Quick Start
-
-Download the three Gemma 4 variants:
+Run each model. Keep `serve` running in one terminal, then run `eval` in another.
 
 ```bash
-./scripts/model_forge_dgx.py gemma4_26b_a4b download base
-./scripts/model_forge_dgx.py gemma4_26b_a4b download ft
-./scripts/model_forge_dgx.py gemma4_26b_a4b download abli
+./forge serve gemma4_26b_a4b base
+./forge eval gemma4_26b_a4b base
 ```
 
-The downloader prompts for `HF_TOKEN` if it is not already set. It stores models
-under `~/models` by default and uses Hugging Face Xet high-performance mode.
-
-Serve and evaluate each variant. Run `serve` in one terminal, then run evals in
-another terminal while the server is up.
-
-Base:
-
 ```bash
-./scripts/model_forge_dgx.py gemma4_26b_a4b serve base
-./scripts/model_forge_dgx.py gemma4_26b_a4b smoke base
-./scripts/model_forge_dgx.py gemma4_26b_a4b full base
+./forge serve gemma4_26b_a4b ft
+./forge eval gemma4_26b_a4b ft
 ```
 
-Fine-tune:
-
 ```bash
-./scripts/model_forge_dgx.py gemma4_26b_a4b serve ft
-./scripts/model_forge_dgx.py gemma4_26b_a4b smoke ft
-./scripts/model_forge_dgx.py gemma4_26b_a4b full ft
-```
-
-Ablation:
-
-```bash
-./scripts/model_forge_dgx.py gemma4_26b_a4b serve abli
-./scripts/model_forge_dgx.py gemma4_26b_a4b smoke abli
-./scripts/model_forge_dgx.py gemma4_26b_a4b full abli
+./forge serve gemma4_26b_a4b abli
+./forge eval gemma4_26b_a4b abli
 ```
 
 Compare:
 
 ```bash
-./scripts/model_forge_dgx.py gemma4_26b_a4b compare
+./forge compare gemma4_26b_a4b
 ```
-
-For Gemma only, `./scripts/gemma4_dgx.sh ...` remains available as a short
-compatibility alias for the generic family runner.
 
 Open:
 
@@ -111,140 +67,100 @@ reports/generated/gemma4_26b_a4b_comparison/comparison_report.html
 
 ## External Benchmarks
 
-Install external dependencies once:
+Run IFEval through `lm-evaluation-harness` against the served model:
 
 ```bash
-./scripts/model_forge_dgx.py gemma4_26b_a4b external-install
+./forge external gemma4_26b_a4b base
+./forge external gemma4_26b_a4b ft
+./forge external gemma4_26b_a4b abli
 ```
 
-Run IFEval through `lm-evaluation-harness` against the currently served model:
+The external command checks the active server first, so the requested variant
+must match the model currently served by `./forge serve`.
+
+For a quick check:
 
 ```bash
-MODEL_FORGE_EXTERNAL_LIMIT=20 ./scripts/model_forge_dgx.py gemma4_26b_a4b external base ifeval
-MODEL_FORGE_EXTERNAL_LIMIT=20 ./scripts/model_forge_dgx.py gemma4_26b_a4b external ft ifeval
-MODEL_FORGE_EXTERNAL_LIMIT=20 ./scripts/model_forge_dgx.py gemma4_26b_a4b external abli ifeval
+MODEL_FORGE_EXTERNAL_LIMIT=20 ./forge external gemma4_26b_a4b base
 ```
 
-Remove `MODEL_FORGE_EXTERNAL_LIMIT` for a full run.
-
-External outputs are written under:
+External outputs are written to:
 
 ```text
 reports/generated/gemma4_26b_a4b_external/
 ```
 
-The wrapper checks `/v1/models` before running so you do not accidentally score
-the wrong served variant.
+## Artifact Evals
 
-## Artifact Workbench
-
-Artifact runs ask models to generate practical HTML, Canvas/WebGL, and Python
-artifacts. Outputs are saved for human inspection.
+Artifact evals generate HTML, Canvas/WebGL, and Python outputs for human review:
 
 ```bash
-./scripts/setup.sh artifacts
-./scripts/model_forge_dgx.py gemma4_26b_a4b artifact base
-./scripts/model_forge_dgx.py gemma4_26b_a4b artifact ft
-./scripts/model_forge_dgx.py gemma4_26b_a4b artifact abli
+./forge eval gemma4_26b_a4b base --artifact
+./forge eval gemma4_26b_a4b ft --artifact
+./forge eval gemma4_26b_a4b abli --artifact
 ```
 
-Run artifact commands with the matching variant server already running.
+## What Gets Measured
 
-## Common Overrides
+model-forge tracks:
 
-Use these when moving across machines:
+- workflow success
+- structured output adherence
+- normal-use regression
+- benign refusal rate
+- unsafe overcompliance
+- latency and tokens/sec
+- raw responses and generated artifacts
+- external benchmark outputs
+
+The built-in evals are a screening harness. Promotion decisions should also use
+external benchmarks and human inspection of raw outputs.
+
+## Families
+
+List configured families:
 
 ```bash
-MODEL_FORGE_MODELS_DIR=/data/models ./scripts/model_forge_dgx.py gemma4_26b_a4b serve base
-GPU_MEMORY_UTILIZATION=0.80 ./scripts/model_forge_dgx.py gemma4_26b_a4b serve base
-MAX_MODEL_LEN=16384 ./scripts/model_forge_dgx.py gemma4_26b_a4b serve base
-MODEL_FORGE_EXTERNAL_CONCURRENCY=2 ./scripts/model_forge_dgx.py gemma4_26b_a4b external base ifeval
+./forge families
 ```
 
-Model downloads can be tuned:
+Family definitions live in:
+
+```text
+configs/model_families/
+```
+
+A family file defines variants, local model paths, served aliases, eval configs,
+external benchmark defaults, and report locations. Adding a new model family
+should usually mean adding one YAML file plus, if needed, a serving profile.
+
+## Useful Overrides
 
 ```bash
-HF_MAX_WORKERS=16 HF_XET_NUM_CONCURRENT_RANGE_GETS=16 ./scripts/model_forge_dgx.py gemma4_26b_a4b download base
+MODEL_FORGE_MODELS_DIR=/data/models ./forge serve gemma4_26b_a4b base
+GPU_MEMORY_UTILIZATION=0.80 ./forge serve gemma4_26b_a4b base
+MAX_MODEL_LEN=16384 ./forge serve gemma4_26b_a4b base
+HF_MAX_WORKERS=16 HF_XET_NUM_CONCURRENT_RANGE_GETS=16 ./forge download gemma4_26b_a4b base
 ```
-
-## Adding Model Families
-
-Model-family convenience workflows are defined in `configs/model_families/`.
-Add a new YAML file to describe:
-
-- variant repo IDs and local directory names
-- served model aliases
-- serve script and default vLLM settings
-- eval and artifact configs
-- comparison output path
-- external benchmark output path and default tasks
-
-Then run the generic command:
-
-```bash
-./scripts/model_forge_dgx.py <family> serve base
-./scripts/model_forge_dgx.py <family> full base
-./scripts/model_forge_dgx.py <family> external base ifeval
-./scripts/model_forge_dgx.py <family> compare
-```
-
-## Lower-Level CLI
-
-The Python entrypoints remain available for custom configs and other model
-families:
-
-```bash
-uv run model-forge-eval --config configs/experiments/qwen35_9b_v0.yaml --dry-run
-uv run model-forge-compare --base <base-run> --ft <ft-run>
-uv run model-forge-matrix --config <config.yaml> --variant base=<model> --variant ft=<model>
-uv run model-forge-external lm-eval --dry-run
-```
-
-Use these when building a new model-family workflow before adding a convenience
-family registry in `configs/model_families/`.
-
-## Outputs
-
-Evaluation runs write to `results/`. Generated reports write to
-`reports/generated/`.
-
-Typical files:
-
-- `manifest.json`
-- `scores.csv`
-- `responses.jsonl`
-- `examples.md`
-- `comparison.json`
-- `comparison.csv`
-- `comparison_report.html`
-- `external_run.json`
-- captured external benchmark `stdout.txt` and `stderr.txt`
-- artifact reports and extracted generated files when running artifact suites
-
-Generated outputs are ignored by git.
 
 ## Repository Layout
 
 ```text
-configs/         Experiment and suite configuration
-configs/model_families/
-                 Model-family registries for one-command workflows
-datasets/        Dataset manifests and metadata
-docs/            Evaluation and platform documentation
-evals/           Prompt sets and scoring rubrics
-models/          Local checkpoint directory conventions
-pipelines/       Training and ablation pipeline notes
-reports/         Report templates and generated comparison outputs
-results/         Machine-readable run outputs
-scripts/         Setup, download, serving, and eval wrappers
-src/             Python package source
+configs/                 Experiment and family configuration
+docs/                    Detailed workflow notes
+evals/                   Prompt sets and scoring rubrics
+pipelines/               Fine-tuning and ablation pipeline notes
+reports/                 Generated comparison and external reports
+results/                 Raw evaluation outputs
+scripts/                 Internal helpers and compatibility wrappers
+src/model_forge/         Python package source
+forge                    Main user-facing command
 ```
 
 ## Design Principles
 
-- Prefer short, reproducible commands over bespoke shell sessions.
-- Keep raw model outputs for inspection.
-- Treat in-repo evals as screening, not final truth.
-- Use external benchmark runners where they are stronger.
-- Judge ablations by false-refusal reduction without unsafe-overcompliance or normal-use regressions.
-- Judge fine-tunes by capability and structure improvements without safety or workflow regressions.
+- Keep the public workflow short and reproducible.
+- Preserve raw outputs so results can be inspected.
+- Use external benchmarks instead of trusting only local checks.
+- Treat ablation success as fewer false refusals without more unsafe compliance.
+- Treat fine-tune success as better capability and structure without regressions.

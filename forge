@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_DIR=$(cd "$(dirname "$0")" && pwd)
+cd "$REPO_DIR"
+
+PYTHON=${PYTHON:-$REPO_DIR/.venv/bin/python}
+if [[ ! -x "$PYTHON" ]]; then
+  PYTHON=$(command -v python3)
+fi
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  ./forge setup [base|external|artifacts|all]
+  ./forge download <family> [base|ft|abli|all]
+  ./forge serve <family> [base|ft|abli]
+  ./forge eval <family> [base|ft|abli] [--smoke|--artifact]
+  ./forge external <family> [base|ft|abli] [tasks]
+  ./forge compare <family>
+  ./forge families
+
+Examples:
+  ./forge setup all
+  ./forge download gemma4_26b_a4b all
+  ./forge serve gemma4_26b_a4b base
+  ./forge eval gemma4_26b_a4b base
+  ./forge external gemma4_26b_a4b base
+  ./forge compare gemma4_26b_a4b
+USAGE
+}
+
+ACTION=${1:-help}
+shift || true
+
+case "$ACTION" in
+  setup)
+    ./scripts/setup.sh "${1:-base}"
+    ;;
+  download)
+    FAMILY=${1:?family is required}
+    VARIANT=${2:-all}
+    "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" download "$VARIANT"
+    ;;
+  serve)
+    FAMILY=${1:?family is required}
+    VARIANT=${2:-base}
+    "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" serve "$VARIANT"
+    ;;
+  eval)
+    FAMILY=${1:?family is required}
+    VARIANT=${2:-base}
+    MODE=${3:-full}
+    case "$MODE" in
+      --smoke|smoke) MODE=smoke ;;
+      --artifact|artifact) MODE=artifact ;;
+      full|"") MODE=full ;;
+      *) echo "unknown eval mode: $MODE" >&2; usage >&2; exit 2 ;;
+    esac
+    "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" "$MODE" "$VARIANT"
+    ;;
+  external)
+    FAMILY=${1:?family is required}
+    VARIANT=${2:-base}
+    TASKS=${3:-}
+    if [[ -n "$TASKS" ]]; then
+      "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" external "$VARIANT" "$TASKS"
+    else
+      "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" external "$VARIANT"
+    fi
+    ;;
+  compare)
+    FAMILY=${1:?family is required}
+    "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" compare
+    ;;
+  families)
+    find "$REPO_DIR/configs/model_families" -maxdepth 1 -name '*.yaml' -printf '%f\n' | sed 's/[.]yaml$//' | sort
+    ;;
+  help|-h|--help)
+    usage
+    ;;
+  *)
+    echo "unknown command: $ACTION" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
