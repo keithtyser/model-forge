@@ -10,6 +10,7 @@ import shutil
 import statistics
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -607,7 +608,74 @@ def validate_html_artifact_in_browser(path: Path) -> dict[str, Any]:
     }
 
 
-def validate_python_artifact(path: Path) -> dict[str, Any]:
+def build_python_fixture(root: Path, spec: dict[str, Any]) -> Path:
+    kind = spec.get("kind")
+    if kind == "responses_jsonl":
+        fixture = root / "responses.jsonl"
+        rows = [
+            {
+                "bucket": "agentic_tool_use_json",
+                "case_id": "case_1",
+                "latency_seconds": 1.25,
+                "usage": {"completion_tokens": 120},
+                "scores": {"workflow_success": 1.0},
+            },
+            {
+                "bucket": "normal_use_regression",
+                "case_id": "case_2",
+                "latency_seconds": 2.75,
+                "usage": {"completion_tokens": 80},
+                "scores": {"normal_use_regression_pass_rate": 0.0},
+            },
+        ]
+        fixture.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
+        return fixture
+    if kind == "html_dir":
+        html_dir = root / "artifacts"
+        html_dir.mkdir()
+        (html_dir / "valid.html").write_text("<!doctype html><html><body><h1>Valid Artifact</h1></body></html>\n")
+        (html_dir / "invalid.html").write_text("<html><body>No heading</body></html>\n")
+        return html_dir
+    raise ValueError(f"unknown python validation fixture kind: {kind}")
+
+
+def run_python_fixture_validation(path: Path, spec: dict[str, Any]) -> dict[str, Any]:
+    if not spec:
+        return {"skipped": True, "reason": "no validation fixture configured"}
+    with tempfile.TemporaryDirectory(prefix="model_forge_fixture_") as tmp:
+        fixture = build_python_fixture(Path(tmp), spec)
+        args = [part.replace("{fixture}", str(fixture)) for part in spec.get("args", ["{fixture}"])]
+        proc = subprocess.run(
+            [sys.executable, str(path), *args],
+            text=True,
+            capture_output=True,
+            timeout=int(spec.get("timeout_seconds", 20)),
+            check=False,
+        )
+    combined = (proc.stdout + "\n" + proc.stderr).lower()
+    stdout_any = [item.lower() for item in spec.get("stdout_any", [])]
+    stdout_all = [item.lower() for item in spec.get("stdout_all", [])]
+    checks = {
+        "fixture_exits_cleanly": proc.returncode == 0,
+    }
+    if stdout_any:
+        checks["stdout_contains_any_expected"] = any(item in combined for item in stdout_any)
+    if stdout_all:
+        checks["stdout_contains_all_expected"] = all(item in combined for item in stdout_all)
+    errors = [name for name, ok in checks.items() if not ok]
+    return {
+        "ok": not errors,
+        "skipped": False,
+        "checks": checks,
+        "errors": errors,
+        "returncode": proc.returncode,
+        "stdout": proc.stdout[-2000:],
+        "stderr": proc.stderr[-2000:],
+    }
+
+
+def validate_python_artifact(path: Path, checks_config: dict[str, Any] | None = None) -> dict[str, Any]:
+    checks_config = checks_config or {}
     compile_proc = subprocess.run(
         [sys.executable, "-m", "py_compile", str(path)],
         text=True,
@@ -633,14 +701,22 @@ def validate_python_artifact(path: Path) -> dict[str, Any]:
         details["compile_stderr"] = compile_proc.stderr[-1000:]
     if help_proc.returncode != 0:
         details["help_stderr"] = help_proc.stderr[-1000:]
-    return {"ok": not errors, "type": "python", "checks": checks, "errors": errors, "details": details}
+    fixture = run_python_fixture_validation(path, checks_config.get("validation_fixture", {}))
+    return {
+        "ok": not errors and fixture.get("ok", True),
+        "type": "python",
+        "checks": checks,
+        "errors": errors + fixture.get("errors", []),
+        "details": details,
+        "fixture": fixture,
+    }
 
 
-def validate_artifact(path: Path, artifact_type: str) -> dict[str, Any]:
+def validate_artifact(path: Path, artifact_type: str, checks_config: dict[str, Any] | None = None) -> dict[str, Any]:
     if artifact_type == "html":
         return validate_html_artifact(path)
     if artifact_type == "python":
-        return validate_python_artifact(path)
+        return validate_python_artifact(path, checks_config)
     return {
         "ok": True,
         "type": artifact_type,
@@ -666,7 +742,7 @@ def write_artifacts(root: Path, results: list[EvalResult]) -> tuple[dict[str, st
         path.write_text(extract_code_artifact(result.response_text, artifact_type).strip() + "\n")
         key = f"{result.case.bucket}/{result.case.case_id}"
         artifact_paths[key] = f"artifacts/{filename}"
-        artifact_validations[key] = validate_artifact(path, artifact_type)
+        artifact_validations[key] = validate_artifact(path, artifact_type, result.case.checks)
     if artifact_validations:
         (root / "artifact_validations.json").write_text(json.dumps(artifact_validations, indent=2) + "\n")
     return artifact_paths, artifact_validations
