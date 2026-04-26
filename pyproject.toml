@@ -13,6 +13,11 @@ dependencies = [
   "rich>=13.7",
 ]
 
+[project.optional-dependencies]
+artifacts = [
+  "playwright>=1.45",
+]
+
 [project.scripts]
 model-forge-eval = "model_forge.evals.run_eval:main"
 model-forge-compare = "model_forge.evals.compare_runs:main"

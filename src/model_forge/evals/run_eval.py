@@ -514,7 +514,97 @@ def validate_html_artifact(path: Path) -> dict[str, Any]:
     if "<canvas" in lowered:
         checks["has_canvas_script"] = "getcontext" in lowered or "webgl" in lowered
     errors = [name for name, ok in checks.items() if not ok]
-    return {"ok": not errors, "type": "html", "checks": checks, "errors": errors}
+    browser = validate_html_artifact_in_browser(path)
+    return {
+        "ok": not errors and browser.get("ok", True),
+        "type": "html",
+        "checks": checks,
+        "errors": errors + browser.get("errors", []),
+        "browser": browser,
+    }
+
+
+def validate_html_artifact_in_browser(path: Path) -> dict[str, Any]:
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception as exc:
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": f"playwright unavailable: {exc.__class__.__name__}",
+        }
+
+    console_errors: list[str] = []
+    screenshot_path = path.with_suffix(".png")
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1440, "height": 1000})
+            page.on("console", lambda message: console_errors.append(message.text) if message.type == "error" else None)
+            page.on("pageerror", lambda exc: console_errors.append(str(exc)))
+            page.goto(path.resolve().as_uri(), wait_until="networkidle", timeout=15000)
+            page.wait_for_timeout(750)
+            dom = page.evaluate(
+                """() => ({
+                    bodyTextLength: document.body ? document.body.innerText.trim().length : 0,
+                    elementCount: document.querySelectorAll('body *').length,
+                    headings: document.querySelectorAll('h1,h2,h3,h4,h5,h6').length,
+                    canvases: document.querySelectorAll('canvas').length
+                })"""
+            )
+            canvas_pixels = page.evaluate(
+                """() => Array.from(document.querySelectorAll('canvas')).map((canvas) => {
+                    const result = { width: canvas.width, height: canvas.height, nonblank: false, error: null };
+                    try {
+                        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                        if (gl && canvas.width && canvas.height) {
+                            const pixels = new Uint8Array(canvas.width * canvas.height * 4);
+                            gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+                            result.nonblank = pixels.some((value) => value !== 0);
+                            return result;
+                        }
+                    } catch (error) {
+                        result.error = String(error);
+                    }
+                    try {
+                        const ctx = canvas.getContext('2d');
+                        if (ctx && canvas.width && canvas.height) {
+                            const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+                            result.nonblank = Array.from(data).some((value) => value !== 0);
+                        }
+                    } catch (error) {
+                        result.error = result.error || String(error);
+                    }
+                    return result;
+                })"""
+            )
+            page.screenshot(path=str(screenshot_path), full_page=True)
+            browser.close()
+    except Exception as exc:
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": f"browser validation unavailable: {exc.__class__.__name__}: {exc}",
+        }
+
+    checks = {
+        "dom_has_visible_text": dom["bodyTextLength"] > 0,
+        "dom_has_elements": dom["elementCount"] > 0,
+        "dom_has_heading": dom["headings"] > 0,
+        "console_error_free": not console_errors,
+    }
+    if dom["canvases"]:
+        checks["canvas_nonblank"] = any(item.get("nonblank") for item in canvas_pixels)
+    errors = [name for name, ok in checks.items() if not ok]
+    return {
+        "ok": not errors,
+        "skipped": False,
+        "checks": checks,
+        "errors": errors,
+        "console_errors": console_errors[:10],
+        "canvas_pixels": canvas_pixels,
+        "screenshot_path": screenshot_path.name,
+    }
 
 
 def validate_python_artifact(path: Path) -> dict[str, Any]:

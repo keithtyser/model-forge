@@ -195,6 +195,14 @@ Artifact runs also write:
 - `artifact_report.html`
 - `artifacts/<case>.html`
 - `artifacts/<case>.py`
+- `artifact_validations.json`
+
+Basic artifact validation runs with the standard Python dependencies. Browser validation for HTML/Canvas/WebGL artifacts is enabled when Playwright and browser binaries are installed:
+
+```bash
+pip install -e ".[artifacts]"
+python -m playwright install chromium
+```
 
 ## Runtime overrides supported by model-forge
 
