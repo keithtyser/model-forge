@@ -3,12 +3,15 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
 import re
+import shutil
 import statistics
+import subprocess
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -67,6 +70,16 @@ class EvalResult:
     raw_response: dict[str, Any] | None = None
 
 
+def env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    return int(value) if value else default
+
+
+def env_float(name: str, default: float) -> float:
+    value = os.getenv(name)
+    return float(value) if value else default
+
+
 def load_config(path: Path) -> EvalConfig:
     raw = yaml.safe_load(path.read_text())
     return EvalConfig(
@@ -79,6 +92,32 @@ def load_config(path: Path) -> EvalConfig:
         system_prompt=raw["eval"].get("system_prompt", ""),
         metrics=raw.get("metrics", []),
     )
+
+
+def apply_runtime_overrides(cfg: EvalConfig, output_suffix: str | None) -> EvalConfig:
+    backend = dict(cfg.backend)
+    if os.getenv("MODEL_FORGE_BASE_URL"):
+        backend["base_url"] = os.environ["MODEL_FORGE_BASE_URL"]
+    if os.getenv("MODEL_FORGE_MODEL"):
+        backend["model_alias"] = os.environ["MODEL_FORGE_MODEL"]
+    if os.getenv("MODEL_FORGE_API_KEY"):
+        backend["api_key"] = os.environ["MODEL_FORGE_API_KEY"]
+    if os.getenv("MODEL_FORGE_API_KEY_ENV"):
+        backend["api_key_env"] = os.environ["MODEL_FORGE_API_KEY_ENV"]
+    if os.getenv("MODEL_FORGE_TEMPERATURE"):
+        backend["temperature"] = float(os.environ["MODEL_FORGE_TEMPERATURE"])
+    if os.getenv("MODEL_FORGE_MAX_TOKENS"):
+        backend["max_tokens"] = int(os.environ["MODEL_FORGE_MAX_TOKENS"])
+    if os.getenv("MODEL_FORGE_TIMEOUT_SECONDS"):
+        backend["timeout_seconds"] = int(os.environ["MODEL_FORGE_TIMEOUT_SECONDS"])
+    if os.getenv("MODEL_FORGE_EXTRA_BODY"):
+        backend["extra_body"] = json.loads(os.environ["MODEL_FORGE_EXTRA_BODY"])
+
+    output_dir = cfg.output_dir
+    if output_suffix:
+        output_dir = str(Path(output_dir) / output_suffix)
+
+    return replace(cfg, backend=backend, output_dir=output_dir)
 
 
 def load_prompt_set(path: Path) -> list[EvalCase]:
@@ -116,6 +155,13 @@ def collect_cases(root: Path, prompt_sets: list[str]) -> list[EvalCase]:
             continue
         raise FileNotFoundError(f"Prompt set not found: {name}")
     return cases
+
+
+def filter_cases(cases: list[EvalCase], buckets: list[str] | None, max_cases: int | None) -> list[EvalCase]:
+    filtered = [case for case in cases if not buckets or case.bucket in buckets]
+    if max_cases is not None:
+        filtered = filtered[:max_cases]
+    return filtered
 
 
 def contains_refusal(text: str) -> bool:
@@ -285,13 +331,21 @@ def call_openai_compatible(case: EvalCase, cfg: EvalConfig) -> tuple[str, float,
         "temperature": backend.get("temperature", 0.2),
         "max_tokens": backend.get("max_tokens", 700),
     }
+    extra_body = backend.get("extra_body") or {}
+    if extra_body:
+        body.update(extra_body)
+
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
+    api_key = backend.get("api_key")
     api_key_env = backend.get("api_key_env")
-    if api_key_env and os.getenv(api_key_env):
-        headers["Authorization"] = f"Bearer {os.environ[api_key_env]}"
+    if not api_key and api_key_env and os.getenv(api_key_env):
+        api_key = os.environ[api_key_env]
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
     url = backend["base_url"].rstrip("/") + "/chat/completions"
     request = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST")
     start = time.perf_counter()
@@ -305,6 +359,39 @@ def call_openai_compatible(case: EvalCase, cfg: EvalConfig) -> tuple[str, float,
     content = raw["choices"][0]["message"]["content"]
     usage = raw.get("usage", {})
     return content, elapsed, usage, raw
+
+
+def detect_gpu_info() -> dict[str, Any]:
+    if not shutil.which("nvidia-smi"):
+        return {"available": False}
+    query = "name,memory.total,driver_version"
+    cmd = ["nvidia-smi", f"--query-gpu={query}", "--format=csv,noheader"]
+    try:
+        output = subprocess.check_output(cmd, text=True, timeout=10)
+    except Exception as exc:
+        return {"available": True, "error": str(exc)}
+    gpus = []
+    for line in output.strip().splitlines():
+        parts = [part.strip() for part in line.split(",")]
+        if len(parts) == 3:
+            gpus.append({"name": parts[0], "memory_total": parts[1], "driver_version": parts[2]})
+    return {"available": True, "gpus": gpus}
+
+
+def collect_runtime_metadata(cfg: EvalConfig, dry_run: bool) -> dict[str, Any]:
+    runtime = {
+        "hostname": platform.node(),
+        "platform": platform.platform(),
+        "python_version": platform.python_version(),
+        "hardware_label": os.getenv("MODEL_FORGE_HARDWARE_LABEL", ""),
+        "quantization": os.getenv("MODEL_FORGE_QUANT", ""),
+        "context_length": os.getenv("MODEL_FORGE_CONTEXT_LENGTH", ""),
+        "dry_run": dry_run,
+        "gpu": detect_gpu_info(),
+        "backend_base_url": cfg.backend.get("base_url"),
+        "backend_model_alias": cfg.backend.get("model_alias"),
+    }
+    return runtime
 
 
 def build_manifest(cfg: EvalConfig, cases: list[EvalCase], dry_run: bool) -> dict[str, Any]:
@@ -321,6 +408,7 @@ def build_manifest(cfg: EvalConfig, cases: list[EvalCase], dry_run: bool) -> dic
         "metrics": cfg.metrics,
         "dry_run": dry_run,
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "runtime": collect_runtime_metadata(cfg, dry_run),
     }
 
 
@@ -450,13 +538,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run model-forge evaluation")
     parser.add_argument("--config", required=True, help="Path to experiment YAML")
     parser.add_argument("--dry-run", action="store_true", help="Validate config and emit placeholder outputs")
+    parser.add_argument("--bucket", action="append", default=None, help="Limit to one or more prompt buckets")
+    parser.add_argument("--max-cases", type=int, default=None, help="Limit the number of eval cases")
+    parser.add_argument("--output-suffix", default=None, help="Append a suffix under the configured output directory")
     args = parser.parse_args()
 
     config_path = Path(args.config).resolve()
     repo_root = config_path.parents[2]
-    cfg = load_config(config_path)
+    cfg = apply_runtime_overrides(load_config(config_path), output_suffix=args.output_suffix)
     prompt_root = repo_root / "evals" / "prompts"
     cases = collect_cases(prompt_root, cfg.prompt_sets)
+    cases = filter_cases(cases, buckets=args.bucket, max_cases=args.max_cases)
     manifest = build_manifest(cfg, cases, dry_run=args.dry_run)
     results = [run_case(case, cfg, dry_run=args.dry_run) for case in cases]
     output_root = repo_root / cfg.output_dir
@@ -469,6 +561,7 @@ def main() -> None:
         "total_cases": len(cases),
         "prompt_counts": manifest["prompt_counts"],
         "dry_run": args.dry_run,
+        "runtime": manifest["runtime"],
     }, indent=2))
 
 

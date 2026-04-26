@@ -5,6 +5,25 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 
 class Handler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:
+        if self.path != "/v1/models":
+            self.send_response(404)
+            self.end_headers()
+            return
+        response = {
+            "object": "list",
+            "data": [
+                {"id": "qwen35_9b_local", "object": "model", "owned_by": "mock"},
+                {"id": "Qwen/Qwen3.5-9B", "object": "model", "owned_by": "mock"},
+            ],
+        }
+        encoded = json.dumps(response).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
     def do_POST(self) -> None:
         if self.path != "/v1/chat/completions":
             self.send_response(404)

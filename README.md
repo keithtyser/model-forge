@@ -47,6 +47,10 @@ pip install -e .
 python -m model_forge.evals.run_eval --config configs/experiments/qwen35_9b_v0.yaml --dry-run
 ```
 
+## Running on DGX Spark
+
+See `docs/dgx-spark.md` for a concrete vLLM-based workflow and the exact commands to run the first base-model evaluation.
+
 ## Initial experiment matrix
 
 - `base`
