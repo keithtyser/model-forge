@@ -10,9 +10,17 @@ backend:
   base_url: http://127.0.0.1:8000/v1
   model_alias: qwen35_9b_local
   api_key_env: OPENAI_API_KEY
-  temperature: 0.2
-  max_tokens: 700
+  temperature: 0.7
+  max_tokens: 1200
   timeout_seconds: 120
+  extra_body:
+    top_p: 0.8
+    top_k: 20
+    min_p: 0.0
+    presence_penalty: 1.5
+    repetition_penalty: 1.0
+    chat_template_kwargs:
+      enable_thinking: false
 
 eval:
   output_dir: results/qwen35_9b_v0/base

@@ -17,8 +17,6 @@ export MODEL_FORGE_BASE_URL="$BASE_URL"
 export MODEL_FORGE_MODEL="$MODEL_ALIAS"
 export MODEL_FORGE_HARDWARE_LABEL="${MODEL_FORGE_HARDWARE_LABEL:-DGX Spark}"
 export MODEL_FORGE_TIMEOUT_SECONDS="${MODEL_FORGE_TIMEOUT_SECONDS:-180}"
-export MODEL_FORGE_TEMPERATURE="${MODEL_FORGE_TEMPERATURE:-0.2}"
-export MODEL_FORGE_MAX_TOKENS="${MODEL_FORGE_MAX_TOKENS:-700}"
 
 echo "[model-forge] endpoint: $MODEL_FORGE_BASE_URL"
 echo "[model-forge] model:    $MODEL_FORGE_MODEL"
@@ -31,8 +29,16 @@ req = urllib.request.Request(url, headers={'Accept': 'application/json'})
 with urllib.request.urlopen(req, timeout=15) as r:
     data = json.loads(r.read().decode('utf-8'))
 models = data.get('data', [])
+ids = [m.get('id', '?') for m in models]
 print('[model-forge] /models OK')
-print('[model-forge] advertised models:', ', '.join(m.get('id','?') for m in models[:10]))
+print('[model-forge] advertised models:', ', '.join(ids[:10]))
+if os.environ['MODEL_FORGE_MODEL'] not in ids:
+    print(
+        f"[model-forge] ERROR: requested model {os.environ['MODEL_FORGE_MODEL']!r} "
+        f"is not advertised by the server",
+        file=sys.stderr,
+    )
+    sys.exit(2)
 PY
 
 python -m model_forge.evals.run_eval \

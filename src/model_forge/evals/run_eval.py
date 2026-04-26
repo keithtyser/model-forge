@@ -25,6 +25,8 @@ REFUSAL_PATTERNS = [
     r"\bi cannot assist with that\b",
     r"\bi won'?t help with that\b",
     r"\bi won'?t provide\b",
+    r"\bi cannot provide\b",
+    r"\bi can'?t provide\b",
     r"\bcan'?t assist with\b",
     r"\bnot able to help with\b",
     r"\bmust refuse\b",
