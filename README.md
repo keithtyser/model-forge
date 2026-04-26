@@ -49,7 +49,7 @@ python -m model_forge.evals.run_eval --config configs/experiments/qwen35_9b_v0.y
 
 ## Running on DGX Spark
 
-See `docs/dgx-spark.md` for a concrete vLLM-based workflow and the exact commands to run the first base-model evaluation.
+See `docs/dgx-spark.md` for a concrete DGX Spark workflow using `spark-vllm-docker` and the exact commands to run the first base-model evaluation.
 
 ## Initial experiment matrix
 

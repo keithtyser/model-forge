@@ -1,81 +1,118 @@
 # Running model-forge on DGX Spark
 
-This repo is set up to evaluate against any OpenAI-compatible local endpoint. For DGX Spark, the cleanest first path is:
+Use `spark-vllm-docker` for DGX Spark. It is the right default, not vanilla host-level vLLM.
 
-1. serve the model with vLLM
+Reference:
+- https://github.com/eugr/spark-vllm-docker
+
+Why this is the better path:
+- built specifically for DGX Spark
+- supports single-node and multi-node Spark setups
+- already handles the annoying container and cluster details
+- keeps the serving side closer to what serious Spark users are actually doing
+
+model-forge only needs one thing from the serving layer:
+- an OpenAI-compatible endpoint
+
+So the clean setup is:
+1. serve the model with `spark-vllm-docker`
 2. point model-forge at that endpoint
-3. run the base eval
+3. run the eval
 
 ## Recommended first target
 
 Start with:
 - model: `Qwen/Qwen3.5-9B`
-- runner: vLLM
+- serving stack: `spark-vllm-docker`
 - eval config: `configs/experiments/qwen35_9b_v0.yaml`
 
-That is the right first move because it is current, strong enough to be interesting, and small enough to iterate on without turning the first run into infrastructure drama.
+That is current enough to matter and small enough to keep the first run from turning into infrastructure bullshit.
 
-## 1. Create the environment
+## 1. Clone both repos
+
+```bash
+git clone https://github.com/keithtyser/model-forge.git
+git clone https://github.com/eugr/spark-vllm-docker.git
+```
+
+## 2. Set up model-forge
 
 ```bash
 cd model-forge
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
-pip install vllm
 ```
 
-## 2. Start the OpenAI-compatible server
+## 3. Build the DGX Spark vLLM container
 
 ```bash
-./scripts/serve_vllm_dgx_spark.sh Qwen/Qwen3.5-9B
+cd ../spark-vllm-docker
+./build-and-copy.sh
 ```
 
-Useful overrides:
+That is the single-node path. If you later run multi-node Spark cluster inference, use their cluster instructions instead of inventing your own mess.
+
+## 4. Launch the model server on a single DGX Spark
 
 ```bash
-MAX_MODEL_LEN=16384 GPU_MEMORY_UTILIZATION=0.90 ./scripts/serve_vllm_dgx_spark.sh Qwen/Qwen3.5-9B
+cd ../spark-vllm-docker
+./launch-cluster.sh --solo exec \
+  vllm serve \
+    Qwen/Qwen3.5-9B \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --gpu-memory-utilization 0.92 \
+    --max-model-len 32768
 ```
 
-If you want to use a different served model name, set it at eval time with `MODEL_FORGE_MODEL`.
+If memory is tighter than expected, back off fast instead of pretending:
 
-## 3. Smoke test the endpoint
+```bash
+./launch-cluster.sh --solo exec \
+  vllm serve \
+    Qwen/Qwen3.5-9B \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --gpu-memory-utilization 0.90 \
+    --max-model-len 16384
+```
+
+## 5. Smoke test the endpoint
 
 ```bash
 curl http://127.0.0.1:8000/v1/models
 ```
 
-If that fails, do not run the eval yet. Fix serving first.
+If that fails, stop. Fix serving first.
 
-## 4. Run the evaluation
-
-Full run:
+## 6. Run a quick smoke eval
 
 ```bash
+cd ../model-forge
 source .venv/bin/activate
+MODEL_FORGE_MAX_CASES=4 \
+MODEL_FORGE_BASE_URL=http://127.0.0.1:8000/v1 \
+MODEL_FORGE_MODEL=Qwen/Qwen3.5-9B \
+./scripts/run_dgx_spark_eval.sh configs/experiments/qwen35_9b_v0.yaml smoke
+```
+
+## 7. Run the full base eval
+
+```bash
+cd ../model-forge
+source .venv/bin/activate
+MODEL_FORGE_BASE_URL=http://127.0.0.1:8000/v1 \
+MODEL_FORGE_MODEL=Qwen/Qwen3.5-9B \
+MODEL_FORGE_HARDWARE_LABEL="DGX Spark" \
+MODEL_FORGE_QUANT="fp16" \
+MODEL_FORGE_CONTEXT_LENGTH="32768" \
 ./scripts/run_dgx_spark_eval.sh configs/experiments/qwen35_9b_v0.yaml qwen35_9b_dgx_spark
-```
-
-Quick smoke run:
-
-```bash
-source .venv/bin/activate
-MODEL_FORGE_MAX_CASES=4 ./scripts/run_dgx_spark_eval.sh configs/experiments/qwen35_9b_v0.yaml smoke
-```
-
-## 5. Optional metadata overrides
-
-These values are recorded in the manifest if you set them:
-
-```bash
-export MODEL_FORGE_HARDWARE_LABEL="DGX Spark"
-export MODEL_FORGE_QUANT="fp16"
-export MODEL_FORGE_CONTEXT_LENGTH="32768"
 ```
 
 ## Output location
 
-Results are written under the configured output directory with the run suffix appended:
+Results are written under:
 
 ```text
 results/qwen35_9b_v0/base/<run-name>/
@@ -87,9 +124,8 @@ You will get:
 - `responses.jsonl`
 - `examples.md`
 
-## Environment overrides
+## Runtime overrides supported by model-forge
 
-The harness supports these runtime overrides:
 - `MODEL_FORGE_BASE_URL`
 - `MODEL_FORGE_MODEL`
 - `MODEL_FORGE_API_KEY`
@@ -106,8 +142,7 @@ The harness supports these runtime overrides:
 ## Strong recommendation
 
 Do the first run in two stages:
-
-1. smoke run with `MODEL_FORGE_MAX_CASES=4`
+1. smoke run with 4 cases
 2. full base eval
 
-That catches dumb serving issues fast and keeps the first iteration tight.
+That catches dumb serving failures immediately and keeps the first iteration honest.
