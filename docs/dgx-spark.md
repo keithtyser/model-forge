@@ -44,6 +44,8 @@ Serve the base model:
 ./scripts/dgx_spark_serve_gemma4_26b_a4b.sh
 ```
 
+The Gemma wrapper defaults to `GPU_MEMORY_UTILIZATION=0.85` because DGX Spark usually exposes less free CUDA memory than the full unified-memory total at server startup. If startup still fails during memory reservation, retry with `GPU_MEMORY_UTILIZATION=0.80` or reduce `MAX_MODEL_LEN` to `16384`.
+
 Serve Jackrong's fine-tune:
 
 ```bash
