@@ -230,4 +230,12 @@ model-forge-external lm-eval --dry-run
 model-forge-external promptfoo --dry-run
 ```
 
+Install optional Python-backed external tools:
+
+```bash
+pip install -e ".[external]"
+```
+
+`promptfoo` is a Node.js tool and should be installed with its own documented package manager workflow.
+
 If the external tool is installed, arguments after `--` are passed through to that tool. Each run writes `external_run.json` plus captured stdout/stderr when executed.

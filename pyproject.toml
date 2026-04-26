@@ -17,6 +17,11 @@ dependencies = [
 artifacts = [
   "playwright>=1.45",
 ]
+external = [
+  "inspect-ai>=0.3",
+  "lighteval>=0.10",
+  "lm-eval>=0.4",
+]
 
 [project.scripts]
 model-forge-eval = "model_forge.evals.run_eval:main"
