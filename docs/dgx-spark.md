@@ -46,6 +46,14 @@ pip install -e .
 
 ## 3. Build the DGX Spark vLLM container
 
+If you want a one-command wrapper from this repo:
+
+```bash
+./scripts/dgx_spark_build_vllm.sh
+```
+
+Equivalent manual command:
+
 ```bash
 cd ../spark-vllm-docker
 ./build-and-copy.sh
@@ -54,6 +62,14 @@ cd ../spark-vllm-docker
 That is the single-node path. If you later run multi-node Spark cluster inference, use their cluster instructions instead of inventing your own mess.
 
 ## 4. Launch the model server on a single DGX Spark
+
+Preferred wrapper:
+
+```bash
+./scripts/dgx_spark_serve_qwen35_9b.sh
+```
+
+Equivalent manual command:
 
 ```bash
 cd ../spark-vllm-docker
@@ -88,6 +104,14 @@ If that fails, stop. Fix serving first.
 
 ## 6. Run a quick smoke eval
 
+Preferred wrapper:
+
+```bash
+./scripts/dgx_spark_smoke_eval_qwen35_9b.sh
+```
+
+Equivalent manual command:
+
 ```bash
 cd ../model-forge
 source .venv/bin/activate
@@ -98,6 +122,14 @@ MODEL_FORGE_MODEL=Qwen/Qwen3.5-9B \
 ```
 
 ## 7. Run the full base eval
+
+Preferred wrapper:
+
+```bash
+./scripts/dgx_spark_full_eval_qwen35_9b.sh
+```
+
+Equivalent manual command:
 
 ```bash
 cd ../model-forge
