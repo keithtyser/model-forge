@@ -38,7 +38,25 @@ Gemma 4 26B-A4B is a good second target for DGX Spark because it is a MoE model 
 
 For fair benchmark comparisons, start with the HF safetensors/BF16 models on the same vLLM stack. Quantized GGUF or NVFP4 runs are useful for throughput testing, but they add a quantization variable and should be compared separately.
 
-The simplest workflow is the convenience wrapper:
+The generic family workflow is:
+
+```bash
+./scripts/model_forge_dgx.py gemma4_26b_a4b serve base
+./scripts/model_forge_dgx.py gemma4_26b_a4b smoke base
+./scripts/model_forge_dgx.py gemma4_26b_a4b full base
+
+./scripts/model_forge_dgx.py gemma4_26b_a4b serve ft
+./scripts/model_forge_dgx.py gemma4_26b_a4b smoke ft
+./scripts/model_forge_dgx.py gemma4_26b_a4b full ft
+
+./scripts/model_forge_dgx.py gemma4_26b_a4b serve abli
+./scripts/model_forge_dgx.py gemma4_26b_a4b smoke abli
+./scripts/model_forge_dgx.py gemma4_26b_a4b full abli
+
+./scripts/model_forge_dgx.py gemma4_26b_a4b compare
+```
+
+For Gemma 4 only, the shorter compatibility wrapper is:
 
 ```bash
 ./scripts/gemma4_dgx.sh serve base

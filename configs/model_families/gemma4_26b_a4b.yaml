@@ -1,0 +1,41 @@
+name: gemma4_26b_a4b
+display_name: Gemma 4 26B-A4B
+
+models_dir_env: MODEL_FORGE_MODELS_DIR
+default_models_dir: ~/models
+
+variants:
+  base:
+    repo_id: google/gemma-4-26B-A4B-it
+    local_dir: gemma-4-26B-A4B-it
+    served_model_name: google/gemma-4-26B-A4B-it
+  ft:
+    repo_id: Jackrong/Gemopus-4-26B-A4B-it
+    local_dir: Gemopus-4-26B-A4B-it
+    served_model_name: Jackrong/Gemopus-4-26B-A4B-it
+  abli:
+    repo_id: huihui-ai/Huihui-gemma-4-26B-A4B-it-abliterated
+    local_dir: Huihui-gemma-4-26B-A4B-it-abliterated
+    served_model_name: huihui-ai/Huihui-gemma-4-26B-A4B-it-abliterated
+
+serve:
+  script: scripts/dgx_spark_serve_gemma4_26b_a4b.sh
+  default_gpu_memory_utilization: "0.85"
+  default_max_model_len: "32768"
+
+eval:
+  config: configs/experiments/gemma4_26b_a4b_v0.yaml
+  artifact_config: configs/experiments/gemma4_26b_a4b_artifacts_v0.yaml
+  output_root: results/gemma4_26b_a4b_v0/base
+  run_prefix: gemma4_26b_a4b
+  smoke_suffix: "{family}_{variant}_smoke"
+  full_suffix: "{family}_{variant}_dgx_spark"
+  artifact_suffix: "{family}_{variant}_artifacts_dgx_spark"
+
+comparison:
+  output_dir: reports/generated/gemma4_26b_a4b_comparison
+
+external:
+  default_tool: lm-eval
+  default_tasks: ifeval
+  output_root: reports/generated/gemma4_26b_a4b_external

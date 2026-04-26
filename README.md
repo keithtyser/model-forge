@@ -11,8 +11,8 @@ The immediate focus is Gemma 4 on DGX Spark:
 - fine-tune: `Jackrong/Gemopus-4-26B-A4B-it`
 - ablation: `huihui-ai/Huihui-gemma-4-26B-A4B-it-abliterated`
 
-Qwen experiment configs are also present, but the polished one-command local
-workflow currently targets Gemma 4.
+Qwen experiment configs are also present. The reusable family runner is
+config-driven, but the first fully populated family registry is Gemma 4.
 
 ## What It Measures
 
@@ -59,9 +59,9 @@ Profiles:
 Download the three Gemma 4 variants:
 
 ```bash
-./scripts/download_gemma4_models.sh base
-./scripts/download_gemma4_models.sh ft
-./scripts/download_gemma4_models.sh abli
+./scripts/model_forge_dgx.py gemma4_26b_a4b download base
+./scripts/model_forge_dgx.py gemma4_26b_a4b download ft
+./scripts/model_forge_dgx.py gemma4_26b_a4b download abli
 ```
 
 The downloader prompts for `HF_TOKEN` if it is not already set. It stores models
@@ -73,32 +73,35 @@ another terminal while the server is up.
 Base:
 
 ```bash
-./scripts/gemma4_dgx.sh serve base
-./scripts/gemma4_dgx.sh smoke base
-./scripts/gemma4_dgx.sh full base
+./scripts/model_forge_dgx.py gemma4_26b_a4b serve base
+./scripts/model_forge_dgx.py gemma4_26b_a4b smoke base
+./scripts/model_forge_dgx.py gemma4_26b_a4b full base
 ```
 
 Fine-tune:
 
 ```bash
-./scripts/gemma4_dgx.sh serve ft
-./scripts/gemma4_dgx.sh smoke ft
-./scripts/gemma4_dgx.sh full ft
+./scripts/model_forge_dgx.py gemma4_26b_a4b serve ft
+./scripts/model_forge_dgx.py gemma4_26b_a4b smoke ft
+./scripts/model_forge_dgx.py gemma4_26b_a4b full ft
 ```
 
 Ablation:
 
 ```bash
-./scripts/gemma4_dgx.sh serve abli
-./scripts/gemma4_dgx.sh smoke abli
-./scripts/gemma4_dgx.sh full abli
+./scripts/model_forge_dgx.py gemma4_26b_a4b serve abli
+./scripts/model_forge_dgx.py gemma4_26b_a4b smoke abli
+./scripts/model_forge_dgx.py gemma4_26b_a4b full abli
 ```
 
 Compare:
 
 ```bash
-./scripts/gemma4_dgx.sh compare
+./scripts/model_forge_dgx.py gemma4_26b_a4b compare
 ```
+
+For Gemma only, `./scripts/gemma4_dgx.sh ...` remains available as a short
+compatibility alias for the generic family runner.
 
 Open:
 
@@ -111,15 +114,15 @@ reports/generated/gemma4_26b_a4b_comparison/comparison_report.html
 Install external dependencies once:
 
 ```bash
-./scripts/gemma4_dgx.sh external-install
+./scripts/model_forge_dgx.py gemma4_26b_a4b external-install
 ```
 
 Run IFEval through `lm-evaluation-harness` against the currently served model:
 
 ```bash
-MODEL_FORGE_EXTERNAL_LIMIT=20 ./scripts/gemma4_dgx.sh external base ifeval
-MODEL_FORGE_EXTERNAL_LIMIT=20 ./scripts/gemma4_dgx.sh external ft ifeval
-MODEL_FORGE_EXTERNAL_LIMIT=20 ./scripts/gemma4_dgx.sh external abli ifeval
+MODEL_FORGE_EXTERNAL_LIMIT=20 ./scripts/model_forge_dgx.py gemma4_26b_a4b external base ifeval
+MODEL_FORGE_EXTERNAL_LIMIT=20 ./scripts/model_forge_dgx.py gemma4_26b_a4b external ft ifeval
+MODEL_FORGE_EXTERNAL_LIMIT=20 ./scripts/model_forge_dgx.py gemma4_26b_a4b external abli ifeval
 ```
 
 Remove `MODEL_FORGE_EXTERNAL_LIMIT` for a full run.
@@ -140,9 +143,9 @@ artifacts. Outputs are saved for human inspection.
 
 ```bash
 ./scripts/setup.sh artifacts
-./scripts/gemma4_dgx.sh artifact base
-./scripts/gemma4_dgx.sh artifact ft
-./scripts/gemma4_dgx.sh artifact abli
+./scripts/model_forge_dgx.py gemma4_26b_a4b artifact base
+./scripts/model_forge_dgx.py gemma4_26b_a4b artifact ft
+./scripts/model_forge_dgx.py gemma4_26b_a4b artifact abli
 ```
 
 Run artifact commands with the matching variant server already running.
@@ -152,16 +155,37 @@ Run artifact commands with the matching variant server already running.
 Use these when moving across machines:
 
 ```bash
-MODEL_FORGE_MODELS_DIR=/data/models ./scripts/gemma4_dgx.sh serve base
-GPU_MEMORY_UTILIZATION=0.80 ./scripts/gemma4_dgx.sh serve base
-MAX_MODEL_LEN=16384 ./scripts/gemma4_dgx.sh serve base
-MODEL_FORGE_EXTERNAL_CONCURRENCY=2 ./scripts/gemma4_dgx.sh external base ifeval
+MODEL_FORGE_MODELS_DIR=/data/models ./scripts/model_forge_dgx.py gemma4_26b_a4b serve base
+GPU_MEMORY_UTILIZATION=0.80 ./scripts/model_forge_dgx.py gemma4_26b_a4b serve base
+MAX_MODEL_LEN=16384 ./scripts/model_forge_dgx.py gemma4_26b_a4b serve base
+MODEL_FORGE_EXTERNAL_CONCURRENCY=2 ./scripts/model_forge_dgx.py gemma4_26b_a4b external base ifeval
 ```
 
 Model downloads can be tuned:
 
 ```bash
-HF_MAX_WORKERS=16 HF_XET_NUM_CONCURRENT_RANGE_GETS=16 ./scripts/download_gemma4_models.sh base
+HF_MAX_WORKERS=16 HF_XET_NUM_CONCURRENT_RANGE_GETS=16 ./scripts/model_forge_dgx.py gemma4_26b_a4b download base
+```
+
+## Adding Model Families
+
+Model-family convenience workflows are defined in `configs/model_families/`.
+Add a new YAML file to describe:
+
+- variant repo IDs and local directory names
+- served model aliases
+- serve script and default vLLM settings
+- eval and artifact configs
+- comparison output path
+- external benchmark output path and default tasks
+
+Then run the generic command:
+
+```bash
+./scripts/model_forge_dgx.py <family> serve base
+./scripts/model_forge_dgx.py <family> full base
+./scripts/model_forge_dgx.py <family> external base ifeval
+./scripts/model_forge_dgx.py <family> compare
 ```
 
 ## Lower-Level CLI
@@ -177,7 +201,7 @@ uv run model-forge-external lm-eval --dry-run
 ```
 
 Use these when building a new model-family workflow before adding a convenience
-wrapper like `scripts/gemma4_dgx.sh`.
+family registry in `configs/model_families/`.
 
 ## Outputs
 
@@ -203,6 +227,8 @@ Generated outputs are ignored by git.
 
 ```text
 configs/         Experiment and suite configuration
+configs/model_families/
+                 Model-family registries for one-command workflows
 datasets/        Dataset manifests and metadata
 docs/            Evaluation and platform documentation
 evals/           Prompt sets and scoring rubrics
