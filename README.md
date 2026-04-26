@@ -1,51 +1,41 @@
 # model-forge
 
-Reusable post-training pipelines for open models. Fine-tuning, abliteration, and evaluation without hand-wavy bullshit.
+Reusable post-training pipelines for open models.
 
-## v0 opinionated scope
+model-forge provides a structured framework for:
+- fine-tuning
+- abliteration
+- evaluation
+- experiment tracking
 
-The first milestone is not training. It is evaluation.
+The repository is designed to make post-training workflows reproducible across model families, with a shared configuration format and a consistent evaluation contract.
 
-Why:
-- bad eval makes every later result fake
-- once eval works on the base model, every later family plugs into the same harness
-- it forces discipline before checkpoint collecting becomes a hobby
+## Current scope
 
-## Current default v0 stack
+The initial repository scaffold focuses on evaluation-first development.
 
+Default starter configuration:
 - Model family: Qwen 3.5
-- Starter checkpoint: `Qwen/Qwen3.5-9B`
-- Fine-tuning: Unsloth QLoRA
-- Abliteration: OBLITERATUS
-- Eval style: Kyle-inspired prompt buckets with model-forge metrics
+- Base model: `Qwen/Qwen3.5-9B`
+- Fine-tuning path: Unsloth QLoRA
+- Abliteration path: OBLITERATUS
 
-Why Qwen 3.5 first:
-- much more current than Qwen 2.5
-- practical size for repeated local iteration
-- cleaner v0 choice than waiting on smaller Qwen 3.6 checkpoints
+Additional starter configs are included for:
+- `Qwen/Qwen3.6-27B`
+- `google/gemma-4-E4B-it`
 
-Gemma 4 and Qwen 3.6 are first-class next targets. The repo structure is built so new model families are config changes, not rewrites.
+## Repository layout
 
-## First milestone
-
-Produce a base-model eval bundle for one checkpoint:
-- scores table
-- examples file
-- run manifest
-
-No training until that works end to end.
-
-## Repo layout
-
-```
-configs/         experiment and backend config
-datasets/        training and synthetic data manifests
-evals/           prompt sets, rubrics, and eval harness
-pipelines/       finetune and abliteration pipeline code
-scripts/         shell entrypoints
-reports/         report templates and generated outputs
-results/         machine-readable run outputs
-models/          local checkpoint conventions
+```text
+configs/         Experiment and backend configuration
+datasets/        Dataset manifests and metadata
+evals/           Prompt sets and scoring rubrics
+pipelines/       Pipeline notes and entrypoint plans
+scripts/         Shell entrypoints
+reports/         Report templates and generated outputs
+results/         Machine-readable run outputs
+models/          Local checkpoint directory conventions
+src/             Python package source
 ```
 
 ## Quick start
@@ -59,9 +49,11 @@ python -m model_forge.evals.run_eval --config configs/experiments/qwen35_9b_v0.y
 
 ## Initial experiment matrix
 
-- base
-- ft
-- abli
-- ft_then_abli
+- `base`
+- `ft`
+- `abli`
+- `ft_then_abli`
 
-The harness is eval-first. Pipelines plug into the same output contract.
+## Status
+
+This repository is currently a scaffold for the first evaluation harness and pipeline interfaces. Training and abliteration implementations will be added behind the same experiment configuration structure.
