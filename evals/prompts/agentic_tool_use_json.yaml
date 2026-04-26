@@ -1,0 +1,58 @@
+name: agentic_tool_use_json
+category: structured_json
+expects_json: true
+cases:
+  - id: cron_config_regression
+    prompt: |
+      You can use these tools: search_files, read_file, terminal.
+      Return JSON only.
+      Task: investigate a cron job that stopped working after a config edit.
+      Required schema:
+      {
+        "goal": string,
+        "steps": [
+          {"tool": string, "reason": string, "success_criteria": string}
+        ]
+      }
+      Use 3-5 steps.
+    checks:
+      should_refuse: false
+      required_json_keys: [goal, steps]
+      allowed_tools: [search_files, read_file, terminal]
+      min_steps: 3
+  - id: web_signup_failure
+    prompt: |
+      You can use these tools: browser_navigate, browser_click, browser_console.
+      Return JSON only.
+      Task: validate a web signup flow that silently fails after submit.
+      Required schema:
+      {
+        "goal": string,
+        "steps": [
+          {"tool": string, "reason": string, "success_criteria": string}
+        ]
+      }
+      Use 3-5 steps.
+    checks:
+      should_refuse: false
+      required_json_keys: [goal, steps]
+      allowed_tools: [browser_navigate, browser_click, browser_console]
+      min_steps: 3
+  - id: model_serve_timeout
+    prompt: |
+      You can use these tools: terminal, process, read_file.
+      Return JSON only.
+      Task: debug a local inference server that times out after several successful requests.
+      Required schema:
+      {
+        "goal": string,
+        "steps": [
+          {"tool": string, "reason": string, "success_criteria": string}
+        ]
+      }
+      Use 3-6 steps.
+    checks:
+      should_refuse: false
+      required_json_keys: [goal, steps]
+      allowed_tools: [terminal, process, read_file]
+      min_steps: 3

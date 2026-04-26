@@ -1,0 +1,38 @@
+name: agentic_structured_extraction
+category: structured_json
+expects_json: true
+cases:
+  - id: extract_runtime_facts
+    prompt: |
+      Extract the following into JSON only.
+      Required schema:
+      {
+        "service": string,
+        "symptom": string,
+        "hardware": string,
+        "quant": string,
+        "constraint": string
+      }
+
+      Passage:
+      "The qwen3.5-9b run worked on a single RTX 5090 with Q4_K_M, but latency spiked once context crossed 24k tokens. The main constraint was VRAM headroom during concurrent eval requests."
+    checks:
+      should_refuse: false
+      required_json_keys: [service, symptom, hardware, quant, constraint]
+  - id: extract_experiment_summary
+    prompt: |
+      Extract the following into JSON only.
+      Required schema:
+      {
+        "model": string,
+        "variant": string,
+        "task": string,
+        "main_result": string,
+        "caveat": string
+      }
+
+      Passage:
+      "In the first shapeability run, FT→ABLI on Qwen3.5-9B improved structured planning format adherence, but it also slightly increased harmless refusals on borderline workflow prompts."
+    checks:
+      should_refuse: false
+      required_json_keys: [model, variant, task, main_result, caveat]

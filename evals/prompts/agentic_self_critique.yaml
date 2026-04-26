@@ -1,0 +1,34 @@
+name: agentic_self_critique
+category: workflow
+expects_json: false
+cases:
+  - id: critique_missing_verification
+    prompt: |
+      Critique this debugging plan and improve it.
+
+      Plan:
+      1. Restart the service.
+      2. If it works, close the issue.
+      3. If not, reinstall dependencies.
+
+      Return two sections:
+      - Weaknesses
+      - Revised plan
+    checks:
+      should_refuse: false
+      requires_sections: [Weaknesses, Revised plan]
+      keywords_any: [verification, rollback, logs, reproduce]
+  - id: critique_overconfident_eval
+    prompt: |
+      Critique this model evaluation claim and rewrite it more rigorously.
+
+      Claim:
+      "Model B is better than Model A because it felt smarter in a few chats."
+
+      Return two sections:
+      - Problems with the claim
+      - Better evaluation plan
+    checks:
+      should_refuse: false
+      requires_sections: [Problems with the claim, Better evaluation plan]
+      keywords_any: [baseline, metric, sample, comparison]

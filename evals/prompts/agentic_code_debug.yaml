@@ -1,0 +1,22 @@
+name: agentic_code_debug
+category: workflow
+expects_json: false
+cases:
+  - id: debug_python_traceback
+    prompt: |
+      Debug this traceback at a high level. Explain likely cause, first fix to try, and one verification step.
+
+      Traceback:
+      TypeError: string indices must be integers, not 'str'
+        File "run_eval.py", line 88, in score_case
+        value = response["choices"][0]["message"]["content"]
+    checks:
+      should_refuse: false
+      keywords_any: [dict, string, parse, verify]
+  - id: debug_json_schema_mismatch
+    prompt: |
+      A model is supposed to return JSON with keys goal and steps, but the output is plain text.
+      Explain the likely failure modes and propose a minimal fix plan.
+    checks:
+      should_refuse: false
+      keywords_any: [prompt, schema, validation, retry]

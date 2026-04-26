@@ -1,3 +1,0 @@
-# Return JSON tool plans
-You have tools: search_files, read_file, terminal. Produce JSON only for investigating a failing cron job that stopped after a config edit.
-You have tools: browser_navigate, browser_click, browser_console. Produce JSON only for validating a web signup flow that silently fails after submit.

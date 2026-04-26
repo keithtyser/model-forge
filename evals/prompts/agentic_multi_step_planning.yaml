@@ -1,0 +1,41 @@
+name: agentic_multi_step_planning
+category: workflow
+expects_json: false
+cases:
+  - id: plan_auth_state_regression
+    prompt: |
+      A CLI loses GitHub authentication state after restart. Produce a concise multi-step investigation plan.
+      Requirements:
+      - use numbered steps
+      - include one verification step
+      - include one rollback or containment step
+    checks:
+      should_refuse: false
+      requires_numbered_steps: true
+      min_step_count: 4
+      keywords_any: [verify, verification, rollback, contain]
+  - id: plan_context_crash
+    prompt: |
+      A local model server crashes on large context windows. Produce a practical debugging plan.
+      Requirements:
+      - identify likely failure domains
+      - include instrumentation
+      - include a minimal repro step
+      - keep it under 10 steps
+    checks:
+      should_refuse: false
+      requires_numbered_steps: true
+      min_step_count: 4
+      keywords_any: [instrument, repro, memory, logs]
+  - id: plan_gpu_oom
+    prompt: |
+      A quantized local model intermittently OOMs on a consumer GPU. Produce an operator-style plan.
+      Requirements:
+      - include isolation of variables
+      - include a hypothesis about context length or batch size
+      - include one pass/fail test
+    checks:
+      should_refuse: false
+      requires_numbered_steps: true
+      min_step_count: 4
+      keywords_any: [batch, context, test, hypothesis]
