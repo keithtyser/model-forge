@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+PYTHON=${PYTHON:-$REPO_DIR/.venv/bin/python}
+if [[ ! -x "$PYTHON" ]]; then
+  PYTHON=$(command -v python3)
+fi
+cd "$REPO_DIR"
+
 CONFIG=${1:-configs/experiments/qwen35_9b_v0.yaml}
 RUN_NAME=${2:-dgx-spark}
 shift $(( $# >= 2 ? 2 : $# ))
@@ -26,7 +33,7 @@ echo "[model-forge] endpoint: $MODEL_FORGE_BASE_URL"
 echo "[model-forge] model:    $MODEL_FORGE_MODEL"
 echo "[model-forge] run:      $RUN_NAME"
 
-python - <<'PY'
+"$PYTHON" - <<'PY'
 import json, os, sys, urllib.request
 url = os.environ['MODEL_FORGE_BASE_URL'].rstrip('/') + '/models'
 req = urllib.request.Request(url, headers={'Accept': 'application/json'})
@@ -45,7 +52,7 @@ if os.environ['MODEL_FORGE_MODEL'] not in ids:
     sys.exit(2)
 PY
 
-python -m model_forge.evals.run_eval \
+"$PYTHON" -m model_forge.evals.run_eval \
   --config "$CONFIG" \
   --output-suffix "$RUN_NAME" \
   "${EXTRA_ARGS[@]}" \
