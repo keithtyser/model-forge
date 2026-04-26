@@ -23,6 +23,13 @@ LOWER_IS_BETTER_PATTERNS = (
     "latency",
 )
 
+CRITICAL_REGRESSION_METRICS = {
+    "workflow_success",
+    "schema_adherence",
+    "normal_use_regression_pass_rate",
+    "unsafe_overcompliance_rate",
+}
+
 
 def lower_is_better(metric: str) -> bool:
     return any(pattern in metric for pattern in LOWER_IS_BETTER_PATTERNS)
@@ -149,6 +156,7 @@ def compare_runs(runs: dict[str, dict[str, Any]]) -> dict[str, Any]:
                         "delta": delta,
                     })
         rows.append(row)
+    recommendations = build_recommendations(assessments)
     return {
         "runs": {
             name: {
@@ -163,9 +171,46 @@ def compare_runs(runs: dict[str, dict[str, Any]]) -> dict[str, Any]:
         },
         "score_rows": rows,
         "variant_assessments": assessments,
+        "recommendations": recommendations,
         "failures": {name: run["failures"] for name, run in runs.items()},
         "artifacts": {name: run["artifacts"] for name, run in runs.items()},
     }
+
+
+def build_recommendations(assessments: dict[str, dict[str, list[dict[str, Any]]]]) -> dict[str, dict[str, Any]]:
+    recommendations = {}
+    for name, assessment in assessments.items():
+        regressions = assessment.get("regressions", [])
+        improvements = assessment.get("improvements", [])
+        critical_regressions = [
+            item for item in regressions
+            if item["metric"] in CRITICAL_REGRESSION_METRICS
+        ]
+        refusal_improvements = [
+            item for item in improvements
+            if item["metric"] == "benign_refusal_rate"
+        ]
+        capability_improvements = [
+            item for item in improvements
+            if item["metric"] in {"workflow_success", "schema_adherence", "normal_use_regression_pass_rate"}
+        ]
+        if critical_regressions:
+            decision = "reject_or_investigate"
+            reason = "critical regressions detected"
+        elif improvements:
+            decision = "promote_candidate"
+            reason = "improvements without critical regressions"
+        else:
+            decision = "flat"
+            reason = "no material metric movement"
+        recommendations[name] = {
+            "decision": decision,
+            "reason": reason,
+            "critical_regressions": critical_regressions,
+            "refusal_improvements": refusal_improvements,
+            "capability_improvements": capability_improvements,
+        }
+    return recommendations
 
 
 def write_csv(path: Path, comparison: dict[str, Any], variant_names: list[str]) -> None:
@@ -206,6 +251,7 @@ def write_html(path: Path, comparison: dict[str, Any], variant_names: list[str])
     for name in variant_names:
         if name == "base":
             continue
+        recommendation = comparison.get("recommendations", {}).get(name, {})
         assessment = comparison.get("variant_assessments", {}).get(name, {})
         improvements = assessment.get("improvements", [])[:20]
         regressions = assessment.get("regressions", [])[:20]
@@ -219,6 +265,7 @@ def write_html(path: Path, comparison: dict[str, Any], variant_names: list[str])
         ) or "<li>No metric regressions vs base.</li>"
         assessment_sections.append(
             f"<h3>{html.escape(name)}</h3>"
+            f"<p><strong>Recommendation:</strong> {html.escape(recommendation.get('decision', 'unknown'))} - {html.escape(recommendation.get('reason', ''))}</p>"
             f"<h4>Improvements</h4><ul>{improvement_items}</ul>"
             f"<h4>Regressions</h4><ul>{regression_items}</ul>"
         )
