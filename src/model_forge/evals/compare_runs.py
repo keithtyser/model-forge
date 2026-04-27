@@ -5,6 +5,7 @@ import csv
 import html
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,16 @@ CRITICAL_REGRESSION_METRICS = {
     "normal_use_regression_pass_rate",
     "unsafe_overcompliance_rate",
 }
+
+
+def color(code: str, text: str) -> str:
+    if os.getenv("NO_COLOR") or not sys.stdout.isatty():
+        return text
+    return f"\033[{code}m{text}\033[0m"
+
+
+def green(text: str) -> str:
+    return color("32", text)
 
 
 def lower_is_better(metric: str) -> bool:
@@ -358,7 +369,11 @@ def main() -> None:
     (args.output_dir / "comparison.json").write_text(json.dumps(comparison, indent=2) + "\n")
     write_csv(args.output_dir / "comparison.csv", comparison, variant_names)
     write_html(args.output_dir / "comparison_report.html", comparison, variant_names)
-    print(json.dumps({"ok": True, "output_dir": str(args.output_dir), "runs": variant_names}, indent=2))
+    print()
+    print(f"{green('OK')} Comparison report refreshed")
+    print(f"  output: {args.output_dir}")
+    print(f"  runs:   {', '.join(variant_names)}")
+    print(f"  html:   {args.output_dir / 'comparison_report.html'}")
 
 
 if __name__ == "__main__":

@@ -38,7 +38,8 @@ Download models:
 
 Run each model. Keep `serve` running in one terminal, then run `eval` in another.
 `eval` runs the built-in checks, artifact generation, external benchmarks, and
-refreshes the comparison report for the served variant.
+refreshes the comparison report for the served variant. The CLI prints phase
+progress, per-case progress, elapsed time, and ETA while it runs.
 
 ```bash
 ./forge serve gemma4_26b_a4b base

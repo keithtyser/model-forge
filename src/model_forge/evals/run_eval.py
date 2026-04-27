@@ -97,6 +97,42 @@ def env_float(name: str, default: float) -> float:
     return float(value) if value else default
 
 
+def color(code: str, text: str) -> str:
+    if os.getenv("NO_COLOR") or not sys.stderr.isatty():
+        return text
+    return f"\033[{code}m{text}\033[0m"
+
+
+def muted(text: str) -> str:
+    return color("2", text)
+
+
+def cyan(text: str) -> str:
+    return color("36", text)
+
+
+def green(text: str) -> str:
+    return color("32", text)
+
+
+def progress_bar(done: int, total: int, width: int = 24) -> str:
+    if total <= 0:
+        return "[" + ("-" * width) + "]"
+    filled = int(width * done / total)
+    return "[" + ("#" * filled) + ("-" * (width - filled)) + "]"
+
+
+def format_duration(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    minutes, sec = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes:02d}m {sec:02d}s"
+    if minutes:
+        return f"{minutes}m {sec:02d}s"
+    return f"{sec}s"
+
+
 def load_config(path: Path) -> EvalConfig:
     raw = yaml.safe_load(path.read_text())
     return EvalConfig(
@@ -915,6 +951,55 @@ def run_case(case: EvalCase, cfg: EvalConfig, dry_run: bool, trial_index: int = 
     )
 
 
+def run_cases_with_progress(cases: list[EvalCase], cfg: EvalConfig, dry_run: bool, trials: int) -> list[EvalResult]:
+    total = len(cases) * trials
+    results: list[EvalResult] = []
+    started = time.perf_counter()
+    print(
+        f"{cyan('==>')} Eval started  "
+        f"{muted(str(len(cases)) + ' prompts x ' + str(trials) + (' trials' if trials != 1 else ' trial'))}",
+        file=sys.stderr,
+        flush=True,
+    )
+    for case in cases:
+        for trial_index in range(1, trials + 1):
+            completed = len(results)
+            elapsed = time.perf_counter() - started
+            eta = "unknown" if completed == 0 else format_duration((elapsed / completed) * (total - completed))
+            print(
+                f"{cyan('...')} {progress_bar(completed, total)} "
+                f"{completed + 1}/{total} {case.bucket}/{case.case_id} "
+                f"{muted('trial ' + str(trial_index) + ' | elapsed ' + format_duration(elapsed) + ' | eta ' + eta)}",
+                file=sys.stderr,
+                flush=True,
+            )
+            result = run_case(case, cfg, dry_run=dry_run, trial_index=trial_index)
+            results.append(result)
+            completed = len(results)
+            elapsed = time.perf_counter() - started
+            eta = "0s" if completed == total else format_duration((elapsed / completed) * (total - completed))
+            print(
+                f"{green('OK ')} {progress_bar(completed, total)} "
+                f"{completed}/{total} done "
+                f"{muted('last ' + format_duration(result.latency_seconds) + ' | elapsed ' + format_duration(elapsed) + ' | eta ' + eta)}",
+                file=sys.stderr,
+                flush=True,
+            )
+    return results
+
+
+def print_run_summary(config_path: Path, output_root: Path, manifest: dict[str, Any], cases: list[EvalCase], args: argparse.Namespace) -> None:
+    runtime = manifest["runtime"]
+    print()
+    print(f"{green('OK')} Eval complete")
+    print(f"  config:  {config_path}")
+    print(f"  output:  {output_root}")
+    print(f"  model:   {runtime.get('backend_model_alias', '')}")
+    print(f"  variant: {runtime.get('variant', '')}")
+    print(f"  cases:   {manifest['total_cases']} ({len(cases)} prompts x {args.trials} trial{'s' if args.trials != 1 else ''})")
+    print(f"  dry run: {str(args.dry_run).lower()}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run model-forge evaluation")
     parser.add_argument("--config", required=True, help="Path to experiment YAML")
@@ -934,25 +1019,11 @@ def main() -> None:
     cases = collect_cases(prompt_root, cfg.prompt_sets)
     cases = filter_cases(cases, buckets=args.bucket, max_cases=args.max_cases)
     manifest = build_manifest(cfg, cases, dry_run=args.dry_run, trials=args.trials)
-    results = [
-        run_case(case, cfg, dry_run=args.dry_run, trial_index=trial_index)
-        for case in cases
-        for trial_index in range(1, args.trials + 1)
-    ]
+    results = run_cases_with_progress(cases, cfg, dry_run=args.dry_run, trials=args.trials)
     output_root = repo_root / cfg.output_dir
     write_outputs(output_root, manifest, results)
 
-    print(json.dumps({
-        "ok": True,
-        "config": str(config_path),
-        "output_dir": str(output_root),
-        "total_prompts": len(cases),
-        "trials": args.trials,
-        "total_cases": manifest["total_cases"],
-        "prompt_counts": manifest["prompt_counts"],
-        "dry_run": args.dry_run,
-        "runtime": manifest["runtime"],
-    }, indent=2))
+    print_run_summary(config_path, output_root, manifest, cases, args)
 
 
 if __name__ == "__main__":

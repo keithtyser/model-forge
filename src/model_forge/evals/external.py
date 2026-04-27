@@ -6,8 +6,11 @@ import json
 import shutil
 import subprocess
 import sys
+import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 
 TOOLS = {
@@ -50,6 +53,75 @@ def find_tool_command(tool: str) -> list[str] | None:
     return None
 
 
+def format_duration(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    minutes, sec = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes:02d}m {sec:02d}s"
+    if minutes:
+        return f"{minutes}m {sec:02d}s"
+    return f"{sec}s"
+
+
+def color(code: str, text: str) -> str:
+    if not sys.stdout.isatty():
+        return text
+    return f"\033[{code}m{text}\033[0m"
+
+
+def cyan(text: str) -> str:
+    return color("36", text)
+
+
+def green(text: str) -> str:
+    return color("32", text)
+
+
+def run_with_tee(command: list[str], output_dir: Path) -> int:
+    stdout_chunks: list[str] = []
+    stderr_chunks: list[str] = []
+    started = time.perf_counter()
+    print(f"{cyan('...')} external runner started: {' '.join(command[:2])}", flush=True)
+    proc = subprocess.Popen(
+        command,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        bufsize=1,
+    )
+
+    def pump(stream: Any, chunks: list[str], target: Any) -> None:
+        try:
+            for line in stream:
+                chunks.append(line)
+                target.write(line)
+                target.flush()
+        finally:
+            stream.close()
+
+    stdout_thread = threading.Thread(target=pump, args=(proc.stdout, stdout_chunks, sys.stdout), daemon=True)
+    stderr_thread = threading.Thread(target=pump, args=(proc.stderr, stderr_chunks, sys.stderr), daemon=True)
+    stdout_thread.start()
+    stderr_thread.start()
+    while proc.poll() is None:
+        print(
+            f"{cyan('...')} external runner still running | elapsed {format_duration(time.perf_counter() - started)}",
+            flush=True,
+        )
+        time.sleep(60)
+    stdout_thread.join()
+    stderr_thread.join()
+    (output_dir / "stdout.txt").write_text("".join(stdout_chunks))
+    (output_dir / "stderr.txt").write_text("".join(stderr_chunks))
+    print(
+        f"{green('OK')} external runner finished in {format_duration(time.perf_counter() - started)} "
+        f"with exit code {proc.returncode}",
+        flush=True,
+    )
+    return int(proc.returncode or 0)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Bridge model-forge runs to external benchmark tools")
     parser.add_argument("tool", choices=sorted(TOOLS))
@@ -79,14 +151,17 @@ def main() -> None:
         sys.exit(0 if args.dry_run else 2)
 
     if not args.dry_run:
-        proc = subprocess.run([*command, *tool_args], text=True, capture_output=True, check=False)
-        metadata["returncode"] = proc.returncode
-        (args.output_dir / "stdout.txt").write_text(proc.stdout)
-        (args.output_dir / "stderr.txt").write_text(proc.stderr)
-        if proc.returncode != 0:
-            metadata["error"] = f"{args.tool} exited with {proc.returncode}"
+        returncode = run_with_tee([*command, *tool_args], args.output_dir)
+        metadata["returncode"] = returncode
+        if returncode != 0:
+            metadata["error"] = f"{args.tool} exited with {returncode}"
     (args.output_dir / "external_run.json").write_text(json.dumps(metadata, indent=2) + "\n")
-    print(json.dumps(metadata, indent=2))
+    print()
+    status = green("OK") if metadata.get("returncode", 0) == 0 and command is not None else "ERROR"
+    print(f"{status} External benchmark complete")
+    print(f"  tool:    {args.tool}")
+    print(f"  output:  {args.output_dir}")
+    print(f"  command: {' '.join(command or [])}")
     if metadata.get("returncode", 0) != 0:
         sys.exit(int(metadata["returncode"]))
 

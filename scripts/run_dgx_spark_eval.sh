@@ -29,9 +29,20 @@ export MODEL_FORGE_MODEL="$MODEL_ALIAS"
 export MODEL_FORGE_HARDWARE_LABEL="${MODEL_FORGE_HARDWARE_LABEL:-DGX Spark}"
 export MODEL_FORGE_TIMEOUT_SECONDS="${MODEL_FORGE_TIMEOUT_SECONDS:-180}"
 
-echo "[model-forge] endpoint: $MODEL_FORGE_BASE_URL"
-echo "[model-forge] model:    $MODEL_FORGE_MODEL"
-echo "[model-forge] run:      $RUN_NAME"
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+  CYAN=$'\033[36m'
+  GREEN=$'\033[32m'
+  RESET=$'\033[0m'
+else
+  CYAN=""
+  GREEN=""
+  RESET=""
+fi
+
+echo "${CYAN}==>${RESET} Eval target"
+echo "  endpoint: $MODEL_FORGE_BASE_URL"
+echo "  model:    $MODEL_FORGE_MODEL"
+echo "  run:      $RUN_NAME"
 
 "$PYTHON" - <<'PY'
 import json, os, sys, urllib.request
@@ -41,8 +52,8 @@ with urllib.request.urlopen(req, timeout=15) as r:
     data = json.loads(r.read().decode('utf-8'))
 models = data.get('data', [])
 ids = [m.get('id', '?') for m in models]
-print('[model-forge] /models OK')
-print('[model-forge] advertised models:', ', '.join(ids[:10]))
+print('OK  /models reachable')
+print('    advertised models:', ', '.join(ids[:10]))
 if os.environ['MODEL_FORGE_MODEL'] not in ids:
     print(
         f"[model-forge] ERROR: requested model {os.environ['MODEL_FORGE_MODEL']!r} "

@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -69,9 +70,38 @@ def run(cmd: list[str], env: dict[str, str] | None = None) -> None:
     subprocess.run(cmd, cwd=REPO_DIR, env=env, check=True)
 
 
+def color(code: str, text: str) -> str:
+    if os.getenv("NO_COLOR") or not sys.stdout.isatty():
+        return text
+    return f"\033[{code}m{text}\033[0m"
+
+
+def cyan(text: str) -> str:
+    return color("36", text)
+
+
+def green(text: str) -> str:
+    return color("32", text)
+
+
+def muted(text: str) -> str:
+    return color("2", text)
+
+
 def step(message: str) -> None:
     print()
-    print(f"[model-forge] {message}", flush=True)
+    print(f"{cyan('==>')} {message}", flush=True)
+
+
+def format_duration(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    minutes, sec = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes:02d}m {sec:02d}s"
+    if minutes:
+        return f"{minutes}m {sec:02d}s"
+    return f"{sec}s"
 
 
 def action_serve(family: dict[str, Any], family_name: str, variant: str) -> None:
@@ -206,24 +236,43 @@ def action_external(family: dict[str, Any], family_name: str, variant: str, task
 
     env = os.environ.copy()
     env.setdefault("OPENAI_API_KEY", "local")
-    print(f"[model-forge] external lm-eval family:  {family_name}", flush=True)
-    print(f"[model-forge] external lm-eval variant: {variant}", flush=True)
-    print(f"[model-forge] external lm-eval model:   {model}", flush=True)
-    print(f"[model-forge] external lm-eval tasks:   {tasks}", flush=True)
-    print(f"[model-forge] external lm-eval output:  {output_dir}", flush=True)
+    print(f"{cyan('==>')} External benchmark")
+    print(f"  family:  {family_name}")
+    print(f"  variant: {variant}")
+    print(f"  model:   {model}")
+    print(f"  tasks:   {tasks}")
+    print(f"  output:  {output_dir}", flush=True)
     run(cmd, env=env)
 
 
 def action_suite(family: dict[str, Any], family_name: str, variant: str, tasks: str) -> None:
     variant_config(family, variant)
-    step(f"eval suite: internal checks ({variant})")
-    action_eval(family, family_name, variant, "full")
-    step(f"eval suite: artifact generation ({variant})")
-    action_eval(family, family_name, variant, "artifact")
-    step(f"eval suite: external benchmarks ({variant})")
-    action_external(family, family_name, variant, tasks, dry_run=False)
-    step("eval suite: comparison report")
-    action_compare(family, family_name)
+    suite_started = time.perf_counter()
+    phases = [
+        ("internal checks", lambda: action_eval(family, family_name, variant, "full")),
+        ("artifact generation", lambda: action_eval(family, family_name, variant, "artifact")),
+        ("external benchmarks", lambda: action_external(family, family_name, variant, tasks, dry_run=False)),
+        ("comparison report", lambda: action_compare(family, family_name)),
+    ]
+    durations: list[float] = []
+    total = len(phases)
+    for index, (label, fn) in enumerate(phases, start=1):
+        elapsed = time.perf_counter() - suite_started
+        eta = "unknown" if not durations else format_duration((sum(durations) / len(durations)) * (total - index + 1))
+        step(f"Phase {index}/{total}: {label} {muted('(' + variant + ')')}")
+        print(f"    elapsed {format_duration(elapsed)} | eta {eta}", flush=True)
+        phase_started = time.perf_counter()
+        fn()
+        duration = time.perf_counter() - phase_started
+        durations.append(duration)
+        print(
+            f"{green('OK')} Phase {index}/{total} finished in {format_duration(duration)}",
+            flush=True,
+        )
+    print(
+        f"\n{green('OK')} Eval suite complete in {format_duration(time.perf_counter() - suite_started)}",
+        flush=True,
+    )
 
 
 def action_download(family: dict[str, Any], variant: str) -> None:
