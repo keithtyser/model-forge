@@ -13,6 +13,10 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from rich.console import Console
+from rich.panel import Panel
+
+console = Console()
 
 
 REPO_DIR = Path(__file__).resolve().parents[1]
@@ -90,7 +94,7 @@ def muted(text: str) -> str:
 
 def step(message: str) -> None:
     print()
-    print(f"{cyan('==>')} {message}", flush=True)
+    console.print(f"[bold cyan]==>[/bold cyan] {message}")
 
 
 def format_duration(seconds: float) -> str:
@@ -164,6 +168,10 @@ def action_compare(family: dict[str, Any], family_name: str) -> None:
     artifact_base = output_root / format_template(eval_cfg["artifact_suffix"], family_name, "base")
     if artifact_base.exists():
         cmd.extend(["--artifact-base", str(artifact_base)])
+    external_root = REPO_DIR / family.get("external", {}).get("output_root", "")
+    external_base = external_root / "base"
+    if external_base.exists():
+        cmd.extend(["--external-base", str(external_base)])
     flag_by_variant = {
         "ft": "--ft",
         "abli": "--abli",
@@ -178,6 +186,9 @@ def action_compare(family: dict[str, Any], family_name: str) -> None:
                 artifact_path = output_root / format_template(eval_cfg["artifact_suffix"], family_name, variant)
                 if artifact_path.exists():
                     cmd.extend([f"--artifact-{variant.replace('_', '-')}", str(artifact_path)])
+                external_path = external_root / variant
+                if external_path.exists():
+                    cmd.extend([f"--external-{variant.replace('_', '-')}", str(external_path)])
     run(cmd)
 
 
@@ -242,12 +253,17 @@ def action_external(family: dict[str, Any], family_name: str, variant: str, task
 
     env = os.environ.copy()
     env.setdefault("OPENAI_API_KEY", "local")
-    print(f"{cyan('==>')} External benchmark")
-    print(f"  family:  {family_name}")
-    print(f"  variant: {variant}")
-    print(f"  model:   {model}")
-    print(f"  tasks:   {tasks}")
-    print(f"  output:  {output_dir}", flush=True)
+    console.print(Panel.fit(
+        "\n".join([
+            f"[bold]Family[/bold]:  {family_name}",
+            f"[bold]Variant[/bold]: {variant}",
+            f"[bold]Model[/bold]:   {model}",
+            f"[bold]Tasks[/bold]:   {tasks}",
+            f"[bold]Output[/bold]:  {output_dir}",
+        ]),
+        title="[bold cyan]External Benchmark[/bold cyan]",
+        border_style="cyan",
+    ))
     run(cmd, env=env)
 
 
@@ -266,19 +282,18 @@ def action_suite(family: dict[str, Any], family_name: str, variant: str, tasks: 
         elapsed = time.perf_counter() - suite_started
         eta = "unknown" if not durations else format_duration((sum(durations) / len(durations)) * (total - index + 1))
         step(f"Phase {index}/{total}: {label} {muted('(' + variant + ')')}")
-        print(f"    elapsed {format_duration(elapsed)} | eta {eta}", flush=True)
+        console.print(f"    [dim]elapsed {format_duration(elapsed)} | eta {eta}[/dim]")
         phase_started = time.perf_counter()
         fn()
         duration = time.perf_counter() - phase_started
         durations.append(duration)
-        print(
-            f"{green('OK')} Phase {index}/{total} finished in {format_duration(duration)}",
-            flush=True,
-        )
-    print(
-        f"\n{green('OK')} Eval suite complete in {format_duration(time.perf_counter() - suite_started)}",
-        flush=True,
-    )
+        console.print(f"[bold green]OK[/bold green] Phase {index}/{total} finished in {format_duration(duration)}")
+    console.print()
+    console.print(Panel.fit(
+        f"Completed in [bold]{format_duration(time.perf_counter() - suite_started)}[/bold]",
+        title="[bold green]Eval Suite Complete[/bold green]",
+        border_style="green",
+    ))
 
 
 def action_download(family: dict[str, Any], variant: str) -> None:

@@ -56,7 +56,9 @@ progress, per-case progress, elapsed time, and ETA while it runs.
 ./forge eval gemma4_26b_a4b abli
 ```
 
-Open the report after one or more variants have run:
+`compare` prints a Rich terminal summary with internal scores, external
+benchmark scores, deltas against base, and recommendations. It also writes the
+HTML reports:
 
 ```text
 reports/generated/gemma4_26b_a4b_comparison/comparison_report.html

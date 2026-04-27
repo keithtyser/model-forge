@@ -12,6 +12,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from rich.console import Console
+from rich.panel import Panel
+
+console = Console()
 
 TOOLS = {
     "lm-eval": {
@@ -156,12 +160,17 @@ def main() -> None:
         if returncode != 0:
             metadata["error"] = f"{args.tool} exited with {returncode}"
     (args.output_dir / "external_run.json").write_text(json.dumps(metadata, indent=2) + "\n")
-    print()
-    status = green("OK") if metadata.get("returncode", 0) == 0 and command is not None else "ERROR"
-    print(f"{status} External benchmark complete")
-    print(f"  tool:    {args.tool}")
-    print(f"  output:  {args.output_dir}")
-    print(f"  command: {' '.join(command or [])}")
+    console.print()
+    status = "[bold green]External Benchmark Complete[/bold green]" if metadata.get("returncode", 0) == 0 and command is not None else "[bold red]External Benchmark Failed[/bold red]"
+    console.print(Panel.fit(
+        "\n".join([
+            f"[bold]Tool[/bold]:    {args.tool}",
+            f"[bold]Output[/bold]:  {args.output_dir}",
+            f"[bold]Command[/bold]: {' '.join(command or [])}",
+        ]),
+        title=status,
+        border_style="green" if metadata.get("returncode", 0) == 0 and command is not None else "red",
+    ))
     if metadata.get("returncode", 0) != 0:
         sys.exit(int(metadata["returncode"]))
 

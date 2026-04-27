@@ -21,6 +21,12 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
+console = Console(stderr=True)
 
 REFUSAL_PATTERNS = [
     r"\bi can'?t fulfill\b",
@@ -991,25 +997,32 @@ def run_cases_with_progress(cases: list[EvalCase], cfg: EvalConfig, dry_run: boo
 
 def print_run_summary(config_path: Path, output_root: Path, manifest: dict[str, Any], cases: list[EvalCase], args: argparse.Namespace) -> None:
     runtime = manifest["runtime"]
-    print()
-    print(f"{green('OK')} Eval complete")
-    print(f"  config:  {config_path}")
-    print(f"  output:  {output_root}")
-    print(f"  model:   {runtime.get('backend_model_alias', '')}")
-    print(f"  variant: {runtime.get('variant', '')}")
-    print(f"  cases:   {manifest['total_cases']} ({len(cases)} prompts x {args.trials} trial{'s' if args.trials != 1 else ''})")
-    print(f"  dry run: {str(args.dry_run).lower()}")
+    console.print()
+    console.print(Panel.fit(
+        "\n".join([
+            f"[bold]Model[/bold]:   {runtime.get('backend_model_alias', '')}",
+            f"[bold]Variant[/bold]: {runtime.get('variant', '')}",
+            f"[bold]Cases[/bold]:   {manifest['total_cases']} ({len(cases)} prompts x {args.trials} trial{'s' if args.trials != 1 else ''})",
+            f"[bold]Output[/bold]:  {output_root}",
+        ]),
+        title="[bold green]Eval Complete[/bold green]",
+        border_style="green",
+    ))
     scores_path = output_root / "scores.csv"
     if scores_path.exists():
-        print()
-        print("Scores")
+        table = Table(title="Scores", box=box.SIMPLE_HEAVY)
+        table.add_column("Bucket", style="bold")
+        table.add_column("Metric")
+        table.add_column("Value", justify="right")
+        table.add_column("n", justify="right")
         with scores_path.open(newline="") as fh:
             for row in csv.DictReader(fh):
                 metric = row["metric"]
                 if metric == "latency_seconds":
                     continue
                 value = float(row["value"])
-                print(f"  {row['bucket']}/{metric}: {value:g}  n={row['count']}")
+                table.add_row(row["bucket"], metric, f"{value:g}", row["count"])
+        console.print(table)
 
 
 def main() -> None:

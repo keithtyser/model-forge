@@ -9,6 +9,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
 
 VARIANT_ARGS = [
     ("base", "--base"),
@@ -22,6 +27,13 @@ ARTIFACT_VARIANT_ARGS = [
     (name, f"--artifact-{flag.removeprefix('--')}")
     for name, flag in VARIANT_ARGS
 ]
+
+EXTERNAL_VARIANT_ARGS = [
+    (name, f"--external-{flag.removeprefix('--')}")
+    for name, flag in VARIANT_ARGS
+]
+
+console = Console()
 
 LOWER_IS_BETTER_PATTERNS = (
     "benign_refusal_rate",
@@ -141,15 +153,55 @@ def load_artifacts(run_dir: Path) -> dict[str, dict[str, Any]]:
     return artifacts
 
 
-def load_run(name: str, run_dir: Path, artifact_dir: Path | None = None) -> dict[str, Any]:
+def latest_result_file(root: Path) -> Path | None:
+    files = sorted(root.glob("**/results_*.json"), key=lambda item: item.stat().st_mtime, reverse=True)
+    return files[0] if files else None
+
+
+def load_external_results(external_dir: Path | None) -> dict[str, Any]:
+    if not external_dir or not external_dir.exists():
+        return {}
+    runs: dict[str, Any] = {}
+    for task_dir in sorted(path for path in external_dir.iterdir() if path.is_dir()):
+        result_file = latest_result_file(task_dir)
+        metadata_file = task_dir / "external_run.json"
+        metadata = json.loads(metadata_file.read_text()) if metadata_file.exists() else {}
+        if not result_file:
+            runs[task_dir.name] = {"metadata": metadata, "results": {}, "result_file": None}
+            continue
+        data = json.loads(result_file.read_text())
+        metrics = {}
+        for task_name, task_results in (data.get("results") or {}).items():
+            for metric_name, value in task_results.items():
+                if metric_name == "alias" or metric_name.endswith("_stderr,none"):
+                    continue
+                if isinstance(value, (int, float)):
+                    metrics[f"{task_name}/{metric_name.replace(',none', '')}"] = float(value)
+        runs[task_dir.name] = {
+            "metadata": metadata,
+            "results": metrics,
+            "result_file": str(result_file),
+            "evaluation_time_seconds": data.get("total_evaluation_time_seconds"),
+        }
+    return runs
+
+
+def load_run(
+    name: str,
+    run_dir: Path,
+    artifact_dir: Path | None = None,
+    external_dir: Path | None = None,
+) -> dict[str, Any]:
     return {
         "name": name,
         "path": str(run_dir),
         "artifact_path": str(artifact_dir) if artifact_dir else None,
+        "external_path": str(external_dir) if external_dir else None,
         "manifest": load_manifest(run_dir),
         "scores": load_scores(run_dir),
         "failures": load_failures(run_dir),
         "artifacts": load_artifacts(artifact_dir or run_dir),
+        "external": load_external_results(external_dir),
     }
 
 
@@ -187,6 +239,7 @@ def compare_runs(runs: dict[str, dict[str, Any]]) -> dict[str, Any]:
             name: {
                 "path": run["path"],
                 "artifact_path": run.get("artifact_path"),
+                "external_path": run.get("external_path"),
                 "model_id": run["manifest"].get("model_id"),
                 "variant": run["manifest"].get("runtime", {}).get("variant") or run["manifest"].get("variant"),
                 "backend_model_alias": run["manifest"].get("runtime", {}).get("backend_model_alias"),
@@ -200,6 +253,7 @@ def compare_runs(runs: dict[str, dict[str, Any]]) -> dict[str, Any]:
         "recommendations": recommendations,
         "failures": {name: run["failures"] for name, run in runs.items()},
         "artifacts": {name: run["artifacts"] for name, run in runs.items()},
+        "external": {name: run["external"] for name, run in runs.items()},
     }
 
 
@@ -324,6 +378,36 @@ def write_html(path: Path, comparison: dict[str, Any], variant_names: list[str])
             cells.append(f"<td>{validation}<br>{'<br>'.join(links)}<br><small>{html.escape(errors)}</small></td>")
         artifact_rows.append("<tr>" + "".join(cells) + "</tr>")
 
+    external_rows = []
+    external_keys = sorted({
+        metric
+        for variant in comparison.get("external", {}).values()
+        for task in variant.values()
+        for metric in (task.get("results") or {})
+    })
+    for metric in external_keys:
+        cells = [f"<td>{html.escape(metric)}</td>"]
+        base_value = None
+        for name in variant_names:
+            value = None
+            for task in comparison.get("external", {}).get(name, {}).values():
+                if metric in (task.get("results") or {}):
+                    value = task["results"][metric]
+                    break
+            if name == "base":
+                base_value = value
+            if name != "base" and base_value is not None and value is not None:
+                cells.append(f"<td>{value:g}</td><td>{value - base_value:+g}</td>")
+            elif name != "base":
+                cells.append(f"<td>{'' if value is None else f'{value:g}'}</td><td></td>")
+            else:
+                cells.append(f"<td>{'' if value is None else f'{value:g}'}</td>")
+        external_rows.append("<tr>" + "".join(cells) + "</tr>")
+    external_headers = "".join(
+        f"<th>{html.escape(name)}</th>{'' if name == 'base' else f'<th>{html.escape(name)} delta</th>'}"
+        for name in variant_names
+    )
+
     doc = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -353,6 +437,11 @@ def write_html(path: Path, comparison: dict[str, Any], variant_names: list[str])
   <table>
     <thead><tr><th>Case</th>{''.join(f'<th>{html.escape(name)}</th>' for name in variant_names)}</tr></thead>
     <tbody>{''.join(artifact_rows) or '<tr><td>No artifacts found.</td></tr>'}</tbody>
+  </table>
+  <h2>External Benchmarks</h2>
+  <table>
+    <thead><tr><th>Metric</th>{external_headers}</tr></thead>
+    <tbody>{''.join(external_rows) or '<tr><td>No external benchmark results found.</td></tr>'}</tbody>
   </table>
   <h2>Notable Failures</h2>
   {''.join(failure_sections)}
@@ -452,15 +541,17 @@ def metric_label(bucket: str, metric: str) -> str:
 
 
 def print_terminal_results(comparison: dict[str, Any], variant_names: list[str], output_dir: Path) -> None:
-    print()
-    print(f"{green('OK')} Comparison report refreshed")
-    print(f"  output:    {output_dir}")
-    print(f"  html:      {output_dir / 'comparison_report.html'}")
-    print(f"  artifacts: {output_dir / 'artifact_compare.html'}")
-    print(f"  runs:      {', '.join(variant_names)}")
+    console.print()
+    console.print(Panel.fit(
+        "\n".join([
+            f"[bold]Runs[/bold]: {', '.join(variant_names)}",
+            f"[bold]HTML[/bold]: {output_dir / 'comparison_report.html'}",
+            f"[bold]Artifacts[/bold]: {output_dir / 'artifact_compare.html'}",
+        ]),
+        title="[bold green]Comparison Refreshed[/bold green]",
+        border_style="green",
+    ))
 
-    print()
-    print("Results")
     score_rows = comparison.get("score_rows", [])
     key_rows = [
         row for row in score_rows
@@ -475,30 +566,85 @@ def print_terminal_results(comparison: dict[str, Any], variant_names: list[str],
             "latency_seconds_median",
         })
     ]
+    results_table = Table(title="Internal Eval Results", box=box.SIMPLE_HEAVY)
+    results_table.add_column("Metric", style="bold")
+    for name in variant_names:
+        results_table.add_column(name, justify="right")
+        if name != "base":
+            results_table.add_column(f"{name} delta", justify="right")
     for row in key_rows[:32]:
-        values = []
+        cells = [metric_label(row["bucket"], row["metric"])]
+        base_value = row.get("base")
         for name in variant_names:
             value = row.get(name)
             if value is None:
+                cells.append("")
+                if name != "base":
+                    cells.append("")
                 continue
-            cell = f"{name}={value:g}"
-            if name != "base" and row.get(f"{name}_delta") is not None:
+            cells.append(f"{value:g}")
+            if name != "base":
                 delta = row[f"{name}_delta"]
-                marker = green(f"{delta:+g}") if classify_delta(row["metric"], delta) == "improvement" else red(f"{delta:+g}") if classify_delta(row["metric"], delta) == "regression" else f"{delta:+g}"
-                cell = f"{cell} ({marker})"
-            values.append(cell)
-        print(f"  {metric_label(row['bucket'], row['metric'])}: " + " | ".join(values))
+                classification = classify_delta(row["metric"], delta) if base_value is not None else "flat"
+                style = "green" if classification == "improvement" else "red" if classification == "regression" else "dim"
+                cells.append(f"[{style}]{delta:+g}[/{style}]")
+        results_table.add_row(*cells)
+    console.print(results_table)
+
+    external_metrics = sorted({
+        metric
+        for variant in comparison.get("external", {}).values()
+        for task in variant.values()
+        for metric in (task.get("results") or {})
+    })
+    if external_metrics:
+        external_table = Table(title="External Benchmarks", box=box.SIMPLE_HEAVY)
+        external_table.add_column("Metric", style="bold")
+        for name in variant_names:
+            external_table.add_column(name, justify="right")
+            if name != "base":
+                external_table.add_column(f"{name} delta", justify="right")
+        for metric in external_metrics:
+            row = [metric]
+            base_value = None
+            values_by_variant = {}
+            for name in variant_names:
+                value = None
+                for task in comparison.get("external", {}).get(name, {}).values():
+                    if metric in (task.get("results") or {}):
+                        value = task["results"][metric]
+                        break
+                values_by_variant[name] = value
+                if name == "base":
+                    base_value = value
+            for name in variant_names:
+                value = values_by_variant[name]
+                row.append("" if value is None else f"{value:g}")
+                if name != "base":
+                    if value is None or base_value is None:
+                        row.append("")
+                    else:
+                        delta = value - base_value
+                        style = "green" if delta > 0 else "red" if delta < 0 else "dim"
+                        row.append(f"[{style}]{delta:+g}[/{style}]")
+            external_table.add_row(*row)
+        console.print(external_table)
+    else:
+        console.print(Panel("No external benchmark results found for the compared variants.", title="External Benchmarks", border_style="yellow"))
 
     if len(variant_names) > 1:
-        print()
-        print("Recommendations")
+        rec_table = Table(title="Recommendations", box=box.SIMPLE_HEAVY)
+        rec_table.add_column("Variant", style="bold")
+        rec_table.add_column("Decision")
+        rec_table.add_column("Reason")
         for name in variant_names:
             if name == "base":
                 continue
             recommendation = comparison.get("recommendations", {}).get(name, {})
             decision = recommendation.get("decision", "unknown")
-            rendered = red(decision) if decision == "reject_or_investigate" else green(decision) if decision == "promote_candidate" else yellow(decision)
-            print(f"  {name}: {rendered} - {recommendation.get('reason', '')}")
+            style = "red" if decision == "reject_or_investigate" else "green" if decision == "promote_candidate" else "yellow"
+            rec_table.add_row(name, f"[{style}]{decision}[/{style}]", recommendation.get("reason", ""))
+        console.print(rec_table)
 
 
 def main() -> None:
@@ -506,6 +652,8 @@ def main() -> None:
     for _, flag in VARIANT_ARGS:
         parser.add_argument(flag, type=Path)
     for _, flag in ARTIFACT_VARIANT_ARGS:
+        parser.add_argument(flag, type=Path)
+    for _, flag in EXTERNAL_VARIANT_ARGS:
         parser.add_argument(flag, type=Path)
     parser.add_argument("--output-dir", type=Path, default=Path("reports/generated/comparison"), help="Directory for comparison outputs")
     args = parser.parse_args()
@@ -515,7 +663,8 @@ def main() -> None:
         run_dir = getattr(args, name)
         if run_dir:
             artifact_dir = getattr(args, f"artifact_{name}")
-            runs[name] = load_run(name, run_dir, artifact_dir=artifact_dir)
+            external_dir = getattr(args, f"external_{name}")
+            runs[name] = load_run(name, run_dir, artifact_dir=artifact_dir, external_dir=external_dir)
     if "base" not in runs:
         parser.error("--base is required")
     if len(runs) < 2:
