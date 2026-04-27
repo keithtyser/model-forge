@@ -37,6 +37,8 @@ Download models:
 ```
 
 Run each model. Keep `serve` running in one terminal, then run `eval` in another.
+`eval` runs the built-in checks, artifact generation, external benchmarks, and
+refreshes the comparison report for the served variant.
 
 ```bash
 ./forge serve gemma4_26b_a4b base
@@ -53,16 +55,23 @@ Run each model. Keep `serve` running in one terminal, then run `eval` in another
 ./forge eval gemma4_26b_a4b abli
 ```
 
-Compare:
-
-```bash
-./forge compare gemma4_26b_a4b
-```
-
-Open:
+Open the report after one or more variants have run:
 
 ```text
 reports/generated/gemma4_26b_a4b_comparison/comparison_report.html
+```
+
+## Focused Commands
+
+The default `eval` command is the recommended path. Focused commands are useful
+for quick checks or debugging:
+
+```bash
+./forge eval gemma4_26b_a4b base --smoke
+./forge eval gemma4_26b_a4b base --internal
+./forge eval gemma4_26b_a4b base --artifact
+./forge eval gemma4_26b_a4b base --external
+./forge compare gemma4_26b_a4b
 ```
 
 ## External Benchmarks
@@ -70,9 +79,9 @@ reports/generated/gemma4_26b_a4b_comparison/comparison_report.html
 Run IFEval through `lm-evaluation-harness` against the served model:
 
 ```bash
-./forge external gemma4_26b_a4b base
-./forge external gemma4_26b_a4b ft
-./forge external gemma4_26b_a4b abli
+./forge eval gemma4_26b_a4b base --external
+./forge eval gemma4_26b_a4b ft --external
+./forge eval gemma4_26b_a4b abli --external
 ```
 
 The external command checks the active server first, so the requested variant
@@ -88,16 +97,6 @@ External outputs are written to:
 
 ```text
 reports/generated/gemma4_26b_a4b_external/
-```
-
-## Artifact Evals
-
-Artifact evals generate HTML, Canvas/WebGL, and Python outputs for human review:
-
-```bash
-./forge eval gemma4_26b_a4b base --artifact
-./forge eval gemma4_26b_a4b ft --artifact
-./forge eval gemma4_26b_a4b abli --artifact
 ```
 
 ## What Gets Measured

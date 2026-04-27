@@ -69,6 +69,11 @@ def run(cmd: list[str], env: dict[str, str] | None = None) -> None:
     subprocess.run(cmd, cwd=REPO_DIR, env=env, check=True)
 
 
+def step(message: str) -> None:
+    print()
+    print(f"[model-forge] {message}", flush=True)
+
+
 def action_serve(family: dict[str, Any], family_name: str, variant: str) -> None:
     path = variant_local_path(family, variant)
     if not path.is_dir():
@@ -209,6 +214,18 @@ def action_external(family: dict[str, Any], family_name: str, variant: str, task
     run(cmd, env=env)
 
 
+def action_suite(family: dict[str, Any], family_name: str, variant: str, tasks: str) -> None:
+    variant_config(family, variant)
+    step(f"eval suite: internal checks ({variant})")
+    action_eval(family, family_name, variant, "full")
+    step(f"eval suite: artifact generation ({variant})")
+    action_eval(family, family_name, variant, "artifact")
+    step(f"eval suite: external benchmarks ({variant})")
+    action_external(family, family_name, variant, tasks, dry_run=False)
+    step("eval suite: comparison report")
+    action_compare(family, family_name)
+
+
 def action_download(family: dict[str, Any], variant: str) -> None:
     variants: list[str]
     if variant == "all":
@@ -293,6 +310,7 @@ def main() -> None:
         "download",
         "serve",
         "smoke",
+        "suite",
         "full",
         "artifact",
         "compare",
@@ -308,6 +326,9 @@ def main() -> None:
     family_name = family["name"]
     if args.action == "serve":
         action_serve(family, family_name, args.variant)
+    elif args.action == "suite":
+        tasks = args.tasks or os.environ.get("MODEL_FORGE_EXTERNAL_TASKS") or family["external"].get("default_tasks", "ifeval")
+        action_suite(family, family_name, args.variant, tasks)
     elif args.action in {"smoke", "full", "artifact"}:
         action_eval(family, family_name, args.variant, args.action)
     elif args.action == "compare":

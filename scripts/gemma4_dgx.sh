@@ -9,6 +9,7 @@ if [[ "$ACTION" == "help" || "$ACTION" == "-h" || "$ACTION" == "--help" ]]; then
   cat <<'USAGE'
 Usage:
   ./scripts/gemma4_dgx.sh serve   [base|ft|abli]
+  ./scripts/gemma4_dgx.sh suite   [base|ft|abli] [lm-eval-tasks]
   ./scripts/gemma4_dgx.sh smoke   [base|ft|abli]
   ./scripts/gemma4_dgx.sh full    [base|ft|abli]
   ./scripts/gemma4_dgx.sh artifact [base|ft|abli]
