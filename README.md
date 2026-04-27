@@ -62,6 +62,12 @@ Open the report after one or more variants have run:
 reports/generated/gemma4_26b_a4b_comparison/comparison_report.html
 ```
 
+Generated artifacts can be reviewed side by side here:
+
+```text
+reports/generated/gemma4_26b_a4b_comparison/artifact_compare.html
+```
+
 ## Focused Commands
 
 The default `eval` command is the recommended path. Focused commands are useful

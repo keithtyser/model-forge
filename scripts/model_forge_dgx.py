@@ -161,6 +161,9 @@ def action_compare(family: dict[str, Any], family_name: str) -> None:
         "--output-dir",
         family["comparison"]["output_dir"],
     ]
+    artifact_base = output_root / format_template(eval_cfg["artifact_suffix"], family_name, "base")
+    if artifact_base.exists():
+        cmd.extend(["--artifact-base", str(artifact_base)])
     flag_by_variant = {
         "ft": "--ft",
         "abli": "--abli",
@@ -172,6 +175,9 @@ def action_compare(family: dict[str, Any], family_name: str) -> None:
             path = output_root / format_template(eval_cfg["full_suffix"], family_name, variant)
             if path.exists():
                 cmd.extend([flag, str(path)])
+                artifact_path = output_root / format_template(eval_cfg["artifact_suffix"], family_name, variant)
+                if artifact_path.exists():
+                    cmd.extend([f"--artifact-{variant.replace('_', '-')}", str(artifact_path)])
     run(cmd)
 
 

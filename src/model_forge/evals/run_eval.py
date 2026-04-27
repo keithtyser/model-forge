@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import html
 import json
 import os
@@ -998,6 +999,17 @@ def print_run_summary(config_path: Path, output_root: Path, manifest: dict[str, 
     print(f"  variant: {runtime.get('variant', '')}")
     print(f"  cases:   {manifest['total_cases']} ({len(cases)} prompts x {args.trials} trial{'s' if args.trials != 1 else ''})")
     print(f"  dry run: {str(args.dry_run).lower()}")
+    scores_path = output_root / "scores.csv"
+    if scores_path.exists():
+        print()
+        print("Scores")
+        with scores_path.open(newline="") as fh:
+            for row in csv.DictReader(fh):
+                metric = row["metric"]
+                if metric == "latency_seconds":
+                    continue
+                value = float(row["value"])
+                print(f"  {row['bucket']}/{metric}: {value:g}  n={row['count']}")
 
 
 def main() -> None:

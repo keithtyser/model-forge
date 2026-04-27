@@ -18,6 +18,11 @@ VARIANT_ARGS = [
     ("abli_then_ft", "--abli-then-ft"),
 ]
 
+ARTIFACT_VARIANT_ARGS = [
+    (name, f"--artifact-{flag.removeprefix('--')}")
+    for name, flag in VARIANT_ARGS
+]
+
 LOWER_IS_BETTER_PATTERNS = (
     "benign_refusal_rate",
     "unsafe_overcompliance_rate",
@@ -40,6 +45,14 @@ def color(code: str, text: str) -> str:
 
 def green(text: str) -> str:
     return color("32", text)
+
+
+def red(text: str) -> str:
+    return color("31", text)
+
+
+def yellow(text: str) -> str:
+    return color("33", text)
 
 
 def lower_is_better(metric: str) -> bool:
@@ -128,14 +141,15 @@ def load_artifacts(run_dir: Path) -> dict[str, dict[str, Any]]:
     return artifacts
 
 
-def load_run(name: str, run_dir: Path) -> dict[str, Any]:
+def load_run(name: str, run_dir: Path, artifact_dir: Path | None = None) -> dict[str, Any]:
     return {
         "name": name,
         "path": str(run_dir),
+        "artifact_path": str(artifact_dir) if artifact_dir else None,
         "manifest": load_manifest(run_dir),
         "scores": load_scores(run_dir),
         "failures": load_failures(run_dir),
-        "artifacts": load_artifacts(run_dir),
+        "artifacts": load_artifacts(artifact_dir or run_dir),
     }
 
 
@@ -172,6 +186,7 @@ def compare_runs(runs: dict[str, dict[str, Any]]) -> dict[str, Any]:
         "runs": {
             name: {
                 "path": run["path"],
+                "artifact_path": run.get("artifact_path"),
                 "model_id": run["manifest"].get("model_id"),
                 "variant": run["manifest"].get("runtime", {}).get("variant") or run["manifest"].get("variant"),
                 "backend_model_alias": run["manifest"].get("runtime", {}).get("backend_model_alias"),
@@ -324,6 +339,7 @@ def write_html(path: Path, comparison: dict[str, Any], variant_names: list[str])
 </head>
 <body>
   <h1>model-forge comparison report</h1>
+  <p><a href="artifact_compare.html">Open side-by-side artifact comparison</a></p>
   <h2>Runs</h2>
   <pre>{html.escape(json.dumps(comparison["runs"], indent=2))}</pre>
   <h2>Score Deltas</h2>
@@ -346,9 +362,150 @@ def write_html(path: Path, comparison: dict[str, Any], variant_names: list[str])
     path.write_text(doc)
 
 
+def artifact_link(path: Path, target: str | None, label: str) -> str:
+    if not target:
+        return ""
+    href = os.path.relpath(target, start=path.parent)
+    return f'<a href="{html.escape(href)}">{html.escape(label)}</a>'
+
+
+def write_artifact_compare_html(path: Path, comparison: dict[str, Any], variant_names: list[str]) -> None:
+    artifact_keys = sorted({key for artifacts in comparison.get("artifacts", {}).values() for key in artifacts})
+    sections = []
+    for key in artifact_keys:
+        cards = []
+        for name in variant_names:
+            item = comparison.get("artifacts", {}).get(name, {}).get(key)
+            if not item:
+                cards.append(f'<section class="card missing"><h3>{html.escape(name)}</h3><p>No artifact for this case.</p></section>')
+                continue
+            validation = "unknown"
+            status_class = "unknown"
+            if item.get("validation_ok") is True:
+                validation = "pass"
+                status_class = "pass"
+            elif item.get("validation_ok") is False:
+                validation = "fail"
+                status_class = "fail"
+            screenshot_path = item.get("screenshot_path")
+            screenshot = ""
+            if screenshot_path:
+                screenshot_href = os.path.relpath(screenshot_path, start=path.parent)
+                screenshot = f'<a href="{html.escape(screenshot_href)}"><img src="{html.escape(screenshot_href)}" alt="{html.escape(name)} screenshot"></a>'
+            errors = ", ".join(item.get("validation_errors") or [])
+            cards.append(
+                f'<section class="card {status_class}">'
+                f'<div class="card-head"><h3>{html.escape(name)}</h3><span>{html.escape(validation)}</span></div>'
+                f'<div class="preview">{screenshot or "<p>No screenshot captured.</p>"}</div>'
+                f'<p class="links">{artifact_link(path, item.get("artifact_path"), "open artifact")} {artifact_link(path, screenshot_path, "open screenshot")}</p>'
+                f'<p class="errors">{html.escape(errors)}</p>'
+                f'</section>'
+            )
+        sections.append(
+            f'<section class="case"><h2>{html.escape(key)}</h2><div class="grid">'
+            + "".join(cards)
+            + "</div></section>"
+        )
+
+    doc = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>model-forge artifact comparison</title>
+  <style>
+    :root {{ color-scheme: light; --bg:#f5f7fa; --panel:#fff; --text:#15171a; --muted:#626b77; --line:#dfe4ea; --ok:#0f8a5f; --bad:#b42318; }}
+    body {{ margin:0; padding:28px; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:var(--bg); color:var(--text); }}
+    header {{ max-width:1200px; margin:0 auto 28px; }}
+    h1 {{ margin:0 0 6px; font-size:28px; }}
+    p {{ color:var(--muted); }}
+    .case {{ max-width:1400px; margin:0 auto 32px; }}
+    .case h2 {{ font-size:18px; margin:0 0 12px; }}
+    .grid {{ display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; align-items:start; }}
+    .card {{ background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.04); }}
+    .card-head {{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid var(--line); }}
+    .card h3 {{ margin:0; font-size:15px; }}
+    .card span {{ font-size:12px; font-weight:700; text-transform:uppercase; }}
+    .pass span {{ color:var(--ok); }}
+    .fail span {{ color:var(--bad); }}
+    .preview {{ min-height:220px; background:#eef1f5; display:flex; align-items:center; justify-content:center; }}
+    img {{ display:block; width:100%; height:auto; }}
+    .links, .errors {{ margin:10px 12px; font-size:13px; }}
+    .links a {{ margin-right:12px; }}
+    .errors {{ color:var(--bad); }}
+    .missing {{ opacity:.65; }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Artifact comparison</h1>
+    <p>Side-by-side screenshots and artifact links for each generated artifact prompt.</p>
+  </header>
+  {''.join(sections) or '<p>No artifacts found.</p>'}
+</body>
+</html>
+"""
+    path.write_text(doc)
+
+
+def metric_label(bucket: str, metric: str) -> str:
+    return f"{bucket}/{metric}"
+
+
+def print_terminal_results(comparison: dict[str, Any], variant_names: list[str], output_dir: Path) -> None:
+    print()
+    print(f"{green('OK')} Comparison report refreshed")
+    print(f"  output:    {output_dir}")
+    print(f"  html:      {output_dir / 'comparison_report.html'}")
+    print(f"  artifacts: {output_dir / 'artifact_compare.html'}")
+    print(f"  runs:      {', '.join(variant_names)}")
+
+    print()
+    print("Results")
+    score_rows = comparison.get("score_rows", [])
+    key_rows = [
+        row for row in score_rows
+        if row["metric"] not in {"latency_seconds"}
+        and (row["bucket"] == "overall" or row["metric"] in {
+            "workflow_success",
+            "schema_adherence",
+            "normal_use_regression_pass_rate",
+            "benign_refusal_rate",
+            "unsafe_overcompliance_rate",
+            "tokens_per_second",
+            "latency_seconds_median",
+        })
+    ]
+    for row in key_rows[:32]:
+        values = []
+        for name in variant_names:
+            value = row.get(name)
+            if value is None:
+                continue
+            cell = f"{name}={value:g}"
+            if name != "base" and row.get(f"{name}_delta") is not None:
+                delta = row[f"{name}_delta"]
+                marker = green(f"{delta:+g}") if classify_delta(row["metric"], delta) == "improvement" else red(f"{delta:+g}") if classify_delta(row["metric"], delta) == "regression" else f"{delta:+g}"
+                cell = f"{cell} ({marker})"
+            values.append(cell)
+        print(f"  {metric_label(row['bucket'], row['metric'])}: " + " | ".join(values))
+
+    if len(variant_names) > 1:
+        print()
+        print("Recommendations")
+        for name in variant_names:
+            if name == "base":
+                continue
+            recommendation = comparison.get("recommendations", {}).get(name, {})
+            decision = recommendation.get("decision", "unknown")
+            rendered = red(decision) if decision == "reject_or_investigate" else green(decision) if decision == "promote_candidate" else yellow(decision)
+            print(f"  {name}: {rendered} - {recommendation.get('reason', '')}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Compare model-forge result directories")
     for _, flag in VARIANT_ARGS:
+        parser.add_argument(flag, type=Path)
+    for _, flag in ARTIFACT_VARIANT_ARGS:
         parser.add_argument(flag, type=Path)
     parser.add_argument("--output-dir", type=Path, default=Path("reports/generated/comparison"), help="Directory for comparison outputs")
     args = parser.parse_args()
@@ -357,7 +514,8 @@ def main() -> None:
     for name, _ in VARIANT_ARGS:
         run_dir = getattr(args, name)
         if run_dir:
-            runs[name] = load_run(name, run_dir)
+            artifact_dir = getattr(args, f"artifact_{name}")
+            runs[name] = load_run(name, run_dir, artifact_dir=artifact_dir)
     if "base" not in runs:
         parser.error("--base is required")
     if len(runs) < 2:
@@ -369,11 +527,8 @@ def main() -> None:
     (args.output_dir / "comparison.json").write_text(json.dumps(comparison, indent=2) + "\n")
     write_csv(args.output_dir / "comparison.csv", comparison, variant_names)
     write_html(args.output_dir / "comparison_report.html", comparison, variant_names)
-    print()
-    print(f"{green('OK')} Comparison report refreshed")
-    print(f"  output: {args.output_dir}")
-    print(f"  runs:   {', '.join(variant_names)}")
-    print(f"  html:   {args.output_dir / 'comparison_report.html'}")
+    write_artifact_compare_html(args.output_dir / "artifact_compare.html", comparison, variant_names)
+    print_terminal_results(comparison, variant_names, args.output_dir)
 
 
 if __name__ == "__main__":
