@@ -25,6 +25,22 @@ EXTRA_VLLM_ARGS=(
   --max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS"
 )
 
+if [[ "${VLLM_ENABLE_CHUNKED_PREFILL:-0}" == "1" || "${VLLM_ENABLE_CHUNKED_PREFILL:-false}" == "true" ]]; then
+  EXTRA_VLLM_ARGS+=(--enable-chunked-prefill)
+fi
+if [[ -n "${VLLM_KV_CACHE_DTYPE:-}" ]]; then
+  EXTRA_VLLM_ARGS+=(--kv-cache-dtype "$VLLM_KV_CACHE_DTYPE")
+fi
+if [[ -n "${VLLM_CPU_OFFLOAD_GB:-}" ]]; then
+  EXTRA_VLLM_ARGS+=(--cpu-offload-gb "$VLLM_CPU_OFFLOAD_GB")
+fi
+if [[ -n "${VLLM_SWAP_SPACE:-}" ]]; then
+  EXTRA_VLLM_ARGS+=(--swap-space "$VLLM_SWAP_SPACE")
+fi
+if [[ -n "${VLLM_MAX_NUM_SEQS:-}" ]]; then
+  EXTRA_VLLM_ARGS+=(--max-num-seqs "$VLLM_MAX_NUM_SEQS")
+fi
+
 cd "$SPARK_VLLM_DIR"
 ./launch-cluster.sh --solo exec \
   vllm serve \

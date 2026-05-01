@@ -17,6 +17,7 @@ Usage:
   ./forge serve <family> [base|ft|abli]
   ./forge eval <family> [base|ft|abli] [--smoke|--internal|--artifact|--external] [tasks]
   ./forge external <family> [base|ft|abli] [tasks]
+  ./forge ablate <family> [plan|collect|export] [--execute]
   ./forge compare <family>
   ./forge golden-summary <family> [output-json]
   ./forge golden-check <family> [baseline-json]
@@ -27,6 +28,7 @@ Examples:
   ./forge download gemma4_26b_a4b all
   ./forge serve gemma4_26b_a4b base
   ./forge eval gemma4_26b_a4b base
+  ./forge ablate gemma4_26b_a4b plan
   ./forge compare gemma4_26b_a4b
 
 By default, eval runs internal checks, artifact evals, external benchmarks,
@@ -79,6 +81,21 @@ case "$ACTION" in
     else
       "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" external "$VARIANT"
     fi
+    ;;
+  ablate)
+    FAMILY=${1:?family is required}
+    shift
+    STEP=${1:-plan}
+    if [[ $# -gt 0 ]]; then
+      shift
+    fi
+    case "$FAMILY" in
+      gemma4_26b_a4b)
+        CONFIG="$REPO_DIR/configs/abliteration/gemma4_26b_a4b_local_abli.yaml"
+        ;;
+      *) echo "unknown ablation family: $FAMILY" >&2; exit 2 ;;
+    esac
+    "$PYTHON" -m model_forge.pipelines.abliterate --config "$CONFIG" "$STEP" "$@"
     ;;
   compare)
     FAMILY=${1:?family is required}

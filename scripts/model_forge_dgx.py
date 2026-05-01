@@ -20,6 +20,13 @@ console = Console()
 
 
 REPO_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_DIR / "src"))
+
+try:
+    from model_forge.hardware import detect_hardware_profile, recommended_vllm_env
+except Exception:  # pragma: no cover - script fallback for partially installed environments
+    detect_hardware_profile = None
+    recommended_vllm_env = None
 
 
 def load_family(name: str) -> dict[str, Any]:
@@ -117,6 +124,21 @@ def action_serve(family: dict[str, Any], family_name: str, variant: str) -> None
     env["MODEL_FORGE_MODEL"] = str(path)
     env["MODEL_FORGE_SERVED_MODEL_NAME"] = served_model_name(family, variant)
     env.setdefault("MODEL_FORGE_MODELS_DIR", str(models_dir(family)))
+    if recommended_vllm_env is not None:
+        for key, value in recommended_vllm_env(env).items():
+            env.setdefault(key, value)
+    if detect_hardware_profile is not None:
+        profile = detect_hardware_profile(env)
+        console.print(Panel.fit(
+            "\n".join([
+                f"[bold]Profile[/bold]: {profile.label}",
+                f"[bold]GPU memory util[/bold]: {env.get('GPU_MEMORY_UTILIZATION', '<unset>')}",
+                f"[bold]Max model len[/bold]: {env.get('MAX_MODEL_LEN', '<unset>')}",
+                f"[bold]Batched tokens[/bold]: {env.get('MAX_NUM_BATCHED_TOKENS', '<unset>')}",
+            ]),
+            title="[bold cyan]Serving Hardware Profile[/bold cyan]",
+            border_style="cyan",
+        ))
     if serve.get("default_gpu_memory_utilization"):
         env.setdefault("GPU_MEMORY_UTILIZATION", str(serve["default_gpu_memory_utilization"]))
     if serve.get("default_max_model_len"):
@@ -175,6 +197,7 @@ def action_compare(family: dict[str, Any], family_name: str) -> None:
     flag_by_variant = {
         "ft": "--ft",
         "abli": "--abli",
+        "local_abli": "--local-abli",
         "ft_then_abli": "--ft-then-abli",
         "abli_then_ft": "--abli-then-ft",
     }
@@ -345,6 +368,9 @@ def action_download(family: dict[str, Any], variant: str) -> None:
     workers = os.environ.get("HF_MAX_WORKERS", "32")
     for item in variants:
         cfg = variant_config(family, item)
+        if cfg.get("downloadable") is False:
+            print(f"[model-forge] skipping non-downloadable variant {item}: {cfg['local_dir']}")
+            continue
         target = variant_local_path(family, item)
         print()
         print(f"[model-forge] downloading {cfg['repo_id']} -> {target}")

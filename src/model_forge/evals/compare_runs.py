@@ -19,6 +19,7 @@ VARIANT_ARGS = [
     ("base", "--base"),
     ("ft", "--ft"),
     ("abli", "--abli"),
+    ("local_abli", "--local-abli"),
     ("ft_then_abli", "--ft-then-abli"),
     ("abli_then_ft", "--abli-then-ft"),
 ]

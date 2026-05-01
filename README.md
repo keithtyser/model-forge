@@ -46,6 +46,12 @@ progress, per-case progress, elapsed time, and ETA while it runs.
 ./forge eval gemma4_26b_a4b base
 ```
 
+Plan a local Gemma refusal ablation without loading the model:
+
+```bash
+./forge ablate gemma4_26b_a4b plan
+```
+
 ```bash
 ./forge serve gemma4_26b_a4b ft
 ./forge eval gemma4_26b_a4b ft
@@ -165,8 +171,10 @@ should usually mean adding one YAML file plus, if needed, a serving profile.
 
 ```bash
 MODEL_FORGE_MODELS_DIR=/data/models ./forge serve gemma4_26b_a4b base
+MODEL_FORGE_HARDWARE_PROFILE=dgx_spark ./forge serve gemma4_26b_a4b base
 GPU_MEMORY_UTILIZATION=0.80 ./forge serve gemma4_26b_a4b base
 MAX_MODEL_LEN=16384 ./forge serve gemma4_26b_a4b base
+VLLM_CPU_OFFLOAD_GB=24 ./forge serve gemma4_26b_a4b base
 HF_MAX_WORKERS=16 HF_XET_NUM_CONCURRENT_RANGE_GETS=16 ./forge download gemma4_26b_a4b base
 ```
 

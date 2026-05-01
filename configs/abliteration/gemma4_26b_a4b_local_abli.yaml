@@ -1,0 +1,37 @@
+name: gemma4_26b_a4b_local_abli
+method: contrastive_refusal_direction
+
+model:
+  source: google/gemma-4-26B-A4B-it
+  local_dir: ~/models/gemma-4-26B-A4B-it
+  output_dir: ~/models/gemma-4-26B-A4B-it-local-abliterated
+  dtype: bfloat16
+  device_map: auto
+  trust_remote_code: false
+
+data:
+  harmful_prompts: ../../datasets/abliteration/harmful_refusal.yaml
+  benign_prompts: ../../datasets/abliteration/benign_control.yaml
+
+activation_collection:
+  batch_size: 1
+  max_pairs: 24
+  max_seq_len: 1024
+  layer_skip_first: 5
+  layer_skip_last: 1
+  token_position: final_prompt_token
+
+edit:
+  mode: projection
+  strength: 1.0
+  leave_embeddings_untouched: true
+  leave_lm_head_untouched: true
+  leave_moe_experts_untouched: true
+  review_required_before_export: true
+
+safety:
+  require_execute_flag: true
+  min_free_cuda_gb: 18
+  one_model_process_at_a_time: true
+
+artifacts_dir: artifacts/abliteration/gemma4_26b_a4b_local_abli

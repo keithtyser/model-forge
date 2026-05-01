@@ -24,6 +24,12 @@ external = [
   "lighteval>=0.10",
   "lm-eval>=0.4",
 ]
+abliteration = [
+  "accelerate>=0.34",
+  "safetensors>=0.4",
+  "torch>=2.5",
+  "transformers>=4.46",
+]
 
 [project.scripts]
 model-forge-eval = "model_forge.evals.run_eval:main"
@@ -31,6 +37,7 @@ model-forge-compare = "model_forge.evals.compare_runs:main"
 model-forge-golden-summary = "model_forge.evals.golden_summary:main"
 model-forge-matrix = "model_forge.evals.run_matrix:main"
 model-forge-external = "model_forge.evals.external:main"
+model-forge-abliterate = "model_forge.pipelines.abliterate:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

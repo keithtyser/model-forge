@@ -33,6 +33,18 @@ fi
 if [[ -n "${VLLM_MOE_BACKEND:-}" ]]; then
   EXTRA_VLLM_ARGS+=(--moe-backend "$VLLM_MOE_BACKEND")
 fi
+if [[ "${VLLM_ENABLE_CHUNKED_PREFILL:-0}" == "1" || "${VLLM_ENABLE_CHUNKED_PREFILL:-false}" == "true" ]]; then
+  EXTRA_VLLM_ARGS+=(--enable-chunked-prefill)
+fi
+if [[ -n "${VLLM_CPU_OFFLOAD_GB:-}" ]]; then
+  EXTRA_VLLM_ARGS+=(--cpu-offload-gb "$VLLM_CPU_OFFLOAD_GB")
+fi
+if [[ -n "${VLLM_SWAP_SPACE:-}" ]]; then
+  EXTRA_VLLM_ARGS+=(--swap-space "$VLLM_SWAP_SPACE")
+fi
+if [[ -n "${VLLM_MAX_NUM_SEQS:-}" ]]; then
+  EXTRA_VLLM_ARGS+=(--max-num-seqs "$VLLM_MAX_NUM_SEQS")
+fi
 if [[ "${VLLM_TRUST_REMOTE_CODE:-false}" == "true" ]]; then
   EXTRA_VLLM_ARGS+=(--trust-remote-code)
 fi
