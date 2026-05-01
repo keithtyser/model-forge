@@ -51,6 +51,48 @@ abliteration without making fine-tuning part of the critical path:
 - allow per-module and per-layer strength multipliers
 - run reference-alignment sweeps before writing another 49 GB checkpoint
 
+## SOTA Backends
+
+For best available abliteration, model-forge should orchestrate external SOTA
+tooling and then evaluate the resulting checkpoint with the same local suite.
+The local implementation remains useful for transparent experiments, but the
+default SOTA recipe is now:
+
+1. prepare backend config from the model-family config
+2. run OBLITERATUS `advanced` as the primary noninteractive backend
+3. use Heretic as the KL-optimized baseline/oracle
+4. serve the produced `local_abli_sota` checkpoint
+5. run internal eval first, then artifact and external evals only if internal
+   refusal suppression moves
+
+Both OBLITERATUS and Heretic are AGPL-licensed in their open-source form. Review
+their license terms before redistributing modified code, model artifacts, or
+running modified tooling as a service.
+
+Prepare backend-specific files:
+
+```bash
+./forge ablate gemma4_26b_a4b sota-prepare
+```
+
+Run the preferred SOTA backend when the environment is ready:
+
+```bash
+./forge ablate gemma4_26b_a4b sota-run --execute
+```
+
+Select Heretic explicitly:
+
+```bash
+./forge ablate gemma4_26b_a4b sota-run --backend heretic --execute
+```
+
+The SOTA output path for Gemma is:
+
+```text
+~/models/gemma-4-26B-A4B-it-local-abliterated-sota
+```
+
 Do not run collection while a vLLM server is active. Keep one large model
 process at a time.
 

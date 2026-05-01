@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -469,6 +470,232 @@ def copy_non_weight_files(source_dir: Path, output_dir: Path) -> None:
             shutil.copy2(path, target)
 
 
+def sota_config(config: dict[str, Any]) -> dict[str, Any]:
+    defaults = {
+        "preferred_backend": "obliteratus",
+        "output_dir": config.get("model", {}).get("output_dir"),
+        "work_dir": str(Path(config.get("artifacts_dir", "artifacts/abliteration/sota")) / "sota"),
+        "license_notice": "External SOTA backends may be AGPL-licensed; review license terms before redistribution or service use.",
+        "backends": {
+            "obliteratus": {
+                "install": "pip install 'git+https://github.com/elder-plinius/OBLITERATUS.git'",
+                "method": "advanced",
+                "max_seq_length": 512,
+                "telemetry": False,
+            },
+            "heretic": {
+                "install": "pip install -U 'heretic-llm[research]'",
+                "quantization": "none",
+                "device_map": "auto",
+                "n_trials": 200,
+                "n_startup_trials": 60,
+                "orthogonalize_direction": True,
+                "row_normalization": "full",
+                "winsorization_quantile": 1.0,
+            },
+        },
+    }
+    user = config.get("sota", {})
+    merged = json.loads(json.dumps(defaults))
+    for key, value in user.items():
+        if key == "backends":
+            for backend, backend_cfg in value.items():
+                merged.setdefault("backends", {}).setdefault(backend, {}).update(backend_cfg or {})
+        else:
+            merged[key] = value
+    return merged
+
+
+def build_sota_plan(config: dict[str, Any], config_path: Path, backend: str | None = None) -> dict[str, Any]:
+    plan = build_plan(config, config_path)
+    sota = sota_config(config)
+    selected = backend or sota.get("preferred_backend", "obliteratus")
+    backends = sota.get("backends", {})
+    if selected not in backends:
+        raise SystemExit(f"unknown SOTA backend {selected!r}; valid backends: {', '.join(sorted(backends))}")
+    model_cfg = plan["model"]
+    source = resolve_model_source(model_cfg["local_dir"] or model_cfg["source"])
+    output_dir = resolve_repo_path(sota.get("output_dir") or model_cfg["output_dir"])
+    work_dir = resolve_repo_path(sota.get("work_dir", Path(config.get("artifacts_dir", "artifacts/abliteration/sota")) / "sota"))
+    return {
+        "name": plan["name"],
+        "backend": selected,
+        "source_model": source,
+        "output_dir": str(output_dir),
+        "work_dir": str(work_dir),
+        "backend_config": backends[selected],
+        "install": backends[selected].get("install"),
+        "license_notice": sota.get("license_notice"),
+        "all_backends": backends,
+    }
+
+
+def print_sota_plan(plan: dict[str, Any]) -> None:
+    lines = [
+        f"[bold]Backend[/bold]: {plan['backend']}",
+        f"[bold]Source[/bold]: {plan['source_model']}",
+        f"[bold]Output[/bold]: {plan['output_dir']}",
+        f"[bold]Work dir[/bold]: {plan['work_dir']}",
+        f"[bold]Install[/bold]: {plan['install']}",
+    ]
+    console.print(Panel.fit("\n".join(lines), title="[bold cyan]SOTA Abliteration Backend[/bold cyan]", border_style="cyan"))
+    console.print(f"[yellow]{plan['license_notice']}[/yellow]")
+
+
+def write_obliteratus_runner(plan: dict[str, Any]) -> Path:
+    backend = plan["backend_config"]
+    work_dir = Path(plan["work_dir"])
+    work_dir.mkdir(parents=True, exist_ok=True)
+    runner = work_dir / "run_obliteratus.py"
+    script = f'''from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+
+from obliteratus.abliterate import AbliterationPipeline
+
+model_name = {plan["source_model"]!r}
+output_dir = {plan["output_dir"]!r}
+method = {backend.get("method", "advanced")!r}
+max_seq_length = {int(backend.get("max_seq_length", 512))}
+
+if {not bool(backend.get("telemetry", False))!r}:
+    os.environ.setdefault("OBLITERATUS_TELEMETRY", "0")
+
+pipeline = AbliterationPipeline(
+    model_name=model_name,
+    method=method,
+    output_dir=output_dir,
+    max_seq_length=max_seq_length,
+)
+result = pipeline.run()
+Path(output_dir).mkdir(parents=True, exist_ok=True)
+summary_path = Path(output_dir) / "model_forge_sota_obliteratus.json"
+summary_path.write_text(json.dumps({{
+    "backend": "obliteratus",
+    "method": method,
+    "model_name": model_name,
+    "output_dir": output_dir,
+    "result": result if isinstance(result, (dict, list, str, int, float, bool, type(None))) else repr(result),
+}}, indent=2) + "\\n")
+print(f"Wrote {{summary_path}}")
+'''
+    runner.write_text(script)
+    return runner
+
+
+def write_heretic_config(plan: dict[str, Any]) -> Path:
+    backend = plan["backend_config"]
+    work_dir = Path(plan["work_dir"])
+    work_dir.mkdir(parents=True, exist_ok=True)
+    config_path = work_dir / "heretic_config.toml"
+    lines = [
+        f'model = "{plan["source_model"]}"',
+        'dtypes = ["auto", "float16", "bfloat16", "float32"]',
+        f'quantization = "{backend.get("quantization", "none")}"',
+        f'device_map = "{backend.get("device_map", "auto")}"',
+        f'n_trials = {int(backend.get("n_trials", 200))}',
+        f'n_startup_trials = {int(backend.get("n_startup_trials", 60))}',
+        f'orthogonalize_direction = {str(bool(backend.get("orthogonalize_direction", True))).lower()}',
+        f'row_normalization = "{backend.get("row_normalization", "full")}"',
+        f'winsorization_quantile = {float(backend.get("winsorization_quantile", 1.0))}',
+        'offload_outputs_to_cpu = true',
+        f'study_checkpoint_dir = "{work_dir / "heretic_checkpoints"}"',
+    ]
+    if backend.get("max_memory"):
+        items = ", ".join(f'"{key}" = "{value}"' for key, value in backend["max_memory"].items())
+        lines.append(f"max_memory = {{ {items} }}")
+    config_path.write_text("\n".join(lines) + "\n")
+    return config_path
+
+
+def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str | None = None) -> dict[str, Any]:
+    selected_plan = build_sota_plan(config, config_path, backend)
+    work_dir = Path(selected_plan["work_dir"])
+    work_dir.mkdir(parents=True, exist_ok=True)
+    paths: dict[str, str] = {}
+    for name in selected_plan["all_backends"]:
+        plan = build_sota_plan(config, config_path, name)
+        if name == "obliteratus":
+            paths["obliteratus_runner"] = str(write_obliteratus_runner(plan))
+        elif name == "heretic":
+            paths["heretic_config"] = str(write_heretic_config(plan))
+    readme = work_dir / "README.md"
+    readme.write_text(
+        "\n".join([
+            "# SOTA Abliteration Backend",
+            "",
+            f"Source model: `{selected_plan['source_model']}`",
+            f"Output dir: `{selected_plan['output_dir']}`",
+            "",
+            "Preferred backend: `" + selected_plan["backend"] + "`",
+            "",
+            "Install commands:",
+            "",
+            "```bash",
+            *(backend_cfg.get("install", "") for backend_cfg in selected_plan["all_backends"].values()),
+            "```",
+            "",
+            "Run OBLITERATUS:",
+            "",
+            "```bash",
+            f"{sys.executable} {paths.get('obliteratus_runner', '<runner>')}",
+            "```",
+            "",
+            "Run Heretic:",
+            "",
+            "```bash",
+            f"heretic --config {paths.get('heretic_config', '<config>')}",
+            "```",
+            "",
+            selected_plan["license_notice"],
+            "",
+        ])
+    )
+    return {"plan": selected_plan, "paths": paths, "readme": str(readme)}
+
+
+def command_sota_plan(args: argparse.Namespace) -> None:
+    config_path = resolve_repo_path(args.config)
+    plan = build_sota_plan(load_yaml(config_path), config_path, args.backend)
+    print_sota_plan(plan)
+
+
+def command_sota_prepare(args: argparse.Namespace) -> None:
+    config_path = resolve_repo_path(args.config)
+    result = write_sota_artifacts(load_yaml(config_path), config_path, args.backend)
+    print_sota_plan(result["plan"])
+    console.print("[bold green]Wrote SOTA backend artifacts[/bold green]")
+    for label, path in result["paths"].items():
+        console.print(f"- {label}: {path}")
+    console.print(f"- README: {result['readme']}")
+
+
+def command_sota_run(args: argparse.Namespace) -> None:
+    config_path = resolve_repo_path(args.config)
+    config = load_yaml(config_path)
+    result = write_sota_artifacts(config, config_path, args.backend)
+    plan = result["plan"]
+    print_sota_plan(plan)
+    if not args.execute:
+        console.print("[yellow]Dry run only; pass --execute to run the external backend.[/yellow]")
+        return
+    if plan["backend"] == "obliteratus":
+        runner = result["paths"].get("obliteratus_runner")
+        if runner is None:
+            raise SystemExit("missing generated OBLITERATUS runner")
+        subprocess.run([sys.executable, runner], cwd=REPO_DIR, check=True)
+    elif plan["backend"] == "heretic":
+        executable = shutil.which("heretic")
+        if executable is None:
+            raise SystemExit("missing `heretic` executable; install with: " + str(plan["install"]))
+        config_file = result["paths"].get("heretic_config")
+        subprocess.run([executable, "--config", str(config_file)], cwd=Path(plan["work_dir"]), check=True)
+    else:
+        raise SystemExit(f"unsupported SOTA backend: {plan['backend']}")
+
+
 def export_projection(
     config: dict[str, Any],
     config_path: Path,
@@ -917,6 +1144,19 @@ def build_parser() -> argparse.ArgumentParser:
     sweep.add_argument("--top-k", type=int, default=12)
     sweep.add_argument("--output", default=None)
     sweep.set_defaults(func=command_sweep_reference)
+
+    sota_plan = sub.add_parser("sota-plan", help="Inspect SOTA external backend plan")
+    sota_plan.add_argument("--backend", choices=["obliteratus", "heretic"], default=None)
+    sota_plan.set_defaults(func=command_sota_plan)
+
+    sota_prepare = sub.add_parser("sota-prepare", help="Write backend-specific SOTA runner/config files")
+    sota_prepare.add_argument("--backend", choices=["obliteratus", "heretic"], default=None)
+    sota_prepare.set_defaults(func=command_sota_prepare)
+
+    sota_run = sub.add_parser("sota-run", help="Run a prepared external SOTA backend")
+    sota_run.add_argument("--backend", choices=["obliteratus", "heretic"], default=None)
+    sota_run.add_argument("--execute", action="store_true")
+    sota_run.set_defaults(func=command_sota_run)
     return parser
 
 

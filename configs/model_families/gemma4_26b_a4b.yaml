@@ -22,6 +22,11 @@ variants:
     local_dir: gemma-4-26B-A4B-it-local-abliterated-v3
     served_model_name: local/gemma-4-26B-A4B-it-abliterated-v3
     downloadable: false
+  local_abli_sota:
+    repo_id: google/gemma-4-26B-A4B-it
+    local_dir: gemma-4-26B-A4B-it-local-abliterated-sota
+    served_model_name: local/gemma-4-26B-A4B-it-abliterated-sota
+    downloadable: false
 
 serve:
   script: scripts/dgx_spark_serve_gemma4_26b_a4b.sh

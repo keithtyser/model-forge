@@ -10,6 +10,7 @@ from model_forge.pipelines.abliterate import (
     REPO_DIR,
     _projection_delta,
     build_plan,
+    build_sota_plan,
     configured_target_layers,
     intervention_direction,
     is_projection_target,
@@ -73,6 +74,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(plan["activation_collection"]["token_position"], "suffix_mean")
         self.assertEqual(plan["activation_collection"]["direction_extraction"], "mean_difference")
         self.assertFalse(plan["model"]["trust_remote_code"])
+        self.assertEqual(plan["model"]["output_dir"], "~/models/gemma-4-26B-A4B-it-local-abliterated-v3")
 
     def test_prompt_sets_are_non_empty_and_balanced(self) -> None:
         harmful = load_prompts(Path(REPO_DIR / "datasets" / "abliteration" / "harmful_refusal.yaml"))
@@ -88,6 +90,19 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertTrue(is_projection_target("model.language_model.layers.29.mlp.down_proj.weight", edit))
         self.assertTrue(is_projection_target("model.language_model.layers.29.self_attn.o_proj.weight", edit))
         self.assertFalse(is_projection_target("model.language_model.layers.29.mlp.experts.down_proj", edit))
+
+    def test_sota_plan_is_minimal_and_targets_sota_output(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_local_abli.yaml"
+        plan = build_sota_plan(load_yaml(config_path), config_path)
+        self.assertEqual(plan["backend"], "obliteratus")
+        self.assertTrue(plan["source_model"].endswith("gemma-4-26B-A4B-it"))
+        self.assertTrue(plan["output_dir"].endswith("gemma-4-26B-A4B-it-local-abliterated-sota"))
+
+    def test_sota_plan_can_select_heretic(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_local_abli.yaml"
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+        self.assertEqual(plan["backend"], "heretic")
+        self.assertEqual(plan["backend_config"]["row_normalization"], "full")
 
     def test_strict_export_would_catch_missing_last_layer_direction(self) -> None:
         edit = {"layer_start": 5, "layer_end": 29}
