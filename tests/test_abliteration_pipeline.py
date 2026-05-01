@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from model_forge.hardware import detect_hardware_profile, recommended_vllm_env
+from model_forge.hardware import detect_hardware_profile, recommended_training_env, recommended_vllm_env
 from model_forge.pipelines.abliterate import REPO_DIR, build_plan, load_prompts, load_yaml
 
 
@@ -28,6 +28,21 @@ class HardwareProfileTests(unittest.TestCase):
         self.assertEqual(env["MAX_MODEL_LEN"], "16384")
         self.assertEqual(env["MAX_NUM_BATCHED_TOKENS"], "32768")
 
+    @mock.patch("model_forge.hardware._query_nvidia_smi", return_value=())
+    def test_high_parallelism_requires_explicit_opt_in(self, _query: mock.Mock) -> None:
+        safe = recommended_training_env({"MODEL_FORGE_HARDWARE_PROFILE": "dgx_spark"})
+        high = recommended_training_env({
+            "MODEL_FORGE_HARDWARE_PROFILE": "dgx_spark",
+            "MODEL_FORGE_ENABLE_HIGH_PARALLELISM": "1",
+        })
+        explicit = recommended_training_env({
+            "MODEL_FORGE_HARDWARE_PROFILE": "dgx_spark",
+            "MODEL_FORGE_PARALLELISM": "192",
+        })
+        self.assertEqual(safe["MODEL_FORGE_PARALLELISM"], "32")
+        self.assertEqual(high["MODEL_FORGE_PARALLELISM"], "192")
+        self.assertEqual(explicit["MODEL_FORGE_PARALLELISM"], "192")
+
 
 class AbliterationPlanTests(unittest.TestCase):
     def test_gemma_plan_is_dry_run_friendly_and_paired(self) -> None:
@@ -39,6 +54,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(plan["data"]["harmful_count"], plan["data"]["benign_count"])
         self.assertEqual(plan["data"]["usable_pairs"], 24)
         self.assertEqual(plan["hardware"]["profile"], "dgx_spark")
+        self.assertEqual(plan["activation_collection"]["high_parallelism_c"], 192)
         self.assertFalse(plan["model"]["trust_remote_code"])
 
     def test_prompt_sets_are_non_empty_and_balanced(self) -> None:

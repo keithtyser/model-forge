@@ -17,6 +17,8 @@ activation_collection:
   batch_size: 1
   max_pairs: 24
   max_seq_len: 1024
+  preprocessing_parallelism: auto
+  high_parallelism_c: 192
   layer_skip_first: 5
   layer_skip_last: 1
   token_position: final_prompt_token

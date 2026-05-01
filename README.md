@@ -175,6 +175,8 @@ MODEL_FORGE_HARDWARE_PROFILE=dgx_spark ./forge serve gemma4_26b_a4b base
 GPU_MEMORY_UTILIZATION=0.80 ./forge serve gemma4_26b_a4b base
 MAX_MODEL_LEN=16384 ./forge serve gemma4_26b_a4b base
 VLLM_CPU_OFFLOAD_GB=24 ./forge serve gemma4_26b_a4b base
+MODEL_FORGE_ENABLE_HIGH_PARALLELISM=1 ./forge ablate gemma4_26b_a4b plan
+MODEL_FORGE_PARALLELISM=192 ./forge ablate gemma4_26b_a4b plan
 HF_MAX_WORKERS=16 HF_XET_NUM_CONCURRENT_RANGE_GETS=16 ./forge download gemma4_26b_a4b base
 ```
 

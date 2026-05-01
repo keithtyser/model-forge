@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from model_forge.hardware import detect_hardware_profile
+from model_forge.hardware import detect_hardware_profile, recommended_training_env
 
 console = Console()
 
@@ -84,6 +84,7 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
     activation = config.get("activation_collection", {})
     safety = config.get("safety", {})
     hardware = detect_hardware_profile()
+    training_env = recommended_training_env()
 
     harmful_path = resolve_repo_path(data.get("harmful_prompts", ""), config_path.parent)
     benign_path = resolve_repo_path(data.get("benign_prompts", ""), config_path.parent)
@@ -114,6 +115,9 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "batch_size": int(activation.get("batch_size", 1)),
             "max_seq_len": int(activation.get("max_seq_len", 1024)),
             "max_pairs": max_pairs,
+            "preprocessing_parallelism": activation.get("preprocessing_parallelism", "auto"),
+            "effective_parallelism": int(training_env.get("MODEL_FORGE_PARALLELISM", "1")),
+            "high_parallelism_c": int(activation.get("high_parallelism_c", training_env.get("MODEL_FORGE_HIGH_PARALLELISM", "1"))),
             "layer_skip_first": int(activation.get("layer_skip_first", 0)),
             "layer_skip_last": int(activation.get("layer_skip_last", 0)),
         },
@@ -128,6 +132,7 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "label": hardware.label,
             "gpus": [{"name": gpu.name, "memory_total_mb": gpu.memory_total_mb} for gpu in hardware.gpus],
             "vllm_env": dict(hardware.vllm_env),
+            "training_env": dict(training_env),
             "notes": list(hardware.notes),
         },
     }
@@ -153,6 +158,8 @@ def print_plan(plan: dict[str, Any]) -> None:
     table.add_row("usable contrast pairs", str(plan["data"]["usable_pairs"]))
     table.add_row("batch size", str(plan["activation_collection"]["batch_size"]))
     table.add_row("max sequence length", str(plan["activation_collection"]["max_seq_len"]))
+    table.add_row("effective preprocessing c", str(plan["activation_collection"]["effective_parallelism"]))
+    table.add_row("high-throughput c", str(plan["activation_collection"]["high_parallelism_c"]))
     free = plan["safety"]["free_cuda_gb"]
     table.add_row("free CUDA GB", "unknown" if free is None else f"{free:.1f}")
     table.add_row("required free CUDA GB", str(plan["safety"]["min_free_cuda_gb"]))

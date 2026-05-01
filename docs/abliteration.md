@@ -49,6 +49,38 @@ one model at a time, `GPU_MEMORY_UTILIZATION=0.85`, prefix caching, chunked
 prefill, and `MAX_NUM_BATCHED_TOKENS=32768`. Dedicated Blackwell cards get a
 higher starting cap, but still keep the same override path.
 
+## Training Parallelism
+
+DGX Spark can be bandwidth-bound during post-training data and activation
+pipelines. The hardware profile records a high-throughput setting of `c=192`,
+but model-forge does not enable that by default because excessive workers can
+raise host memory pressure and make model loading less predictable.
+
+Safe default:
+
+```bash
+MODEL_FORGE_HARDWARE_PROFILE=dgx_spark ./forge ablate gemma4_26b_a4b plan
+```
+
+Opt in to the high-parallelism recommendation:
+
+```bash
+MODEL_FORGE_HARDWARE_PROFILE=dgx_spark \
+MODEL_FORGE_ENABLE_HIGH_PARALLELISM=1 \
+./forge ablate gemma4_26b_a4b plan
+```
+
+Explicit override:
+
+```bash
+MODEL_FORGE_PARALLELISM=192 ./forge ablate gemma4_26b_a4b plan
+```
+
+Keep activation collection at `batch_size: 1` for Gemma 26B-A4B unless a smoke
+run proves there is enough headroom. The `c` setting is for preprocessing and
+input-pipeline parallelism, not for multiplying the number of large model
+forward passes in memory.
+
 ## Comparing The Local Ablation
 
 After a reviewed export exists at `~/models/gemma-4-26B-A4B-it-local-abliterated`,
