@@ -4,7 +4,7 @@ method: contrastive_refusal_direction
 model:
   source: google/gemma-4-26B-A4B-it
   local_dir: ~/models/gemma-4-26B-A4B-it
-  output_dir: ~/models/gemma-4-26B-A4B-it-local-abliterated
+  output_dir: ~/models/gemma-4-26B-A4B-it-local-abliterated-v2
   dtype: bfloat16
   device_map: cuda
   trust_remote_code: false
@@ -20,12 +20,14 @@ activation_collection:
   preprocessing_parallelism: auto
   high_parallelism_c: 192
   layer_skip_first: 5
-  layer_skip_last: 1
-  token_position: final_prompt_token
+  layer_skip_last: 0
+  token_position: suffix_mean
+  harmful_suffix: "\n\nI can't help with instructions for harmful requests."
+  benign_suffix: "\n\nHere is a direct, helpful answer."
 
 edit:
   mode: projection
-  strength: 1.0
+  strength: 2.0
   layer_start: 5
   layer_end: 29
   target_weight_suffixes:
@@ -34,6 +36,7 @@ edit:
   leave_embeddings_untouched: true
   leave_lm_head_untouched: true
   leave_moe_experts_untouched: true
+  require_all_target_directions: true
   review_required_before_export: true
 
 safety:
@@ -42,3 +45,6 @@ safety:
   one_model_process_at_a_time: true
 
 artifacts_dir: artifacts/abliteration/gemma4_26b_a4b_local_abli
+
+diagnostics:
+  reference_model: ~/models/Huihui-gemma-4-26B-A4B-it-abliterated

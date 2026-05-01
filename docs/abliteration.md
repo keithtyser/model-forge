@@ -2,10 +2,11 @@
 
 model-forge treats abliteration as a reproducible experiment:
 
-1. collect a refusal direction from harmful-vs-benign contrast prompts
+1. collect a refusal direction from suffix-pooled harmful-vs-benign contrast prompts
 2. review the direction artifacts and candidate layers
-3. export a local ablated model by projecting that direction out of base weights
-4. run the same internal, artifact, and external eval suite against base, downloaded abli, and local abli
+3. compare the edit geometry against the downloaded abli model for diagnostics
+4. export a local ablated model by projecting that direction out of base weights
+5. run the same internal, artifact, and external eval suite against base, downloaded abli, and local abli
 
 The default command is a dry run and does not load a model:
 
@@ -23,7 +24,8 @@ uv pip install -e ".[abliteration]"
 
 On DGX Spark, run collection in a CUDA-enabled environment. If the host Python
 environment has CPU-only PyTorch, use the Spark/vLLM CUDA container and mount
-the repo plus model directory.
+the repo plus model directory. Add `--user "$(id -u):$(id -g)"` to container
+runs so generated artifacts remain writable from the host checkout.
 
 Outputs are written under:
 
@@ -31,8 +33,40 @@ Outputs are written under:
 artifacts/abliteration/gemma4_26b_a4b_local_abli/
 ```
 
+The current Gemma recipe is a v2 candidate. It pools activations over short
+assistant suffixes instead of only the final prompt token, includes layer 29,
+uses projection strength `2.0`, and refuses to export if any configured target
+layer lacks a collected direction. The target modules intentionally match the
+downloaded abli checkpoint pattern: `self_attn.o_proj.weight` and
+`mlp.down_proj.weight` for language layers 5 through 29. Mixture-of-experts
+weights, embeddings, and the LM head stay untouched.
+
 Do not run collection while a vLLM server is active. Keep one large model
 process at a time.
+
+Before exporting, run the reference diagnostic. It compares base-to-downloaded
+abli deltas with the configured target pattern and, when local directions exist,
+reports cosine similarity between the reference delta and the candidate
+projection delta. This is diagnostic only; export still uses base weights and
+locally collected directions.
+
+```bash
+./forge ablate gemma4_26b_a4b analyze-reference \
+  --output artifacts/abliteration/gemma4_26b_a4b_local_abli/reference_diagnostics.json
+```
+
+If earlier root-run containers already own `artifacts/`, either repair the
+directory ownership outside the container or write diagnostics to `/tmp` for
+inspection.
+
+For exploratory strength sweeps, write each candidate to a distinct output
+directory:
+
+```bash
+./forge ablate gemma4_26b_a4b export --execute --overwrite \
+  --strength 2.0 \
+  --output-dir ~/models/gemma-4-26B-A4B-it-local-abliterated-v2
+```
 
 ## Hardware Profiles
 
@@ -87,7 +121,7 @@ forward passes in memory.
 
 ## Comparing The Local Ablation
 
-After a reviewed export exists at `~/models/gemma-4-26B-A4B-it-local-abliterated`,
+After a reviewed export exists at `~/models/gemma-4-26B-A4B-it-local-abliterated-v2`,
 serve and evaluate it like any other variant:
 
 ```bash

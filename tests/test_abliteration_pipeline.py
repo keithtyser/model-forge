@@ -6,7 +6,15 @@ from pathlib import Path
 from unittest import mock
 
 from model_forge.hardware import GpuInfo, detect_hardware_profile, recommended_training_env, recommended_vllm_env
-from model_forge.pipelines.abliterate import REPO_DIR, build_plan, load_prompts, load_yaml
+from model_forge.pipelines.abliterate import (
+    REPO_DIR,
+    build_plan,
+    configured_target_layers,
+    is_projection_target,
+    load_prompts,
+    load_yaml,
+    missing_direction_layers,
+)
 
 
 class HardwareProfileTests(unittest.TestCase):
@@ -59,6 +67,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(plan["data"]["usable_pairs"], 24)
         self.assertEqual(plan["hardware"]["profile"], "dgx_spark")
         self.assertEqual(plan["activation_collection"]["high_parallelism_c"], 192)
+        self.assertEqual(plan["activation_collection"]["token_position"], "suffix_mean")
         self.assertFalse(plan["model"]["trust_remote_code"])
 
     def test_prompt_sets_are_non_empty_and_balanced(self) -> None:
@@ -67,6 +76,19 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(len(harmful), len(benign))
         self.assertGreaterEqual(len(harmful), 20)
         self.assertTrue(all(len(prompt.split()) >= 6 for prompt in harmful + benign))
+
+    def test_projection_targets_cover_downloaded_abli_pattern(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_local_abli.yaml"
+        edit = load_yaml(config_path)["edit"]
+        self.assertEqual(configured_target_layers(edit), list(range(5, 30)))
+        self.assertTrue(is_projection_target("model.language_model.layers.29.mlp.down_proj.weight", edit))
+        self.assertTrue(is_projection_target("model.language_model.layers.29.self_attn.o_proj.weight", edit))
+        self.assertFalse(is_projection_target("model.language_model.layers.29.mlp.experts.down_proj", edit))
+
+    def test_strict_export_would_catch_missing_last_layer_direction(self) -> None:
+        edit = {"layer_start": 5, "layer_end": 29}
+        directions = {layer: object() for layer in range(5, 29)}
+        self.assertEqual(missing_direction_layers(edit, directions), [29])
 
 
 if __name__ == "__main__":

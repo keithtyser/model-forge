@@ -127,6 +127,9 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "batch_size": int(activation.get("batch_size", 1)),
             "max_seq_len": int(activation.get("max_seq_len", 1024)),
             "max_pairs": max_pairs,
+            "token_position": activation.get("token_position", "final_prompt_token"),
+            "harmful_suffix": activation.get("harmful_suffix"),
+            "benign_suffix": activation.get("benign_suffix"),
             "preprocessing_parallelism": activation.get("preprocessing_parallelism", "auto"),
             "effective_parallelism": int(training_env.get("MODEL_FORGE_PARALLELISM", "1")),
             "high_parallelism_c": int(activation.get("high_parallelism_c", training_env.get("MODEL_FORGE_HIGH_PARALLELISM", "1"))),
@@ -170,6 +173,7 @@ def print_plan(plan: dict[str, Any]) -> None:
     table.add_row("usable contrast pairs", str(plan["data"]["usable_pairs"]))
     table.add_row("batch size", str(plan["activation_collection"]["batch_size"]))
     table.add_row("max sequence length", str(plan["activation_collection"]["max_seq_len"]))
+    table.add_row("token position", str(plan["activation_collection"]["token_position"]))
     table.add_row("effective preprocessing c", str(plan["activation_collection"]["effective_parallelism"]))
     table.add_row("high-throughput c", str(plan["activation_collection"]["high_parallelism_c"]))
     free = plan["safety"]["free_cuda_gb"]
@@ -241,11 +245,12 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
     model.eval()
     first_device = next(model.parameters()).device
 
-    def prompt_vectors(prompts: list[str]) -> dict[int, list[Any]]:
+    def prompt_vectors(prompts: list[str], suffix: str | None) -> dict[int, list[Any]]:
         vectors: dict[int, list[Any]] = {}
         for prompt in prompts:
+            full_prompt = prompt if not suffix else prompt.rstrip() + suffix
             inputs = tokenizer(
-                prompt,
+                full_prompt,
                 return_tensors="pt",
                 truncation=True,
                 max_length=activation["max_seq_len"],
@@ -253,15 +258,30 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
             )
             inputs = {key: value.to(first_device) for key, value in inputs.items()}
             last_index = int(inputs["attention_mask"][0].sum().item()) - 1
+            first_pool_index = last_index
+            if suffix and activation["token_position"] == "suffix_mean":
+                prompt_inputs = tokenizer(
+                    prompt,
+                    return_tensors="pt",
+                    truncation=True,
+                    max_length=activation["max_seq_len"],
+                    padding=False,
+                )
+                prompt_len = int(prompt_inputs["attention_mask"][0].sum().item())
+                first_pool_index = min(max(prompt_len, 0), last_index)
             with torch.no_grad():
                 outputs = model(**inputs, output_hidden_states=True, use_cache=False)
             hidden_states = outputs.hidden_states[1:]
             for layer_index, states in enumerate(hidden_states):
-                vectors.setdefault(layer_index, []).append(states[0, last_index, :].detach().float().cpu())
+                if activation["token_position"] == "suffix_mean" and suffix:
+                    vector = states[0, first_pool_index : last_index + 1, :].mean(dim=0)
+                else:
+                    vector = states[0, last_index, :]
+                vectors.setdefault(layer_index, []).append(vector.detach().float().cpu())
         return vectors
 
-    harmful_vectors = prompt_vectors(harmful)
-    benign_vectors = prompt_vectors(benign)
+    harmful_vectors = prompt_vectors(harmful, activation.get("harmful_suffix"))
+    benign_vectors = prompt_vectors(benign, activation.get("benign_suffix"))
     layer_count = min(len(harmful_vectors), len(benign_vectors))
     first = activation["layer_skip_first"]
     last_exclusive = layer_count - activation["layer_skip_last"]
@@ -305,6 +325,18 @@ def is_projection_target(name: str, edit: dict[str, Any]) -> bool:
     return bool(suffixes) and name.endswith(suffixes)
 
 
+def configured_target_layers(edit: dict[str, Any]) -> list[int]:
+    start = int(edit.get("layer_start", 0))
+    end = int(edit.get("layer_end", start - 1))
+    if end < start:
+        return []
+    return list(range(start, end + 1))
+
+
+def missing_direction_layers(edit: dict[str, Any], directions: dict[int, Any]) -> list[int]:
+    return [layer for layer in configured_target_layers(edit) if layer not in directions]
+
+
 def copy_non_weight_files(source_dir: Path, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     for path in source_dir.iterdir():
@@ -321,7 +353,14 @@ def copy_non_weight_files(source_dir: Path, output_dir: Path) -> None:
             shutil.copy2(path, target)
 
 
-def export_projection(config: dict[str, Any], config_path: Path, directions_path: Path, overwrite: bool) -> None:
+def export_projection(
+    config: dict[str, Any],
+    config_path: Path,
+    directions_path: Path,
+    overwrite: bool,
+    strength_override: float | None = None,
+    output_dir_override: str | None = None,
+) -> None:
     import torch
     from safetensors import safe_open
     from safetensors.torch import save_file
@@ -330,8 +369,8 @@ def export_projection(config: dict[str, Any], config_path: Path, directions_path
     model_cfg = plan["model"]
     edit = plan["edit"]
     source_dir = Path(resolve_model_source(model_cfg["local_dir"] or model_cfg["source"]))
-    output_dir = resolve_repo_path(model_cfg["output_dir"])
-    strength = float(edit.get("strength", 1.0))
+    output_dir = resolve_repo_path(output_dir_override or model_cfg["output_dir"])
+    strength = float(strength_override if strength_override is not None else edit.get("strength", 1.0))
 
     if edit.get("mode") != "projection":
         raise SystemExit(f"unsupported export edit mode: {edit.get('mode')!r}")
@@ -348,6 +387,13 @@ def export_projection(config: dict[str, Any], config_path: Path, directions_path
     index = json.loads(index_path.read_text())
     raw_directions = torch.load(directions_path, map_location="cpu")
     directions = {int(layer): vector.float() for layer, vector in raw_directions.items()}
+    missing_layers = missing_direction_layers(edit, directions)
+    if missing_layers and edit.get("require_all_target_directions", True):
+        raise SystemExit(
+            "refusing export because target layers lack directions: "
+            f"{missing_layers}. Re-run collection with matching layer_skip settings, "
+            "or set edit.require_all_target_directions=false for exploratory exports."
+        )
 
     copy_non_weight_files(source_dir, output_dir)
     (output_dir / "model.safetensors.index.json").write_text(json.dumps(index, indent=2) + "\n")
@@ -398,6 +444,8 @@ def export_projection(config: dict[str, Any], config_path: Path, directions_path
         "layer_start": edit.get("layer_start"),
         "layer_end": edit.get("layer_end"),
         "target_weight_suffixes": edit.get("target_weight_suffixes"),
+        "required_target_layers": configured_target_layers(edit),
+        "missing_direction_layers": missing_layers,
         "changed_tensor_count": len(changed),
         "changed_tensors": changed,
     }
@@ -410,6 +458,115 @@ def export_projection(config: dict[str, Any], config_path: Path, directions_path
         ]),
         title="[bold green]Abliterated Base Checkpoint Exported[/bold green]",
         border_style="green",
+    ))
+
+
+def _projection_delta(base_tensor: Any, direction: Any, strength: float) -> Any:
+    import torch
+
+    direction = direction / direction.norm().clamp_min(1e-6)
+    base_float = base_tensor.float()
+    output_tensor = base_float - strength * torch.outer(direction, direction @ base_float)
+    return output_tensor - base_float
+
+
+def analyze_reference(
+    config: dict[str, Any],
+    config_path: Path,
+    reference_model: str,
+    directions_path: Path | None,
+    output_path: Path | None,
+    strength_override: float | None = None,
+) -> None:
+    import torch
+    from safetensors import safe_open
+
+    plan = build_plan(config, config_path)
+    model_cfg = plan["model"]
+    edit = plan["edit"]
+    source_dir = Path(resolve_model_source(model_cfg["local_dir"] or model_cfg["source"]))
+    reference_dir = Path(resolve_model_source(reference_model))
+    strength = float(strength_override if strength_override is not None else edit.get("strength", 1.0))
+    if not source_dir.exists():
+        raise SystemExit(f"missing base model directory: {source_dir}")
+    if not reference_dir.exists():
+        raise SystemExit(f"missing reference model directory: {reference_dir}")
+
+    index = json.loads((source_dir / "model.safetensors.index.json").read_text())
+    reference_index = json.loads((reference_dir / "model.safetensors.index.json").read_text())
+    weight_map = index["weight_map"]
+    reference_map = reference_index["weight_map"]
+    directions: dict[int, Any] = {}
+    if directions_path and directions_path.exists():
+        raw_directions = torch.load(directions_path, map_location="cpu")
+        directions = {int(layer): vector.float() for layer, vector in raw_directions.items()}
+
+    changed: list[dict[str, Any]] = []
+    by_suffix: dict[str, int] = {}
+    by_layer: dict[str, int] = {}
+    cosines: list[float] = []
+    for name, shard in weight_map.items():
+        reference_shard = reference_map.get(name)
+        if reference_shard is None:
+            continue
+        with safe_open(source_dir / shard, framework="pt", device="cpu") as base_file:
+            base_tensor = base_file.get_tensor(name)
+        with safe_open(reference_dir / reference_shard, framework="pt", device="cpu") as reference_file:
+            reference_tensor = reference_file.get_tensor(name)
+        reference_delta = reference_tensor.float() - base_tensor.float()
+        mean_abs_delta = float(reference_delta.abs().mean())
+        if mean_abs_delta <= 0:
+            continue
+        layer = language_layer_index(name)
+        suffix = next((item for item in edit.get("target_weight_suffixes", []) if name.endswith(item)), "<outside-targets>")
+        entry: dict[str, Any] = {
+            "name": name,
+            "layer": layer,
+            "suffix": suffix,
+            "shape": list(base_tensor.shape),
+            "reference_mean_abs_delta": mean_abs_delta,
+            "reference_max_abs_delta": float(reference_delta.abs().max()),
+            "is_configured_target": is_projection_target(name, edit),
+        }
+        if layer is not None:
+            by_layer[str(layer)] = by_layer.get(str(layer), 0) + 1
+        by_suffix[suffix] = by_suffix.get(suffix, 0) + 1
+        if is_projection_target(name, edit) and layer in directions and base_tensor.ndim == 2:
+            projected_delta = _projection_delta(base_tensor, directions[layer], strength)
+            reference_flat = reference_delta.flatten()
+            projected_flat = projected_delta.flatten()
+            cosine = torch.nn.functional.cosine_similarity(reference_flat, projected_flat, dim=0).item()
+            entry["projection_reference_cosine"] = float(cosine)
+            entry["projection_mean_abs_delta"] = float(projected_delta.abs().mean())
+            cosines.append(float(cosine))
+        changed.append(entry)
+
+    summary = {
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "base_model": str(source_dir),
+        "reference_model": str(reference_dir),
+        "directions": str(directions_path) if directions_path else None,
+        "strength": strength,
+        "changed_tensor_count": len(changed),
+        "changed_by_suffix": dict(sorted(by_suffix.items())),
+        "changed_by_layer": dict(sorted(by_layer.items(), key=lambda item: int(item[0]))),
+        "configured_target_layers": configured_target_layers(edit),
+        "missing_direction_layers": missing_direction_layers(edit, directions) if directions else [],
+        "projection_reference_cosine_mean": sum(cosines) / len(cosines) if cosines else None,
+        "changed_tensors": changed,
+    }
+    if output_path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(summary, indent=2) + "\n")
+    console.print(Panel.fit(
+        "\n".join([
+            f"[bold]Reference[/bold]: {reference_dir}",
+            f"[bold]Changed tensors[/bold]: {len(changed)}",
+            f"[bold]Changed suffixes[/bold]: {summary['changed_by_suffix']}",
+            f"[bold]Projection cosine mean[/bold]: {summary['projection_reference_cosine_mean']}",
+        ]),
+        title="[bold cyan]Reference Ablation Diagnostics[/bold cyan]",
+        border_style="cyan",
     ))
 
 
@@ -441,7 +598,35 @@ def command_export(args: argparse.Namespace) -> None:
         console.print("[yellow]Dry run only; export is blocked until collected directions are reviewed.[/yellow]")
         return
     directions_path = resolve_repo_path(args.directions or Path(config.get("artifacts_dir", "artifacts/abliteration/refusal_directions")) / "refusal_directions.pt")
-    export_projection(config, config_path, directions_path=directions_path, overwrite=args.overwrite)
+    export_projection(
+        config,
+        config_path,
+        directions_path=directions_path,
+        overwrite=args.overwrite,
+        strength_override=args.strength,
+        output_dir_override=args.output_dir,
+    )
+
+
+def command_analyze_reference(args: argparse.Namespace) -> None:
+    config_path = resolve_repo_path(args.config)
+    config = load_yaml(config_path)
+    diagnostics = config.get("diagnostics", {})
+    reference_model = args.reference_model or diagnostics.get("reference_model")
+    if not reference_model:
+        raise SystemExit("reference model is required; pass --reference-model or set diagnostics.reference_model")
+    directions_path = None
+    if args.directions or config.get("artifacts_dir"):
+        directions_path = resolve_repo_path(args.directions or Path(config.get("artifacts_dir")) / "refusal_directions.pt")
+    output_path = resolve_repo_path(args.output) if args.output else None
+    analyze_reference(
+        config,
+        config_path,
+        reference_model=reference_model,
+        directions_path=directions_path,
+        output_path=output_path,
+        strength_override=args.strength,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -461,7 +646,16 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument("--execute", action="store_true")
     export.add_argument("--overwrite", action="store_true")
     export.add_argument("--directions", default=None)
+    export.add_argument("--strength", type=float, default=None, help="Override edit.strength for this export")
+    export.add_argument("--output-dir", default=None, help="Override model.output_dir for this export")
     export.set_defaults(func=command_export)
+
+    analyze = sub.add_parser("analyze-reference", help="Compare base-to-reference deltas against configured targets")
+    analyze.add_argument("--reference-model", default=None)
+    analyze.add_argument("--directions", default=None)
+    analyze.add_argument("--strength", type=float, default=None)
+    analyze.add_argument("--output", default=None)
+    analyze.set_defaults(func=command_analyze_reference)
     return parser
 
 
