@@ -4,7 +4,7 @@ method: contrastive_refusal_direction
 model:
   source: google/gemma-4-26B-A4B-it
   local_dir: ~/models/gemma-4-26B-A4B-it
-  output_dir: ~/models/gemma-4-26B-A4B-it-local-abliterated-v2
+  output_dir: ~/models/gemma-4-26B-A4B-it-local-abliterated-v3
   dtype: bfloat16
   device_map: cuda
   trust_remote_code: false
@@ -22,12 +22,19 @@ activation_collection:
   layer_skip_first: 5
   layer_skip_last: 0
   token_position: suffix_mean
+  direction_extraction: mean_difference
+  winsorize_quantile: 0.02
   harmful_suffix: "\n\nI can't help with instructions for harmful requests."
   benign_suffix: "\n\nHere is a direct, helpful answer."
 
 edit:
   mode: projection
-  strength: 2.0
+  direction_transform: biprojection
+  norm_preserve: true
+  strength: 3.0
+  module_strengths:
+    self_attn.o_proj.weight: 1.25
+    mlp.down_proj.weight: 0.75
   layer_start: 5
   layer_end: 29
   target_weight_suffixes:

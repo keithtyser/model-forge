@@ -128,6 +128,8 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "max_seq_len": int(activation.get("max_seq_len", 1024)),
             "max_pairs": max_pairs,
             "token_position": activation.get("token_position", "final_prompt_token"),
+            "direction_extraction": activation.get("direction_extraction", "mean_difference"),
+            "winsorize_quantile": activation.get("winsorize_quantile"),
             "harmful_suffix": activation.get("harmful_suffix"),
             "benign_suffix": activation.get("benign_suffix"),
             "preprocessing_parallelism": activation.get("preprocessing_parallelism", "auto"),
@@ -174,6 +176,7 @@ def print_plan(plan: dict[str, Any]) -> None:
     table.add_row("batch size", str(plan["activation_collection"]["batch_size"]))
     table.add_row("max sequence length", str(plan["activation_collection"]["max_seq_len"]))
     table.add_row("token position", str(plan["activation_collection"]["token_position"]))
+    table.add_row("direction extraction", str(plan["activation_collection"]["direction_extraction"]))
     table.add_row("effective preprocessing c", str(plan["activation_collection"]["effective_parallelism"]))
     table.add_row("high-throughput c", str(plan["activation_collection"]["high_parallelism_c"]))
     free = plan["safety"]["free_cuda_gb"]
@@ -286,21 +289,73 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
     first = activation["layer_skip_first"]
     last_exclusive = layer_count - activation["layer_skip_last"]
     directions = {}
+    harmful_means = {}
+    benign_means = {}
+    def maybe_winsorize(values: Any) -> Any:
+        quantile = activation.get("winsorize_quantile")
+        if quantile is None:
+            return values
+        q = float(quantile)
+        if q <= 0 or q >= 0.5:
+            raise SystemExit("winsorize_quantile must be between 0 and 0.5")
+        low = torch.quantile(values, q, dim=0)
+        high = torch.quantile(values, 1 - q, dim=0)
+        return values.clamp(low, high)
+
+    def extract_direction(harmful_stack: Any, benign_stack: Any) -> Any:
+        method = str(activation.get("direction_extraction", "mean_difference")).lower()
+        mean_direction = harmful_stack.mean(dim=0) - benign_stack.mean(dim=0)
+        if method == "mean_difference":
+            return mean_direction
+        contrast = harmful_stack - benign_stack
+        if method == "paired_svd":
+            centered = contrast - contrast.mean(dim=0, keepdim=True)
+            _, _, vh = torch.linalg.svd(centered.float(), full_matrices=False)
+            direction = vh[0]
+        elif method == "whitened_paired_svd":
+            pooled = torch.cat([harmful_stack, benign_stack], dim=0)
+            scale = pooled.float().std(dim=0).clamp_min(1e-6)
+            whitened = contrast.float() / scale
+            whitened = whitened - whitened.mean(dim=0, keepdim=True)
+            _, _, vh = torch.linalg.svd(whitened, full_matrices=False)
+            direction = vh[0] / scale
+        else:
+            raise SystemExit(f"unsupported direction_extraction: {method!r}")
+        if torch.dot(direction.float(), mean_direction.float()) < 0:
+            direction = -direction
+        return direction
+
     for layer_index in range(first, max(first, last_exclusive)):
-        harmful_mean = torch.stack(harmful_vectors[layer_index]).mean(dim=0)
-        benign_mean = torch.stack(benign_vectors[layer_index]).mean(dim=0)
-        direction = harmful_mean - benign_mean
+        harmful_stack = maybe_winsorize(torch.stack(harmful_vectors[layer_index]))
+        benign_stack = maybe_winsorize(torch.stack(benign_vectors[layer_index]))
+        harmful_mean = harmful_stack.mean(dim=0)
+        benign_mean = benign_stack.mean(dim=0)
+        direction = extract_direction(harmful_stack, benign_stack)
         norm = torch.linalg.vector_norm(direction)
         if norm > 0:
             direction = direction / norm
         directions[layer_index] = direction
+        harmful_means[layer_index] = harmful_mean
+        benign_means[layer_index] = benign_mean
 
     output_dir.mkdir(parents=True, exist_ok=True)
     torch.save(directions, output_dir / "refusal_directions.pt")
+    torch.save(
+        {
+            "refusal_directions": directions,
+            "harmful_means": harmful_means,
+            "benign_means": benign_means,
+            "direction_method": activation["token_position"],
+            "direction_extraction": activation["direction_extraction"],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        },
+        output_dir / "direction_artifact.pt",
+    )
     metadata = {
         "created_at": datetime.now(timezone.utc).isoformat(),
         "plan": plan,
         "direction_layers": sorted(directions),
+        "artifact_format": "direction_artifact_v1",
     }
     (output_dir / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
     console.print(f"[bold green]Wrote[/bold green] {output_dir / 'refusal_directions.pt'}")
@@ -335,6 +390,67 @@ def configured_target_layers(edit: dict[str, Any]) -> list[int]:
 
 def missing_direction_layers(edit: dict[str, Any], directions: dict[int, Any]) -> list[int]:
     return [layer for layer in configured_target_layers(edit) if layer not in directions]
+
+
+def _is_layer_tensor_dict(value: Any) -> bool:
+    return isinstance(value, dict) and all(isinstance(key, int) for key in value)
+
+
+def load_direction_artifact(path: Path) -> dict[str, Any]:
+    import torch
+
+    raw = torch.load(path, map_location="cpu")
+    if _is_layer_tensor_dict(raw):
+        return {
+            "refusal_directions": {int(layer): vector.float() for layer, vector in raw.items()},
+            "harmful_means": {},
+            "benign_means": {},
+            "source_path": str(path),
+            "format": "legacy_refusal_directions",
+        }
+    directions = raw.get("refusal_directions", raw.get("directions"))
+    if not _is_layer_tensor_dict(directions):
+        raise SystemExit(f"direction artifact does not contain layer-indexed directions: {path}")
+    return {
+        "refusal_directions": {int(layer): vector.float() for layer, vector in directions.items()},
+        "harmful_means": {int(layer): vector.float() for layer, vector in raw.get("harmful_means", {}).items()},
+        "benign_means": {int(layer): vector.float() for layer, vector in raw.get("benign_means", {}).items()},
+        "source_path": str(path),
+        "format": raw.get("format", "direction_artifact_v1"),
+    }
+
+
+def tensor_strength(name: str, layer: int, edit: dict[str, Any], default: float) -> float:
+    strength = default
+    for suffix, value in (edit.get("module_strengths") or {}).items():
+        if name.endswith(suffix):
+            strength *= float(value)
+    layer_strengths = edit.get("layer_strengths") or {}
+    if str(layer) in layer_strengths:
+        strength *= float(layer_strengths[str(layer)])
+    elif layer in layer_strengths:
+        strength *= float(layer_strengths[layer])
+    return strength
+
+
+def intervention_direction(layer: int, artifact: dict[str, Any], edit: dict[str, Any]) -> Any:
+    import torch
+
+    direction = artifact["refusal_directions"][layer].float()
+    mode = str(edit.get("direction_transform", "raw")).lower()
+    if mode in {"biprojection", "orthogonalized", "projected"}:
+        benign = artifact.get("benign_means", {}).get(layer)
+        if benign is None:
+            raise SystemExit(
+                f"direction_transform={mode} requires benign_means for layer {layer}; "
+                "re-run collection to create direction_artifact.pt"
+            )
+        benign = benign.float()
+        benign = benign / torch.linalg.vector_norm(benign).clamp_min(1e-6)
+        direction = direction - benign * torch.dot(direction, benign)
+    elif mode != "raw":
+        raise SystemExit(f"unsupported direction_transform: {mode!r}")
+    return direction / torch.linalg.vector_norm(direction).clamp_min(1e-6)
 
 
 def copy_non_weight_files(source_dir: Path, output_dir: Path) -> None:
@@ -385,8 +501,8 @@ def export_projection(
 
     index_path = source_dir / "model.safetensors.index.json"
     index = json.loads(index_path.read_text())
-    raw_directions = torch.load(directions_path, map_location="cpu")
-    directions = {int(layer): vector.float() for layer, vector in raw_directions.items()}
+    artifact = load_direction_artifact(directions_path)
+    directions = artifact["refusal_directions"]
     missing_layers = missing_direction_layers(edit, directions)
     if missing_layers and edit.get("require_all_target_directions", True):
         raise SystemExit(
@@ -412,21 +528,30 @@ def export_projection(
                 if not is_projection_target(name, edit) or layer not in directions:
                     shard_tensors[name] = base_tensor
                     continue
-                direction = directions[layer]
-                if base_tensor.ndim != 2 or base_tensor.shape[0] != direction.numel():
+                direction = intervention_direction(layer, artifact, edit)
+                if base_tensor.ndim not in {1, 2} or base_tensor.shape[0] != direction.numel():
                     raise SystemExit(
                         f"cannot project {name}: tensor shape {tuple(base_tensor.shape)} "
                         f"does not match direction length {direction.numel()}"
                     )
-                direction = direction / direction.norm().clamp_min(1e-6)
+                local_strength = tensor_strength(name, layer, edit, strength)
                 base_float = base_tensor.float()
-                output_tensor = (base_float - strength * torch.outer(direction, direction @ base_float)).to(base_tensor.dtype)
+                if base_tensor.ndim == 1:
+                    output_float = base_float - local_strength * direction * torch.dot(direction, base_float)
+                else:
+                    output_float = base_float - local_strength * torch.outer(direction, direction @ base_float)
+                    if edit.get("norm_preserve", False):
+                        base_norms = base_float.norm(dim=1, keepdim=True)
+                        output_norms = output_float.norm(dim=1, keepdim=True).clamp_min(1e-6)
+                        output_float = output_float * (base_norms / output_norms)
+                output_tensor = output_float.to(base_tensor.dtype)
                 delta = output_tensor.float() - base_float
                 changed.append({
                     "name": name,
                     "shard": shard,
                     "shape": list(base_tensor.shape),
                     "dtype": str(base_tensor.dtype),
+                    "strength": local_strength,
                     "mean_abs_delta": float(delta.abs().mean()),
                     "max_abs_delta": float(delta.abs().max()),
                 })
@@ -441,6 +566,10 @@ def export_projection(
         "directions": str(directions_path),
         "output_dir": str(output_dir),
         "strength": strength,
+        "direction_artifact_format": artifact["format"],
+        "direction_transform": edit.get("direction_transform", "raw"),
+        "norm_preserve": bool(edit.get("norm_preserve", False)),
+        "module_strengths": edit.get("module_strengths", {}),
         "layer_start": edit.get("layer_start"),
         "layer_end": edit.get("layer_end"),
         "target_weight_suffixes": edit.get("target_weight_suffixes"),
@@ -461,12 +590,19 @@ def export_projection(
     ))
 
 
-def _projection_delta(base_tensor: Any, direction: Any, strength: float) -> Any:
+def _projection_delta(base_tensor: Any, direction: Any, strength: float, norm_preserve: bool = False) -> Any:
     import torch
 
     direction = direction / direction.norm().clamp_min(1e-6)
     base_float = base_tensor.float()
-    output_tensor = base_float - strength * torch.outer(direction, direction @ base_float)
+    if base_tensor.ndim == 1:
+        output_tensor = base_float - strength * direction * torch.dot(direction, base_float)
+    else:
+        output_tensor = base_float - strength * torch.outer(direction, direction @ base_float)
+        if norm_preserve:
+            base_norms = base_float.norm(dim=1, keepdim=True)
+            output_norms = output_tensor.norm(dim=1, keepdim=True).clamp_min(1e-6)
+            output_tensor = output_tensor * (base_norms / output_norms)
     return output_tensor - base_float
 
 
@@ -477,7 +613,8 @@ def analyze_reference(
     directions_path: Path | None,
     output_path: Path | None,
     strength_override: float | None = None,
-) -> None:
+    quiet: bool = False,
+) -> dict[str, Any]:
     import torch
     from safetensors import safe_open
 
@@ -496,10 +633,11 @@ def analyze_reference(
     reference_index = json.loads((reference_dir / "model.safetensors.index.json").read_text())
     weight_map = index["weight_map"]
     reference_map = reference_index["weight_map"]
+    artifact: dict[str, Any] = {"refusal_directions": {}, "harmful_means": {}, "benign_means": {}, "format": "none"}
     directions: dict[int, Any] = {}
     if directions_path and directions_path.exists():
-        raw_directions = torch.load(directions_path, map_location="cpu")
-        directions = {int(layer): vector.float() for layer, vector in raw_directions.items()}
+        artifact = load_direction_artifact(directions_path)
+        directions = artifact["refusal_directions"]
 
     changed: list[dict[str, Any]] = []
     by_suffix: dict[str, int] = {}
@@ -531,13 +669,22 @@ def analyze_reference(
         if layer is not None:
             by_layer[str(layer)] = by_layer.get(str(layer), 0) + 1
         by_suffix[suffix] = by_suffix.get(suffix, 0) + 1
-        if is_projection_target(name, edit) and layer in directions and base_tensor.ndim == 2:
-            projected_delta = _projection_delta(base_tensor, directions[layer], strength)
+        if is_projection_target(name, edit) and layer in directions and base_tensor.ndim in {1, 2}:
+            direction = intervention_direction(layer, artifact, edit)
+            local_strength = tensor_strength(name, layer, edit, strength)
+            projected_delta = _projection_delta(
+                base_tensor,
+                direction,
+                local_strength,
+                norm_preserve=bool(edit.get("norm_preserve", False)),
+            )
             reference_flat = reference_delta.flatten()
             projected_flat = projected_delta.flatten()
             cosine = torch.nn.functional.cosine_similarity(reference_flat, projected_flat, dim=0).item()
             entry["projection_reference_cosine"] = float(cosine)
             entry["projection_mean_abs_delta"] = float(projected_delta.abs().mean())
+            entry["projection_reference_mean_abs_ratio"] = float(projected_delta.abs().mean() / reference_delta.abs().mean().clamp_min(1e-12))
+            entry["projection_strength"] = local_strength
             cosines.append(float(cosine))
         changed.append(entry)
 
@@ -546,7 +693,10 @@ def analyze_reference(
         "base_model": str(source_dir),
         "reference_model": str(reference_dir),
         "directions": str(directions_path) if directions_path else None,
+        "direction_artifact_format": artifact["format"],
         "strength": strength,
+        "direction_transform": edit.get("direction_transform", "raw"),
+        "norm_preserve": bool(edit.get("norm_preserve", False)),
         "changed_tensor_count": len(changed),
         "changed_by_suffix": dict(sorted(by_suffix.items())),
         "changed_by_layer": dict(sorted(by_layer.items(), key=lambda item: int(item[0]))),
@@ -558,16 +708,18 @@ def analyze_reference(
     if output_path:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(summary, indent=2) + "\n")
-    console.print(Panel.fit(
-        "\n".join([
-            f"[bold]Reference[/bold]: {reference_dir}",
-            f"[bold]Changed tensors[/bold]: {len(changed)}",
-            f"[bold]Changed suffixes[/bold]: {summary['changed_by_suffix']}",
-            f"[bold]Projection cosine mean[/bold]: {summary['projection_reference_cosine_mean']}",
-        ]),
-        title="[bold cyan]Reference Ablation Diagnostics[/bold cyan]",
-        border_style="cyan",
-    ))
+    if not quiet:
+        console.print(Panel.fit(
+            "\n".join([
+                f"[bold]Reference[/bold]: {reference_dir}",
+                f"[bold]Changed tensors[/bold]: {len(changed)}",
+                f"[bold]Changed suffixes[/bold]: {summary['changed_by_suffix']}",
+                f"[bold]Projection cosine mean[/bold]: {summary['projection_reference_cosine_mean']}",
+            ]),
+            title="[bold cyan]Reference Ablation Diagnostics[/bold cyan]",
+            border_style="cyan",
+        ))
+    return summary
 
 
 def command_plan(args: argparse.Namespace) -> None:
@@ -597,7 +749,11 @@ def command_export(args: argparse.Namespace) -> None:
     if not args.execute:
         console.print("[yellow]Dry run only; export is blocked until collected directions are reviewed.[/yellow]")
         return
-    directions_path = resolve_repo_path(args.directions or Path(config.get("artifacts_dir", "artifacts/abliteration/refusal_directions")) / "refusal_directions.pt")
+    artifacts_dir = Path(config.get("artifacts_dir", "artifacts/abliteration/refusal_directions"))
+    default_directions = artifacts_dir / "direction_artifact.pt"
+    if not resolve_repo_path(default_directions).exists():
+        default_directions = artifacts_dir / "refusal_directions.pt"
+    directions_path = resolve_repo_path(args.directions or default_directions)
     export_projection(
         config,
         config_path,
@@ -617,7 +773,11 @@ def command_analyze_reference(args: argparse.Namespace) -> None:
         raise SystemExit("reference model is required; pass --reference-model or set diagnostics.reference_model")
     directions_path = None
     if args.directions or config.get("artifacts_dir"):
-        directions_path = resolve_repo_path(args.directions or Path(config.get("artifacts_dir")) / "refusal_directions.pt")
+        artifacts_dir = Path(config.get("artifacts_dir"))
+        default_directions = artifacts_dir / "direction_artifact.pt"
+        if not resolve_repo_path(default_directions).exists():
+            default_directions = artifacts_dir / "refusal_directions.pt"
+        directions_path = resolve_repo_path(args.directions or default_directions)
     output_path = resolve_repo_path(args.output) if args.output else None
     analyze_reference(
         config,
@@ -627,6 +787,97 @@ def command_analyze_reference(args: argparse.Namespace) -> None:
         output_path=output_path,
         strength_override=args.strength,
     )
+
+
+def parse_float_list(raw: str) -> list[float]:
+    values = [float(item.strip()) for item in raw.split(",") if item.strip()]
+    if not values:
+        raise SystemExit("expected at least one numeric value")
+    return values
+
+
+def command_sweep_reference(args: argparse.Namespace) -> None:
+    config_path = resolve_repo_path(args.config)
+    config = load_yaml(config_path)
+    diagnostics = config.get("diagnostics", {})
+    reference_model = args.reference_model or diagnostics.get("reference_model")
+    if not reference_model:
+        raise SystemExit("reference model is required; pass --reference-model or set diagnostics.reference_model")
+    directions_path = resolve_repo_path(args.directions or Path(config.get("artifacts_dir", "artifacts/abliteration/refusal_directions")) / "direction_artifact.pt")
+    if not directions_path.exists():
+        legacy = resolve_repo_path(Path(config.get("artifacts_dir", "artifacts/abliteration/refusal_directions")) / "refusal_directions.pt")
+        directions_path = legacy
+    strengths = parse_float_list(args.strengths)
+    transforms = [item.strip() for item in args.transforms.split(",") if item.strip()]
+    norm_options = [False, True] if args.include_norm_preserve else [bool(config.get("edit", {}).get("norm_preserve", False))]
+
+    rows: list[dict[str, Any]] = []
+    for transform in transforms:
+        for norm_preserve in norm_options:
+            for strength in strengths:
+                candidate = json.loads(json.dumps(config))
+                candidate.setdefault("edit", {})["direction_transform"] = transform
+                candidate["edit"]["norm_preserve"] = norm_preserve
+                try:
+                    summary = analyze_reference(
+                        candidate,
+                        config_path,
+                        reference_model=reference_model,
+                        directions_path=directions_path,
+                        output_path=None,
+                        strength_override=strength,
+                        quiet=True,
+                    )
+                    ratios = [
+                        item["projection_reference_mean_abs_ratio"]
+                        for item in summary["changed_tensors"]
+                        if "projection_reference_mean_abs_ratio" in item
+                    ]
+                    rows.append({
+                        "transform": transform,
+                        "norm_preserve": norm_preserve,
+                        "strength": strength,
+                        "cosine_mean": summary["projection_reference_cosine_mean"],
+                        "mean_abs_ratio": sum(ratios) / len(ratios) if ratios else None,
+                        "missing_layers": summary["missing_direction_layers"],
+                        "error": None,
+                    })
+                except SystemExit as exc:
+                    rows.append({
+                        "transform": transform,
+                        "norm_preserve": norm_preserve,
+                        "strength": strength,
+                        "cosine_mean": None,
+                        "mean_abs_ratio": None,
+                        "missing_layers": [],
+                        "error": str(exc),
+                    })
+
+    rows.sort(key=lambda item: (item["cosine_mean"] is None, -(item["cosine_mean"] or -999), abs((item["mean_abs_ratio"] or 0) - 1)))
+    output_path = resolve_repo_path(args.output) if args.output else None
+    if output_path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps({"created_at": datetime.now(timezone.utc).isoformat(), "rows": rows}, indent=2) + "\n")
+
+    table = Table(title="Reference Alignment Sweep")
+    table.add_column("transform")
+    table.add_column("norm")
+    table.add_column("strength")
+    table.add_column("cosine")
+    table.add_column("abs ratio")
+    table.add_column("missing")
+    table.add_column("error")
+    for row in rows[: args.top_k]:
+        table.add_row(
+            str(row["transform"]),
+            str(row["norm_preserve"]),
+            f"{row['strength']:.3g}",
+            "n/a" if row["cosine_mean"] is None else f"{row['cosine_mean']:.4f}",
+            "n/a" if row["mean_abs_ratio"] is None else f"{row['mean_abs_ratio']:.4f}",
+            ",".join(str(item) for item in row["missing_layers"]),
+            "" if row["error"] is None else row["error"][:80],
+        )
+    console.print(table)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -656,6 +907,16 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--strength", type=float, default=None)
     analyze.add_argument("--output", default=None)
     analyze.set_defaults(func=command_analyze_reference)
+
+    sweep = sub.add_parser("sweep-reference", help="Rank training-free edit settings against a reference checkpoint")
+    sweep.add_argument("--reference-model", default=None)
+    sweep.add_argument("--directions", default=None)
+    sweep.add_argument("--strengths", default="0.5,1.0,1.5,2.0,3.0,4.0")
+    sweep.add_argument("--transforms", default="raw,biprojection")
+    sweep.add_argument("--include-norm-preserve", action="store_true")
+    sweep.add_argument("--top-k", type=int, default=12)
+    sweep.add_argument("--output", default=None)
+    sweep.set_defaults(func=command_sweep_reference)
     return parser
 
 

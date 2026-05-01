@@ -8,12 +8,15 @@ from unittest import mock
 from model_forge.hardware import GpuInfo, detect_hardware_profile, recommended_training_env, recommended_vllm_env
 from model_forge.pipelines.abliterate import (
     REPO_DIR,
+    _projection_delta,
     build_plan,
     configured_target_layers,
+    intervention_direction,
     is_projection_target,
     load_prompts,
     load_yaml,
     missing_direction_layers,
+    tensor_strength,
 )
 
 
@@ -68,6 +71,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(plan["hardware"]["profile"], "dgx_spark")
         self.assertEqual(plan["activation_collection"]["high_parallelism_c"], 192)
         self.assertEqual(plan["activation_collection"]["token_position"], "suffix_mean")
+        self.assertEqual(plan["activation_collection"]["direction_extraction"], "mean_difference")
         self.assertFalse(plan["model"]["trust_remote_code"])
 
     def test_prompt_sets_are_non_empty_and_balanced(self) -> None:
@@ -89,6 +93,34 @@ class AbliterationPlanTests(unittest.TestCase):
         edit = {"layer_start": 5, "layer_end": 29}
         directions = {layer: object() for layer in range(5, 29)}
         self.assertEqual(missing_direction_layers(edit, directions), [29])
+
+    def test_module_strengths_and_layer_multipliers_compose(self) -> None:
+        edit = {
+            "module_strengths": {"self_attn.o_proj.weight": 1.25},
+            "layer_strengths": {"7": 0.5},
+        }
+        name = "model.language_model.layers.7.self_attn.o_proj.weight"
+        self.assertEqual(tensor_strength(name, 7, edit, 3.0), 1.875)
+
+    def test_biprojection_orthogonalizes_against_benign_mean(self) -> None:
+        import torch
+
+        artifact = {
+            "refusal_directions": {5: torch.tensor([1.0, 1.0, 0.0])},
+            "benign_means": {5: torch.tensor([1.0, 0.0, 0.0])},
+        }
+        direction = intervention_direction(5, artifact, {"direction_transform": "biprojection"})
+        self.assertAlmostEqual(float(torch.dot(direction, torch.tensor([1.0, 0.0, 0.0]))), 0.0, places=6)
+        self.assertAlmostEqual(float(torch.linalg.vector_norm(direction)), 1.0, places=6)
+
+    def test_norm_preserving_projection_restores_row_norms(self) -> None:
+        import torch
+
+        weight = torch.tensor([[3.0, 4.0], [1.0, 0.0]])
+        direction = torch.tensor([0.0, 1.0])
+        delta = _projection_delta(weight, direction, strength=0.5, norm_preserve=True)
+        projected = weight + delta
+        self.assertTrue(torch.allclose(weight.norm(dim=1), projected.norm(dim=1), atol=1e-5))
 
 
 if __name__ == "__main__":

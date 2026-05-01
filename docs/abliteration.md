@@ -33,13 +33,23 @@ Outputs are written under:
 artifacts/abliteration/gemma4_26b_a4b_local_abli/
 ```
 
-The current Gemma recipe is a v2 candidate. It pools activations over short
+The current Gemma recipe is a v3 candidate. It pools activations over short
 assistant suffixes instead of only the final prompt token, includes layer 29,
-uses projection strength `2.0`, and refuses to export if any configured target
-layer lacks a collected direction. The target modules intentionally match the
-downloaded abli checkpoint pattern: `self_attn.o_proj.weight` and
+uses norm-preserving biprojection, and refuses to export if any configured
+target layer lacks a collected direction. The target modules intentionally
+match the downloaded abli checkpoint pattern: `self_attn.o_proj.weight` and
 `mlp.down_proj.weight` for language layers 5 through 29. Mixture-of-experts
 weights, embeddings, and the LM head stay untouched.
+
+The v3 backend follows the practical shape of OBLITERATUS/HERETIC-style
+abliteration without making fine-tuning part of the critical path:
+
+- store harmful and benign activation means in `direction_artifact.pt`
+- extract directions with mean-difference, paired SVD, or whitened paired SVD
+- optionally orthogonalize the refusal direction against benign activations
+- preserve output-row norms after projection
+- allow per-module and per-layer strength multipliers
+- run reference-alignment sweeps before writing another 49 GB checkpoint
 
 Do not run collection while a vLLM server is active. Keep one large model
 process at a time.
@@ -55,6 +65,15 @@ locally collected directions.
   --output artifacts/abliteration/gemma4_26b_a4b_local_abli/reference_diagnostics.json
 ```
 
+To rank training-free edit settings against the downloaded abli checkpoint
+before exporting:
+
+```bash
+./forge ablate gemma4_26b_a4b sweep-reference \
+  --include-norm-preserve \
+  --output artifacts/abliteration/gemma4_26b_a4b_local_abli/reference_sweep.json
+```
+
 If earlier root-run containers already own `artifacts/`, either repair the
 directory ownership outside the container or write diagnostics to `/tmp` for
 inspection.
@@ -64,8 +83,8 @@ directory:
 
 ```bash
 ./forge ablate gemma4_26b_a4b export --execute --overwrite \
-  --strength 2.0 \
-  --output-dir ~/models/gemma-4-26B-A4B-it-local-abliterated-v2
+  --strength 3.0 \
+  --output-dir ~/models/gemma-4-26B-A4B-it-local-abliterated-v3
 ```
 
 ## Hardware Profiles
@@ -121,7 +140,7 @@ forward passes in memory.
 
 ## Comparing The Local Ablation
 
-After a reviewed export exists at `~/models/gemma-4-26B-A4B-it-local-abliterated-v2`,
+After a reviewed export exists at `~/models/gemma-4-26B-A4B-it-local-abliterated-v3`,
 serve and evaluate it like any other variant:
 
 ```bash

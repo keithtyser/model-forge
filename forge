@@ -17,7 +17,7 @@ Usage:
   ./forge serve <family> [base|ft|abli|local_abli]
   ./forge eval <family> [base|ft|abli|local_abli] [--smoke|--internal|--artifact|--external] [tasks]
   ./forge external <family> [base|ft|abli|local_abli] [tasks]
-  ./forge ablate <family> [plan|collect|analyze-reference|export] [--execute]
+  ./forge ablate <family> [plan|collect|analyze-reference|sweep-reference|export] [--execute]
   ./forge compare <family>
   ./forge golden-summary <family> [output-json]
   ./forge golden-check <family> [baseline-json]
