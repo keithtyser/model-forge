@@ -47,10 +47,12 @@ def _query_nvidia_smi() -> tuple[GpuInfo, ...]:
         line = raw_line.strip()
         if not line:
             continue
-        match = re.match(r"(.+),\s*(\d+)$", line)
+        match = re.match(r"(.+),\s*(\d+|\[?N/A\]?)$", line)
         if not match:
             continue
-        gpus.append(GpuInfo(name=match.group(1).strip(), memory_total_mb=int(match.group(2))))
+        raw_memory = match.group(2).strip("[]")
+        memory = 0 if raw_memory == "N/A" else int(raw_memory)
+        gpus.append(GpuInfo(name=match.group(1).strip(), memory_total_mb=memory))
     return tuple(gpus)
 
 

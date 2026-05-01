@@ -6,7 +6,7 @@ model:
   local_dir: ~/models/gemma-4-26B-A4B-it
   output_dir: ~/models/gemma-4-26B-A4B-it-local-abliterated
   dtype: bfloat16
-  device_map: auto
+  device_map: cuda
   trust_remote_code: false
 
 data:
@@ -26,6 +26,11 @@ activation_collection:
 edit:
   mode: projection
   strength: 1.0
+  layer_start: 5
+  layer_end: 29
+  target_weight_suffixes:
+    - mlp.down_proj.weight
+    - self_attn.o_proj.weight
   leave_embeddings_untouched: true
   leave_lm_head_untouched: true
   leave_moe_experts_untouched: true

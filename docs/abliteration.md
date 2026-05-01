@@ -4,7 +4,7 @@ model-forge treats abliteration as a reproducible experiment:
 
 1. collect a refusal direction from harmful-vs-benign contrast prompts
 2. review the direction artifacts and candidate layers
-3. export a local ablated model only after review
+3. export a local ablated model by projecting that direction out of base weights
 4. run the same internal, artifact, and external eval suite against base, downloaded abli, and local abli
 
 The default command is a dry run and does not load a model:
@@ -20,6 +20,10 @@ and a free-memory check:
 uv pip install -e ".[abliteration]"
 ./forge ablate gemma4_26b_a4b collect --execute
 ```
+
+On DGX Spark, run collection in a CUDA-enabled environment. If the host Python
+environment has CPU-only PyTorch, use the Spark/vLLM CUDA container and mount
+the repo plus model directory.
 
 Outputs are written under:
 

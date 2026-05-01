@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,6 +37,16 @@ def resolve_repo_path(raw: str | Path, base: Path | None = None) -> Path:
     if path.is_absolute():
         return path
     return (base or REPO_DIR) / path
+
+
+def resolve_model_source(raw: str | Path | None) -> str:
+    if raw is None:
+        raise SystemExit("model source is required")
+    value = str(raw)
+    path = Path(value).expanduser()
+    if path.is_absolute() or value.startswith("~"):
+        return str(path)
+    return value
 
 
 def load_prompts(path: Path) -> list[str]:
@@ -204,9 +216,7 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
 
     plan = build_plan(config, config_path)
     model_cfg = plan["model"]
-    source = model_cfg["local_dir"] or model_cfg["source"]
-    if not source:
-        raise SystemExit("config model.source or model.local_dir is required")
+    source = resolve_model_source(model_cfg["local_dir"] or model_cfg["source"])
 
     harmful = load_prompts(Path(plan["data"]["harmful_prompts"]))[: plan["data"]["usable_pairs"]]
     benign = load_prompts(Path(plan["data"]["benign_prompts"]))[: plan["data"]["usable_pairs"]]
@@ -215,13 +225,19 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
     tokenizer = AutoTokenizer.from_pretrained(source, trust_remote_code=model_cfg["trust_remote_code"])
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    model = AutoModelForCausalLM.from_pretrained(
-        source,
-        device_map=model_cfg["device_map"],
-        torch_dtype=_torch_dtype(torch, model_cfg["dtype"]),
-        low_cpu_mem_usage=True,
-        trust_remote_code=model_cfg["trust_remote_code"],
-    )
+    device_map = str(model_cfg["device_map"])
+    load_kwargs = {
+        "torch_dtype": _torch_dtype(torch, model_cfg["dtype"]),
+        "trust_remote_code": model_cfg["trust_remote_code"],
+    }
+    if device_map == "auto":
+        load_kwargs["device_map"] = "auto"
+        load_kwargs["low_cpu_mem_usage"] = True
+    model = AutoModelForCausalLM.from_pretrained(source, **load_kwargs)
+    if device_map in {"cuda", "cuda:0"}:
+        if not torch.cuda.is_available():
+            raise SystemExit("device_map=cuda requested but CUDA is not available")
+        model.to(torch.device("cuda:0"))
     model.eval()
     first_device = next(model.parameters()).device
 
@@ -270,6 +286,133 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
     console.print(f"[bold green]Wrote[/bold green] {output_dir / 'refusal_directions.pt'}")
 
 
+def language_layer_index(name: str) -> int | None:
+    match = re.search(r"model[.]language_model[.]layers[.](\d+)[.]", name)
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def is_projection_target(name: str, edit: dict[str, Any]) -> bool:
+    layer = language_layer_index(name)
+    if layer is None:
+        return False
+    if layer < int(edit.get("layer_start", 0)):
+        return False
+    if layer > int(edit.get("layer_end", 10**9)):
+        return False
+    suffixes = tuple(edit.get("target_weight_suffixes") or ())
+    return bool(suffixes) and name.endswith(suffixes)
+
+
+def copy_non_weight_files(source_dir: Path, output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for path in source_dir.iterdir():
+        if path.name.startswith("model-") and path.suffix == ".safetensors":
+            continue
+        if path.name == "model.safetensors.index.json":
+            continue
+        target = output_dir / path.name
+        if path.is_dir():
+            if target.exists():
+                shutil.rmtree(target)
+            shutil.copytree(path, target)
+        elif path.is_file():
+            shutil.copy2(path, target)
+
+
+def export_projection(config: dict[str, Any], config_path: Path, directions_path: Path, overwrite: bool) -> None:
+    import torch
+    from safetensors import safe_open
+    from safetensors.torch import save_file
+
+    plan = build_plan(config, config_path)
+    model_cfg = plan["model"]
+    edit = plan["edit"]
+    source_dir = Path(resolve_model_source(model_cfg["local_dir"] or model_cfg["source"]))
+    output_dir = resolve_repo_path(model_cfg["output_dir"])
+    strength = float(edit.get("strength", 1.0))
+
+    if edit.get("mode") != "projection":
+        raise SystemExit(f"unsupported export edit mode: {edit.get('mode')!r}")
+    if not source_dir.exists():
+        raise SystemExit(f"missing base model directory: {source_dir}")
+    if not directions_path.exists():
+        raise SystemExit(f"missing refusal directions: {directions_path}")
+    if output_dir.exists():
+        if not overwrite:
+            raise SystemExit(f"output already exists: {output_dir}; pass --overwrite to replace it")
+        shutil.rmtree(output_dir)
+
+    index_path = source_dir / "model.safetensors.index.json"
+    index = json.loads(index_path.read_text())
+    raw_directions = torch.load(directions_path, map_location="cpu")
+    directions = {int(layer): vector.float() for layer, vector in raw_directions.items()}
+
+    copy_non_weight_files(source_dir, output_dir)
+    (output_dir / "model.safetensors.index.json").write_text(json.dumps(index, indent=2) + "\n")
+
+    weight_map = index["weight_map"]
+    shards = sorted(set(weight_map.values()))
+    changed: list[dict[str, Any]] = []
+    for shard in shards:
+        names = [name for name, filename in weight_map.items() if filename == shard]
+        shard_tensors: dict[str, Any] = {}
+        console.print(f"[cyan]Writing[/cyan] {shard} ({len(names)} tensors)")
+        with safe_open(source_dir / shard, framework="pt", device="cpu") as base_file:
+            for name in names:
+                base_tensor = base_file.get_tensor(name)
+                layer = language_layer_index(name)
+                if not is_projection_target(name, edit) or layer not in directions:
+                    shard_tensors[name] = base_tensor
+                    continue
+                direction = directions[layer]
+                if base_tensor.ndim != 2 or base_tensor.shape[0] != direction.numel():
+                    raise SystemExit(
+                        f"cannot project {name}: tensor shape {tuple(base_tensor.shape)} "
+                        f"does not match direction length {direction.numel()}"
+                    )
+                direction = direction / direction.norm().clamp_min(1e-6)
+                base_float = base_tensor.float()
+                output_tensor = (base_float - strength * torch.outer(direction, direction @ base_float)).to(base_tensor.dtype)
+                delta = output_tensor.float() - base_float
+                changed.append({
+                    "name": name,
+                    "shard": shard,
+                    "shape": list(base_tensor.shape),
+                    "dtype": str(base_tensor.dtype),
+                    "mean_abs_delta": float(delta.abs().mean()),
+                    "max_abs_delta": float(delta.abs().max()),
+                })
+                shard_tensors[name] = output_tensor
+        save_file(shard_tensors, output_dir / shard)
+        del shard_tensors
+
+    metadata = {
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "method": "projection",
+        "base_model": str(source_dir),
+        "directions": str(directions_path),
+        "output_dir": str(output_dir),
+        "strength": strength,
+        "layer_start": edit.get("layer_start"),
+        "layer_end": edit.get("layer_end"),
+        "target_weight_suffixes": edit.get("target_weight_suffixes"),
+        "changed_tensor_count": len(changed),
+        "changed_tensors": changed,
+    }
+    (output_dir / "model_forge_abliteration.json").write_text(json.dumps(metadata, indent=2) + "\n")
+    console.print(Panel.fit(
+        "\n".join([
+            f"[bold]Output[/bold]: {output_dir}",
+            f"[bold]Changed tensors[/bold]: {len(changed)}",
+            f"[bold]Strength[/bold]: {strength}",
+        ]),
+        title="[bold green]Abliterated Base Checkpoint Exported[/bold green]",
+        border_style="green",
+    ))
+
+
 def command_plan(args: argparse.Namespace) -> None:
     config_path = resolve_repo_path(args.config)
     plan = build_plan(load_yaml(config_path), config_path)
@@ -291,15 +434,14 @@ def command_collect(args: argparse.Namespace) -> None:
 
 def command_export(args: argparse.Namespace) -> None:
     config_path = resolve_repo_path(args.config)
-    plan = build_plan(load_yaml(config_path), config_path)
+    config = load_yaml(config_path)
+    plan = build_plan(config, config_path)
     print_plan(plan)
     if not args.execute:
         console.print("[yellow]Dry run only; export is blocked until collected directions are reviewed.[/yellow]")
         return
-    raise SystemExit(
-        "weight export is intentionally not implemented yet; first collect directions, inspect layers, "
-        "then add a family-specific exporter so MoE/router weights are not edited blindly"
-    )
+    directions_path = resolve_repo_path(args.directions or Path(config.get("artifacts_dir", "artifacts/abliteration/refusal_directions")) / "refusal_directions.pt")
+    export_projection(config, config_path, directions_path=directions_path, overwrite=args.overwrite)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -317,6 +459,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     export = sub.add_parser("export", help="Reserved for reviewed weight-edit export")
     export.add_argument("--execute", action="store_true")
+    export.add_argument("--overwrite", action="store_true")
+    export.add_argument("--directions", default=None)
     export.set_defaults(func=command_export)
     return parser
 

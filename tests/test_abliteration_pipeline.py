@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from model_forge.hardware import detect_hardware_profile, recommended_training_env, recommended_vllm_env
+from model_forge.hardware import GpuInfo, detect_hardware_profile, recommended_training_env, recommended_vllm_env
 from model_forge.pipelines.abliterate import REPO_DIR, build_plan, load_prompts, load_yaml
 
 
@@ -27,6 +27,10 @@ class HardwareProfileTests(unittest.TestCase):
         self.assertEqual(env["GPU_MEMORY_UTILIZATION"], "0.80")
         self.assertEqual(env["MAX_MODEL_LEN"], "16384")
         self.assertEqual(env["MAX_NUM_BATCHED_TOKENS"], "32768")
+
+    @mock.patch("model_forge.hardware._query_nvidia_smi", return_value=(GpuInfo("NVIDIA GB10", 0),))
+    def test_gb10_with_unknown_memory_detects_spark(self, _query: mock.Mock) -> None:
+        self.assertEqual(detect_hardware_profile({}).name, "dgx_spark")
 
     @mock.patch("model_forge.hardware._query_nvidia_smi", return_value=())
     def test_high_parallelism_requires_explicit_opt_in(self, _query: mock.Mock) -> None:
