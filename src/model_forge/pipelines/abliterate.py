@@ -51,6 +51,11 @@ def resolve_model_source(raw: str | Path | None) -> str:
 
 
 def load_prompts(path: Path) -> list[str]:
+    if path.suffix.lower() == ".txt":
+        prompts = [line.strip() for line in path.read_text().splitlines() if line.strip()]
+        if not prompts:
+            raise SystemExit(f"prompt file must contain at least one non-empty line: {path}")
+        return prompts
     data = yaml.safe_load(path.read_text()) or {}
     if isinstance(data, list):
         prompts = data
@@ -130,6 +135,9 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "max_pairs": max_pairs,
             "token_position": activation.get("token_position", "final_prompt_token"),
             "direction_extraction": activation.get("direction_extraction", "mean_difference"),
+            "direction_source_layer": activation.get("direction_source_layer"),
+            "replicate_source_direction": bool(activation.get("replicate_source_direction", False)),
+            "use_chat_template": bool(activation.get("use_chat_template", False)),
             "winsorize_quantile": activation.get("winsorize_quantile"),
             "harmful_suffix": activation.get("harmful_suffix"),
             "benign_suffix": activation.get("benign_suffix"),
@@ -178,6 +186,8 @@ def print_plan(plan: dict[str, Any]) -> None:
     table.add_row("max sequence length", str(plan["activation_collection"]["max_seq_len"]))
     table.add_row("token position", str(plan["activation_collection"]["token_position"]))
     table.add_row("direction extraction", str(plan["activation_collection"]["direction_extraction"]))
+    table.add_row("direction source layer", str(plan["activation_collection"]["direction_source_layer"]))
+    table.add_row("chat template", str(plan["activation_collection"]["use_chat_template"]))
     table.add_row("effective preprocessing c", str(plan["activation_collection"]["effective_parallelism"]))
     table.add_row("high-throughput c", str(plan["activation_collection"]["high_parallelism_c"]))
     free = plan["safety"]["free_cuda_gb"]
@@ -253,24 +263,46 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
         vectors: dict[int, list[Any]] = {}
         for prompt in prompts:
             full_prompt = prompt if not suffix else prompt.rstrip() + suffix
-            inputs = tokenizer(
-                full_prompt,
-                return_tensors="pt",
-                truncation=True,
-                max_length=activation["max_seq_len"],
-                padding=False,
-            )
-            inputs = {key: value.to(first_device) for key, value in inputs.items()}
-            last_index = int(inputs["attention_mask"][0].sum().item()) - 1
-            first_pool_index = last_index
-            if suffix and activation["token_position"] == "suffix_mean":
-                prompt_inputs = tokenizer(
-                    prompt,
+            if activation.get("use_chat_template"):
+                inputs = tokenizer.apply_chat_template(
+                    [{"role": "user", "content": full_prompt}],
+                    add_generation_prompt=True,
+                    tokenize=True,
+                    return_dict=True,
+                    return_tensors="pt",
+                    truncation=True,
+                    max_length=activation["max_seq_len"],
+                )
+            else:
+                inputs = tokenizer(
+                    full_prompt,
                     return_tensors="pt",
                     truncation=True,
                     max_length=activation["max_seq_len"],
                     padding=False,
                 )
+            inputs = {key: value.to(first_device) for key, value in inputs.items()}
+            last_index = int(inputs["attention_mask"][0].sum().item()) - 1
+            first_pool_index = last_index
+            if suffix and activation["token_position"] == "suffix_mean":
+                if activation.get("use_chat_template"):
+                    prompt_inputs = tokenizer.apply_chat_template(
+                        [{"role": "user", "content": prompt}],
+                        add_generation_prompt=True,
+                        tokenize=True,
+                        return_dict=True,
+                        return_tensors="pt",
+                        truncation=True,
+                        max_length=activation["max_seq_len"],
+                    )
+                else:
+                    prompt_inputs = tokenizer(
+                        prompt,
+                        return_tensors="pt",
+                        truncation=True,
+                        max_length=activation["max_seq_len"],
+                        padding=False,
+                    )
                 prompt_len = int(prompt_inputs["attention_mask"][0].sum().item())
                 first_pool_index = min(max(prompt_len, 0), last_index)
             with torch.no_grad():
@@ -326,7 +358,24 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
             direction = -direction
         return direction
 
-    for layer_index in range(first, max(first, last_exclusive)):
+    target_layers = list(range(first, max(first, last_exclusive)))
+    source_layer = activation.get("direction_source_layer")
+    if source_layer is not None:
+        if isinstance(source_layer, str) and source_layer.endswith("%"):
+            source_layer_index = int(layer_count * (float(source_layer.rstrip("%")) / 100.0))
+        elif isinstance(source_layer, float) and 0 < source_layer < 1:
+            source_layer_index = int(layer_count * source_layer)
+        else:
+            source_layer_index = int(source_layer)
+        if source_layer_index < 0 or source_layer_index >= layer_count:
+            raise SystemExit(f"direction_source_layer {source_layer!r} resolved outside available layers 0..{layer_count - 1}")
+        if source_layer_index not in target_layers:
+            target_layers.append(source_layer_index)
+    else:
+        source_layer_index = None
+
+    extracted_directions = {}
+    for layer_index in sorted(target_layers):
         harmful_stack = maybe_winsorize(torch.stack(harmful_vectors[layer_index]))
         benign_stack = maybe_winsorize(torch.stack(benign_vectors[layer_index]))
         harmful_mean = harmful_stack.mean(dim=0)
@@ -335,9 +384,14 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
         norm = torch.linalg.vector_norm(direction)
         if norm > 0:
             direction = direction / norm
+        extracted_directions[layer_index] = direction
         directions[layer_index] = direction
         harmful_means[layer_index] = harmful_mean
         benign_means[layer_index] = benign_mean
+
+    if source_layer_index is not None and activation.get("replicate_source_direction"):
+        source_direction = extracted_directions[source_layer_index]
+        directions = {layer_index: source_direction.clone() for layer_index in range(first, max(first, last_exclusive))}
 
     output_dir.mkdir(parents=True, exist_ok=True)
     torch.save(directions, output_dir / "refusal_directions.pt")
@@ -348,6 +402,9 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
             "benign_means": benign_means,
             "direction_method": activation["token_position"],
             "direction_extraction": activation["direction_extraction"],
+            "direction_source_layer": source_layer_index,
+            "replicate_source_direction": bool(activation.get("replicate_source_direction", False)),
+            "use_chat_template": bool(activation.get("use_chat_template", False)),
             "created_at": datetime.now(timezone.utc).isoformat(),
         },
         output_dir / "direction_artifact.pt",

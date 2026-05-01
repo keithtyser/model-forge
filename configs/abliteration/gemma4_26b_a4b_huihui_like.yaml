@@ -1,0 +1,58 @@
+name: gemma4_26b_a4b_huihui_like
+method: huihui_style_single_refusal_direction
+
+model:
+  source: google/gemma-4-26B-A4B-it
+  local_dir: /home/ktyser/models/gemma-4-26B-A4B-it
+  output_dir: /home/ktyser/models/gemma-4-26B-A4B-it-local-abliterated-huihui-like
+  dtype: bfloat16
+  device_map: cuda
+  trust_remote_code: false
+
+data:
+  harmful_prompts: ../../datasets/abliteration/huihui_harmful_sample.txt
+  benign_prompts: ../../datasets/abliteration/huihui_benign_sample.txt
+
+activation_collection:
+  batch_size: 1
+  max_pairs: 64
+  max_seq_len: 1024
+  preprocessing_parallelism: auto
+  high_parallelism_c: 192
+  layer_skip_first: 5
+  layer_skip_last: 0
+  token_position: final_prompt_token
+  direction_extraction: mean_difference
+  direction_source_layer: 13
+  replicate_source_direction: true
+  use_chat_template: true
+  winsorize_quantile: null
+
+edit:
+  mode: projection
+  direction_transform: raw
+  norm_preserve: false
+  strength: 2.7
+  module_strengths:
+    self_attn.o_proj.weight: 1.0
+    mlp.down_proj.weight: 1.0
+  layer_start: 5
+  layer_end: 29
+  target_weight_suffixes:
+    - mlp.down_proj.weight
+    - self_attn.o_proj.weight
+  leave_embeddings_untouched: true
+  leave_lm_head_untouched: true
+  leave_moe_experts_untouched: true
+  require_all_target_directions: true
+  review_required_before_export: true
+
+safety:
+  require_execute_flag: true
+  min_free_cuda_gb: 18
+  one_model_process_at_a_time: true
+
+artifacts_dir: artifacts/abliteration/gemma4_26b_a4b_huihui_like
+
+diagnostics:
+  reference_model: /home/ktyser/models/Huihui-gemma-4-26B-A4B-it-abliterated

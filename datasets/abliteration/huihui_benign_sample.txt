@@ -1,0 +1,64 @@
+Give three tips for staying healthy.
+What are the three primary colors?
+Describe the structure of an atom.
+How can we reduce air pollution?
+Pretend you are a project manager of a construction company. Describe a time when you had to make a difficult decision.
+Write a short story in third person narration about a protagonist who has to make an important career decision.
+How did Julius Caesar die?
+What is the capital of France?
+Generate a list of ten items a person might need for a camping trip
+Discuss the causes of the Great Depression
+Explain the use of word embeddings in Natural Language Processing
+Describe the function of a computer motherboard
+Propose an ethical solution to the problem of data privacy
+Generate three verbs that mean the same as "to apologize"
+What does DNA stand for?
+Compare and contrast the Cuban Missile Crisis and the Vietnam War.
+Generate a list of random words.
+Who is the world's most famous painter?
+Explain the concept of cogging torque.
+Look up the boiling point of water.
+Describe the life and reign of King Charles II.
+Identify the lines of longitude that divides North and South America.
+Explain the process of cellular respiration in plants.
+Generate a list of adjectives that describe a person as brave.
+Outline the consequences of deforestation.
+Develop a plan to reduce electricity usage in a home.
+The sum of the digits of the year 2004 is 6. What is the first year after 2000 for which the sum of the digits is 12?
+Generate a poem that expresses joy.
+Brainstorm possible solutions to reduce water pollution.
+Variable x is defined as "4x + 2y = 10". Find the value of x.
+Explain the concept of artificial intelligence in simple terms.
+Design an app for a delivery company.
+Generate a poem with 10 lines.
+A recipe for 30 cookies requires two cups of flour among its ingredients. Eduardo wants to bake five dozen cookies. How many cups of flour will he need to use in his adjusted recipe?
+Calculate the total surface area of a cube with a side length of 5 cm.
+What is the force on a 1 kg mass due to the gravitational force?
+Provide one example for a cultural practice.
+Give two examples of a liquid.
+What is the product of 6 and 2?
+What type of plant is a skunk cabbage?
+The Happy Valley Kennel has 4 chickens, 2 dogs, and 5 cats. In how many ways can the 11 animals be placed in a row of 11 cages, such that all of the animals of each type are in adjacent cages?
+Name two types of desert biomes.
+What is the ones digit of 7^35 when written as an integer?
+Generate a list of business ideas for a food delivery service.
+Imagine you are speaking with a customer who is unsatisfied with the product they bought from you. Construct a response that diffuses the situation.
+Explain the concept of a bubble sort algorithm to a non-technical audience.
+Generate a list of methods to reduce food waste.
+Propose an idea for a self-driving car.
+Explain the concept of a linear regression model using simple language.
+Construct a list of tips to help reduce stress.
+Generate a list of marketing strategies to promote a new mobile app.
+Generate a list of country names in the western hemisphere.
+Explain what an API is.
+Compute the area of a rectangle with length 10cm and width 5cm.
+Find the capital of Spain.
+Design a database schema to record employee salaries.
+Generate a password of 8 characters.
+Suggest what content a web page about robotics should consist of.
+What is the most commonly shared type of content on social media?
+Generate a list of present continuous verbs.
+Think of a phrase or idiom containing the word "sleep".
+Convert 94F to celsius
+Find the synonyms of the following word: 'Tenacious'.
+Generate a creative birthday wish for a friend.

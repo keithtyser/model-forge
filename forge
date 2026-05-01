@@ -14,9 +14,9 @@ usage() {
 Usage:
   ./forge setup [base|external|artifacts|all]
   ./forge download <family> [base|ft|abli|all]
-  ./forge serve <family> [base|ft|abli|local_abli|local_abli_sota]
-  ./forge eval <family> [base|ft|abli|local_abli|local_abli_sota] [--smoke|--internal|--artifact|--external] [tasks]
-  ./forge external <family> [base|ft|abli|local_abli|local_abli_sota] [tasks]
+  ./forge serve <family> [base|ft|abli|local_abli|local_abli_sota|local_abli_huihui_like|local_abli_huihui_like_s4]
+  ./forge eval <family> [base|ft|abli|local_abli|local_abli_sota|local_abli_huihui_like|local_abli_huihui_like_s4] [--smoke|--internal|--artifact|--external] [tasks]
+  ./forge external <family> [base|ft|abli|local_abli|local_abli_sota|local_abli_huihui_like|local_abli_huihui_like_s4] [tasks]
   ./forge ablate <family> [plan|collect|analyze-reference|sweep-reference|export|sota-plan|sota-prepare|sota-run] [--execute]
   ./forge compare <family>
   ./forge golden-summary <family> [output-json]
