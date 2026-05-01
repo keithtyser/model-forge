@@ -18,6 +18,8 @@ Usage:
   ./forge eval <family> [base|ft|abli] [--smoke|--internal|--artifact|--external] [tasks]
   ./forge external <family> [base|ft|abli] [tasks]
   ./forge compare <family>
+  ./forge golden-summary <family> [output-json]
+  ./forge golden-check <family> [baseline-json]
   ./forge families
 
 Examples:
@@ -81,6 +83,36 @@ case "$ACTION" in
   compare)
     FAMILY=${1:?family is required}
     "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" compare
+    ;;
+  golden-summary)
+    FAMILY=${1:?family is required}
+    OUTPUT=${2:-}
+    case "$FAMILY" in
+      gemma4_26b_a4b)
+        COMPARISON="$REPO_DIR/reports/generated/gemma4_26b_a4b_comparison/comparison.json"
+        DEFAULT_OUTPUT="$REPO_DIR/reports/golden/gemma4_26b_a4b_ablation_internal.json"
+        ;;
+      *) echo "unknown golden summary family: $FAMILY" >&2; exit 2 ;;
+    esac
+    "$PYTHON" -m model_forge.evals.golden_summary \
+      --comparison "$COMPARISON" \
+      --output "${OUTPUT:-$DEFAULT_OUTPUT}" \
+      --objective ablation_research
+    ;;
+  golden-check)
+    FAMILY=${1:?family is required}
+    BASELINE=${2:-}
+    case "$FAMILY" in
+      gemma4_26b_a4b)
+        COMPARISON="$REPO_DIR/reports/generated/gemma4_26b_a4b_comparison/comparison.json"
+        DEFAULT_BASELINE="$REPO_DIR/reports/golden/gemma4_26b_a4b_ablation_internal.json"
+        ;;
+      *) echo "unknown golden summary family: $FAMILY" >&2; exit 2 ;;
+    esac
+    "$PYTHON" -m model_forge.evals.golden_summary \
+      --comparison "$COMPARISON" \
+      --check "${BASELINE:-$DEFAULT_BASELINE}" \
+      --objective ablation_research
     ;;
   families)
     find "$REPO_DIR/configs/model_families" -maxdepth 1 -name '*.yaml' -printf '%f\n' | sed 's/[.]yaml$//' | sort

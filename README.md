@@ -83,6 +83,25 @@ for quick checks or debugging:
 ./forge compare gemma4_26b_a4b
 ```
 
+For a stronger internal baseline, run three sampled trials per prompt. This is
+intentionally expensive because the Gemma internal suite is 106 prompts per
+variant, so three trials is 318 generations per variant:
+
+```bash
+MODEL_FORGE_TRIALS=3 ./forge eval gemma4_26b_a4b base --internal
+MODEL_FORGE_TRIALS=3 ./forge eval gemma4_26b_a4b ft --internal
+MODEL_FORGE_TRIALS=3 ./forge eval gemma4_26b_a4b abli --internal
+./forge compare gemma4_26b_a4b
+./forge golden-summary gemma4_26b_a4b
+```
+
+Later, compare a refreshed report against that compact baseline without
+rerunning the models:
+
+```bash
+./forge golden-check gemma4_26b_a4b
+```
+
 ## External Benchmarks
 
 Run IFEval through `lm-evaluation-harness` against the served model:
@@ -170,5 +189,6 @@ forge                    Main user-facing command
 - Keep the public workflow short and reproducible.
 - Preserve raw outputs so results can be inspected.
 - Use external benchmarks instead of trusting only local checks.
-- Treat ablation success as fewer false refusals without more unsafe compliance.
+- Treat ablation success as fewer refusals while preserving capability; report
+  unsafe compliance separately as risk.
 - Treat fine-tune success as better capability and structure without regressions.

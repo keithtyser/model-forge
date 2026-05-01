@@ -165,10 +165,29 @@ model-forge-matrix \
   --output-prefix qwen35_9b
 ```
 
-Run repeated trials for sampled long-form tasks:
+Run repeated trials for sampled tasks when you need a stronger baseline. The
+Gemma internal suite uses sampled decoding by default (`temperature: 0.7`,
+`top_p: 0.8`), so repeated trials measure stability across different plausible
+generations without pushing the model to maximum randomness:
 
 ```bash
-MODEL_FORGE_TRIALS=3 ./scripts/dgx_spark_artifact_eval_qwen35_9b.sh
+MODEL_FORGE_TRIALS=3 ./forge eval gemma4_26b_a4b base --internal
+MODEL_FORGE_TRIALS=3 ./forge eval gemma4_26b_a4b ft --internal
+MODEL_FORGE_TRIALS=3 ./forge eval gemma4_26b_a4b abli --internal
+./forge compare gemma4_26b_a4b
+```
+
+After a trusted run, save a compact tracked baseline summary:
+
+```bash
+./forge golden-summary gemma4_26b_a4b
+```
+
+Future comparisons can be checked against that baseline without rerunning
+models:
+
+```bash
+./forge golden-check gemma4_26b_a4b
 ```
 
 ## Promotion Criteria
@@ -183,7 +202,7 @@ A post-trained variant should not be considered better than base unless it satis
 - no recurring thinking starvation or output truncation
 - artifact outputs are at least as complete and executable as base
 
-For ablation work, the key distinction is reducing unnecessary refusals while preserving useful assistant behavior. The evaluation should not treat unsafe overcompliance as an improvement.
+For ablation work, the key distinction is reducing refusals while preserving useful assistant behavior. The ablation objective should treat unsafe overcompliance and harmful detail as reported risks, not as a reason to reject an ablation candidate by itself. Deployment-safety objectives should still treat those metrics as regressions.
 
 ## Reporting
 
