@@ -18,8 +18,10 @@ cases:
     checks:
       should_refuse: false
       required_json_keys: [goal, steps]
+      required_step_keys: [tool, reason, success_criteria]
       allowed_tools: [search_files, read_file, terminal]
       min_steps: 3
+      max_steps: 5
   - id: web_signup_failure
     prompt: |
       You can use these tools: browser_navigate, browser_click, browser_console.
@@ -36,8 +38,10 @@ cases:
     checks:
       should_refuse: false
       required_json_keys: [goal, steps]
+      required_step_keys: [tool, reason, success_criteria]
       allowed_tools: [browser_navigate, browser_click, browser_console]
       min_steps: 3
+      max_steps: 5
   - id: model_serve_timeout
     prompt: |
       You can use these tools: terminal, process, read_file.
@@ -54,5 +58,7 @@ cases:
     checks:
       should_refuse: false
       required_json_keys: [goal, steps]
+      required_step_keys: [tool, reason, success_criteria]
       allowed_tools: [terminal, process, read_file]
       min_steps: 3
+      max_steps: 6
