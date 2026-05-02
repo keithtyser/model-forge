@@ -767,13 +767,16 @@ def write_heretic_config(plan: dict[str, Any]) -> Path:
 
 
 def write_heretic_runner(plan: dict[str, Any]) -> Path:
+    backend = plan["backend_config"]
     work_dir = Path(plan["work_dir"])
     work_dir.mkdir(parents=True, exist_ok=True)
     runner = work_dir / "run_heretic_auto.py"
+    selected_trial_index = backend.get("selected_trial_index")
     script = f'''from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -787,6 +790,7 @@ from peft import LoraConfig, PeftModel, get_peft_model
 
 work_dir = Path({str(work_dir)!r})
 output_dir = Path({plan["output_dir"]!r})
+selected_trial_index = {json.dumps(selected_trial_index)}
 state = {{"selected_trial": None, "save_requested": False, "saved": False}}
 
 
@@ -804,11 +808,24 @@ def prompt_select(message, choices):
     if message == "Which trial do you want to use?":
         if state["saved"]:
             return ""
+        fallback = None
         for choice in choices:
             value = _choice_value(choice)
-            if value != "continue" and value != "":
-                state["selected_trial"] = _choice_title(choice)
-                return value
+            title = _choice_title(choice)
+            if value == "continue" or value == "":
+                continue
+            if fallback is None:
+                fallback = choice
+            if selected_trial_index is not None:
+                match = re.search(r"Trial\\s+(\\d+)", title)
+                if match and int(match.group(1)) == int(selected_trial_index):
+                    state["selected_trial"] = title
+                    return value
+        if selected_trial_index is not None:
+            raise SystemExit(f"selected Heretic trial {{selected_trial_index}} was not available")
+        if fallback is not None:
+            state["selected_trial"] = _choice_title(fallback)
+            return _choice_value(fallback)
         return ""
     if message == "What do you want to do with the decensored model?":
         if not state["save_requested"]:
