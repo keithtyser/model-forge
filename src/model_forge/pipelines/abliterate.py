@@ -135,6 +135,7 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "max_pairs": max_pairs,
             "token_position": activation.get("token_position", "final_prompt_token"),
             "direction_extraction": activation.get("direction_extraction", "mean_difference"),
+            "direction_components": int(activation.get("direction_components", 1)),
             "direction_source_layer": activation.get("direction_source_layer"),
             "replicate_source_direction": bool(activation.get("replicate_source_direction", False)),
             "use_chat_template": bool(activation.get("use_chat_template", False)),
@@ -186,6 +187,7 @@ def print_plan(plan: dict[str, Any]) -> None:
     table.add_row("max sequence length", str(plan["activation_collection"]["max_seq_len"]))
     table.add_row("token position", str(plan["activation_collection"]["token_position"]))
     table.add_row("direction extraction", str(plan["activation_collection"]["direction_extraction"]))
+    table.add_row("direction components", str(plan["activation_collection"]["direction_components"]))
     table.add_row("direction source layer", str(plan["activation_collection"]["direction_source_layer"]))
     table.add_row("chat template", str(plan["activation_collection"]["use_chat_template"]))
     table.add_row("effective preprocessing c", str(plan["activation_collection"]["effective_parallelism"]))
@@ -335,8 +337,21 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
         high = torch.quantile(values, 1 - q, dim=0)
         return values.clamp(low, high)
 
+    def normalize_direction_basis(direction: Any) -> Any:
+        if direction.ndim == 1:
+            return direction / torch.linalg.vector_norm(direction).clamp_min(1e-6)
+        if direction.ndim != 2:
+            raise SystemExit(f"direction tensor must be 1D or 2D, got shape {tuple(direction.shape)}")
+        norms = torch.linalg.vector_norm(direction, dim=1)
+        direction = direction[norms > 1e-6]
+        if direction.numel() == 0:
+            return direction
+        q, _ = torch.linalg.qr(direction.float().T, mode="reduced")
+        return q.T.contiguous()
+
     def extract_direction(harmful_stack: Any, benign_stack: Any) -> Any:
         method = str(activation.get("direction_extraction", "mean_difference")).lower()
+        components = max(1, int(activation.get("direction_components", 1)))
         mean_direction = harmful_stack.mean(dim=0) - benign_stack.mean(dim=0)
         if method == "mean_difference":
             return mean_direction
@@ -344,18 +359,27 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
         if method == "paired_svd":
             centered = contrast - contrast.mean(dim=0, keepdim=True)
             _, _, vh = torch.linalg.svd(centered.float(), full_matrices=False)
-            direction = vh[0]
+            direction = vh[:components]
         elif method == "whitened_paired_svd":
             pooled = torch.cat([harmful_stack, benign_stack], dim=0)
             scale = pooled.float().std(dim=0).clamp_min(1e-6)
             whitened = contrast.float() / scale
             whitened = whitened - whitened.mean(dim=0, keepdim=True)
             _, _, vh = torch.linalg.svd(whitened, full_matrices=False)
-            direction = vh[0] / scale
+            direction = vh[:components] / scale
+        elif method == "mean_plus_paired_svd":
+            centered = contrast - contrast.mean(dim=0, keepdim=True)
+            _, _, vh = torch.linalg.svd(centered.float(), full_matrices=False)
+            direction = torch.vstack([mean_direction.float(), vh[: max(0, components - 1)]])
         else:
             raise SystemExit(f"unsupported direction_extraction: {method!r}")
-        if torch.dot(direction.float(), mean_direction.float()) < 0:
-            direction = -direction
+        if direction.ndim == 1:
+            if torch.dot(direction.float(), mean_direction.float()) < 0:
+                direction = -direction
+        else:
+            for idx in range(direction.shape[0]):
+                if torch.dot(direction[idx].float(), mean_direction.float()) < 0:
+                    direction[idx] = -direction[idx]
         return direction
 
     target_layers = list(range(first, max(first, last_exclusive)))
@@ -381,9 +405,7 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
         harmful_mean = harmful_stack.mean(dim=0)
         benign_mean = benign_stack.mean(dim=0)
         direction = extract_direction(harmful_stack, benign_stack)
-        norm = torch.linalg.vector_norm(direction)
-        if norm > 0:
-            direction = direction / norm
+        direction = normalize_direction_basis(direction)
         extracted_directions[layer_index] = direction
         directions[layer_index] = direction
         harmful_means[layer_index] = harmful_mean
@@ -402,6 +424,7 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
             "benign_means": benign_means,
             "direction_method": activation["token_position"],
             "direction_extraction": activation["direction_extraction"],
+            "direction_components": int(activation.get("direction_components", 1)),
             "direction_source_layer": source_layer_index,
             "replicate_source_direction": bool(activation.get("replicate_source_direction", False)),
             "use_chat_template": bool(activation.get("use_chat_template", False)),
@@ -491,6 +514,26 @@ def tensor_strength(name: str, layer: int, edit: dict[str, Any], default: float)
     return strength
 
 
+def direction_width(direction: Any) -> int:
+    return int(direction.shape[-1])
+
+
+def normalize_intervention_direction(direction: Any) -> Any:
+    import torch
+
+    direction = direction.float()
+    if direction.ndim == 1:
+        return direction / torch.linalg.vector_norm(direction).clamp_min(1e-6)
+    if direction.ndim != 2:
+        raise SystemExit(f"direction tensor must be 1D or 2D, got shape {tuple(direction.shape)}")
+    norms = torch.linalg.vector_norm(direction, dim=1)
+    direction = direction[norms > 1e-6]
+    if direction.numel() == 0:
+        raise SystemExit("direction subspace is empty after dropping zero-norm components")
+    q, _ = torch.linalg.qr(direction.T, mode="reduced")
+    return q.T.contiguous()
+
+
 def intervention_direction(layer: int, artifact: dict[str, Any], edit: dict[str, Any]) -> Any:
     import torch
 
@@ -505,10 +548,35 @@ def intervention_direction(layer: int, artifact: dict[str, Any], edit: dict[str,
             )
         benign = benign.float()
         benign = benign / torch.linalg.vector_norm(benign).clamp_min(1e-6)
-        direction = direction - benign * torch.dot(direction, benign)
+        if direction.ndim == 1:
+            direction = direction - benign * torch.dot(direction, benign)
+        else:
+            direction = direction - torch.outer(direction @ benign, benign)
     elif mode != "raw":
         raise SystemExit(f"unsupported direction_transform: {mode!r}")
-    return direction / torch.linalg.vector_norm(direction).clamp_min(1e-6)
+    return normalize_intervention_direction(direction)
+
+
+def apply_projection(base_tensor: Any, direction: Any, strength: float, norm_preserve: bool = False) -> Any:
+    import torch
+
+    direction = normalize_intervention_direction(direction)
+    base_float = base_tensor.float()
+    if direction.ndim == 1:
+        if base_tensor.ndim == 1:
+            output_float = base_float - strength * direction * torch.dot(direction, base_float)
+        else:
+            output_float = base_float - strength * torch.outer(direction, direction @ base_float)
+    else:
+        if base_tensor.ndim == 1:
+            output_float = base_float - strength * (direction.T @ (direction @ base_float))
+        else:
+            output_float = base_float - strength * (direction.T @ (direction @ base_float))
+    if base_tensor.ndim == 2 and norm_preserve:
+        base_norms = base_float.norm(dim=1, keepdim=True)
+        output_norms = output_float.norm(dim=1, keepdim=True).clamp_min(1e-6)
+        output_float = output_float * (base_norms / output_norms)
+    return output_float
 
 
 def copy_non_weight_files(source_dir: Path, output_dir: Path) -> None:
@@ -813,21 +881,19 @@ def export_projection(
                     shard_tensors[name] = base_tensor
                     continue
                 direction = intervention_direction(layer, artifact, edit)
-                if base_tensor.ndim not in {1, 2} or base_tensor.shape[0] != direction.numel():
+                if base_tensor.ndim not in {1, 2} or base_tensor.shape[0] != direction_width(direction):
                     raise SystemExit(
                         f"cannot project {name}: tensor shape {tuple(base_tensor.shape)} "
-                        f"does not match direction length {direction.numel()}"
+                        f"does not match direction width {direction_width(direction)}"
                     )
                 local_strength = tensor_strength(name, layer, edit, strength)
                 base_float = base_tensor.float()
-                if base_tensor.ndim == 1:
-                    output_float = base_float - local_strength * direction * torch.dot(direction, base_float)
-                else:
-                    output_float = base_float - local_strength * torch.outer(direction, direction @ base_float)
-                    if edit.get("norm_preserve", False):
-                        base_norms = base_float.norm(dim=1, keepdim=True)
-                        output_norms = output_float.norm(dim=1, keepdim=True).clamp_min(1e-6)
-                        output_float = output_float * (base_norms / output_norms)
+                output_float = apply_projection(
+                    base_tensor,
+                    direction,
+                    local_strength,
+                    norm_preserve=bool(edit.get("norm_preserve", False)),
+                )
                 output_tensor = output_float.to(base_tensor.dtype)
                 delta = output_tensor.float() - base_float
                 changed.append({
@@ -875,18 +941,8 @@ def export_projection(
 
 
 def _projection_delta(base_tensor: Any, direction: Any, strength: float, norm_preserve: bool = False) -> Any:
-    import torch
-
-    direction = direction / direction.norm().clamp_min(1e-6)
     base_float = base_tensor.float()
-    if base_tensor.ndim == 1:
-        output_tensor = base_float - strength * direction * torch.dot(direction, base_float)
-    else:
-        output_tensor = base_float - strength * torch.outer(direction, direction @ base_float)
-        if norm_preserve:
-            base_norms = base_float.norm(dim=1, keepdim=True)
-            output_norms = output_tensor.norm(dim=1, keepdim=True).clamp_min(1e-6)
-            output_tensor = output_tensor * (base_norms / output_norms)
+    output_tensor = apply_projection(base_tensor, direction, strength, norm_preserve=norm_preserve)
     return output_tensor - base_float
 
 

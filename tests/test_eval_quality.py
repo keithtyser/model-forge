@@ -7,6 +7,7 @@ from pathlib import Path
 
 from model_forge.evals.compare_runs import classify_delta, load_external_results, load_paired_boundary
 from model_forge.evals.run_eval import EvalCase, EvalResult, count_numbered_steps, score_benign_answer_quality, score_harmful_boundary, score_json_structure, summarize_scores, try_parse_json
+from model_forge.pipelines.abliterate import apply_projection
 
 
 class JsonScoringTests(unittest.TestCase):
@@ -40,6 +41,15 @@ class JsonScoringTests(unittest.TestCase):
 - 3. Run the pass/fail test
 """
         self.assertEqual(count_numbered_steps(text), 3)
+
+    def test_subspace_projection_removes_multiple_components(self) -> None:
+        import torch
+
+        base = torch.eye(3)
+        directions = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+        projected = apply_projection(base, directions, strength=1.0)
+        self.assertTrue(torch.allclose(projected[:2], torch.zeros(2, 3)))
+        self.assertTrue(torch.allclose(projected[2], torch.tensor([0.0, 0.0, 1.0])))
 
 
 class UnsafeScoringTests(unittest.TestCase):
