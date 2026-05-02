@@ -308,10 +308,23 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
                 prompt_len = int(prompt_inputs["attention_mask"][0].sum().item())
                 first_pool_index = min(max(prompt_len, 0), last_index)
             with torch.no_grad():
-                outputs = model(**inputs, output_hidden_states=True, use_cache=False)
-            hidden_states = outputs.hidden_states[1:]
+                if activation["token_position"] == "generation_last_token":
+                    outputs = model.generate(
+                        **inputs,
+                        use_cache=False,
+                        max_new_tokens=1,
+                        return_dict_in_generate=True,
+                        output_hidden_states=True,
+                        do_sample=False,
+                    )
+                    hidden_states = outputs.hidden_states[0][1:]
+                else:
+                    outputs = model(**inputs, output_hidden_states=True, use_cache=False)
+                    hidden_states = outputs.hidden_states[1:]
             for layer_index, states in enumerate(hidden_states):
-                if activation["token_position"] == "suffix_mean" and suffix:
+                if activation["token_position"] == "generation_last_token":
+                    vector = states[0, -1, :]
+                elif activation["token_position"] == "suffix_mean" and suffix:
                     vector = states[0, first_pool_index : last_index + 1, :].mean(dim=0)
                 else:
                     vector = states[0, last_index, :]
@@ -714,25 +727,175 @@ def write_heretic_config(plan: dict[str, Any]) -> Path:
     backend = plan["backend_config"]
     work_dir = Path(plan["work_dir"])
     work_dir.mkdir(parents=True, exist_ok=True)
-    config_path = work_dir / "heretic_config.toml"
+    config_path = work_dir / "config.toml"
     lines = [
         f'model = "{plan["source_model"]}"',
         'dtypes = ["auto", "float16", "bfloat16", "float32"]',
         f'quantization = "{backend.get("quantization", "none")}"',
         f'device_map = "{backend.get("device_map", "auto")}"',
+        f'batch_size = {int(backend.get("batch_size", 0))}',
+        f'max_batch_size = {int(backend.get("max_batch_size", 128))}',
+        f'max_response_length = {int(backend.get("max_response_length", 100))}',
+        f'kl_divergence_scale = {float(backend.get("kl_divergence_scale", 1.0))}',
+        f'kl_divergence_target = {float(backend.get("kl_divergence_target", 0.01))}',
         f'n_trials = {int(backend.get("n_trials", 200))}',
         f'n_startup_trials = {int(backend.get("n_startup_trials", 60))}',
         f'orthogonalize_direction = {str(bool(backend.get("orthogonalize_direction", True))).lower()}',
         f'row_normalization = "{backend.get("row_normalization", "full")}"',
+        f'full_normalization_lora_rank = {int(backend.get("full_normalization_lora_rank", 3))}',
         f'winsorization_quantile = {float(backend.get("winsorization_quantile", 1.0))}',
-        'offload_outputs_to_cpu = true',
         f'study_checkpoint_dir = "{work_dir / "heretic_checkpoints"}"',
     ]
     if backend.get("max_memory"):
         items = ", ".join(f'"{key}" = "{value}"' for key, value in backend["max_memory"].items())
         lines.append(f"max_memory = {{ {items} }}")
+    for section in ["good_prompts", "bad_prompts", "good_evaluation_prompts", "bad_evaluation_prompts"]:
+        prompt_cfg = backend.get(section)
+        if not prompt_cfg:
+            continue
+        lines.append("")
+        lines.append(f"[{section}]")
+        for key in ["dataset", "split", "column", "prefix", "suffix", "system_prompt"]:
+            if key in prompt_cfg:
+                value = prompt_cfg[key]
+                if value is None:
+                    lines.append(f"{key} = null")
+                else:
+                    lines.append(f"{key} = {json.dumps(str(value))}")
     config_path.write_text("\n".join(lines) + "\n")
     return config_path
+
+
+def write_heretic_runner(plan: dict[str, Any]) -> Path:
+    work_dir = Path(plan["work_dir"])
+    work_dir.mkdir(parents=True, exist_ok=True)
+    runner = work_dir / "run_heretic_auto.py"
+    script = f'''from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+
+import questionary
+from questionary import Choice
+
+import heretic.main as heretic_main
+import heretic.model as heretic_model
+from heretic.config import RowNormalization
+from peft import LoraConfig, PeftModel, get_peft_model
+
+work_dir = Path({str(work_dir)!r})
+output_dir = Path({plan["output_dir"]!r})
+state = {{"selected_trial": None, "save_requested": False, "saved": False}}
+
+
+def _choice_title(choice):
+    return choice.title if isinstance(choice, Choice) else str(choice)
+
+
+def _choice_value(choice):
+    return choice.value if isinstance(choice, Choice) else choice
+
+
+def prompt_select(message, choices):
+    if message == "How would you like to proceed?":
+        return "continue"
+    if message == "Which trial do you want to use?":
+        if state["saved"]:
+            return ""
+        for choice in choices:
+            value = _choice_value(choice)
+            if value != "continue" and value != "":
+                state["selected_trial"] = _choice_title(choice)
+                return value
+        return ""
+    if message == "What do you want to do with the decensored model?":
+        if not state["save_requested"]:
+            state["save_requested"] = True
+            return "Save the model to a local folder"
+        state["saved"] = True
+        return "Return to the trial selection menu"
+    if message == "How do you want to proceed?":
+        return "merge"
+    return _choice_value(choices[0]) if choices else None
+
+
+def prompt_path(message):
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return str(output_dir)
+
+
+def prompt_text(message, default="", qmark="?", unsafe=False):
+    return default
+
+
+def prompt_password(message):
+    return ""
+
+
+def apply_lora_exact_language_modules(self):
+    target_ids = set()
+    for layer_index in range(len(self.get_layers())):
+        for modules in self.get_layer_modules(layer_index).values():
+            for module in modules:
+                target_ids.add(id(module))
+
+    target_modules = [
+        name for name, module in self.model.named_modules()
+        if id(module) in target_ids
+    ]
+    if not target_modules:
+        raise RuntimeError("No exact language-layer Heretic targets found")
+
+    if self.settings.row_normalization != RowNormalization.FULL:
+        lora_rank = 1
+    else:
+        lora_rank = self.settings.full_normalization_lora_rank
+
+    self.peft_config = LoraConfig(
+        r=lora_rank,
+        target_modules=target_modules,
+        lora_alpha=lora_rank,
+        lora_dropout=0,
+        bias="none",
+        task_type="CAUSAL_LM",
+    )
+    self.model = get_peft_model(self.model, self.peft_config)
+    print("* LoRA adapters initialized with exact language-layer targets")
+
+
+def main():
+    os.chdir(work_dir)
+    sys.argv = ["heretic"]
+    heretic_main.prompt_select = prompt_select
+    heretic_main.prompt_path = prompt_path
+    heretic_main.prompt_text = prompt_text
+    heretic_main.prompt_password = prompt_password
+    heretic_model.Model._apply_lora = apply_lora_exact_language_modules
+    questionary.select = lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("unexpected interactive prompt"))
+    heretic_main.run()
+    if not state["saved"]:
+        raise SystemExit("Heretic exited before a model was saved")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = output_dir / "model_forge_sota_heretic.json"
+    summary_path.write_text(json.dumps({{
+        "backend": "heretic",
+        "source_model": {plan["source_model"]!r},
+        "output_dir": str(output_dir),
+        "work_dir": str(work_dir),
+        "selected_trial": state["selected_trial"],
+        "saved": state["saved"],
+        "config": str(work_dir / "config.toml"),
+    }}, indent=2) + "\\n")
+    print(f"Wrote {{summary_path}}")
+
+
+if __name__ == "__main__":
+    main()
+'''
+    runner.write_text(script)
+    return runner
 
 
 def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str | None = None) -> dict[str, Any]:
@@ -746,6 +909,7 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
             paths["obliteratus_runner"] = str(write_obliteratus_runner(plan))
         elif name == "heretic":
             paths["heretic_config"] = str(write_heretic_config(plan))
+            paths["heretic_runner"] = str(write_heretic_runner(plan))
     readme = work_dir / "README.md"
     readme.write_text(
         "\n".join([
@@ -771,8 +935,10 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
             "Run Heretic:",
             "",
             "```bash",
-            f"heretic --config {paths.get('heretic_config', '<config>')}",
+            f"cd {work_dir} && {sys.executable} {paths.get('heretic_runner', '<runner>')}",
             "```",
+            "",
+            "Heretic reads `config.toml` from the working directory. The generated runner patches Heretic's prompts so batch runs save the selected Pareto trial to the configured output directory.",
             "",
             selected_plan["license_notice"],
             "",
@@ -812,11 +978,10 @@ def command_sota_run(args: argparse.Namespace) -> None:
             raise SystemExit("missing generated OBLITERATUS runner")
         subprocess.run([sys.executable, runner], cwd=REPO_DIR, check=True)
     elif plan["backend"] == "heretic":
-        executable = shutil.which("heretic")
-        if executable is None:
-            raise SystemExit("missing `heretic` executable; install with: " + str(plan["install"]))
-        config_file = result["paths"].get("heretic_config")
-        subprocess.run([executable, "--config", str(config_file)], cwd=Path(plan["work_dir"]), check=True)
+        runner = result["paths"].get("heretic_runner")
+        if runner is None:
+            raise SystemExit("missing generated Heretic runner")
+        subprocess.run([sys.executable, runner], cwd=Path(plan["work_dir"]), check=True)
     else:
         raise SystemExit(f"unsupported SOTA backend: {plan['backend']}")
 
