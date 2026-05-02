@@ -727,6 +727,7 @@ def write_heretic_config(plan: dict[str, Any]) -> Path:
     backend = plan["backend_config"]
     work_dir = Path(plan["work_dir"])
     work_dir.mkdir(parents=True, exist_ok=True)
+    materialize_model_forge_heretic_prompts(plan, backend, work_dir)
     config_path = work_dir / "config.toml"
     lines = [
         f'model = "{plan["source_model"]}"',
@@ -766,6 +767,101 @@ def write_heretic_config(plan: dict[str, Any]) -> Path:
     return config_path
 
 
+def load_eval_prompt_cases(bucket: str) -> list[dict[str, Any]]:
+    path = REPO_DIR / "evals" / "prompts" / f"{bucket}.yaml"
+    raw = yaml.safe_load(path.read_text()) or {}
+    cases = raw.get("cases", [])
+    if not isinstance(cases, list):
+        raise SystemExit(f"eval prompt set must contain cases: {path}")
+    return cases
+
+
+def prompts_for_buckets(buckets: list[str], *, should_refuse: bool) -> list[str]:
+    prompts: list[str] = []
+    seen: set[str] = set()
+    for bucket in buckets:
+        for item in load_eval_prompt_cases(bucket):
+            if not isinstance(item, dict):
+                continue
+            checks = item.get("checks", {}) or {}
+            if bool(checks.get("should_refuse", False)) != should_refuse:
+                continue
+            prompt = str(item.get("prompt", "")).strip()
+            if prompt and prompt not in seen:
+                seen.add(prompt)
+                prompts.append(prompt)
+    if not prompts:
+        kind = "bad" if should_refuse else "good"
+        raise SystemExit(f"no {kind} prompts found for buckets: {', '.join(buckets)}")
+    return prompts
+
+
+def save_heretic_prompt_dataset(path: Path, prompts: list[str]) -> None:
+    from datasets import Dataset
+
+    if path.exists():
+        shutil.rmtree(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Dataset.from_dict({"text": prompts}, split="train").save_to_disk(str(path))
+
+
+def materialize_model_forge_heretic_prompts(plan: dict[str, Any], backend: dict[str, Any], work_dir: Path) -> None:
+    spec = backend.get("model_forge_prompt_datasets")
+    if spec is None:
+        return
+    dataset_root = work_dir / "model_forge_prompt_datasets"
+    defaults = {
+        "good_train_buckets": [
+            "agentic_multi_step_planning",
+            "agentic_tool_use_json",
+            "agentic_self_critique",
+            "agentic_structured_extraction",
+            "agentic_code_debug",
+            "reasoning_style_stability",
+            "refusal_benign_boundary",
+            "refusal_calibration_benign",
+            "normal_use_regression",
+            "capability_preservation_challenge",
+        ],
+        "good_eval_buckets": [
+            "refusal_paired_boundary",
+            "capability_preservation_challenge",
+        ],
+        "bad_train_buckets": [
+            "unsafe_overcompliance",
+            "refusal_calibration_unsafe",
+            "refusal_paired_boundary",
+        ],
+        "bad_eval_buckets": [
+            "unsafe_overcompliance",
+            "refusal_calibration_unsafe",
+            "refusal_paired_boundary",
+        ],
+    }
+    if isinstance(spec, dict):
+        defaults.update({key: value for key, value in spec.items() if value is not None})
+    sections = {
+        "good_prompts": prompts_for_buckets(list(defaults["good_train_buckets"]), should_refuse=False),
+        "good_evaluation_prompts": prompts_for_buckets(list(defaults["good_eval_buckets"]), should_refuse=False),
+        "bad_prompts": prompts_for_buckets(list(defaults["bad_train_buckets"]), should_refuse=True),
+        "bad_evaluation_prompts": prompts_for_buckets(list(defaults["bad_eval_buckets"]), should_refuse=True),
+    }
+    summary: dict[str, Any] = {"source": "model_forge_eval_prompts", "sections": {}}
+    for section, prompts in sections.items():
+        path = dataset_root / section
+        save_heretic_prompt_dataset(path, prompts)
+        backend[section] = {
+            "dataset": str(path),
+            "split": "train[:]",
+            "column": "text",
+        }
+        summary["sections"][section] = {
+            "path": str(path),
+            "count": len(prompts),
+        }
+    (dataset_root / "manifest.json").write_text(json.dumps(summary, indent=2) + "\n")
+
+
 def write_heretic_runner(plan: dict[str, Any]) -> Path:
     backend = plan["backend_config"]
     work_dir = Path(plan["work_dir"])
@@ -790,7 +886,7 @@ from peft import LoraConfig, PeftModel, get_peft_model
 
 work_dir = Path({str(work_dir)!r})
 output_dir = Path({plan["output_dir"]!r})
-selected_trial_index = {json.dumps(selected_trial_index)}
+selected_trial_index = {selected_trial_index!r}
 state = {{"selected_trial": None, "save_requested": False, "saved": False}}
 
 
