@@ -94,9 +94,11 @@ class AbliterationPlanTests(unittest.TestCase):
     def test_sota_plan_is_minimal_and_targets_sota_output(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_local_abli.yaml"
         plan = build_sota_plan(load_yaml(config_path), config_path)
-        self.assertEqual(plan["backend"], "obliteratus")
+        self.assertEqual(plan["backend"], "heretic")
         self.assertTrue(plan["source_model"].endswith("gemma-4-26B-A4B-it"))
-        self.assertTrue(plan["output_dir"].endswith("gemma-4-26B-A4B-it-local-abliterated-sota"))
+        self.assertTrue(plan["output_dir"].endswith("gemma-4-26B-A4B-it-local-abliterated-sota-internal-t34"))
+        self.assertEqual(plan["backend_config"]["selected_trial_index"], 34)
+        self.assertEqual(plan["backend_config"]["model_forge_prompt_datasets"], {})
 
     def test_sota_plan_can_select_heretic(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_local_abli.yaml"

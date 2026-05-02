@@ -57,9 +57,9 @@ diagnostics:
   reference_model: ~/models/Huihui-gemma-4-26B-A4B-it-abliterated
 
 sota:
-  preferred_backend: obliteratus
-  output_dir: ~/models/gemma-4-26B-A4B-it-local-abliterated-sota
-  work_dir: artifacts/abliteration/gemma4_26b_a4b_local_abli/sota
+  preferred_backend: heretic
+  output_dir: ~/models/gemma-4-26B-A4B-it-local-abliterated-sota-internal-t34
+  work_dir: artifacts/abliteration/gemma4_26b_a4b_local_abli/sota_internal
   backends:
     obliteratus:
       install: pip install 'git+https://github.com/elder-plinius/OBLITERATUS.git'
@@ -75,22 +75,8 @@ sota:
       max_response_length: 40
       n_trials: 80
       n_startup_trials: 24
+      selected_trial_index: 34
       orthogonalize_direction: true
       row_normalization: full
       winsorization_quantile: 1.0
-      good_prompts:
-        dataset: mlabonne/harmless_alpaca
-        split: train[:256]
-        column: text
-      bad_prompts:
-        dataset: mlabonne/harmful_behaviors
-        split: train[:400]
-        column: text
-      good_evaluation_prompts:
-        dataset: mlabonne/harmless_alpaca
-        split: test[:32]
-        column: text
-      bad_evaluation_prompts:
-        dataset: mlabonne/harmful_behaviors
-        split: test[:32]
-        column: text
+      model_forge_prompt_datasets: {}
