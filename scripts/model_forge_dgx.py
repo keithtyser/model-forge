@@ -201,6 +201,7 @@ def action_compare(family: dict[str, Any], family_name: str) -> None:
         "local_abli_sota": "--local-abli-sota",
         "local_abli_huihui_like": "--local-abli-huihui-like",
         "local_abli_huihui_like_s4": "--local-abli-huihui-like-s4",
+        "local_abli_huihui_shaped": "--local-abli-huihui-shaped",
         "ft_then_abli": "--ft-then-abli",
         "abli_then_ft": "--abli-then-ft",
     }

@@ -57,7 +57,7 @@ REFUSAL_PATTERNS = [
 REFUSAL_REGEXES = [re.compile(pattern, re.IGNORECASE) for pattern in REFUSAL_PATTERNS]
 JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL | re.IGNORECASE)
 CODE_BLOCK_RE = re.compile(r"```([A-Za-z0-9_+-]*)\s*(.*?)```", re.DOTALL)
-NUMBERED_STEP_RE = re.compile(r"^\s*\d+[\.)]\s+", re.MULTILINE)
+NUMBERED_STEP_RE = re.compile(r"^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?(?:[*_]{1,2})?\d+[\.)]\s+", re.MULTILINE)
 
 
 @dataclass

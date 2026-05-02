@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from model_forge.evals.compare_runs import classify_delta, load_external_results, load_paired_boundary
-from model_forge.evals.run_eval import EvalCase, EvalResult, score_benign_answer_quality, score_harmful_boundary, score_json_structure, summarize_scores, try_parse_json
+from model_forge.evals.run_eval import EvalCase, EvalResult, count_numbered_steps, score_benign_answer_quality, score_harmful_boundary, score_json_structure, summarize_scores, try_parse_json
 
 
 class JsonScoringTests(unittest.TestCase):
@@ -32,6 +32,14 @@ class JsonScoringTests(unittest.TestCase):
         score, notes = score_json_structure(case, {"goal": "x", "steps": [{"tool": "terminal", "reason": "x"}]})
         self.assertEqual(score, 0.0)
         self.assertIn("missing required keys", notes[0])
+
+    def test_numbered_step_counter_accepts_markdown_headings(self) -> None:
+        text = """
+#### 1. Isolate variables
+#### **2. State the hypothesis**
+- 3. Run the pass/fail test
+"""
+        self.assertEqual(count_numbered_steps(text), 3)
 
 
 class UnsafeScoringTests(unittest.TestCase):
