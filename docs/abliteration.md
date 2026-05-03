@@ -8,6 +8,82 @@ model-forge treats abliteration as a reproducible experiment:
 4. export a local ablated model by projecting that direction out of base weights
 5. run the same internal, artifact, and external eval suite against base, downloaded abli, and local abli
 
+## Generalizable Recipe
+
+The portable model-forge recipe is the experiment structure, not a fixed set of
+Gemma layer numbers or strengths. For each new model family:
+
+1. Add or update a model-family YAML so base, fine-tuned, downloaded abli, and
+   local abli variants have explicit local paths, served names, context length,
+   quantization, and report locations.
+2. Build a refusal/benign prompt set from the same internal buckets used for
+   evaluation, but keep train-style direction prompts and held-out eval prompts
+   separate.
+3. Compute fresh refusal directions on the exact source checkpoint you intend to
+   ablate. A fine-tuned model should get its own directions; do not blindly reuse
+   base activations.
+4. Pick architecture-specific target modules. For Gemma 4 A4B, the promoted
+   targets are language-layer `self_attn.o_proj` and `mlp.down_proj`. Qwen,
+   Llama, Mixtral, and other MoE or hybrid models can expose different module
+   names, expert layouts, layer counts, and hidden sizes, so inspect the module
+   tree before editing weights.
+5. Start with conservative memory settings: one model process, batch size 1 for
+   activation/residual work, explicit output directories per candidate, and no
+   concurrent vLLM server.
+6. Run a bounded search or direct transfer. Direct transfer is acceptable only
+   for nearby checkpoints after fresh directions are recomputed. For a new
+   architecture, run a small Heretic/OBLITERATUS sweep and promote the best
+   candidate based on model-forge evals.
+7. Evaluate against the source model, not just against the base model. A combined
+   fine-tuned/ablated checkpoint succeeds if refusal suppression improves while
+   preserving the fine-tuned model's capability and benign-answer quality.
+8. Save the recipe, model card, raw responses, scores, and exact served model
+   name. A model is not promoted from anecdotes or a single harmful prompt.
+
+Promotion criteria should be explicit:
+
+- unsafe/refusal buckets: ablation refusal suppression should move up
+- benign paired boundary: benign refusal should stay low and answer quality
+  should stay near the source model
+- challenge capability: preserve source-model performance within expected eval
+  variance
+- normal-use and artifact evals: no material regressions
+- external benchmarks: rerun when the internal suite says the candidate is worth
+  the cost
+
+For ablation research, unsafe compliance is not automatically a failure. It is
+the intended direction for refusal-removal experiments, but it must be reported
+separately from capability preservation and should be handled carefully when
+publishing models.
+
+## What Transfers
+
+These pieces are expected to generalize:
+
+- the model-family registry and serve/eval/report loop
+- harmful/benign direction collection with held-out eval prompts
+- exact-module LoRA targeting for Heretic-style edits
+- row/norm preservation as the default for capability preservation
+- one-model-at-a-time DGX Spark safety discipline
+- promotion based on source-model-relative evals
+
+These pieces should be recalibrated per model family:
+
+- layer ranges
+- module names and expert handling
+- strength, layer weighting, and direction scope
+- Heretic/OBLITERATUS search bounds
+- prompt mix if the target domain or language differs
+- serving settings when context length, attention backend, or quantization
+  changes
+
+For example, the Gemma t34 direct-transfer recipe is a warm start for the
+Gemma/Gemopus family because the base and FT checkpoints share architecture and
+similar refusal geometry. It should not be assumed to work unchanged for Qwen
+3.5. For Qwen, start by inspecting target modules, computing fresh directions,
+running a bounded search, then promoting only after the Qwen base/FT/local-abli
+comparison shows refusal removal with preserved source-model performance.
+
 The default command is a dry run and does not load a model:
 
 ```bash

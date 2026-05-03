@@ -52,6 +52,30 @@ Plan a local Gemma refusal ablation without loading the model:
 ./forge ablate gemma4_26b_a4b plan
 ```
 
+Prepare a SOTA abliteration recipe for the base or fine-tuned model:
+
+```bash
+./forge ablate gemma4_26b_a4b sota-prepare --backend heretic
+./forge ablate --config configs/abliteration/gemma4_26b_a4b_ft_local_abli.yaml sota-prepare --backend heretic
+```
+
+The ablation workflow is not "copy Gemma constants to every model." The reusable
+part is the loop:
+
+1. pick the source checkpoint, usually base or an already fine-tuned model
+2. collect model-specific refusal directions from matched harmful/benign prompts
+3. apply a transparent edit or run a bounded Heretic/OBLITERATUS search
+4. serve exactly one candidate at a time
+5. promote only if refusals drop while normal-use, challenge, artifact, and
+   external benchmark scores stay near the source model
+
+For nearby checkpoints, a known-good recipe can be used as a warm start. The
+Gemopus r7 recipe does this: it computes fresh directions on
+`Jackrong/Gemopus-4-26B-A4B-it`, then applies the selected base Gemma t34
+Heretic parameters. For a new architecture such as Qwen, reuse the workflow and
+prompt/eval harness, but recalibrate targets, layer ranges, strengths, and
+search parameters before trusting the result.
+
 ```bash
 ./forge serve gemma4_26b_a4b ft
 ./forge eval gemma4_26b_a4b ft
