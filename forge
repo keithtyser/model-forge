@@ -14,9 +14,10 @@ usage() {
 Usage:
   ./forge setup [base|external|artifacts|all]
   ./forge download <family> [base|ft|abli|all]
-  ./forge serve <family> [base|ft|abli|local_abli|local_abli_sota|local_abli_huihui_like|local_abli_huihui_like_s4|local_abli_huihui_shaped]
-  ./forge eval <family> [base|ft|abli|local_abli|local_abli_sota|local_abli_huihui_like|local_abli_huihui_like_s4|local_abli_huihui_shaped] [--smoke|--internal|--artifact|--external] [tasks]
-  ./forge external <family> [base|ft|abli|local_abli|local_abli_sota|local_abli_huihui_like|local_abli_huihui_like_s4|local_abli_huihui_shaped] [tasks]
+  ./forge serve <family> [base|ft|local_ft|abli|local_abli|local_abli_sota|local_abli_huihui_like|local_abli_huihui_like_s4|local_abli_huihui_shaped]
+  ./forge eval <family> [base|ft|local_ft|abli|local_abli|local_abli_sota|local_abli_huihui_like|local_abli_huihui_like_s4|local_abli_huihui_shaped] [--smoke|--internal|--artifact|--external] [tasks]
+  ./forge external <family> [base|ft|local_ft|abli|local_abli|local_abli_sota|local_abli_huihui_like|local_abli_huihui_like_s4|local_abli_huihui_shaped] [tasks]
+  ./forge finetune <family> [plan|prepare|run] [--execute]
   ./forge ablate <family> [plan|collect|analyze-reference|sweep-reference|export|sota-plan|sota-prepare|sota-run] [--execute]
   ./forge compare <family>
   ./forge golden-summary <family> [output-json]
@@ -28,6 +29,7 @@ Examples:
   ./forge download gemma4_26b_a4b all
   ./forge serve gemma4_26b_a4b base
   ./forge eval gemma4_26b_a4b base
+  ./forge finetune gemma4_26b_a4b plan
   ./forge ablate gemma4_26b_a4b plan
   ./forge compare gemma4_26b_a4b
 
@@ -81,6 +83,29 @@ case "$ACTION" in
     else
       "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" external "$VARIANT"
     fi
+    ;;
+  finetune)
+    FAMILY=${1:?family is required}
+    shift
+    STEP=${1:-plan}
+    if [[ $# -gt 0 ]]; then
+      shift
+    fi
+    case "$FAMILY" in
+      gemma4_26b_a4b)
+        CONFIG="$REPO_DIR/configs/finetuning/gemma4_26b_a4b_local_ft_v0.yaml"
+        ;;
+      --config)
+        CONFIG=${1:?config path is required after --config}
+        shift
+        STEP=${1:-plan}
+        if [[ $# -gt 0 ]]; then
+          shift
+        fi
+        ;;
+      *) echo "unknown fine-tune family: $FAMILY" >&2; exit 2 ;;
+    esac
+    "$PYTHON" -m model_forge.pipelines.finetune --config "$CONFIG" "$STEP" "$@"
     ;;
   ablate)
     FAMILY=${1:?family is required}

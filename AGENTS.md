@@ -17,6 +17,7 @@ reusable pipeline code over one-off scripts.
 ## First Things To Inspect
 
 - `README.md`: project overview and model-agnostic workflow
+- `docs/finetuning.md`: SFT/QLoRA workflow and promotion gates
 - `docs/abliteration.md`: refusal-ablation methodology and promotion criteria
 - `docs/evaluation-strategy.md`: eval design and interpretation
 - `docs/spark-optimizations.md`: DGX Spark hardware profile, AEON-7-derived
@@ -30,15 +31,17 @@ reusable pipeline code over one-off scripts.
 ## Standard Workflow
 
 1. Add or update a model family config in `configs/model_families/`.
-2. Add or update an ablation config in `configs/abliteration/`.
-3. Run dry-run planning before loading large models.
-4. Serve exactly one large model at a time.
-5. Run internal evals before expensive artifact or external evals.
-6. Compare against the source checkpoint being modified, not only against an
+2. Add or update fine-tune configs in `configs/finetuning/` and data manifests
+   in `datasets/finetuning/` when training a new source model.
+3. Add or update an ablation config in `configs/abliteration/`.
+4. Run dry-run planning before loading large models.
+5. Serve exactly one large model at a time.
+6. Run internal evals before expensive artifact or external evals.
+7. Compare against the source checkpoint being modified, not only against an
    unrelated downloaded abli model.
-7. Promote only when refusal suppression improves and source-model capability is
+8. Promote only when refusal suppression improves and source-model capability is
    preserved within expected eval variance.
-8. Save raw responses, scores, model cards, and exact recipe/config paths.
+9. Save raw responses, scores, model cards, and exact recipe/config paths.
 
 ## Useful Commands
 
@@ -67,6 +70,27 @@ Plan ablation without loading a model:
 ```bash
 ./forge ablate gemma4_26b_a4b plan
 ```
+
+Plan fine-tuning without loading a model:
+
+```bash
+./forge finetune gemma4_26b_a4b plan
+./forge finetune gemma4_26b_a4b prepare
+```
+
+## Fine-Tuning Rules
+
+- Treat Jackrong's public notebooks as a useful baseline pattern, not a final
+  recipe to copy.
+- Keep the fine-tune recipe model-family agnostic: source model, LoRA targets,
+  context length, data blend, and output variant belong in YAML.
+- Use data manifests with explicit source roles, sample targets, schema fields,
+  licenses, quality gates, and holdouts.
+- Do not train on model-forge eval prompts. Train adjacent skills and let the
+  held-out eval suite decide promotion.
+- Promote a local FT only if it matches or beats the downloaded FT reference on
+  internal challenge capability, paired benign quality, normal-use regression,
+  artifact quality, and external benchmarks.
 
 Prepare Heretic SOTA artifacts:
 

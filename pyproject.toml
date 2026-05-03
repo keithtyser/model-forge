@@ -30,6 +30,16 @@ abliteration = [
   "torch>=2.5",
   "transformers>=4.46",
 ]
+finetuning = [
+  "accelerate>=0.34",
+  "bitsandbytes>=0.44",
+  "datasets>=2.20",
+  "peft>=0.12",
+  "safetensors>=0.4",
+  "torch>=2.5",
+  "transformers>=4.46",
+  "trl>=0.12",
+]
 
 [project.scripts]
 model-forge-eval = "model_forge.evals.run_eval:main"
@@ -38,6 +48,7 @@ model-forge-golden-summary = "model_forge.evals.golden_summary:main"
 model-forge-matrix = "model_forge.evals.run_matrix:main"
 model-forge-external = "model_forge.evals.external:main"
 model-forge-abliterate = "model_forge.pipelines.abliterate:main"
+model-forge-finetune = "model_forge.pipelines.finetune:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

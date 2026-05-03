@@ -53,6 +53,19 @@ Download models:
 ./forge download gemma4_26b_a4b all
 ```
 
+Plan the first local fine-tune from the base checkpoint:
+
+```bash
+./forge finetune gemma4_26b_a4b plan
+./forge finetune gemma4_26b_a4b prepare
+```
+
+The current FT recipe is designed to beat the downloaded
+`Jackrong/Gemopus-4-26B-A4B-it` reference by keeping Jackrong's useful public
+pattern, mixed LoRA/QLoRA SFT over reasoning, coding, math, and chat data, while
+adding model-forge data quality gates, holdouts, and promotion evals. See
+`docs/finetuning.md`.
+
 Run each model. Keep `serve` running in one terminal, then run `eval` in another.
 `eval` runs the built-in checks, artifact generation, external benchmarks, and
 refreshes the comparison report for the served variant. The CLI prints phase
@@ -126,6 +139,11 @@ references.
 ```bash
 ./forge serve gemma4_26b_a4b ft
 ./forge eval gemma4_26b_a4b ft
+```
+
+```bash
+./forge serve gemma4_26b_a4b local_ft
+./forge eval gemma4_26b_a4b local_ft
 ```
 
 ```bash

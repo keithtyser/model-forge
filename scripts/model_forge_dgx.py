@@ -196,6 +196,7 @@ def action_compare(family: dict[str, Any], family_name: str) -> None:
         cmd.extend(["--external-base", str(external_base)])
     flag_by_variant = {
         "ft": "--ft",
+        "local_ft": "--local-ft",
         "abli": "--abli",
         "local_abli": "--local-abli",
         "local_abli_sota": "--local-abli-sota",

@@ -12,6 +12,7 @@ artifacts/
 results/*
 !results/.gitkeep
 reports/generated/
+runs/
 plans/
 models/checkpoints/
 models/merged/

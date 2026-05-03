@@ -13,6 +13,11 @@ variants:
     repo_id: Jackrong/Gemopus-4-26B-A4B-it
     local_dir: Gemopus-4-26B-A4B-it
     served_model_name: Jackrong/Gemopus-4-26B-A4B-it
+  local_ft:
+    repo_id: google/gemma-4-26B-A4B-it
+    local_dir: gemma-4-26B-A4B-it-local-ft-v0
+    served_model_name: local/gemma-4-26B-A4B-it-local-ft-v0
+    downloadable: false
   abli:
     repo_id: huihui-ai/Huihui-gemma-4-26B-A4B-it-abliterated
     local_dir: Huihui-gemma-4-26B-A4B-it-abliterated

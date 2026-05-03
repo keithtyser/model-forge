@@ -1,0 +1,116 @@
+name: gemma4_26b_a4b_local_ft_v0
+description: >
+  First model-forge SFT blend for fine-tuning Gemma 4 26B-A4B from the base
+  checkpoint. It is inspired by Jackrong's public Unsloth SFT notebooks, but
+  turns the idea into a gated, reproducible, eval-aligned recipe.
+format: messages
+chat_template: auto
+max_context_window: 8192
+random_seed: 3407
+
+quality_gates:
+  min_turn_chars: 2
+  require_assistant_content: true
+  reject_unclosed_think: true
+  dedupe_by_conversation_hash: true
+  max_tokens: 8192
+  reject_eval_prompt_overlap: true
+
+sources:
+  - name: competitive_programming_python
+    role: code_reasoning
+    dataset: Jackrong/Competitive-Programming-python-blend
+    split: train
+    messages_field: messages
+    target_samples: 12000
+    license_notes: Mixed upstream licenses documented in the dataset card.
+    rationale: >
+      Strong Python-first competitive programming and code reasoning supervision;
+      directly targets model-forge artifact/code-generation capability.
+
+  - name: qwen_coder_distill
+    role: code_generation_and_debugging
+    dataset: Jackrong/qwen3-coder-480b-distill-mini
+    split: train
+    input_field: Input
+    output_field: code_output
+    target_samples: 8000
+    license_notes: Apache-2.0 per dataset card.
+    rationale: >
+      Distilled from a strong code-specialist teacher; balances the programming
+      blend with shorter cleaned code tasks.
+
+  - name: reasoning_700x
+    role: general_reasoning
+    dataset: Jackrong/Qwen3.5-reasoning-700x
+    split: train
+    messages_field: conversation
+    target_samples: 700
+    license_notes: Apache-2.0 dataset card plus Qwen/DashScope upstream terms.
+    rationale: >
+      Small but high-signal reasoning set used in Jackrong notebooks; included
+      as a continuity baseline rather than the dominant source.
+
+  - name: logicmind_chat_reasoning
+    role: multi_turn_reasoning_chat
+    dataset: Jackrong/LogicMind-Chat-Reasoning-SFT-300K
+    split: train
+    messages_field: messages
+    target_samples: 16000
+    license_notes: See dataset card before public release.
+    rationale: >
+      Multi-turn reasoning/chat coverage to avoid a pure math-code model and to
+      preserve normal assistant behavior.
+
+  - name: natural_reasoning_gpt_oss_120b
+    role: natural_reasoning
+    dataset: Jackrong/Natural-Reasoning-gpt-oss-120B-S1
+    split: train
+    input_field: Input
+    reasoning_field: CoT_Native_Reasoning
+    output_field: answer
+    wrap_reasoning: true
+    target_samples: 10000
+    license_notes: See dataset card before public release.
+    rationale: >
+      Natural-language reasoning traces diversify away from programming-heavy
+      examples and should help challenge-capability preservation.
+
+  - name: stem_reasoning_gpt_oss_120b
+    role: stem_reasoning
+    dataset: Jackrong/gpt-oss-120b-reasoning-STEM-5K
+    split: train
+    input_field: Input
+    reasoning_field: CoT_Native——reasoning
+    output_field: Answer
+    wrap_reasoning: true
+    target_samples: 5000
+    license_notes: CC-BY-4.0 per dataset card.
+    rationale: >
+      STEM reasoning with explicit final answers; useful for math/science tasks
+      without over-weighting very long math-only traces.
+
+  - name: sharegpt_reasoning_chat
+    role: instruction_following_chat
+    dataset: Jackrong/ShareGPT-gpt-oss-120B-reasoning
+    split: train
+    messages_field: conversations
+    target_samples: 9000
+    license_notes: See dataset card before public release.
+    rationale: >
+      General chat/instruction style to reduce regression risk from a narrow
+      reasoning/code blend.
+
+holdouts:
+  - evals/prompts/capability_preservation_challenge.yaml
+  - evals/prompts/normal_use_regression.yaml
+  - evals/prompts/agentic_code_debug.yaml
+  - evals/prompts/artifact_code_generation.yaml
+  - evals/prompts/artifact_web_design.yaml
+  - evals/prompts/agentic_tool_use_json.yaml
+
+promotion_notes:
+  - Do not judge this recipe by training loss alone.
+  - Compare against base and Jackrong/Gemopus-4-26B-A4B-it on the same internal, artifact, and IFEval runs.
+  - Winning means capability and artifact quality beat or match Jackrong while normal-use regression remains low.
+  - If the blend over-produces verbose reasoning, lower natural/STEM reasoning weights and raise chat/code-debug examples.

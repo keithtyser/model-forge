@@ -1,0 +1,74 @@
+name: gemma4_26b_a4b_local_ft_v0
+family: gemma4_26b_a4b
+run_dir: runs/finetune/gemma4_26b_a4b_local_ft_v0
+
+model:
+  source: google/gemma-4-26B-A4B-it
+  local_dir: ~/models/gemma-4-26B-A4B-it
+  output_dir: ~/models/gemma-4-26B-A4B-it-local-ft-v0
+  served_model_name: local/gemma-4-26B-A4B-it-local-ft-v0
+  trust_remote_code: false
+  max_seq_length: 8192
+
+trainer:
+  backend: trl_sft
+  method: qlora
+  load_in_4bit: true
+  bf16: true
+  gradient_checkpointing: true
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 24
+  learning_rate: 0.00012
+  num_train_epochs: 1
+  max_steps:
+  warmup_ratio: 0.04
+  lr_scheduler_type: cosine
+  optim: paged_adamw_8bit
+  weight_decay: 0.001
+  logging_steps: 5
+  save_steps: 100
+  save_total_limit: 2
+  seed: 3407
+  report_to: none
+
+lora:
+  r: 64
+  alpha: 64
+  dropout: 0.0
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+  modules_to_save: []
+
+data:
+  manifest: datasets/finetuning/gemma4_26b_a4b_local_ft_v0.yaml
+
+baseline:
+  target_to_beat: Jackrong/Gemopus-4-26B-A4B-it
+  public_recipe_reference: https://github.com/R6410418/Jackrong-llm-finetuning-guide
+  public_model_reference: https://huggingface.co/Jackrong/Gemopus-4-26B-A4B-it
+  observed_baseline_role: downloaded_ft_reference_for_model_forge_evals
+  strategy_delta:
+    - Keep Jackrong's useful pattern: LoRA/QLoRA SFT over mixed reasoning, coding, math, and chat data.
+    - Improve over notebook-style mixing with explicit data quality gates, deduplication, holdouts, eval-linked promotion gates, and model-forge artifact preservation.
+    - Avoid training directly on model-forge eval prompts; train adjacent skills and compare on held-out internal, artifact, and external evals.
+
+eval:
+  source_variant: base
+  baseline_variant: ft
+  required_gates:
+    challenge_capability_vs_jackrong_ft: ">= baseline"
+    paired_benign_quality_vs_jackrong_ft: ">= baseline"
+    normal_use_regression: ">= 0.95"
+    artifact_quality: "manual_review_no_critical_regression"
+    external_ifeval: ">= jackrong_ft_minus_eval_variance"
+  commands:
+    - MODEL_FORGE_TRIALS=3 ./forge eval gemma4_26b_a4b local_ft --internal
+    - ./forge eval gemma4_26b_a4b local_ft --artifact
+    - ./forge eval gemma4_26b_a4b local_ft --external
+    - ./forge compare gemma4_26b_a4b

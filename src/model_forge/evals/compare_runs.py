@@ -18,6 +18,7 @@ from rich.table import Table
 VARIANT_ARGS = [
     ("base", "--base"),
     ("ft", "--ft"),
+    ("local_ft", "--local-ft"),
     ("abli", "--abli"),
     ("local_abli", "--local-abli"),
     ("local_abli_sota", "--local-abli-sota"),
