@@ -4,6 +4,7 @@ Use `spark-vllm-docker` for DGX Spark. It is the right default, not vanilla host
 
 Reference:
 - https://github.com/eugr/spark-vllm-docker
+- Spark optimization notes: `docs/spark-optimizations.md`
 
 Why this is the better path:
 - built specifically for DGX Spark
@@ -100,6 +101,34 @@ Serve the base model:
 ```
 
 The Gemma wrapper defaults to `GPU_MEMORY_UTILIZATION=0.85` because DGX Spark usually exposes less free CUDA memory than the full unified-memory total at server startup. If startup still fails during memory reservation, retry with `GPU_MEMORY_UTILIZATION=0.80` or reduce `MAX_MODEL_LEN` to `16384`.
+
+The detected Spark profile also enables the reusable serving defaults from the
+AEON-7-style Spark recipes: FP8 KV cache, chunked prefill, prefix caching,
+expandable CUDA allocation segments, high matmul precision, and a low default
+sequence count. Override them per run instead of hard-coding model-specific
+settings:
+
+```bash
+VLLM_KV_CACHE_DTYPE=auto ./forge serve gemma4_26b_a4b base
+VLLM_MAX_NUM_SEQS=8 GPU_MEMORY_UTILIZATION=0.90 ./forge serve gemma4_26b_a4b local_abli
+```
+
+For ModelOpt/NVFP4 checkpoints, pass quantization flags through the same wrapper:
+
+```bash
+VLLM_QUANTIZATION=modelopt \
+VLLM_DTYPE=auto \
+VLLM_KV_CACHE_DTYPE=fp8_e4m3 \
+./forge serve <family> <nvfp4_variant>
+```
+
+For a compatible drafter, pass speculative decoding through without changing the
+eval harness:
+
+```bash
+VLLM_SPECULATIVE_CONFIG='{"method":"eagle3","model":"/models/drafter","num_speculative_tokens":3}' \
+./forge serve <family> <variant>
+```
 
 When serving a local model path, the wrapper automatically mounts `MODEL_FORGE_MODELS_DIR` into the vLLM container. The default is `$HOME/models`.
 

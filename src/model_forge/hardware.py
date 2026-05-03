@@ -21,6 +21,7 @@ class HardwareProfile:
     gpus: tuple[GpuInfo, ...] = ()
     vllm_env: Mapping[str, str] = field(default_factory=dict)
     training_env: Mapping[str, str] = field(default_factory=dict)
+    quantization_env: Mapping[str, str] = field(default_factory=dict)
     notes: tuple[str, ...] = ()
 
 
@@ -67,8 +68,14 @@ def _profile_from_name(name: str, gpus: tuple[GpuInfo, ...]) -> HardwareProfile:
                 "GPU_MEMORY_UTILIZATION": "0.85",
                 "MAX_MODEL_LEN": "32768",
                 "MAX_NUM_BATCHED_TOKENS": "32768",
+                "VLLM_MAX_NUM_SEQS": "4",
                 "VLLM_ENABLE_CHUNKED_PREFILL": "1",
-                "VLLM_KV_CACHE_DTYPE": "auto",
+                "VLLM_ENABLE_PREFIX_CACHING": "1",
+                "VLLM_KV_CACHE_DTYPE": "fp8_e4m3",
+                "VLLM_DTYPE": "auto",
+                "VLLM_ALLOW_LONG_MAX_MODEL_LEN": "1",
+                "VLLM_TEST_FORCE_FP8_MARLIN": "1",
+                "VLLM_MARLIN_USE_ATOMIC_ADD": "1",
                 "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
                 "TORCH_MATMUL_PRECISION": "high",
                 "NVIDIA_FORWARD_COMPAT": "1",
@@ -80,9 +87,18 @@ def _profile_from_name(name: str, gpus: tuple[GpuInfo, ...]) -> HardwareProfile:
                 "TOKENIZERS_PARALLELISM": "true",
                 "OMP_NUM_THREADS": "1",
             },
+            quantization_env={
+                "MODEL_FORGE_QUANT_CALIBRATION_SAMPLES": "512",
+                "MODEL_FORGE_QUANT_CALIBRATION_SEQ_LEN": "4096",
+                "MODEL_FORGE_QUANT_BATCH_SIZE": "auto",
+                "MODEL_FORGE_QUANT_KEEP_BF16_PATTERNS": "router,gate,vision,visual,embed_vision,multi_modal_projector",
+                "MODEL_FORGE_MOE_FAST_CALIBRATION": "1",
+            },
             notes=(
-                "Conservative DGX Spark cap; AEON reports 0.88+ can thrash unified memory.",
-                "Keep one server at a time and prefer shorter contexts while developing.",
+                "Use a Spark/GB10-native vLLM build; stock wheels are usually not compiled for SM 12.1.",
+                "Conservative DGX Spark cap; raise GPU_MEMORY_UTILIZATION only after smoke serving passes.",
+                "Use FP8 KV cache, chunked prefill, prefix caching, and low max-num-seqs to preserve unified-memory headroom.",
+                "For NVFP4 MoE, keep routers and multimodal projection/vision modules in BF16 unless model-specific evals prove otherwise.",
                 "For CPU/input-pipeline bottlenecks, DGX Spark can benefit from high parallelism such as c=192, but gate it behind an explicit override.",
             ),
         )
@@ -95,8 +111,11 @@ def _profile_from_name(name: str, gpus: tuple[GpuInfo, ...]) -> HardwareProfile:
                 "GPU_MEMORY_UTILIZATION": "0.92",
                 "MAX_MODEL_LEN": "32768",
                 "MAX_NUM_BATCHED_TOKENS": "32768",
+                "VLLM_MAX_NUM_SEQS": "8",
                 "VLLM_ENABLE_CHUNKED_PREFILL": "1",
+                "VLLM_ENABLE_PREFIX_CACHING": "1",
                 "VLLM_KV_CACHE_DTYPE": "auto",
+                "VLLM_DTYPE": "auto",
                 "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
                 "TORCH_MATMUL_PRECISION": "high",
             },
@@ -105,6 +124,13 @@ def _profile_from_name(name: str, gpus: tuple[GpuInfo, ...]) -> HardwareProfile:
                 "MODEL_FORGE_HIGH_PARALLELISM": "192",
                 "TOKENIZERS_PARALLELISM": "true",
                 "OMP_NUM_THREADS": "1",
+            },
+            quantization_env={
+                "MODEL_FORGE_QUANT_CALIBRATION_SAMPLES": "512",
+                "MODEL_FORGE_QUANT_CALIBRATION_SEQ_LEN": "4096",
+                "MODEL_FORGE_QUANT_BATCH_SIZE": "auto",
+                "MODEL_FORGE_QUANT_KEEP_BF16_PATTERNS": "router,gate,vision,visual,embed_vision,multi_modal_projector",
+                "MODEL_FORGE_MOE_FAST_CALIBRATION": "1",
             },
             notes=("Higher cap is for dedicated VRAM Blackwell cards; lower it if CUDA graph capture fails.",),
         )
@@ -117,7 +143,9 @@ def _profile_from_name(name: str, gpus: tuple[GpuInfo, ...]) -> HardwareProfile:
                 "GPU_MEMORY_UTILIZATION": "0.75",
                 "MAX_MODEL_LEN": "8192",
                 "MAX_NUM_BATCHED_TOKENS": "4096",
+                "VLLM_MAX_NUM_SEQS": "2",
                 "VLLM_ENABLE_CHUNKED_PREFILL": "1",
+                "VLLM_ENABLE_PREFIX_CACHING": "1",
             },
             training_env={
                 "MODEL_FORGE_PARALLELISM": "8",
@@ -136,7 +164,9 @@ def _profile_from_name(name: str, gpus: tuple[GpuInfo, ...]) -> HardwareProfile:
                 "GPU_MEMORY_UTILIZATION": "0.88",
                 "MAX_MODEL_LEN": "32768",
                 "MAX_NUM_BATCHED_TOKENS": "16384",
+                "VLLM_MAX_NUM_SEQS": "8",
                 "VLLM_ENABLE_CHUNKED_PREFILL": "1",
+                "VLLM_ENABLE_PREFIX_CACHING": "1",
                 "VLLM_KV_CACHE_DTYPE": "auto",
             },
             training_env={
@@ -193,12 +223,26 @@ def recommended_vllm_env(env: Mapping[str, str] | None = None) -> dict[str, str]
         "GPU_MEMORY_UTILIZATION",
         "MAX_MODEL_LEN",
         "MAX_NUM_BATCHED_TOKENS",
+        "VLLM_MAX_NUM_SEQS",
         "VLLM_CPU_OFFLOAD_GB",
         "VLLM_SWAP_SPACE",
         "VLLM_KV_CACHE_DTYPE",
+        "VLLM_DTYPE",
+        "VLLM_QUANTIZATION",
+        "VLLM_SPECULATIVE_CONFIG",
         "VLLM_ENABLE_CHUNKED_PREFILL",
+        "VLLM_ENABLE_PREFIX_CACHING",
+        "VLLM_ALLOW_LONG_MAX_MODEL_LEN",
+        "VLLM_ENABLE_AUTO_TOOL_CHOICE",
+        "VLLM_TOOL_CALL_PARSER",
+        "VLLM_REASONING_PARSER",
+        "VLLM_TEST_FORCE_FP8_MARLIN",
+        "VLLM_MARLIN_USE_ATOMIC_ADD",
+        "VLLM_NVFP4_GEMM_BACKEND",
         "PYTORCH_CUDA_ALLOC_CONF",
         "TORCH_MATMUL_PRECISION",
+        "NVIDIA_FORWARD_COMPAT",
+        "NVIDIA_DISABLE_REQUIRE",
     ):
         if key in env:
             recommendations[key] = env[key]
@@ -218,6 +262,22 @@ def recommended_training_env(env: Mapping[str, str] | None = None) -> dict[str, 
         "OMP_NUM_THREADS",
         "MKL_NUM_THREADS",
         "NUMEXPR_NUM_THREADS",
+    ):
+        if key in env:
+            recommendations[key] = env[key]
+    return recommendations
+
+
+def recommended_quantization_env(env: Mapping[str, str] | None = None) -> dict[str, str]:
+    env = env or os.environ
+    profile = detect_hardware_profile(env)
+    recommendations = dict(profile.quantization_env)
+    for key in (
+        "MODEL_FORGE_QUANT_CALIBRATION_SAMPLES",
+        "MODEL_FORGE_QUANT_CALIBRATION_SEQ_LEN",
+        "MODEL_FORGE_QUANT_BATCH_SIZE",
+        "MODEL_FORGE_QUANT_KEEP_BF16_PATTERNS",
+        "MODEL_FORGE_MOE_FAST_CALIBRATION",
     ):
         if key in env:
             recommendations[key] = env[key]

@@ -5,7 +5,13 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from model_forge.hardware import GpuInfo, detect_hardware_profile, recommended_training_env, recommended_vllm_env
+from model_forge.hardware import (
+    GpuInfo,
+    detect_hardware_profile,
+    recommended_quantization_env,
+    recommended_training_env,
+    recommended_vllm_env,
+)
 from model_forge.pipelines.abliterate import (
     REPO_DIR,
     _projection_delta,
@@ -28,6 +34,8 @@ class HardwareProfileTests(unittest.TestCase):
         self.assertEqual(profile.name, "dgx_spark")
         self.assertEqual(profile.vllm_env["GPU_MEMORY_UTILIZATION"], "0.85")
         self.assertEqual(profile.vllm_env["MAX_NUM_BATCHED_TOKENS"], "32768")
+        self.assertEqual(profile.vllm_env["VLLM_KV_CACHE_DTYPE"], "fp8_e4m3")
+        self.assertEqual(profile.vllm_env["VLLM_MAX_NUM_SEQS"], "4")
 
     @mock.patch("model_forge.hardware._query_nvidia_smi", return_value=())
     def test_user_overrides_win_over_profile_defaults(self, _query: mock.Mock) -> None:
@@ -39,6 +47,18 @@ class HardwareProfileTests(unittest.TestCase):
         self.assertEqual(env["GPU_MEMORY_UTILIZATION"], "0.80")
         self.assertEqual(env["MAX_MODEL_LEN"], "16384")
         self.assertEqual(env["MAX_NUM_BATCHED_TOKENS"], "32768")
+
+    @mock.patch("model_forge.hardware._query_nvidia_smi", return_value=())
+    def test_spark_vllm_quantization_overrides_are_preserved(self, _query: mock.Mock) -> None:
+        env = recommended_vllm_env({
+            "MODEL_FORGE_HARDWARE_PROFILE": "dgx_spark",
+            "VLLM_QUANTIZATION": "modelopt",
+            "VLLM_SPECULATIVE_CONFIG": '{"method":"eagle3","model":"/models/drafter"}',
+            "VLLM_TOOL_CALL_PARSER": "gemma4",
+        })
+        self.assertEqual(env["VLLM_QUANTIZATION"], "modelopt")
+        self.assertEqual(env["VLLM_TOOL_CALL_PARSER"], "gemma4")
+        self.assertIn("eagle3", env["VLLM_SPECULATIVE_CONFIG"])
 
     @mock.patch("model_forge.hardware._query_nvidia_smi", return_value=(GpuInfo("NVIDIA GB10", 0),))
     def test_gb10_with_unknown_memory_detects_spark(self, _query: mock.Mock) -> None:
@@ -58,6 +78,13 @@ class HardwareProfileTests(unittest.TestCase):
         self.assertEqual(safe["MODEL_FORGE_PARALLELISM"], "32")
         self.assertEqual(high["MODEL_FORGE_PARALLELISM"], "192")
         self.assertEqual(explicit["MODEL_FORGE_PARALLELISM"], "192")
+
+    @mock.patch("model_forge.hardware._query_nvidia_smi", return_value=())
+    def test_spark_quantization_profile_keeps_sensitive_moe_layers_bf16(self, _query: mock.Mock) -> None:
+        env = recommended_quantization_env({"MODEL_FORGE_HARDWARE_PROFILE": "dgx_spark"})
+        self.assertEqual(env["MODEL_FORGE_MOE_FAST_CALIBRATION"], "1")
+        self.assertIn("router", env["MODEL_FORGE_QUANT_KEEP_BF16_PATTERNS"])
+        self.assertIn("multi_modal_projector", env["MODEL_FORGE_QUANT_KEEP_BF16_PATTERNS"])
 
 
 class AbliterationPlanTests(unittest.TestCase):

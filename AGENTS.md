@@ -19,6 +19,8 @@ reusable pipeline code over one-off scripts.
 - `README.md`: project overview and model-agnostic workflow
 - `docs/abliteration.md`: refusal-ablation methodology and promotion criteria
 - `docs/evaluation-strategy.md`: eval design and interpretation
+- `docs/spark-optimizations.md`: DGX Spark hardware profile, AEON-7-derived
+  serving/quantization lessons, and safe overrides
 - `configs/model_families/`: model family registry
 - `configs/abliteration/`: ablation recipes
 - `evals/prompts/`: internal prompt buckets and rubrics
@@ -101,8 +103,15 @@ Run tests:
 - Assume large checkpoints can exhaust memory.
 - Keep one large model process or vLLM server active at a time.
 - On DGX Spark, prefer conservative settings first: `GPU_MEMORY_UTILIZATION=0.85`,
-  prefix caching, chunked prefill, and batch size 1 for activation/residual
-  collection.
+  FP8 KV cache, prefix caching, chunked prefill, low `VLLM_MAX_NUM_SEQS`, and
+  batch size 1 for activation/residual collection.
+- Use Spark/GB10-native vLLM builds. Stock vLLM wheels may not be compiled for
+  SM 12.1.
+- Treat AEON-7 NVFP4 settings as hardware guidance, not Gemma constants. Put
+  parser names, quantization format, loader patches, and drafter paths in family
+  config or environment overrides.
+- For MoE quantization, keep routers and multimodal projection/vision modules
+  in BF16 unless a family-specific recipe and eval pass justify otherwise.
 - `MODEL_FORGE_PARALLELISM=192` is for preprocessing/input-pipeline work, not
   for multiplying large model forward passes.
 - Stop `vllm_node` when finished:

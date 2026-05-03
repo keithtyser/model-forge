@@ -94,6 +94,35 @@ Gemma t34 Heretic parameters. For a new architecture such as Qwen, reuse the
 workflow and prompt/eval harness, but recalibrate targets, layer ranges,
 strengths, and search parameters before trusting the result.
 
+## DGX Spark Optimization
+
+Spark-specific defaults are hardware profile settings, not Gemma-only logic.
+`MODEL_FORGE_HARDWARE_PROFILE=dgx_spark` applies conservative vLLM and training
+defaults inspired by AEON-7's public Spark/NVFP4 work: SM 12.1-native serving,
+FP8 KV cache, chunked prefill, prefix caching, expandable CUDA allocation
+segments, low default sequence count, and explicit high-parallelism opt-in for
+pipeline stages that benefit from it.
+
+For ModelOpt/NVFP4 checkpoints, pass quantization and parser settings through
+environment overrides:
+
+```bash
+VLLM_QUANTIZATION=modelopt \
+VLLM_DTYPE=auto \
+VLLM_KV_CACHE_DTYPE=fp8_e4m3 \
+./forge serve <family> <variant>
+```
+
+For compatible draft models, speculative decoding is also a serving override:
+
+```bash
+VLLM_SPECULATIVE_CONFIG='{"method":"eagle3","model":"/models/drafter","num_speculative_tokens":3}' \
+./forge serve <family> <variant>
+```
+
+See `docs/spark-optimizations.md` for the full hardware policy and AEON-7
+references.
+
 ```bash
 ./forge serve gemma4_26b_a4b ft
 ./forge eval gemma4_26b_a4b ft
@@ -218,6 +247,8 @@ MODEL_FORGE_HARDWARE_PROFILE=dgx_spark ./forge serve gemma4_26b_a4b base
 GPU_MEMORY_UTILIZATION=0.80 ./forge serve gemma4_26b_a4b base
 MAX_MODEL_LEN=16384 ./forge serve gemma4_26b_a4b base
 VLLM_CPU_OFFLOAD_GB=24 ./forge serve gemma4_26b_a4b base
+VLLM_QUANTIZATION=modelopt VLLM_KV_CACHE_DTYPE=fp8_e4m3 ./forge serve gemma4_26b_a4b local_abli
+VLLM_SPECULATIVE_CONFIG='{"method":"eagle3","model":"/models/drafter","num_speculative_tokens":3}' ./forge serve gemma4_26b_a4b local_abli
 MODEL_FORGE_ENABLE_HIGH_PARALLELISM=1 ./forge ablate gemma4_26b_a4b plan
 MODEL_FORGE_PARALLELISM=192 ./forge ablate gemma4_26b_a4b plan
 HF_MAX_WORKERS=16 HF_XET_NUM_CONCURRENT_RANGE_GETS=16 ./forge download gemma4_26b_a4b base

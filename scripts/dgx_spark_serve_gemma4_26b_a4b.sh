@@ -20,12 +20,17 @@ PORT=${PORT:-8000}
 EXTRA_VLLM_ARGS=(
   --served-model-name "$SERVED_MODEL_NAME"
   --language-model-only
-  --enable-prefix-caching
   --max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS"
 )
 
+if [[ "${VLLM_ENABLE_PREFIX_CACHING:-1}" == "1" || "${VLLM_ENABLE_PREFIX_CACHING:-true}" == "true" ]]; then
+  EXTRA_VLLM_ARGS+=(--enable-prefix-caching)
+fi
 if [[ -n "${VLLM_QUANTIZATION:-}" ]]; then
   EXTRA_VLLM_ARGS+=(--quantization "$VLLM_QUANTIZATION")
+fi
+if [[ -n "${VLLM_DTYPE:-}" ]]; then
+  EXTRA_VLLM_ARGS+=(--dtype "$VLLM_DTYPE")
 fi
 if [[ -n "${VLLM_KV_CACHE_DTYPE:-}" ]]; then
   EXTRA_VLLM_ARGS+=(--kv-cache-dtype "$VLLM_KV_CACHE_DTYPE")
@@ -47,6 +52,18 @@ if [[ -n "${VLLM_MAX_NUM_SEQS:-}" ]]; then
 fi
 if [[ "${VLLM_TRUST_REMOTE_CODE:-false}" == "true" ]]; then
   EXTRA_VLLM_ARGS+=(--trust-remote-code)
+fi
+if [[ "${VLLM_ENABLE_AUTO_TOOL_CHOICE:-false}" == "true" || "${VLLM_ENABLE_AUTO_TOOL_CHOICE:-0}" == "1" ]]; then
+  EXTRA_VLLM_ARGS+=(--enable-auto-tool-choice)
+fi
+if [[ -n "${VLLM_TOOL_CALL_PARSER:-}" ]]; then
+  EXTRA_VLLM_ARGS+=(--tool-call-parser "$VLLM_TOOL_CALL_PARSER")
+fi
+if [[ -n "${VLLM_REASONING_PARSER:-}" ]]; then
+  EXTRA_VLLM_ARGS+=(--reasoning-parser "$VLLM_REASONING_PARSER")
+fi
+if [[ -n "${VLLM_SPECULATIVE_CONFIG:-}" ]]; then
+  EXTRA_VLLM_ARGS+=(--speculative-config "$VLLM_SPECULATIVE_CONFIG")
 fi
 
 if [[ "$MODEL" = /* && -d "$MODELS_DIR" ]]; then
