@@ -1,17 +1,23 @@
 # Abliteration Workflow
 
-model-forge treats abliteration as a reproducible experiment:
+model-forge treats refusal ablation as a reproducible, model-family-agnostic
+experiment:
 
 1. collect a refusal direction from suffix-pooled harmful-vs-benign contrast prompts
 2. review the direction artifacts and candidate layers
-3. compare the edit geometry against the downloaded abli model for diagnostics
-4. export a local ablated model by projecting that direction out of base weights
-5. run the same internal, artifact, and external eval suite against base, downloaded abli, and local abli
+3. optionally compare edit geometry against a downloaded abli model for diagnostics
+4. export or merge a local ablated model from the selected edit
+5. run the same internal, artifact, and external eval suite against source,
+   reference, and local candidates
 
 ## Generalizable Recipe
 
 The portable model-forge recipe is the experiment structure, not a fixed set of
-Gemma layer numbers or strengths. For each new model family:
+Gemma layer numbers or strengths. The goal is that when a new open model appears
+Qwen, Llama, Gemma, Mixtral, Mistral, Phi, or another family, the user adds a
+family config and follows the same post-training loop.
+
+For each new model family:
 
 1. Add or update a model-family YAML so base, fine-tuned, downloaded abli, and
    local abli variants have explicit local paths, served names, context length,
@@ -22,11 +28,11 @@ Gemma layer numbers or strengths. For each new model family:
 3. Compute fresh refusal directions on the exact source checkpoint you intend to
    ablate. A fine-tuned model should get its own directions; do not blindly reuse
    base activations.
-4. Pick architecture-specific target modules. For Gemma 4 A4B, the promoted
-   targets are language-layer `self_attn.o_proj` and `mlp.down_proj`. Qwen,
-   Llama, Mixtral, and other MoE or hybrid models can expose different module
-   names, expert layouts, layer counts, and hidden sizes, so inspect the module
-   tree before editing weights.
+4. Pick architecture-specific target modules. Attention output and MLP
+   down-projection layers are common starting points, but exact names and safe
+   target sets differ by family. Qwen, Llama, Gemma, Mixtral, and other MoE or
+   hybrid models can expose different module names, expert layouts, layer
+   counts, and hidden sizes, so inspect the module tree before editing weights.
 5. Start with conservative memory settings: one model process, batch size 1 for
    activation/residual work, explicit output directories per candidate, and no
    concurrent vLLM server.
@@ -77,12 +83,18 @@ These pieces should be recalibrated per model family:
 - serving settings when context length, attention backend, or quantization
   changes
 
-For example, the Gemma t34 direct-transfer recipe is a warm start for the
+Example: the Gemma t34 direct-transfer recipe is a warm start for the
 Gemma/Gemopus family because the base and FT checkpoints share architecture and
 similar refusal geometry. It should not be assumed to work unchanged for Qwen
-3.5. For Qwen, start by inspecting target modules, computing fresh directions,
-running a bounded search, then promoting only after the Qwen base/FT/local-abli
-comparison shows refusal removal with preserved source-model performance.
+3.5. For Qwen, add a Qwen family config, inspect Qwen target modules, compute
+fresh Qwen directions, run a bounded search, then promote only after the Qwen
+base/FT/local-abli comparison shows refusal removal with preserved source-model
+performance.
+
+The same principle applies to fine-tuning plus ablation. The ablation baseline
+is the checkpoint being ablated. If the source is a fine-tuned model, success
+means removing refusals while preserving that fine-tuned model's capability, not
+necessarily matching a different downloaded abli model on every metric.
 
 The default command is a dry run and does not load a model:
 
@@ -103,13 +115,13 @@ environment has CPU-only PyTorch, use the Spark/vLLM CUDA container and mount
 the repo plus model directory. Add `--user "$(id -u):$(id -g)"` to container
 runs so generated artifacts remain writable from the host checkout.
 
-Outputs are written under:
+Outputs are written under the configured family artifact directory, for example:
 
 ```text
 artifacts/abliteration/gemma4_26b_a4b_local_abli/
 ```
 
-The current Gemma recipe is a v3 candidate. It pools activations over short
+The current Gemma recipe is the first validated worked example. It pools activations over short
 assistant suffixes instead of only the final prompt token, includes layer 29,
 uses norm-preserving biprojection, and refuses to export if any configured
 target layer lacks a collected direction. The target modules intentionally
@@ -117,7 +129,7 @@ match the downloaded abli checkpoint pattern: `self_attn.o_proj.weight` and
 `mlp.down_proj.weight` for language layers 5 through 29. Mixture-of-experts
 weights, embeddings, and the LM head stay untouched.
 
-The v3 backend follows the practical shape of OBLITERATUS/HERETIC-style
+The transparent local backend follows the practical shape of OBLITERATUS/HERETIC-style
 abliteration without making fine-tuning part of the critical path:
 
 - store harmful and benign activation means in `direction_artifact.pt`
@@ -131,8 +143,8 @@ abliteration without making fine-tuning part of the critical path:
 
 For best available abliteration, model-forge should orchestrate external SOTA
 tooling and then evaluate the resulting checkpoint with the same local suite.
-The local implementation remains useful for transparent experiments, but the
-default SOTA recipe is now:
+The local implementation remains useful for transparent experiments. A typical
+SOTA path is:
 
 1. prepare backend config from the model-family config
 2. run OBLITERATUS `advanced` as the primary noninteractive backend
@@ -163,7 +175,8 @@ Select Heretic explicitly:
 ./forge ablate gemma4_26b_a4b sota-run --backend heretic --execute
 ```
 
-The SOTA output path for Gemma is:
+The SOTA output path is configured per family. For the validated Gemma base
+recipe it is:
 
 ```text
 ~/models/gemma-4-26B-A4B-it-local-abliterated-sota-internal-t34

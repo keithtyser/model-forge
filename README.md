@@ -5,19 +5,36 @@ model-forge is a reproducible post-training workbench for open models.
 It helps answer one question: did a fine-tune, ablation, or combined
 post-training workflow make the model better without breaking something else?
 
-The repo is evaluation-first today. Fine-tuning and ablation workflows will use
-the same family registry and result structure as they are added.
+The repo is evaluation-first, but the target shape is broader: one post-training
+pipeline that can be pointed at any supported open model family to fine-tune,
+ablate refusals, evaluate, compare, and publish reproducible artifacts.
 
-## Current Focus
+## Model-Agnostic Goal
 
-The first supported family is Gemma 4 on DGX Spark:
+model-forge is organized around model families, not one hard-coded model. A
+family config defines the base checkpoint, optional fine-tuned checkpoints,
+downloaded reference ablations, local ablation outputs, serving settings, eval
+configs, and report paths. The same loop should apply when a new open model
+drops:
+
+1. add a family config for the model
+2. download or fine-tune the source checkpoint
+3. ablate refusals with model-specific directions and calibrated edit settings
+4. serve each candidate with the detected hardware profile
+5. run internal, artifact, and external evals
+6. promote only if the candidate improves the intended post-training objective
+   without regressing source-model capability
+7. publish the recipe, model card, scores, and raw outputs
+
+Gemma 4 is the first fully exercised family on DGX Spark:
 
 - `google/gemma-4-26B-A4B-it`
 - `Jackrong/Gemopus-4-26B-A4B-it`
 - `huihui-ai/Huihui-gemma-4-26B-A4B-it-abliterated`
 
-Qwen configs are included for lower-level experiments, but the simple workflow
-currently targets Gemma 4.
+Qwen configs are included as the next family to harden. They should reuse the
+same post-training/eval harness, but with Qwen-specific module targets, layer
+ranges, serving settings, and search bounds.
 
 ## Quick Start
 
@@ -46,10 +63,11 @@ progress, per-case progress, elapsed time, and ETA while it runs.
 ./forge eval gemma4_26b_a4b base
 ```
 
-Plan a local Gemma refusal ablation without loading the model:
+Plan a local refusal ablation without loading the model:
 
 ```bash
 ./forge ablate gemma4_26b_a4b plan
+# Replace gemma4_26b_a4b with another configured family as support is added.
 ```
 
 Prepare a SOTA abliteration recipe for the base or fine-tuned model:
@@ -60,7 +78,7 @@ Prepare a SOTA abliteration recipe for the base or fine-tuned model:
 ```
 
 The ablation workflow is not "copy Gemma constants to every model." The reusable
-part is the loop:
+part is the model-agnostic loop:
 
 1. pick the source checkpoint, usually base or an already fine-tuned model
 2. collect model-specific refusal directions from matched harmful/benign prompts
@@ -69,12 +87,12 @@ part is the loop:
 5. promote only if refusals drop while normal-use, challenge, artifact, and
    external benchmark scores stay near the source model
 
-For nearby checkpoints, a known-good recipe can be used as a warm start. The
-Gemopus r7 recipe does this: it computes fresh directions on
-`Jackrong/Gemopus-4-26B-A4B-it`, then applies the selected base Gemma t34
-Heretic parameters. For a new architecture such as Qwen, reuse the workflow and
-prompt/eval harness, but recalibrate targets, layer ranges, strengths, and
-search parameters before trusting the result.
+For nearby checkpoints within the same architecture family, a known-good recipe
+can be used as a warm start. The Gemopus r7 recipe does this: it computes fresh
+directions on `Jackrong/Gemopus-4-26B-A4B-it`, then applies the selected base
+Gemma t34 Heretic parameters. For a new architecture such as Qwen, reuse the
+workflow and prompt/eval harness, but recalibrate targets, layer ranges,
+strengths, and search parameters before trusting the result.
 
 ```bash
 ./forge serve gemma4_26b_a4b ft
@@ -189,7 +207,8 @@ configs/model_families/
 
 A family file defines variants, local model paths, served aliases, eval configs,
 external benchmark defaults, and report locations. Adding a new model family
-should usually mean adding one YAML file plus, if needed, a serving profile.
+should usually mean adding one YAML file plus, if needed, a serving profile and
+an abliteration config that names the architecture-specific target modules.
 
 ## Useful Overrides
 
