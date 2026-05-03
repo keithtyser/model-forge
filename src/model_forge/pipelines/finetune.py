@@ -66,8 +66,8 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
         "run_dir": str(training_run_dir(config)),
         "model": {
             "source": model["source"],
-            "local_dir": model.get("local_dir"),
-            "output_dir": model["output_dir"],
+            "local_dir": str(expand_path(model["local_dir"])) if model.get("local_dir") else None,
+            "output_dir": str(expand_path(model["output_dir"])),
             "served_model_name": model.get("served_model_name", f"local/{config['name']}"),
             "trust_remote_code": bool(model.get("trust_remote_code", False)),
             "max_seq_length": int(model.get("max_seq_length", trainer.get("max_seq_length", 4096))),
@@ -194,8 +194,25 @@ def normalize_messages(example: dict[str, Any], source: dict[str, Any]) -> list[
         return messages or None
     input_field = source.get("input_field", "Input")
     output_field = source.get("output_field") or source.get("answer_field", "Answer")
-    prompt = example.get(input_field) or example.get(input_field.lower()) or example.get("prompt") or example.get("problem")
-    answer = example.get(output_field) or example.get(output_field.lower()) or example.get("output") or example.get("solution")
+    prompt = (
+        example.get(input_field)
+        or example.get(input_field.lower())
+        or example.get("question")
+        or example.get("prompt")
+        or example.get("problem")
+        or example.get("input")
+    )
+    answer = (
+        example.get(output_field)
+        or example.get(output_field.lower())
+        or example.get("Answer")
+        or example.get("Anwser")
+        or example.get("answer")
+        or example.get("anwser")
+        or example.get("output")
+        or example.get("solution")
+        or example.get("code_output")
+    )
     reasoning_field = source.get("reasoning_field")
     reasoning = example.get(reasoning_field) if reasoning_field else None
     if not isinstance(prompt, str) or not isinstance(answer, str):
@@ -247,19 +264,32 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
         if source.get("enabled", True) is False:
             continue
         split = source.get("split", "train")
-        if source.get("path"):
+        if limit is not None and not source.get("path"):
+            if source.get("subset"):
+                ds_iter = load_dataset(source["dataset"], source["subset"], split=split, streaming=True)
+            else:
+                ds_iter = load_dataset(source["dataset"], split=split, streaming=True)
+            ds = list(ds_iter.take(limit))
+            target = len(ds)
+        elif source.get("path"):
             ds = load_dataset("json", data_files=source["path"], split="train")
-        elif source.get("subset"):
-            ds = load_dataset(source["dataset"], source["subset"], split=split)
+            target = int(source.get("target_samples", 0) or len(ds))
+            target = min(target, len(ds))
+            if limit is not None:
+                target = min(target, limit)
         else:
-            ds = load_dataset(source["dataset"], split=split)
-        target = int(source.get("target_samples", 0) or len(ds))
-        target = min(target, len(ds))
-        if limit is not None:
-            target = min(target, limit)
+            if source.get("subset"):
+                ds = load_dataset(source["dataset"], source["subset"], split=split)
+            else:
+                ds = load_dataset(source["dataset"], split=split)
+            target = int(source.get("target_samples", 0) or len(ds))
+            target = min(target, len(ds))
         if target <= 0:
             continue
-        ds = ds.shuffle(seed=int(plan["trainer"]["seed"])).select(range(target))
+        if hasattr(ds, "shuffle"):
+            ds = ds.shuffle(seed=int(plan["trainer"]["seed"])).select(range(target))
+        else:
+            ds = ds[:target]
         rows = []
         rejected = 0
         for example in ds:

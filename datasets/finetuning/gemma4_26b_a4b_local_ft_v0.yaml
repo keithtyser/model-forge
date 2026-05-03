@@ -55,7 +55,7 @@ sources:
     role: multi_turn_reasoning_chat
     dataset: Jackrong/LogicMind-Chat-Reasoning-SFT-300K
     split: train
-    messages_field: messages
+    messages_field: conversations
     target_samples: 16000
     license_notes: See dataset card before public release.
     rationale: >
@@ -66,9 +66,9 @@ sources:
     role: natural_reasoning
     dataset: Jackrong/Natural-Reasoning-gpt-oss-120B-S1
     split: train
-    input_field: Input
-    reasoning_field: CoT_Native_Reasoning
-    output_field: answer
+    input_field: question
+    reasoning_field: CoT_reasoning
+    output_field: anwser
     wrap_reasoning: true
     target_samples: 10000
     license_notes: See dataset card before public release.
@@ -82,7 +82,7 @@ sources:
     split: train
     input_field: Input
     reasoning_field: CoT_Native——reasoning
-    output_field: Answer
+    output_field: Anwser
     wrap_reasoning: true
     target_samples: 5000
     license_notes: CC-BY-4.0 per dataset card.
@@ -94,7 +94,7 @@ sources:
     role: instruction_following_chat
     dataset: Jackrong/ShareGPT-gpt-oss-120B-reasoning
     split: train
-    messages_field: conversations
+    messages_field: conversation
     target_samples: 9000
     license_notes: See dataset card before public release.
     rationale: >
