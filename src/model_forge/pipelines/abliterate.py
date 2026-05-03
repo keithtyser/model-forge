@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import re
+import pprint
 import shutil
 import subprocess
 import sys
@@ -1011,6 +1012,143 @@ if __name__ == "__main__":
     return runner
 
 
+def write_heretic_direct_runner(plan: dict[str, Any]) -> Path:
+    backend = plan["backend_config"]
+    direct = backend["direct_parameters"]
+    work_dir = Path(plan["work_dir"])
+    work_dir.mkdir(parents=True, exist_ok=True)
+    runner = work_dir / "run_heretic_direct.py"
+    script = f'''from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+
+import torch
+import torch.nn.functional as F
+from peft import LoraConfig, get_peft_model
+
+import heretic.model as heretic_model
+from heretic.config import RowNormalization, Settings
+from heretic.model import AbliterationParameters, Model
+from heretic.utils import empty_cache, load_prompts
+
+work_dir = Path({str(work_dir)!r})
+output_dir = Path({plan["output_dir"]!r})
+direct_parameters = {pprint.pformat(direct, sort_dicts=False)}
+
+
+def apply_lora_exact_language_modules(self):
+    target_ids = set()
+    for layer_index in range(len(self.get_layers())):
+        for modules in self.get_layer_modules(layer_index).values():
+            for module in modules:
+                target_ids.add(id(module))
+
+    target_modules = [
+        name for name, module in self.model.named_modules()
+        if id(module) in target_ids
+    ]
+    if not target_modules:
+        raise RuntimeError("No exact language-layer Heretic targets found")
+
+    if self.settings.row_normalization != RowNormalization.FULL:
+        lora_rank = 1
+    else:
+        lora_rank = self.settings.full_normalization_lora_rank
+
+    self.peft_config = LoraConfig(
+        r=lora_rank,
+        target_modules=target_modules,
+        lora_alpha=lora_rank,
+        lora_dropout=0,
+        bias="none",
+        task_type="CAUSAL_LM",
+    )
+    self.model = get_peft_model(self.model, self.peft_config)
+    print("* LoRA adapters initialized with exact language-layer targets")
+
+
+def build_parameters():
+    return {{
+        name: AbliterationParameters(**values)
+        for name, values in direct_parameters["parameters"].items()
+    }}
+
+
+def main():
+    os.chdir(work_dir)
+    sys.argv = ["heretic"]
+    heretic_model.Model._apply_lora = apply_lora_exact_language_modules
+
+    settings = Settings()
+    print(f"Loading model {{settings.model}}...")
+    model = Model(settings)
+
+    print("Loading prompt datasets...")
+    good_prompts = load_prompts(settings, settings.good_prompts)
+    bad_prompts = load_prompts(settings, settings.bad_prompts)
+    print(f"* Good prompts: {{len(good_prompts)}}")
+    print(f"* Bad prompts: {{len(bad_prompts)}}")
+
+    print("Calculating per-layer refusal directions...")
+    print("* Obtaining residuals for good prompts...")
+    good_residuals = model.get_residuals_batched(good_prompts)
+    print("* Obtaining residuals for bad prompts...")
+    bad_residuals = model.get_residuals_batched(bad_prompts)
+
+    good_means = good_residuals.mean(dim=0)
+    bad_means = bad_residuals.mean(dim=0)
+    refusal_directions = F.normalize(bad_means - good_means, p=2, dim=1)
+
+    if settings.orthogonalize_direction:
+        good_directions = F.normalize(good_means, p=2, dim=1)
+        projection_vector = torch.sum(refusal_directions * good_directions, dim=1)
+        refusal_directions = refusal_directions - projection_vector.unsqueeze(1) * good_directions
+        refusal_directions = F.normalize(refusal_directions, p=2, dim=1)
+
+    del good_residuals, bad_residuals
+    empty_cache()
+
+    print("Applying direct Heretic parameters...")
+    model.abliterate(
+        refusal_directions,
+        direct_parameters.get("direction_index"),
+        build_parameters(),
+    )
+
+    print("Saving merged model...")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    merged_model = model.get_merged_model()
+    merged_model.save_pretrained(output_dir)
+    del merged_model
+    empty_cache()
+    model.tokenizer.save_pretrained(output_dir)
+
+    summary_path = output_dir / "model_forge_sota_heretic.json"
+    summary_path.write_text(json.dumps({{
+        "backend": "heretic",
+        "recipe": direct_parameters.get("recipe", "direct_parameters"),
+        "source_model": settings.model,
+        "output_dir": str(output_dir),
+        "work_dir": str(work_dir),
+        "direction_index": direct_parameters.get("direction_index"),
+        "parameters": direct_parameters.get("parameters"),
+        "derived_from": direct_parameters.get("derived_from"),
+        "config": str(work_dir / "config.toml"),
+        "notes": direct_parameters.get("notes"),
+    }}, indent=2) + "\\n")
+    print(f"Wrote {{summary_path}}")
+
+
+if __name__ == "__main__":
+    main()
+'''
+    runner.write_text(script)
+    return runner
+
+
 def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str | None = None) -> dict[str, Any]:
     selected_plan = build_sota_plan(config, config_path, backend)
     work_dir = Path(selected_plan["work_dir"])
@@ -1022,7 +1160,10 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
             paths["obliteratus_runner"] = str(write_obliteratus_runner(plan))
         elif name == "heretic":
             paths["heretic_config"] = str(write_heretic_config(plan))
-            paths["heretic_runner"] = str(write_heretic_runner(plan))
+            if plan["backend_config"].get("direct_parameters"):
+                paths["heretic_runner"] = str(write_heretic_direct_runner(plan))
+            else:
+                paths["heretic_runner"] = str(write_heretic_runner(plan))
     readme = work_dir / "README.md"
     readme.write_text(
         "\n".join([

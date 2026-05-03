@@ -90,8 +90,27 @@ Select Heretic explicitly:
 The SOTA output path for Gemma is:
 
 ```text
-~/models/gemma-4-26B-A4B-it-local-abliterated-sota
+~/models/gemma-4-26B-A4B-it-local-abliterated-sota-internal-t34
 ```
+
+The base Gemma recipe in `configs/abliteration/gemma4_26b_a4b_local_abli.yaml`
+uses Heretic with model-forge internal prompts and saves the selected Pareto
+trial `[Trial  34] Refusals:  1/27, KL divergence: 0.0183`.
+
+The FT Gemopus recipe in
+`configs/abliteration/gemma4_26b_a4b_ft_local_abli.yaml` reuses those selected
+t34 Heretic parameters, but computes fresh refusal directions on
+`Jackrong/Gemopus-4-26B-A4B-it`. This produced the r7 model:
+
+```text
+~/models/Gemopus-4-26B-A4B-it-local-abliterated-sota-internal-r7-selected-t34-transfer
+```
+
+That direct-transfer path intentionally skips Heretic's full-response
+optimization evaluator during export on DGX Spark. The checkpoint should be
+judged with model-forge evals after serving. In the recorded r7 run, refusal
+suppression matched or beat the downloaded abli while preserving the FT model's
+normal-use and challenge capability scores.
 
 Do not run collection while a vLLM server is active. Keep one large model
 process at a time.

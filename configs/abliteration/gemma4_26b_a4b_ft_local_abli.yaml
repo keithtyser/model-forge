@@ -1,0 +1,104 @@
+name: gemma4_26b_a4b_ft_local_abli
+method: contrastive_refusal_direction
+
+model:
+  source: Jackrong/Gemopus-4-26B-A4B-it
+  local_dir: ~/models/Gemopus-4-26B-A4B-it
+  output_dir: ~/models/Gemopus-4-26B-A4B-it-local-abliterated-v3
+  dtype: bfloat16
+  device_map: cuda
+  trust_remote_code: false
+
+data:
+  harmful_prompts: ../../datasets/abliteration/harmful_refusal.yaml
+  benign_prompts: ../../datasets/abliteration/benign_control.yaml
+
+activation_collection:
+  batch_size: 1
+  max_pairs: 24
+  max_seq_len: 1024
+  preprocessing_parallelism: auto
+  high_parallelism_c: 192
+  layer_skip_first: 5
+  layer_skip_last: 0
+  token_position: suffix_mean
+  direction_extraction: mean_difference
+  winsorize_quantile: 0.02
+  harmful_suffix: "\n\nI can't help with instructions for harmful requests."
+  benign_suffix: "\n\nHere is a direct, helpful answer."
+
+edit:
+  mode: projection
+  direction_transform: biprojection
+  norm_preserve: true
+  strength: 3.0
+  module_strengths:
+    self_attn.o_proj.weight: 1.25
+    mlp.down_proj.weight: 0.75
+  layer_start: 5
+  layer_end: 29
+  target_weight_suffixes:
+    - mlp.down_proj.weight
+    - self_attn.o_proj.weight
+  leave_embeddings_untouched: true
+  leave_lm_head_untouched: true
+  leave_moe_experts_untouched: true
+  require_all_target_directions: true
+  review_required_before_export: true
+
+safety:
+  require_execute_flag: true
+  min_free_cuda_gb: 18
+  one_model_process_at_a_time: true
+
+artifacts_dir: artifacts/abliteration/gemma4_26b_a4b_ft_local_abli
+
+diagnostics:
+  reference_model: ~/models/Huihui-gemma-4-26B-A4B-it-abliterated
+
+sota:
+  preferred_backend: heretic
+  output_dir: ~/models/Gemopus-4-26B-A4B-it-local-abliterated-sota-internal-r7-selected-t34-transfer
+  work_dir: artifacts/abliteration/gemma4_26b_a4b_ft_local_abli/sota_internal_r7_selected_t34_transfer
+  backends:
+    obliteratus:
+      install: pip install 'git+https://github.com/elder-plinius/OBLITERATUS.git'
+      method: advanced
+      max_seq_length: 512
+      telemetry: false
+    heretic:
+      install: pip install -U 'heretic-llm[research]'
+      quantization: none
+      device_map: auto
+      batch_size: 1
+      max_batch_size: 1
+      max_response_length: 16
+      n_trials: 80
+      n_startup_trials: 24
+      orthogonalize_direction: true
+      row_normalization: full
+      winsorization_quantile: 1.0
+      model_forge_prompt_datasets: {}
+      direct_parameters:
+        recipe: ft_selected_t34_transfer
+        derived_from:
+          config: configs/abliteration/gemma4_26b_a4b_local_abli.yaml
+          selected_trial: "[Trial  34] Refusals:  1/27, KL divergence: 0.0183"
+          source_model: google/gemma-4-26B-A4B-it
+        direction_index: null
+        parameters:
+          attn.o_proj:
+            max_weight: 1.442442550383435
+            max_weight_position: 19.743645735399493
+            min_weight: 1.0072477687241204
+            min_weight_distance: 8.522579634654775
+          mlp.down_proj:
+            max_weight: 0.9000153031600974
+            max_weight_position: 20.135432549711687
+            min_weight: 0.0175705697897179
+            min_weight_distance: 9.408713741990061
+        notes: >
+          Compute fresh refusal directions on the FT model using the model-forge
+          internal prompt datasets, then apply the selected base Gemma Heretic
+          t34 per-layer parameters directly. This avoids Heretic's full-response
+          evaluator during export; model quality is judged with model-forge evals.

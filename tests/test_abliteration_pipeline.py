@@ -106,6 +106,18 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(plan["backend"], "heretic")
         self.assertEqual(plan["backend_config"]["row_normalization"], "full")
 
+    def test_ft_sota_plan_uses_selected_t34_transfer_recipe(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_ft_local_abli.yaml"
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+        direct = plan["backend_config"]["direct_parameters"]
+        self.assertTrue(plan["source_model"].endswith("Gemopus-4-26B-A4B-it"))
+        self.assertTrue(plan["output_dir"].endswith("r7-selected-t34-transfer"))
+        self.assertEqual(direct["recipe"], "ft_selected_t34_transfer")
+        self.assertIsNone(direct["direction_index"])
+        self.assertEqual(direct["derived_from"]["selected_trial"], "[Trial  34] Refusals:  1/27, KL divergence: 0.0183")
+        self.assertIn("attn.o_proj", direct["parameters"])
+        self.assertIn("mlp.down_proj", direct["parameters"])
+
     def test_strict_export_would_catch_missing_last_layer_direction(self) -> None:
         edit = {"layer_start": 5, "layer_end": 29}
         directions = {layer: object() for layer in range(5, 29)}
