@@ -14,7 +14,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Kill model-forge workloads when the host is unhealthy.")
     parser.add_argument("--pattern", default=r"train_trl_sft\.py|model_forge\.pipelines\.finetune")
     parser.add_argument("--cpu-percent", type=float, default=95.0)
-    parser.add_argument("--mem-percent", type=float, default=90.0)
+    parser.add_argument("--mem-percent", type=float, default=96.0)
     parser.add_argument("--interval", type=float, default=10.0)
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()

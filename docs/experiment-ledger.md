@@ -137,7 +137,7 @@ IOWeight=100
 nice=10
 reserve_cores=1
 min_memory_available_start=15%
-min_memory_available_runtime=10%
+min_memory_available_runtime=5%
 min_disk_free=15%
 ```
 

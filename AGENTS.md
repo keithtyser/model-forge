@@ -147,7 +147,7 @@ Run tests:
 - Always leave at least one CPU core free. The fine-tuning runner sets thread
   pools to `max(1, os.cpu_count() - reserve_cores)`.
 - Start only if at least 15% RAM and 15% run-directory disk are free.
-- Stop the job if runtime available RAM falls below 10%. Treat a resource guard
+- Stop the job if runtime available RAM falls below 5%. Treat a resource guard
   trip as a real failure to investigate, not as a warning to ignore.
 - Cap dataloaders. `num_workers` must stay below `usable_cores - 2`; keep
   `persistent_workers` off unless memory headroom is known to be safe.
