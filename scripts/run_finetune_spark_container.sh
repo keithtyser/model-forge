@@ -44,6 +44,7 @@ docker run --rm --gpus all \
   --user "$(id -u):$(id -g)" \
   -e PYTHONPATH="$CONTAINER_PYTHONPATH" \
   -e MODEL_FORGE_DISABLE_SYSTEMD_SCOPE=1 \
+  -e MODEL_FORGE_SKIP_PREPARE="${MODEL_FORGE_SKIP_PREPARE:-0}" \
   -e MODEL_FORGE_RESERVE_CORES="$RESERVE_CORES" \
   -e HF_HOME="$HF_CACHE" \
   -e HF_TOKEN="${HF_TOKEN:-}" \
