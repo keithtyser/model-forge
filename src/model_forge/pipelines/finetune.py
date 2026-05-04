@@ -75,6 +75,7 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
         "trainer": {
             "backend": trainer.get("backend", "trl_sft"),
             "method": trainer.get("method", "qlora"),
+            "device_map": trainer.get("device_map", "auto"),
             "load_in_4bit": bool(trainer.get("load_in_4bit", True)),
             "bf16": bool(trainer.get("bf16", True)),
             "gradient_checkpointing": trainer.get("gradient_checkpointing", True),
@@ -321,6 +322,7 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
 
 
 def train(plan: dict[str, Any], dataset_path: Path) -> None:
+    import inspect
     import torch
     from datasets import load_dataset
     from peft import LoraConfig, prepare_model_for_kbit_training
@@ -339,12 +341,13 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
     tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=plan["model"].get("trust_remote_code", False))
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+    device_map = {"": 0} if plan["trainer"].get("device_map") == "single_gpu" else plan["trainer"].get("device_map", "auto")
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
         trust_remote_code=plan["model"].get("trust_remote_code", False),
         quantization_config=quantization_config,
         torch_dtype=torch.bfloat16 if plan["trainer"].get("bf16", True) else torch.float16,
-        device_map="auto",
+        device_map=device_map,
     )
     if quantization_config is not None:
         model = prepare_model_for_kbit_training(model)
@@ -359,10 +362,9 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
         modules_to_save=list(lora.get("modules_to_save", [])) or None,
     )
     dataset = load_dataset("json", data_files=str(dataset_path), split="train")
-    args = SFTConfig(
+    sft_kwargs = dict(
         output_dir=plan["model"]["output_dir"],
         dataset_text_field="text",
-        max_seq_length=int(plan["model"]["max_seq_length"]),
         per_device_train_batch_size=int(plan["trainer"]["per_device_train_batch_size"]),
         gradient_accumulation_steps=int(plan["trainer"]["gradient_accumulation_steps"]),
         learning_rate=float(plan["trainer"]["learning_rate"]),
@@ -380,7 +382,20 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
         seed=int(plan["trainer"]["seed"]),
         report_to=plan["trainer"]["report_to"],
     )
-    trainer = SFTTrainer(model=model, tokenizer=tokenizer, train_dataset=dataset, peft_config=peft_config, args=args)
+    sft_params = inspect.signature(SFTConfig.__init__).parameters
+    if "max_seq_length" in sft_params:
+        sft_kwargs["max_seq_length"] = int(plan["model"]["max_seq_length"])
+    elif "max_length" in sft_params:
+        sft_kwargs["max_length"] = int(plan["model"]["max_seq_length"])
+    args = SFTConfig(**{key: value for key, value in sft_kwargs.items() if key in sft_params})
+
+    trainer_kwargs = dict(model=model, train_dataset=dataset, peft_config=peft_config, args=args)
+    trainer_params = inspect.signature(SFTTrainer.__init__).parameters
+    if "tokenizer" in trainer_params:
+        trainer_kwargs["tokenizer"] = tokenizer
+    else:
+        trainer_kwargs["processing_class"] = tokenizer
+    trainer = SFTTrainer(**trainer_kwargs)
     trainer.train()
     trainer.save_model(plan["model"]["output_dir"])
     tokenizer.save_pretrained(plan["model"]["output_dir"])
