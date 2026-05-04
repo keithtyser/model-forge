@@ -557,6 +557,9 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
         quantization_config=quantization_config,
         torch_dtype=torch.bfloat16 if plan["trainer"].get("bf16", True) else torch.float16,
         device_map=device_map,
+        low_cpu_mem_usage=True,
+        offload_state_dict=True,
+        use_safetensors=True,
     )
     if quantization_config is not None:
         model = prepare_model_for_kbit_training(model)
