@@ -678,7 +678,11 @@ run_limited() {{
   fi
 }}
 
-run_limited "$PYTHON" {shlex.quote(str(outputs["trainer"]))} --plan {shlex.quote(str(outputs["plan"]))} --prepare-data
+if [[ "${{MODEL_FORGE_SKIP_PREPARE:-0}}" == "1" && -s {shlex.quote(str(run_dir / "train.jsonl"))} ]]; then
+  echo "[model-forge] skipping data prep; existing train.jsonl found"
+else
+  run_limited "$PYTHON" {shlex.quote(str(outputs["trainer"]))} --plan {shlex.quote(str(outputs["plan"]))} --prepare-data
+fi
 run_limited "$PYTHON" {shlex.quote(str(outputs["trainer"]))} --plan {shlex.quote(str(outputs["plan"]))} --train
 """
     outputs["shell"].write_text(run_script)

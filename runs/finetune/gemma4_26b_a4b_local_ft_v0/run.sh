@@ -40,5 +40,9 @@ run_limited() {
   fi
 }
 
-run_limited "$PYTHON" /home/ktyser/projects/model-forge/runs/finetune/gemma4_26b_a4b_local_ft_v0/train_trl_sft.py --plan /home/ktyser/projects/model-forge/runs/finetune/gemma4_26b_a4b_local_ft_v0/plan.json --prepare-data
+if [[ "${MODEL_FORGE_SKIP_PREPARE:-0}" == "1" && -s /home/ktyser/projects/model-forge/runs/finetune/gemma4_26b_a4b_local_ft_v0/train.jsonl ]]; then
+  echo "[model-forge] skipping data prep; existing train.jsonl found"
+else
+  run_limited "$PYTHON" /home/ktyser/projects/model-forge/runs/finetune/gemma4_26b_a4b_local_ft_v0/train_trl_sft.py --plan /home/ktyser/projects/model-forge/runs/finetune/gemma4_26b_a4b_local_ft_v0/plan.json --prepare-data
+fi
 run_limited "$PYTHON" /home/ktyser/projects/model-forge/runs/finetune/gemma4_26b_a4b_local_ft_v0/train_trl_sft.py --plan /home/ktyser/projects/model-forge/runs/finetune/gemma4_26b_a4b_local_ft_v0/plan.json --train

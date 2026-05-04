@@ -100,6 +100,12 @@ It pins `transformers==5.5.0`, which registers Gemma4 while leaving the host and
 base Docker image unchanged. The Spark container launcher prepends this overlay
 to `PYTHONPATH` when present.
 
+Resume training from the completed prepared dataset with:
+
+```bash
+MODEL_FORGE_SKIP_PREPARE=1 scripts/run_finetune_spark_container.sh
+```
+
 ## Resource Guardrails
 
 Status: implemented and pushed.

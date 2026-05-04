@@ -144,6 +144,12 @@ The Spark container launcher prepends
 `runs/finetune/gemma4_26b_a4b_local_ft_v0/python_overlay` to `PYTHONPATH` when
 that directory exists.
 
+If `train.jsonl` already exists from a completed prepare phase, skip re-prep:
+
+```bash
+MODEL_FORGE_SKIP_PREPARE=1 scripts/run_finetune_spark_container.sh
+```
+
 Optional host watchdog:
 
 ```bash
