@@ -71,8 +71,14 @@ Next run:
 
 ```bash
 ./forge finetune gemma4_26b_a4b prepare --overwrite
-runs/finetune/gemma4_26b_a4b_local_ft_v0/run.sh
+scripts/run_finetune_spark_container.sh
 ```
+
+Reason: host Python is currently CPU-only, while `nemotron-runner:latest`
+exposes `NVIDIA GB10` and includes the required TRL/PEFT/bitsandbytes training
+stack. The container launcher mounts repo/model/cache paths at their host paths,
+runs as the current user, and applies Docker CPU/memory limits before invoking
+the generated guarded `run.sh`.
 
 ## Resource Guardrails
 

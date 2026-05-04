@@ -1,0 +1,220 @@
+{
+  "name": "gemma4_26b_a4b_local_ft_v0",
+  "family": "gemma4_26b_a4b",
+  "config_path": "/home/ktyser/projects/model-forge/configs/finetuning/gemma4_26b_a4b_local_ft_v0.yaml",
+  "run_dir": "/home/ktyser/projects/model-forge/runs/finetune/gemma4_26b_a4b_local_ft_v0",
+  "model": {
+    "source": "google/gemma-4-26B-A4B-it",
+    "local_dir": "/home/ktyser/models/gemma-4-26B-A4B-it",
+    "output_dir": "/home/ktyser/models/gemma-4-26B-A4B-it-local-ft-v0",
+    "served_model_name": "local/gemma-4-26B-A4B-it-local-ft-v0",
+    "trust_remote_code": false,
+    "max_seq_length": 8192
+  },
+  "trainer": {
+    "backend": "trl_sft",
+    "method": "qlora",
+    "device_map": "single_gpu",
+    "load_in_4bit": true,
+    "bf16": true,
+    "gradient_checkpointing": true,
+    "per_device_train_batch_size": 1,
+    "gradient_accumulation_steps": 24,
+    "learning_rate": 0.00012,
+    "num_train_epochs": 1.0,
+    "max_steps": null,
+    "warmup_ratio": 0.04,
+    "lr_scheduler_type": "cosine",
+    "optim": "paged_adamw_8bit",
+    "weight_decay": 0.001,
+    "logging_steps": 5,
+    "save_steps": 100,
+    "save_total_limit": 2,
+    "seed": 3407,
+    "report_to": "none"
+  },
+  "lora": {
+    "r": 64,
+    "alpha": 64,
+    "dropout": 0.0,
+    "target_modules": [
+      "q_proj.linear",
+      "k_proj.linear",
+      "v_proj.linear",
+      "o_proj.linear",
+      "gate_proj.linear",
+      "up_proj.linear",
+      "down_proj.linear"
+    ],
+    "modules_to_save": []
+  },
+  "data": {
+    "manifest": "/home/ktyser/projects/model-forge/datasets/finetuning/gemma4_26b_a4b_local_ft_v0.yaml",
+    "format": "messages",
+    "chat_template": "auto",
+    "max_context_window": 8192,
+    "target_samples": 60700,
+    "sources": [
+      {
+        "name": "competitive_programming_python",
+        "role": "code_reasoning",
+        "dataset": "Jackrong/Competitive-Programming-python-blend",
+        "split": "train",
+        "messages_field": "messages",
+        "target_samples": 12000,
+        "license_notes": "Mixed upstream licenses documented in the dataset card.",
+        "rationale": "Strong Python-first competitive programming and code reasoning supervision; directly targets model-forge artifact/code-generation capability.\n"
+      },
+      {
+        "name": "qwen_coder_distill",
+        "role": "code_generation_and_debugging",
+        "dataset": "Jackrong/qwen3-coder-480b-distill-mini",
+        "split": "train",
+        "input_field": "Input",
+        "output_field": "code_output",
+        "target_samples": 8000,
+        "license_notes": "Apache-2.0 per dataset card.",
+        "rationale": "Distilled from a strong code-specialist teacher; balances the programming blend with shorter cleaned code tasks.\n"
+      },
+      {
+        "name": "reasoning_700x",
+        "role": "general_reasoning",
+        "dataset": "Jackrong/Qwen3.5-reasoning-700x",
+        "split": "train",
+        "messages_field": "conversation",
+        "target_samples": 700,
+        "license_notes": "Apache-2.0 dataset card plus Qwen/DashScope upstream terms.",
+        "rationale": "Small but high-signal reasoning set used in Jackrong notebooks; included as a continuity baseline rather than the dominant source.\n"
+      },
+      {
+        "name": "logicmind_chat_reasoning",
+        "role": "multi_turn_reasoning_chat",
+        "dataset": "Jackrong/LogicMind-Chat-Reasoning-SFT-300K",
+        "split": "train",
+        "messages_field": "conversations",
+        "target_samples": 16000,
+        "license_notes": "See dataset card before public release.",
+        "rationale": "Multi-turn reasoning/chat coverage to avoid a pure math-code model and to preserve normal assistant behavior.\n"
+      },
+      {
+        "name": "natural_reasoning_gpt_oss_120b",
+        "role": "natural_reasoning",
+        "dataset": "Jackrong/Natural-Reasoning-gpt-oss-120B-S1",
+        "split": "train",
+        "input_field": "question",
+        "reasoning_field": "CoT_reasoning",
+        "output_field": "anwser",
+        "wrap_reasoning": true,
+        "target_samples": 10000,
+        "license_notes": "See dataset card before public release.",
+        "rationale": "Natural-language reasoning traces diversify away from programming-heavy examples and should help challenge-capability preservation.\n"
+      },
+      {
+        "name": "stem_reasoning_gpt_oss_120b",
+        "role": "stem_reasoning",
+        "dataset": "Jackrong/gpt-oss-120b-reasoning-STEM-5K",
+        "split": "train",
+        "input_field": "Input",
+        "reasoning_field": "CoT_Native\u2014\u2014reasoning",
+        "output_field": "Anwser",
+        "wrap_reasoning": true,
+        "target_samples": 5000,
+        "license_notes": "CC-BY-4.0 per dataset card.",
+        "rationale": "STEM reasoning with explicit final answers; useful for math/science tasks without over-weighting very long math-only traces.\n"
+      },
+      {
+        "name": "sharegpt_reasoning_chat",
+        "role": "instruction_following_chat",
+        "dataset": "Jackrong/ShareGPT-gpt-oss-120B-reasoning",
+        "split": "train",
+        "messages_field": "conversation",
+        "target_samples": 9000,
+        "license_notes": "See dataset card before public release.",
+        "rationale": "General chat/instruction style to reduce regression risk from a narrow reasoning/code blend.\n"
+      }
+    ],
+    "quality_gates": {
+      "min_turn_chars": 2,
+      "require_assistant_content": true,
+      "reject_unclosed_think": true,
+      "dedupe_by_conversation_hash": true,
+      "max_tokens": 8192,
+      "reject_eval_prompt_overlap": true
+    },
+    "holdouts": [
+      "evals/prompts/capability_preservation_challenge.yaml",
+      "evals/prompts/normal_use_regression.yaml",
+      "evals/prompts/agentic_code_debug.yaml",
+      "evals/prompts/artifact_code_generation.yaml",
+      "evals/prompts/artifact_web_design.yaml",
+      "evals/prompts/agentic_tool_use_json.yaml"
+    ]
+  },
+  "eval": {
+    "baseline_variant": "ft",
+    "source_variant": "base",
+    "required_gates": {
+      "challenge_capability_vs_jackrong_ft": ">= baseline",
+      "paired_benign_quality_vs_jackrong_ft": ">= baseline",
+      "normal_use_regression": ">= 0.95",
+      "artifact_quality": "manual_review_no_critical_regression",
+      "external_ifeval": ">= jackrong_ft_minus_eval_variance"
+    },
+    "commands": [
+      "MODEL_FORGE_TRIALS=3 ./forge eval gemma4_26b_a4b local_ft --internal",
+      "./forge eval gemma4_26b_a4b local_ft --artifact",
+      "./forge eval gemma4_26b_a4b local_ft --external",
+      "./forge compare gemma4_26b_a4b"
+    ]
+  },
+  "hardware": {
+    "profile": "dgx_spark",
+    "label": "DGX Spark / GB10 unified memory",
+    "gpus": [
+      {
+        "name": "NVIDIA GB10",
+        "memory_total_mb": 0
+      }
+    ],
+    "training_env": {
+      "MODEL_FORGE_PARALLELISM": "32",
+      "MODEL_FORGE_HIGH_PARALLELISM": "192",
+      "TOKENIZERS_PARALLELISM": "true",
+      "OMP_NUM_THREADS": "1"
+    },
+    "notes": [
+      "Use a Spark/GB10-native vLLM build; stock wheels are usually not compiled for SM 12.1.",
+      "Conservative DGX Spark cap; raise GPU_MEMORY_UTILIZATION only after smoke serving passes.",
+      "Use FP8 KV cache, chunked prefill, prefix caching, and low max-num-seqs to preserve unified-memory headroom.",
+      "For NVFP4 MoE, keep routers and multimodal projection/vision modules in BF16 unless model-specific evals prove otherwise.",
+      "For CPU/input-pipeline bottlenecks, DGX Spark can benefit from high parallelism such as c=192, but gate it behind an explicit override."
+    ]
+  },
+  "resource_policy": {
+    "cpu_quota": "80%",
+    "memory_max": "85%",
+    "io_weight": 100,
+    "nice": 10,
+    "reserve_cores": 1,
+    "min_memory_available_start": 0.15,
+    "min_memory_available_runtime": 0.1,
+    "min_disk_free": 0.15,
+    "monitor_interval_seconds": 30,
+    "dataloader_num_workers_max_offset": 2,
+    "persistent_workers_when_memory_tight": false,
+    "checkpoint_on_memory_pressure": true
+  },
+  "baseline": {
+    "target_to_beat": "Jackrong/Gemopus-4-26B-A4B-it",
+    "public_recipe_reference": "https://github.com/R6410418/Jackrong-llm-finetuning-guide",
+    "public_model_reference": "https://huggingface.co/Jackrong/Gemopus-4-26B-A4B-it",
+    "observed_baseline_role": "downloaded_ft_reference_for_model_forge_evals",
+    "strategy_delta": [
+      {
+        "Keep Jackrong's useful pattern": "LoRA/QLoRA SFT over mixed reasoning, coding, math, and chat data."
+      },
+      "Improve over notebook-style mixing with explicit data quality gates, deduplication, holdouts, eval-linked promotion gates, and model-forge artifact preservation.",
+      "Avoid training directly on model-forge eval prompts; train adjacent skills and compare on held-out internal, artifact, and external evals."
+    ]
+  }
+}

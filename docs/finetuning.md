@@ -81,6 +81,18 @@ Start the full training run:
 
 Use `--overwrite` when regenerating run artifacts after editing the config.
 
+On DGX Spark, use the CUDA training container path when host Python is
+CPU-only:
+
+```bash
+./forge finetune gemma4_26b_a4b prepare --overwrite
+scripts/run_finetune_spark_container.sh
+```
+
+The Spark container launcher uses `nemotron-runner:latest`, mounts the repo and
+`~/models` at the same paths, runs as the current user, and applies Docker CPU
+and memory limits before the generated guarded `run.sh` starts.
+
 ## Resource Contract
 
 Training jobs must be tenants on the host, not owners of the host. The generated
@@ -108,6 +120,9 @@ The generated Python runner also enforces:
 Do not bypass `runs/finetune/<name>/run.sh` for full training. If running inside
 a container where `systemd-run` is unavailable, the script falls back to `nice`,
 but the in-process memory, disk, thread, and dataloader guards still apply.
+On this DGX Spark host, unprivileged `systemd-run --scope` may require
+interactive authentication; use `scripts/run_finetune_spark_container.sh` to get
+Docker-enforced CPU and memory limits plus CUDA access.
 
 Optional host watchdog:
 

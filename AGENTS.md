@@ -82,6 +82,14 @@ Plan fine-tuning without loading a model:
 ./forge finetune gemma4_26b_a4b prepare
 ```
 
+Run fine-tuning on DGX Spark only through the guarded CUDA container launcher
+when host Python is CPU-only:
+
+```bash
+./forge finetune gemma4_26b_a4b prepare --overwrite
+scripts/run_finetune_spark_container.sh
+```
+
 ## Fine-Tuning Rules
 
 - Treat Jackrong's public notebooks as a useful baseline pattern, not a final
@@ -131,6 +139,9 @@ Run tests:
 - Full fine-tuning must run through generated `runs/finetune/<name>/run.sh`, not
   an ad hoc `python train.py` command. The launcher wraps data prep and training
   in `systemd-run --scope` when available.
+- If unprivileged `systemd-run --scope` needs interactive auth, use
+  `scripts/run_finetune_spark_container.sh`; it runs the generated `run.sh`
+  inside `nemotron-runner:latest` with Docker CPU/memory limits and CUDA access.
 - Default hard limits are `CPUQuota=80%`, `MemoryMax=85%`, `IOWeight=100`, and
   `nice -n 10`. Do not raise them casually on shared or remote machines.
 - Always leave at least one CPU core free. The fine-tuning runner sets thread
