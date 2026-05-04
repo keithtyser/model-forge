@@ -193,9 +193,12 @@ When publishing a model:
 
 - include a model card linking back to this repo
 - include source model, recipe config, eval scores, and intended-use caveats
+- upload completed models, prepared datasets, and needed eval artifacts to
+  Hugging Face when the owner provides `HF_TOKEN`/`HUGGINGFACE_HUB_TOKEN`
 - keep refusal-ablated models private unless the owner explicitly approves
   public release
 - avoid committing raw model weights into this Git repo
+- never write Hugging Face tokens into tracked files or shell scripts
 
 Repository link for model cards:
 

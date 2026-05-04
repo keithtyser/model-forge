@@ -9,6 +9,8 @@ status so another agent can resume without relying on chat history.
 - Push code, configs, docs, and lightweight run metadata to GitHub.
 - Upload completed model checkpoints and completed prepared datasets to Hugging
   Face.
+- Use the provided Hugging Face token from the environment for future uploads.
+  Do not write the token to a file, command log, model card, config, or commit.
 - Do not upload partial or smoke-test artifacts as final models or datasets.
 - Use `HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN`; never commit tokens.
 
@@ -134,9 +136,9 @@ Observed result: local recipe surpassed the downloaded abli model on the
 model-forge internal suite while preserving capability sufficiently for the
 repo's refusal-removal objective.
 
-Publish status: model upload to Hugging Face should be run with
-`scripts/publish_hf_artifact.py` after confirming the exact winning local folder
-and target repo id.
+Publish status: already uploaded to Hugging Face before the FT handoff. No
+additional upload needed for this completed ablated checkpoint unless the model
+card or files need revision.
 
 ## Ablation: Gemopus FT Local Abli
 
@@ -161,5 +163,6 @@ Observed result: selected run reduced refusals as intended and approximately
 preserved the FT model's paired benign quality and challenge capability, making
 it a successful no-finetune abliteration of the FT checkpoint.
 
-Publish status: model upload to Hugging Face should be run with
-`scripts/publish_hf_artifact.py` after confirming the exact target repo id.
+Publish status: already uploaded to Hugging Face before the FT handoff. No
+additional upload needed for this completed ablated checkpoint unless the model
+card or files need revision.
