@@ -13,6 +13,7 @@ results/*
 !results/.gitkeep
 reports/generated/
 runs/
+logs/
 plans/
 models/checkpoints/
 models/merged/

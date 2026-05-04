@@ -175,6 +175,49 @@ def valid_messages(messages: list[dict[str, str]], gates: dict[str, Any]) -> boo
     return True
 
 
+def tokenizer_source(plan: dict[str, Any]) -> str:
+    source = plan["model"].get("local_dir") or plan["model"]["source"]
+    source_path = Path(source).expanduser()
+    config_path = source_path / "tokenizer_config.json"
+    if not config_path.exists():
+        return source
+
+    try:
+        config = json.loads(config_path.read_text())
+    except Exception:
+        return source
+    extra_tokens = config.get("extra_special_tokens")
+    if not isinstance(extra_tokens, list):
+        return source
+
+    compat_dir = Path(plan["run_dir"]) / "tokenizer_compat"
+    compat_dir.mkdir(parents=True, exist_ok=True)
+    for name in (
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "chat_template.jinja",
+        "config.json",
+        "processor_config.json",
+        "generation_config.json",
+    ):
+        src = source_path / name
+        if src.exists():
+            shutil.copy2(src, compat_dir / name)
+
+    patched_config_path = compat_dir / "tokenizer_config.json"
+    patched_config = json.loads(patched_config_path.read_text())
+    mapping: dict[str, str] = {}
+    for index, token in enumerate(extra_tokens):
+        if token == "<|video|>":
+            key = "video_token"
+        else:
+            key = f"extra_special_token_{index}"
+        mapping[key] = token
+    patched_config["extra_special_tokens"] = mapping
+    patched_config_path.write_text(json.dumps(patched_config, indent=2) + "\n")
+    return str(compat_dir)
+
+
 def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = None) -> dict[str, Any]:
     from datasets import Dataset, concatenate_datasets, load_dataset
     from transformers import AutoTokenizer
@@ -184,7 +227,7 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
     guard.start_monitor()
     try:
         tokenizer = AutoTokenizer.from_pretrained(
-            plan["model"].get("local_dir") or plan["model"]["source"],
+            tokenizer_source(plan),
             trust_remote_code=plan["model"].get("trust_remote_code", False),
         )
         max_context = int(plan["data"]["max_context_window"])
@@ -295,7 +338,7 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
             bnb_4bit_compute_dtype=torch.bfloat16 if plan["trainer"].get("bf16", True) else torch.float16,
             bnb_4bit_use_double_quant=True,
         )
-    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=plan["model"].get("trust_remote_code", False))
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_source(plan), trust_remote_code=plan["model"].get("trust_remote_code", False))
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     device_map = {"": 0} if plan["trainer"].get("device_map") == "single_gpu" else plan["trainer"].get("device_map", "auto")
