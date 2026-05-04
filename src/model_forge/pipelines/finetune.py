@@ -521,12 +521,14 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
         raw_dataset = load_dataset("json", data_files=str(dataset_path), split="train")
 
         def tokenize_batch(batch):
-            return tokenizer(
+            tokenized = tokenizer(
                 batch["text"],
                 truncation=True,
                 max_length=int(plan["model"]["max_seq_length"]),
                 padding=False,
             )
+            tokenized["mm_token_type_ids"] = [[0] * len(input_ids) for input_ids in tokenized["input_ids"]]
+            return tokenized
 
         dataset = raw_dataset.map(
             tokenize_batch,
