@@ -124,6 +124,26 @@ On this DGX Spark host, unprivileged `systemd-run --scope` may require
 interactive authentication; use `scripts/run_finetune_spark_container.sh` to get
 Docker-enforced CPU and memory limits plus CUDA access.
 
+Gemma 4 requires Transformers with `model_type=gemma4` support. If the Spark
+training image still ships a v4 Transformers stack, create a run-local overlay
+inside the guarded container instead of modifying host packages:
+
+```bash
+docker run --rm --gpus all --cpus=4 --memory=32g \
+  --user "$(id -u):$(id -g)" \
+  --entrypoint bash \
+  -v "$PWD:$PWD" \
+  -w "$PWD" \
+  nemotron-runner:latest \
+  -lc 'python3 -m pip install --no-cache-dir \
+    --target runs/finetune/gemma4_26b_a4b_local_ft_v0/python_overlay \
+    "transformers==5.5.0"'
+```
+
+The Spark container launcher prepends
+`runs/finetune/gemma4_26b_a4b_local_ft_v0/python_overlay` to `PYTHONPATH` when
+that directory exists.
+
 Optional host watchdog:
 
 ```bash

@@ -80,6 +80,26 @@ stack. The container launcher mounts repo/model/cache paths at their host paths,
 runs as the current user, and applies Docker CPU/memory limits before invoking
 the generated guarded `run.sh`.
 
+Current data-prep result:
+
+```text
+runs/finetune/gemma4_26b_a4b_local_ft_v0/train.jsonl
+rows: 40189
+size: 801 MB
+```
+
+Training blocker found after data prep: the base Spark training image has
+Transformers 4.57.6, which does not recognize `model_type=gemma4`. A run-local
+Python overlay was created at:
+
+```text
+runs/finetune/gemma4_26b_a4b_local_ft_v0/python_overlay
+```
+
+It pins `transformers==5.5.0`, which registers Gemma4 while leaving the host and
+base Docker image unchanged. The Spark container launcher prepends this overlay
+to `PYTHONPATH` when present.
+
 ## Resource Guardrails
 
 Status: implemented and pushed.

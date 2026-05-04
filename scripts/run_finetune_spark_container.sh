@@ -6,6 +6,11 @@ RUN_DIR="${MODEL_FORGE_FINETUNE_RUN_DIR:-$REPO_DIR/runs/finetune/gemma4_26b_a4b_
 IMAGE="${MODEL_FORGE_TRAIN_IMAGE:-nemotron-runner:latest}"
 MODELS_DIR="${MODEL_FORGE_MODELS_DIR:-$HOME/models}"
 HF_CACHE="${HF_HOME:-$HOME/.cache/huggingface}"
+PYTHON_OVERLAY="${MODEL_FORGE_PYTHON_OVERLAY:-$RUN_DIR/python_overlay}"
+CONTAINER_PYTHONPATH="$REPO_DIR/src"
+if [[ -d "$PYTHON_OVERLAY" ]]; then
+  CONTAINER_PYTHONPATH="$PYTHON_OVERLAY:$CONTAINER_PYTHONPATH"
+fi
 
 TOTAL_MEM_GB="$(awk '/MemTotal/ {printf "%d", ($2 / 1024 / 1024) * 0.85}' /proc/meminfo)"
 TOTAL_CPUS="$(getconf _NPROCESSORS_ONLN)"
@@ -27,6 +32,7 @@ echo "[model-forge] run dir: $RUN_DIR"
 echo "[model-forge] docker CPU limit: ${CPU_LIMIT}"
 echo "[model-forge] docker memory limit: ${TOTAL_MEM_GB}g"
 echo "[model-forge] reserve cores inside runner: ${RESERVE_CORES}"
+echo "[model-forge] python path: ${CONTAINER_PYTHONPATH}"
 df -h /
 
 docker run --rm --gpus all \
@@ -36,7 +42,7 @@ docker run --rm --gpus all \
   --shm-size="${MODEL_FORGE_SHM_SIZE:-64g}" \
   --pids-limit="${MODEL_FORGE_PIDS_LIMIT:-4096}" \
   --user "$(id -u):$(id -g)" \
-  -e PYTHONPATH="$REPO_DIR/src" \
+  -e PYTHONPATH="$CONTAINER_PYTHONPATH" \
   -e MODEL_FORGE_DISABLE_SYSTEMD_SCOPE=1 \
   -e MODEL_FORGE_RESERVE_CORES="$RESERVE_CORES" \
   -e HF_HOME="$HF_CACHE" \
