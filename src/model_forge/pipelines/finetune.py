@@ -182,8 +182,10 @@ TRAINER_SCRIPT = r'''#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
+import gc
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -482,11 +484,11 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
 def train(plan: dict[str, Any], dataset_path: Path) -> None:
     import inspect
     import torch
-    from datasets import load_dataset
-    from peft import LoraConfig, prepare_model_for_kbit_training
+    from datasets import load_dataset, load_from_disk
+    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
     from transformers import TrainerCallback
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-    from trl import SFTConfig, SFTTrainer
+    from transformers import DataCollatorForLanguageModeling, Trainer, TrainingArguments
 
     guard = ResourceGuard(plan, Path(plan["run_dir"]))
     guard.preflight()
@@ -509,6 +511,34 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
                 raise
             return control
 
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_source(plan), trust_remote_code=plan["model"].get("trust_remote_code", False))
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    tokenized_path = Path(plan["run_dir"]) / "tokenized_train"
+    if tokenized_path.exists():
+        dataset = load_from_disk(str(tokenized_path))
+    else:
+        raw_dataset = load_dataset("json", data_files=str(dataset_path), split="train")
+
+        def tokenize_batch(batch):
+            return tokenizer(
+                batch["text"],
+                truncation=True,
+                max_length=int(plan["model"]["max_seq_length"]),
+                padding=False,
+            )
+
+        dataset = raw_dataset.map(
+            tokenize_batch,
+            batched=True,
+            remove_columns=raw_dataset.column_names,
+            desc="Tokenizing train dataset",
+        )
+        dataset.save_to_disk(str(tokenized_path))
+        del raw_dataset
+    gc.collect()
+    guard.check_runtime()
+
     model_id = plan["model"].get("local_dir") or plan["model"]["source"]
     quantization_config = None
     if plan["trainer"].get("load_in_4bit", True):
@@ -518,9 +548,6 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
             bnb_4bit_compute_dtype=torch.bfloat16 if plan["trainer"].get("bf16", True) else torch.float16,
             bnb_4bit_use_double_quant=True,
         )
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_source(plan), trust_remote_code=plan["model"].get("trust_remote_code", False))
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
     device_map = {"": 0} if plan["trainer"].get("device_map") == "single_gpu" else plan["trainer"].get("device_map", "auto")
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
@@ -531,6 +558,8 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
     )
     if quantization_config is not None:
         model = prepare_model_for_kbit_training(model)
+    if hasattr(model, "config"):
+        model.config.use_cache = False
     lora = plan["lora"]
     peft_config = LoraConfig(
         r=int(lora["r"]),
@@ -541,16 +570,24 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
         target_modules=list(lora["target_modules"]),
         modules_to_save=list(lora.get("modules_to_save", [])) or None,
     )
-    dataset = load_dataset("json", data_files=str(dataset_path), split="train")
-    sft_kwargs = dict(
+    model = get_peft_model(model, peft_config)
+
+    max_steps = plan["trainer"].get("max_steps") or -1
+    if max_steps and int(max_steps) > 0:
+        warmup_steps = max(0, int(math.ceil(int(max_steps) * float(plan["trainer"]["warmup_ratio"]))))
+    else:
+        effective_batch = int(plan["trainer"]["per_device_train_batch_size"]) * int(plan["trainer"]["gradient_accumulation_steps"])
+        steps_per_epoch = max(1, math.ceil(len(dataset) / max(1, effective_batch)))
+        warmup_steps = max(0, int(math.ceil(steps_per_epoch * float(plan["trainer"]["num_train_epochs"]) * float(plan["trainer"]["warmup_ratio"]))))
+
+    training_kwargs = dict(
         output_dir=plan["model"]["output_dir"],
-        dataset_text_field="text",
         per_device_train_batch_size=int(plan["trainer"]["per_device_train_batch_size"]),
         gradient_accumulation_steps=int(plan["trainer"]["gradient_accumulation_steps"]),
         learning_rate=float(plan["trainer"]["learning_rate"]),
         num_train_epochs=float(plan["trainer"]["num_train_epochs"]),
-        max_steps=plan["trainer"].get("max_steps") or -1,
-        warmup_ratio=float(plan["trainer"]["warmup_ratio"]),
+        max_steps=max_steps,
+        warmup_steps=warmup_steps,
         lr_scheduler_type=plan["trainer"]["lr_scheduler_type"],
         optim=plan["trainer"]["optim"],
         weight_decay=float(plan["trainer"]["weight_decay"]),
@@ -561,33 +598,38 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
         gradient_checkpointing=bool(plan["trainer"]["gradient_checkpointing"]),
         seed=int(plan["trainer"]["seed"]),
         report_to=plan["trainer"]["report_to"],
+        save_strategy="steps",
+        remove_unused_columns=False,
     )
     worker_offset = int(plan.get("resource_policy", {}).get("dataloader_num_workers_max_offset", 2))
     max_workers = max(0, guard.usable_cores() - worker_offset)
     configured_workers = int(plan["trainer"].get("dataloader_num_workers", 0) or 0)
     dataloader_workers = min(configured_workers, max_workers)
-    sft_kwargs["dataloader_num_workers"] = dataloader_workers
-    sft_kwargs["dataloader_persistent_workers"] = (
+    training_kwargs["dataloader_num_workers"] = dataloader_workers
+    training_kwargs["dataloader_persistent_workers"] = (
         bool(plan["trainer"].get("dataloader_persistent_workers", False))
         and dataloader_workers > 0
         and bool(plan.get("resource_policy", {}).get("persistent_workers_when_memory_tight", False))
     )
     if dataloader_workers > 0:
-        sft_kwargs["dataloader_prefetch_factor"] = min(int(plan["trainer"].get("dataloader_prefetch_factor", 2) or 2), 2)
-    sft_params = inspect.signature(SFTConfig.__init__).parameters
-    if "max_seq_length" in sft_params:
-        sft_kwargs["max_seq_length"] = int(plan["model"]["max_seq_length"])
-    elif "max_length" in sft_params:
-        sft_kwargs["max_length"] = int(plan["model"]["max_seq_length"])
-    args = SFTConfig(**{key: value for key, value in sft_kwargs.items() if key in sft_params})
+        training_kwargs["dataloader_prefetch_factor"] = min(int(plan["trainer"].get("dataloader_prefetch_factor", 2) or 2), 2)
+    args_params = inspect.signature(TrainingArguments.__init__).parameters
+    if "gradient_checkpointing_kwargs" in args_params:
+        training_kwargs["gradient_checkpointing_kwargs"] = {"use_reentrant": False}
+    args = TrainingArguments(**{key: value for key, value in training_kwargs.items() if key in args_params})
 
-    trainer_kwargs = dict(model=model, train_dataset=dataset, peft_config=peft_config, args=args)
-    trainer_params = inspect.signature(SFTTrainer.__init__).parameters
-    if "tokenizer" in trainer_params:
-        trainer_kwargs["tokenizer"] = tokenizer
-    else:
+    trainer_kwargs = dict(
+        model=model,
+        train_dataset=dataset,
+        args=args,
+        data_collator=DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False),
+    )
+    trainer_params = inspect.signature(Trainer.__init__).parameters
+    if "processing_class" in trainer_params:
         trainer_kwargs["processing_class"] = tokenizer
-    trainer = SFTTrainer(**trainer_kwargs)
+    elif "tokenizer" in trainer_params:
+        trainer_kwargs["tokenizer"] = tokenizer
+    trainer = Trainer(**trainer_kwargs)
     trainer.add_callback(ResourceGuardCallback())
     try:
         trainer.train()

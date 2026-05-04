@@ -100,6 +100,12 @@ It pins `transformers==5.5.0`, which registers Gemma4 while leaving the host and
 base Docker image unchanged. The Spark container launcher prepends this overlay
 to `PYTHONPATH` when present.
 
+Second training blocker found after model load: TRL tokenized the raw text
+dataset after loading the 26B model, pushing available host memory below the
+10% runtime floor. The trainer now uses a lean HF causal-LM `Trainer` path:
+tokenize/cache `train.jsonl` to `tokenized_train` before model load, release raw
+text, then load the QLoRA model and train.
+
 Resume training from the completed prepared dataset with:
 
 ```bash

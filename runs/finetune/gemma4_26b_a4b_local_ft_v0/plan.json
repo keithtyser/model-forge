@@ -12,7 +12,7 @@
     "max_seq_length": 8192
   },
   "trainer": {
-    "backend": "trl_sft",
+    "backend": "hf_causal_lm",
     "method": "qlora",
     "device_map": "single_gpu",
     "load_in_4bit": true,
