@@ -290,6 +290,8 @@ forge                    Main user-facing command
 
 - Keep the public workflow short and reproducible.
 - Preserve raw outputs so results can be inspected.
+- Record experiment hypotheses, artifact paths, validation, and publish status
+  in `docs/experiment-ledger.md` so another agent can resume cleanly.
 - Use external benchmarks instead of trusting only local checks.
 - Treat ablation success as fewer refusals while preserving capability; report
   unsafe compliance separately as risk.

@@ -20,6 +20,8 @@ reusable pipeline code over one-off scripts.
 - `docs/finetuning.md`: SFT/QLoRA workflow and promotion gates
 - `docs/abliteration.md`: refusal-ablation methodology and promotion criteria
 - `docs/evaluation-strategy.md`: eval design and interpretation
+- `docs/experiment-ledger.md`: handoff ledger for hypotheses, experiments,
+  artifacts, validation, and publish status
 - `docs/spark-optimizations.md`: DGX Spark hardware profile, AEON-7-derived
   serving/quantization lessons, and safe overrides
 - `configs/model_families/`: model family registry
@@ -42,6 +44,8 @@ reusable pipeline code over one-off scripts.
 8. Promote only when refusal suppression improves and source-model capability is
    preserved within expected eval variance.
 9. Save raw responses, scores, model cards, and exact recipe/config paths.
+10. Update `docs/experiment-ledger.md` before handing off or starting a long
+   run.
 
 ## Useful Commands
 
