@@ -124,6 +124,20 @@ Run tests:
 
 ## Hardware Discipline
 
+- Full fine-tuning must run through generated `runs/finetune/<name>/run.sh`, not
+  an ad hoc `python train.py` command. The launcher wraps data prep and training
+  in `systemd-run --scope` when available.
+- Default hard limits are `CPUQuota=80%`, `MemoryMax=85%`, `IOWeight=100`, and
+  `nice -n 10`. Do not raise them casually on shared or remote machines.
+- Always leave at least one CPU core free. The fine-tuning runner sets thread
+  pools to `max(1, os.cpu_count() - reserve_cores)`.
+- Start only if at least 15% RAM and 15% run-directory disk are free.
+- Stop the job if runtime available RAM falls below 10%. Treat a resource guard
+  trip as a real failure to investigate, not as a warning to ignore.
+- Cap dataloaders. `num_workers` must stay below `usable_cores - 2`; keep
+  `persistent_workers` off unless memory headroom is known to be safe.
+- Keep checkpoint rotation enabled with a small `save_total_limit`.
+- Prefer slower over an unreachable machine.
 - Assume large checkpoints can exhaust memory.
 - Keep one large model process or vLLM server active at a time.
 - On DGX Spark, prefer conservative settings first: `GPU_MEMORY_UTILIZATION=0.85`,
@@ -138,6 +152,14 @@ Run tests:
   in BF16 unless a family-specific recipe and eval pass justify otherwise.
 - `MODEL_FORGE_PARALLELISM=192` is for preprocessing/input-pipeline work, not
   for multiplying large model forward passes.
+- Optional watchdog, started outside the training job:
+
+```bash
+nohup .venv/bin/python scripts/model_forge_watchdog.py \
+  --pattern 'train_trl_sft.py|model_forge.pipelines.finetune' \
+  > logs/model_forge_watchdog.log 2>&1 &
+```
+
 - Stop `vllm_node` when finished:
 
 ```bash

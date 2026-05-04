@@ -81,6 +81,45 @@ Start the full training run:
 
 Use `--overwrite` when regenerating run artifacts after editing the config.
 
+## Resource Contract
+
+Training jobs must be tenants on the host, not owners of the host. The generated
+`run.sh` enforces the default contract before launching data prep or training:
+
+```bash
+systemd-run --scope \
+  -p CPUQuota=80% \
+  -p MemoryMax=85% \
+  -p IOWeight=100 \
+  nice -n 10 ...
+```
+
+The generated Python runner also enforces:
+
+- one reserved CPU core by default
+- `OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `NUMEXPR_NUM_THREADS`, and
+  `OPENBLAS_NUM_THREADS` capped to usable cores
+- start-time memory check requiring at least 15% free RAM
+- runtime memory check requiring at least 10% free RAM
+- disk check requiring at least 15% free space under the run directory
+- dataloader worker caps of `num_workers <= usable_cores - 2`
+- checkpoint rotation through `save_total_limit`
+
+Do not bypass `runs/finetune/<name>/run.sh` for full training. If running inside
+a container where `systemd-run` is unavailable, the script falls back to `nice`,
+but the in-process memory, disk, thread, and dataloader guards still apply.
+
+Optional host watchdog:
+
+```bash
+nohup .venv/bin/python scripts/model_forge_watchdog.py \
+  --pattern 'train_trl_sft.py|model_forge.pipelines.finetune' \
+  > logs/model_forge_watchdog.log 2>&1 &
+```
+
+The watchdog is deliberately not auto-started. Run it outside the training job
+when you want a crude emergency brake for CPU plus memory pressure.
+
 ## DGX Spark Defaults
 
 The Gemma recipe is QLoRA by default:

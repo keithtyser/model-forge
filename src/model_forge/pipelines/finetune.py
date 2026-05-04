@@ -56,6 +56,7 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
     trainer = config["trainer"]
     lora = config.get("lora", {})
     eval_cfg = config.get("eval", {})
+    resource_policy = config.get("resource_policy", {})
     sources = data_manifest.get("sources", [])
     total_target = sum(int(source.get("target_samples", 0) or 0) for source in sources)
 
@@ -124,6 +125,20 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "training_env": training_env,
             "notes": list(hardware.notes),
         },
+        "resource_policy": {
+            "cpu_quota": str(resource_policy.get("cpu_quota", "80%")),
+            "memory_max": str(resource_policy.get("memory_max", "85%")),
+            "io_weight": int(resource_policy.get("io_weight", 100)),
+            "nice": int(resource_policy.get("nice", 10)),
+            "reserve_cores": int(resource_policy.get("reserve_cores", 1)),
+            "min_memory_available_start": float(resource_policy.get("min_memory_available_start", 0.15)),
+            "min_memory_available_runtime": float(resource_policy.get("min_memory_available_runtime", 0.10)),
+            "min_disk_free": float(resource_policy.get("min_disk_free", 0.15)),
+            "monitor_interval_seconds": int(resource_policy.get("monitor_interval_seconds", 30)),
+            "dataloader_num_workers_max_offset": int(resource_policy.get("dataloader_num_workers_max_offset", 2)),
+            "persistent_workers_when_memory_tight": bool(resource_policy.get("persistent_workers_when_memory_tight", False)),
+            "checkpoint_on_memory_pressure": bool(resource_policy.get("checkpoint_on_memory_pressure", True)),
+        },
         "baseline": config.get("baseline", {}),
     }
 
@@ -142,6 +157,8 @@ def render_plan(plan: dict[str, Any]) -> None:
     table.add_row("LoRA r/alpha", f"{plan['lora']['r']}/{plan['lora']['alpha']}")
     table.add_row("Target samples", str(plan["data"]["target_samples"]))
     table.add_row("Hardware", plan["hardware"]["label"])
+    table.add_row("CPU quota", plan["resource_policy"]["cpu_quota"])
+    table.add_row("Memory max", plan["resource_policy"]["memory_max"])
     console.print(table)
     if plan["data"]["sources"]:
         sources = Table(title="Data Blend")
@@ -169,10 +186,101 @@ import hashlib
 import json
 import os
 import re
+import shutil
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+
+class ResourceGuard:
+    def __init__(self, plan: dict[str, Any], run_dir: Path) -> None:
+        self.plan = plan
+        self.policy = plan.get("resource_policy", {})
+        self.run_dir = run_dir
+        self.monitor_interval = int(self.policy.get("monitor_interval_seconds", 30))
+        self._stop = threading.Event()
+        self._last_check = 0.0
+
+    def usable_cores(self) -> int:
+        reserve = int(self.policy.get("reserve_cores", 1))
+        return max(1, (os.cpu_count() or 2) - reserve)
+
+    def configure_threads(self) -> int:
+        cores = self.usable_cores()
+        for key in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+            os.environ[key] = str(cores)
+        os.environ.setdefault("TOKENIZERS_PARALLELISM", "true")
+        try:
+            import torch
+            torch.set_num_threads(cores)
+            torch.set_num_interop_threads(max(1, min(cores, 4)))
+        except Exception:
+            pass
+        return cores
+
+    def _psutil(self):
+        try:
+            import psutil
+            return psutil
+        except Exception as exc:
+            raise RuntimeError("psutil is required for model-forge resource guard") from exc
+
+    def memory_available_ratio(self) -> float:
+        mem = self._psutil().virtual_memory()
+        return float(mem.available) / float(mem.total)
+
+    def disk_free_ratio(self, path: Path | None = None) -> float:
+        target = path or self.run_dir
+        target.mkdir(parents=True, exist_ok=True)
+        usage = shutil.disk_usage(target)
+        return float(usage.free) / float(usage.total)
+
+    def preflight(self) -> None:
+        self.configure_threads()
+        min_mem = float(self.policy.get("min_memory_available_start", 0.15))
+        min_disk = float(self.policy.get("min_disk_free", 0.15))
+        mem_ratio = self.memory_available_ratio()
+        disk_ratio = self.disk_free_ratio()
+        if mem_ratio < min_mem:
+            raise RuntimeError(f"Not enough free memory to start job: {mem_ratio:.1%} available < {min_mem:.1%}")
+        if disk_ratio < min_disk:
+            raise RuntimeError(f"Not enough free disk to start job: {disk_ratio:.1%} free < {min_disk:.1%}")
+
+    def check_runtime(self) -> None:
+        min_mem = float(self.policy.get("min_memory_available_runtime", 0.10))
+        min_disk = float(self.policy.get("min_disk_free", 0.15))
+        mem_ratio = self.memory_available_ratio()
+        disk_ratio = self.disk_free_ratio()
+        if mem_ratio < min_mem:
+            raise RuntimeError(f"Resource guard stopping job: memory available {mem_ratio:.1%} < {min_mem:.1%}")
+        if disk_ratio < min_disk:
+            raise RuntimeError(f"Resource guard stopping job: disk free {disk_ratio:.1%} < {min_disk:.1%}")
+
+    def check_runtime_periodically(self) -> None:
+        now = time.monotonic()
+        if now - self._last_check >= self.monitor_interval:
+            self._last_check = now
+            self.check_runtime()
+
+    def start_monitor(self) -> None:
+        def monitor() -> None:
+            while not self._stop.wait(self.monitor_interval):
+                try:
+                    self.check_runtime()
+                except Exception as exc:
+                    payload = {"error": str(exc), "time": time.time()}
+                    self.run_dir.mkdir(parents=True, exist_ok=True)
+                    (self.run_dir / "resource_guard_abort.json").write_text(json.dumps(payload, indent=2) + "\n")
+                    os._exit(75)
+
+        thread = threading.Thread(target=monitor, name="model-forge-resource-guard", daemon=True)
+        thread.start()
+
+    def stop_monitor(self) -> None:
+        self._stop.set()
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -251,74 +359,81 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
     from datasets import Dataset, concatenate_datasets, load_dataset
     from transformers import AutoTokenizer
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        plan["model"].get("local_dir") or plan["model"]["source"],
-        trust_remote_code=plan["model"].get("trust_remote_code", False),
-    )
-    max_context = int(plan["data"]["max_context_window"])
-    gates = plan["data"].get("quality_gates", {})
-    chunks = []
-    source_stats = []
-    seen: set[str] = set()
+    guard = ResourceGuard(plan, Path(plan["run_dir"]))
+    guard.preflight()
+    guard.start_monitor()
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(
+            plan["model"].get("local_dir") or plan["model"]["source"],
+            trust_remote_code=plan["model"].get("trust_remote_code", False),
+        )
+        max_context = int(plan["data"]["max_context_window"])
+        gates = plan["data"].get("quality_gates", {})
+        chunks = []
+        source_stats = []
+        seen: set[str] = set()
 
-    for source in plan["data"]["sources"]:
-        if source.get("enabled", True) is False:
-            continue
-        split = source.get("split", "train")
-        if limit is not None and not source.get("path"):
-            if source.get("subset"):
-                ds_iter = load_dataset(source["dataset"], source["subset"], split=split, streaming=True)
+        for source in plan["data"]["sources"]:
+            if source.get("enabled", True) is False:
+                continue
+            split = source.get("split", "train")
+            if limit is not None and not source.get("path"):
+                if source.get("subset"):
+                    ds_iter = load_dataset(source["dataset"], source["subset"], split=split, streaming=True)
+                else:
+                    ds_iter = load_dataset(source["dataset"], split=split, streaming=True)
+                ds = list(ds_iter.take(limit))
+                target = len(ds)
+            elif source.get("path"):
+                ds = load_dataset("json", data_files=source["path"], split="train")
+                target = int(source.get("target_samples", 0) or len(ds))
+                target = min(target, len(ds))
+                if limit is not None:
+                    target = min(target, limit)
             else:
-                ds_iter = load_dataset(source["dataset"], split=split, streaming=True)
-            ds = list(ds_iter.take(limit))
-            target = len(ds)
-        elif source.get("path"):
-            ds = load_dataset("json", data_files=source["path"], split="train")
-            target = int(source.get("target_samples", 0) or len(ds))
-            target = min(target, len(ds))
-            if limit is not None:
-                target = min(target, limit)
-        else:
-            if source.get("subset"):
-                ds = load_dataset(source["dataset"], source["subset"], split=split)
+                if source.get("subset"):
+                    ds = load_dataset(source["dataset"], source["subset"], split=split)
+                else:
+                    ds = load_dataset(source["dataset"], split=split)
+                target = int(source.get("target_samples", 0) or len(ds))
+                target = min(target, len(ds))
+            if target <= 0:
+                continue
+            if hasattr(ds, "shuffle"):
+                ds = ds.shuffle(seed=int(plan["trainer"]["seed"])).select(range(target))
             else:
-                ds = load_dataset(source["dataset"], split=split)
-            target = int(source.get("target_samples", 0) or len(ds))
-            target = min(target, len(ds))
-        if target <= 0:
-            continue
-        if hasattr(ds, "shuffle"):
-            ds = ds.shuffle(seed=int(plan["trainer"]["seed"])).select(range(target))
-        else:
-            ds = ds[:target]
-        rows = []
-        rejected = 0
-        for example in ds:
-            messages = normalize_messages(example, source)
-            if messages is None or not valid_messages(messages, gates):
-                rejected += 1
-                continue
-            digest = conversation_hash(messages)
-            if digest in seen:
-                rejected += 1
-                continue
-            text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
-            token_count = len(tokenizer(text, add_special_tokens=False)["input_ids"])
-            if token_count > max_context:
-                rejected += 1
-                continue
-            seen.add(digest)
-            rows.append({"id": digest, "source": source.get("name", source.get("dataset", "")), "messages": messages, "text": text, "token_count": token_count})
-        if rows:
-            chunks.append(Dataset.from_list(rows))
-        source_stats.append({"name": source.get("name", source.get("dataset", "")), "sampled": target, "accepted": len(rows), "rejected": rejected})
+                ds = ds[:target]
+            rows = []
+            rejected = 0
+            for example in ds:
+                guard.check_runtime_periodically()
+                messages = normalize_messages(example, source)
+                if messages is None or not valid_messages(messages, gates):
+                    rejected += 1
+                    continue
+                digest = conversation_hash(messages)
+                if digest in seen:
+                    rejected += 1
+                    continue
+                text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
+                token_count = len(tokenizer(text, add_special_tokens=False)["input_ids"])
+                if token_count > max_context:
+                    rejected += 1
+                    continue
+                seen.add(digest)
+                rows.append({"id": digest, "source": source.get("name", source.get("dataset", "")), "messages": messages, "text": text, "token_count": token_count})
+            if rows:
+                chunks.append(Dataset.from_list(rows))
+            source_stats.append({"name": source.get("name", source.get("dataset", "")), "sampled": target, "accepted": len(rows), "rejected": rejected})
 
-    if not chunks:
-        raise SystemExit("no training rows survived data preparation")
-    dataset = concatenate_datasets(chunks).shuffle(seed=int(plan["trainer"]["seed"]))
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    dataset.to_json(str(output_path), orient="records", lines=True, force_ascii=False)
-    return {"output_path": str(output_path), "rows": len(dataset), "sources": source_stats}
+        if not chunks:
+            raise SystemExit("no training rows survived data preparation")
+        dataset = concatenate_datasets(chunks).shuffle(seed=int(plan["trainer"]["seed"]))
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        dataset.to_json(str(output_path), orient="records", lines=True, force_ascii=False)
+        return {"output_path": str(output_path), "rows": len(dataset), "sources": source_stats}
+    finally:
+        guard.stop_monitor()
 
 
 def train(plan: dict[str, Any], dataset_path: Path) -> None:
@@ -326,8 +441,30 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
     import torch
     from datasets import load_dataset
     from peft import LoraConfig, prepare_model_for_kbit_training
+    from transformers import TrainerCallback
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
     from trl import SFTConfig, SFTTrainer
+
+    guard = ResourceGuard(plan, Path(plan["run_dir"]))
+    guard.preflight()
+    guard.start_monitor()
+
+    class ResourceGuardCallback(TrainerCallback):
+        def on_step_end(self, args, state, control, **kwargs):
+            try:
+                guard.check_runtime_periodically()
+            except Exception:
+                if plan.get("resource_policy", {}).get("checkpoint_on_memory_pressure", True):
+                    model = kwargs.get("model")
+                    tokenizer = kwargs.get("processing_class") or kwargs.get("tokenizer")
+                    checkpoint_dir = Path(plan["run_dir"]) / "resource_guard_checkpoint"
+                    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+                    if model is not None:
+                        model.save_pretrained(checkpoint_dir)
+                    if tokenizer is not None:
+                        tokenizer.save_pretrained(checkpoint_dir)
+                raise
+            return control
 
     model_id = plan["model"].get("local_dir") or plan["model"]["source"]
     quantization_config = None
@@ -382,6 +519,18 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
         seed=int(plan["trainer"]["seed"]),
         report_to=plan["trainer"]["report_to"],
     )
+    worker_offset = int(plan.get("resource_policy", {}).get("dataloader_num_workers_max_offset", 2))
+    max_workers = max(0, guard.usable_cores() - worker_offset)
+    configured_workers = int(plan["trainer"].get("dataloader_num_workers", 0) or 0)
+    dataloader_workers = min(configured_workers, max_workers)
+    sft_kwargs["dataloader_num_workers"] = dataloader_workers
+    sft_kwargs["dataloader_persistent_workers"] = (
+        bool(plan["trainer"].get("dataloader_persistent_workers", False))
+        and dataloader_workers > 0
+        and bool(plan.get("resource_policy", {}).get("persistent_workers_when_memory_tight", False))
+    )
+    if dataloader_workers > 0:
+        sft_kwargs["dataloader_prefetch_factor"] = min(int(plan["trainer"].get("dataloader_prefetch_factor", 2) or 2), 2)
     sft_params = inspect.signature(SFTConfig.__init__).parameters
     if "max_seq_length" in sft_params:
         sft_kwargs["max_seq_length"] = int(plan["model"]["max_seq_length"])
@@ -396,9 +545,13 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
     else:
         trainer_kwargs["processing_class"] = tokenizer
     trainer = SFTTrainer(**trainer_kwargs)
-    trainer.train()
-    trainer.save_model(plan["model"]["output_dir"])
-    tokenizer.save_pretrained(plan["model"]["output_dir"])
+    trainer.add_callback(ResourceGuardCallback())
+    try:
+        trainer.train()
+        trainer.save_model(plan["model"]["output_dir"])
+        tokenizer.save_pretrained(plan["model"]["output_dir"])
+    finally:
+        guard.stop_monitor()
 
 
 def main() -> None:
@@ -442,6 +595,7 @@ def write_artifacts(plan: dict[str, Any], *, overwrite: bool = False) -> dict[st
     env_exports = "\n".join(
         f"export {key}={shlex.quote(str(value))}" for key, value in plan["hardware"]["training_env"].items()
     )
+    resource_policy = plan["resource_policy"]
     run_script = f"""#!/usr/bin/env bash
 set -euo pipefail
 cd {shlex.quote(str(REPO_DIR))}
@@ -449,8 +603,40 @@ cd {shlex.quote(str(REPO_DIR))}
 {env_exports}
 
 PYTHON=${{PYTHON:-{shlex.quote(str(REPO_DIR / '.venv' / 'bin' / 'python'))}}}
-"$PYTHON" {shlex.quote(str(outputs["trainer"]))} --plan {shlex.quote(str(outputs["plan"]))} --prepare-data
-"$PYTHON" {shlex.quote(str(outputs["trainer"]))} --plan {shlex.quote(str(outputs["plan"]))} --train
+CPU_QUOTA=${{MODEL_FORGE_CPU_QUOTA:-{shlex.quote(str(resource_policy["cpu_quota"]))}}}
+MEMORY_MAX=${{MODEL_FORGE_MEMORY_MAX:-{shlex.quote(str(resource_policy["memory_max"]))}}}
+IO_WEIGHT=${{MODEL_FORGE_IO_WEIGHT:-{int(resource_policy["io_weight"])}}}
+NICE_LEVEL=${{MODEL_FORGE_NICE:-{int(resource_policy["nice"])}}}
+RESERVE_CORES=${{MODEL_FORGE_RESERVE_CORES:-{int(resource_policy["reserve_cores"])}}}
+export RESERVE_CORES
+USABLE_CORES=$("$PYTHON" - <<'PY'
+import os
+reserve = int(os.environ.get("RESERVE_CORES", "1"))
+print(max(1, (os.cpu_count() or 2) - reserve))
+PY
+)
+export OMP_NUM_THREADS="$USABLE_CORES"
+export MKL_NUM_THREADS="$USABLE_CORES"
+export NUMEXPR_NUM_THREADS="$USABLE_CORES"
+export OPENBLAS_NUM_THREADS="$USABLE_CORES"
+export TOKENIZERS_PARALLELISM="${{TOKENIZERS_PARALLELISM:-true}}"
+
+df -h /
+
+run_limited() {{
+  if command -v systemd-run >/dev/null 2>&1 && [[ ! -f /.dockerenv ]] && [[ "${{MODEL_FORGE_DISABLE_SYSTEMD_SCOPE:-0}}" != "1" ]]; then
+    systemd-run --scope \\
+      -p "CPUQuota=$CPU_QUOTA" \\
+      -p "MemoryMax=$MEMORY_MAX" \\
+      -p "IOWeight=$IO_WEIGHT" \\
+      nice -n "$NICE_LEVEL" "$@"
+  else
+    nice -n "$NICE_LEVEL" "$@"
+  fi
+}}
+
+run_limited "$PYTHON" {shlex.quote(str(outputs["trainer"]))} --plan {shlex.quote(str(outputs["plan"]))} --prepare-data
+run_limited "$PYTHON" {shlex.quote(str(outputs["trainer"]))} --plan {shlex.quote(str(outputs["plan"]))} --train
 """
     outputs["shell"].write_text(run_script)
     outputs["shell"].chmod(0o755)

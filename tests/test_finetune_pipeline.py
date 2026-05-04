@@ -22,6 +22,9 @@ class FinetunePlanTests(unittest.TestCase):
         self.assertEqual(plan["trainer"]["method"], "qlora")
         self.assertEqual(plan["lora"]["r"], 64)
         self.assertEqual(plan["hardware"]["profile"], "dgx_spark")
+        self.assertEqual(plan["resource_policy"]["cpu_quota"], "80%")
+        self.assertEqual(plan["resource_policy"]["memory_max"], "85%")
+        self.assertEqual(plan["resource_policy"]["reserve_cores"], 1)
 
     def test_data_manifest_has_holdouts_and_nontrivial_blend(self) -> None:
         config_path = REPO_DIR / "configs" / "finetuning" / "gemma4_26b_a4b_local_ft_v0.yaml"
@@ -47,6 +50,16 @@ class FinetunePlanTests(unittest.TestCase):
                 self.assertTrue(Path(path).exists(), path)
             self.assertIn("train_trl_sft.py", outputs["trainer"])
             self.assertIn("eval_after_training.sh", outputs["eval"])
+            run_script = Path(outputs["shell"]).read_text()
+            self.assertIn("systemd-run --scope", run_script)
+            self.assertIn("CPUQuota=$CPU_QUOTA", run_script)
+            self.assertIn("MemoryMax=$MEMORY_MAX", run_script)
+            self.assertIn("IOWeight=$IO_WEIGHT", run_script)
+            self.assertIn("OMP_NUM_THREADS", run_script)
+            self.assertIn("nice -n", run_script)
+            trainer_script = Path(outputs["trainer"]).read_text()
+            self.assertIn("class ResourceGuard", trainer_script)
+            self.assertIn("dataloader_num_workers", trainer_script)
 
 
 if __name__ == "__main__":

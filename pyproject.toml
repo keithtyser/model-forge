@@ -9,6 +9,7 @@ description = "Reusable post-training pipelines for fine-tuning, abliteration, a
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+  "psutil>=5.9",
   "pyyaml>=6.0",
   "rich>=13.7",
 ]

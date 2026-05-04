@@ -32,6 +32,20 @@ trainer:
   seed: 3407
   report_to: none
 
+resource_policy:
+  cpu_quota: "80%"
+  memory_max: "85%"
+  io_weight: 100
+  nice: 10
+  reserve_cores: 1
+  min_memory_available_start: 0.15
+  min_memory_available_runtime: 0.10
+  min_disk_free: 0.15
+  monitor_interval_seconds: 30
+  dataloader_num_workers_max_offset: 2
+  persistent_workers_when_memory_tight: false
+  checkpoint_on_memory_pressure: true
+
 lora:
   r: 64
   alpha: 64
