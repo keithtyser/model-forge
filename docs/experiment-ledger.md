@@ -145,6 +145,19 @@ vision lora_B tensors: 0/189 nonzero
 decision: continue full run to step 500
 ```
 
+Checkpoint-200 gate result:
+
+```text
+status: passed
+timestamp: 2026-05-18 10:04 America/New_York
+trainer_state: global_step=200, max_steps=500
+loss tail: step 200 loss=22.157656860351562
+grad_norm tail: step 200 grad_norm=0.5061691403388977
+text lora_B tensors: 205/205 nonzero, max_abs=0.2329128384590149
+vision lora_B tensors: 0/189 nonzero
+decision: continue full run to step 500
+```
+
 The invalid earlier full-run output was moved aside to:
 
 ```text
