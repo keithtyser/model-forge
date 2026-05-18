@@ -283,10 +283,20 @@ MODEL_FORGE_TRIALS=3 ./forge eval gemma4_26b_a4b local_ft --internal
 
 `local_ft` is a PEFT/LoRA adapter variant. Model family configs should mark
 adapter outputs with `adapter: true`, `base_variant: <base>`, and the adapter's
-`lora_rank`. The serve wrapper then loads the base model and registers the
-adapter with vLLM via `--enable-lora --lora-modules`, so evaluation requests
-use the adapter's `served_model_name` while the base checkpoint remains the
-model weights source.
+`lora_rank`. If the serving backend cannot attach LoRA to a model architecture,
+set `serve_strategy: merged` and `merged_local_dir`, then merge once:
+
+```bash
+PYTHONPATH=runs/finetune/gemma4_26b_a4b_local_ft_v0/python_overlay \
+nice -n 10 .venv/bin/python scripts/merge_peft_adapter.py \
+  --base-model /home/ktyser/models/gemma-4-26B-A4B-it \
+  --adapter /home/ktyser/models/gemma-4-26B-A4B-it-local-ft-v0 \
+  --output-dir /home/ktyser/models/gemma-4-26B-A4B-it-local-ft-v0-merged
+```
+
+For non-MoE or LoRA-compatible backends, adapter variants can use live vLLM LoRA
+serving via `--enable-lora --lora-modules`. Evals always use the adapter
+variant's `served_model_name`.
 
 If the FT is weaker than Jackrong, inspect failures by bucket before changing
 hyperparameters. Typical next moves:

@@ -108,7 +108,9 @@ another backend without hard-coding Gemma behavior.
   `base_variant: <base>`, and `lora_rank` in
   `configs/model_families/<family>.yaml`; use `./forge serve <family> local_ft`
   so vLLM loads base weights plus the LoRA adapter instead of trying to serve
-  the adapter directory as a full model.
+  the adapter directory as a full model. If live LoRA serving is unsupported for
+  the architecture, set `serve_strategy: merged`, merge with
+  `scripts/merge_peft_adapter.py`, and serve the merged checkpoint.
 - Use data manifests with explicit source roles, sample targets, schema fields,
   licenses, quality gates, and holdouts.
 - Do not train on model-forge eval prompts. Train adjacent skills and let the

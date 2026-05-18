@@ -149,8 +149,10 @@ references.
 Fine-tuned adapter variants should declare `adapter: true`,
 `base_variant: <base>`, and `lora_rank` in
 `configs/model_families/<family>.yaml`. `./forge serve` will load the base
-checkpoint and attach the adapter through vLLM LoRA serving, while evals keep
-using the adapter `served_model_name`.
+checkpoint and attach the adapter through vLLM LoRA serving when the backend
+supports it. For MoE or backend-limited paths, set `serve_strategy: merged`,
+create the merged checkpoint with `scripts/merge_peft_adapter.py`, and evals
+will still use the adapter `served_model_name`.
 
 ```bash
 ./forge serve gemma4_26b_a4b abli

@@ -132,11 +132,11 @@ VLLM_SPECULATIVE_CONFIG='{"method":"eagle3","model":"/models/drafter","num_specu
 
 When serving a local model path, the wrapper automatically mounts `MODEL_FORGE_MODELS_DIR` into the vLLM container. The default is `$HOME/models`.
 
-Adapter variants are served as base model plus LoRA adapter. In a model family
-config, set `adapter: true`, `base_variant: <variant>`, and `lora_rank` when the
-adapter rank is above vLLM's default. The workflow exports
-`MODEL_FORGE_LORA_MODULES=<served_adapter_name>=<adapter_path>` and enables
-vLLM LoRA serving automatically. Manual override:
+Adapter variants can be served as live LoRA or as merged checkpoints. In a model
+family config, set `adapter: true`, `base_variant: <variant>`, and `lora_rank`
+when the adapter rank is above vLLM's default. For live LoRA serving, the
+workflow exports `MODEL_FORGE_LORA_MODULES=<served_adapter_name>=<adapter_path>`
+and enables vLLM LoRA serving automatically. Manual override:
 
 ```bash
 MODEL_FORGE_MODEL=/home/ktyser/models/base-model \
@@ -146,6 +146,11 @@ VLLM_ENABLE_LORA=1 \
 VLLM_MAX_LORA_RANK=64 \
 ./scripts/dgx_spark_serve_gemma4_26b_a4b.sh
 ```
+
+Some MoE paths do not support live vLLM LoRA serving. Use
+`serve_strategy: merged` plus `merged_local_dir` and create the merged checkpoint
+with `scripts/merge_peft_adapter.py`; `./forge serve` then serves the merged
+directory as a normal full model.
 
 Serve Jackrong's fine-tune:
 

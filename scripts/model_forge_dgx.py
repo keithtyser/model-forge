@@ -60,12 +60,16 @@ def variant_config(family: dict[str, Any], variant: str) -> dict[str, Any]:
     return variants[variant]
 
 
+def local_dir_path(family: dict[str, Any], local_dir: str) -> Path:
+    path = Path(local_dir).expanduser()
+    if path.is_absolute():
+        return path
+    return models_dir(family) / path
+
+
 def variant_local_path(family: dict[str, Any], variant: str) -> Path:
     cfg = variant_config(family, variant)
-    local_dir = Path(cfg["local_dir"]).expanduser()
-    if local_dir.is_absolute():
-        return local_dir
-    return models_dir(family) / local_dir
+    return local_dir_path(family, cfg["local_dir"])
 
 
 def served_model_name(family: dict[str, Any], variant: str) -> str:
@@ -137,6 +141,26 @@ def configure_serving_variant(family: dict[str, Any], variant: str, env: dict[st
         base_variant = cfg.get("base_variant") or cfg.get("adapter_of")
         if not base_variant:
             raise SystemExit(f"adapter variant {variant!r} must set base_variant")
+        merged_local_dir = cfg.get("merged_local_dir")
+        serve_strategy = cfg.get("serve_strategy", "lora")
+        if serve_strategy == "merged":
+            if not merged_local_dir:
+                raise SystemExit(f"adapter variant {variant!r} uses merged serving but has no merged_local_dir")
+            merged_path = local_dir_path(family, str(merged_local_dir))
+            if not merged_path.is_dir():
+                raise SystemExit(
+                    f"merged model path does not exist: {merged_path}\n"
+                    f"merge {path} into the base model before serving this variant"
+                )
+            env["MODEL_FORGE_MODEL"] = str(merged_path)
+            env["MODEL_FORGE_SERVED_MODEL_NAME"] = served_model_name(family, variant)
+            details.update({
+                "model": str(merged_path),
+                "served_model_name": env["MODEL_FORGE_SERVED_MODEL_NAME"],
+                "adapter": f"merged from {path}",
+                "base_variant": str(base_variant),
+            })
+            return details
         base_path = variant_local_path(family, str(base_variant))
         if not base_path.is_dir():
             raise SystemExit(f"adapter base model path does not exist: {base_path}")

@@ -20,6 +20,8 @@ variants:
     adapter: true
     base_variant: base
     lora_rank: 64
+    merged_local_dir: gemma-4-26B-A4B-it-local-ft-v0-merged
+    serve_strategy: merged
     downloadable: false
   abli:
     repo_id: huihui-ai/Huihui-gemma-4-26B-A4B-it-abliterated
