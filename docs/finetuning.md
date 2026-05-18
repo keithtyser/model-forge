@@ -198,7 +198,33 @@ No resource guard abort.
 2048-token Unsloth QLoRA smoke: passed
 1 optimizer step, gradient_accumulation_steps=24, train_loss=97.67
 Step runtime about 117.5s after model load, no resource guard abort.
+
+Corrected 2048-token text-LoRA smoke: passed
+5 optimizer steps, gradient_accumulation_steps=24
+Trainer grad_norm was nonzero at every step.
+Adapter inspection showed 205/205 text lora_B tensors nonzero and 0/189
+vision lora_B tensors nonzero.
 ```
+
+The corrected Gemma recipe targets language-model module base names:
+
+```yaml
+lora:
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+  exclude_modules:
+    - vision_tower
+```
+
+Do not use Gemma vision `.linear` suffixes for text FT LoRA targets. A stopped
+full-run checkpoint showed that suffix pattern only attached adapters under
+`vision_tower`, producing zero text gradients.
 
 Spark can benefit from high preprocessing parallelism, but only enable it
 explicitly:

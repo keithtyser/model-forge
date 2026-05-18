@@ -56,13 +56,15 @@ lora:
   alpha: 64
   dropout: 0.0
   target_modules:
-    - q_proj.linear
-    - k_proj.linear
-    - v_proj.linear
-    - o_proj.linear
-    - gate_proj.linear
-    - up_proj.linear
-    - down_proj.linear
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+  exclude_modules:
+    - vision_tower
   modules_to_save: []
 
 data:

@@ -28,7 +28,8 @@ For prepared datasets, pass `--repo-type dataset`.
 
 ## Fine-Tune: Gemma 4 26B A4B Local FT v0
 
-Status: planned and smoke-tested; no full FT model has been produced yet.
+Status: corrected text-LoRA recipe smoke-tested; no full FT model has been
+produced yet.
 
 Hypothesis: a stricter SFT/QLoRA recipe using Jackrong-style mixed reasoning,
 code, STEM, and chat sources, plus model-forge quality gates and holdouts, can
@@ -53,13 +54,21 @@ Validation completed:
 - data-prep smoke with `--data-limit 2` accepted rows from multiple sources
 - one-step QLoRA smoke loaded the 26B base checkpoint and completed one trainer
   step with temporary `max_seq_length=512`
-- no full data preparation completed
-- no full training completed
+- full data preparation completed: 40,189 rows, 801 MB JSONL, 2048-token
+  tokenized cache created
+- 1024-token and 2048-token Unsloth QLoRA smoke tests completed under resource
+  guardrails
+- corrected 2048-token, 5-step text-LoRA smoke produced nonzero text
+  `lora_B` tensors and nonzero gradients
+- no valid full training completed
 - no local FT checkpoint exists yet
 
-Current blocker: resource governance was added after the host became
-unresponsive under load. Future full FT runs must use the generated guarded
-`run.sh`, not a direct trainer invocation.
+Current blocker: the first full run was stopped after checkpoint 100 because the
+original Gemma target modules used `.linear` suffixes. Those matched the
+`vision_tower` path only, so text loss produced zero-gradient LoRA updates.
+The recipe now targets text modules by base names and excludes `vision_tower`.
+Future full FT runs must use the generated guarded `run.sh`, not a direct
+trainer invocation.
 
 Publish status:
 
@@ -171,10 +180,19 @@ Unsloth 4-bit loader:
 - 1024-token one-step QLoRA smoke passed with gradient_accumulation_steps=24.
 - Smoke train metrics: train_runtime=61.03s, train_samples_per_second=0.393,
   train_steps_per_second=0.016, train_loss=118.6.
-- 2048-token one-step QLoRA smoke passed with gradient_accumulation_steps=24.
-- 2048 smoke train metrics: train_runtime=117.5s,
+- 2048-token one-step QLoRA smoke passed with gradient_accumulation_steps=24,
+  but it was later found to be vision-only LoRA due to bad target modules.
+- 2048 one-step smoke train metrics: train_runtime=117.5s,
   train_samples_per_second=0.204, train_steps_per_second=0.009,
   train_loss=97.67.
+- Full 500-step attempt was stopped after checkpoint 100. Checkpoint inspection
+  showed all 189 LoRA tensors were under `vision_tower`, all `lora_B` tensors
+  were zero, and trainer logs reported grad_norm=0.0.
+- Corrected 2048-token, 5-step text-LoRA smoke passed. Trainer logs showed
+  nonzero grad_norm at every step; final loss decreased from 97.67 to 49.93.
+- Corrected smoke adapter inspection:
+  text `lora_B` tensors: 205/205 nonzero, max_abs=0.008142.
+  vision `lora_B` tensors: 0/189 nonzero.
 ```
 
 Recipe changes:
@@ -188,13 +206,17 @@ trainer.group_by_length=true
 trainer.pad_to_multiple_of=256
 trainer.torch_dynamo_recompile_limit=128
 tokenized_train caches are keyed by max_seq_length
+lora.target_modules=q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj
+lora.exclude_modules=vision_tower
 ```
 
 Justification: Unsloth preserves the guarded Spark runtime while avoiding the
 HF loader's host-memory spike. Compile is disabled for this Gemma 4 recipe
 because the compiled Unsloth Gemma 4 path hit a hard Torch Dynamo fullgraph
 recompile limit during gradient accumulation. Revisit compile after a successful
-full FT and eval pass.
+full FT and eval pass. Gemma 4 target modules must use language-model module
+base names, not vision `.linear` suffixes; the 5-step smoke is the guard against
+silently training the wrong adapter path.
 
 ## Ablation: Gemma 4 26B A4B Base Local Abli
 

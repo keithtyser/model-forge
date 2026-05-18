@@ -106,6 +106,7 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "alpha": int(lora.get("alpha", lora.get("r", 64))),
             "dropout": float(lora.get("dropout", 0.0)),
             "target_modules": list(lora.get("target_modules", [])),
+            "exclude_modules": list(lora.get("exclude_modules", [])),
             "modules_to_save": list(lora.get("modules_to_save", [])),
         },
         "data": {
@@ -611,9 +612,8 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
         model.config.use_cache = False
     lora = plan["lora"]
     modules_to_save = list(lora.get("modules_to_save", []))
+    exclude_modules = list(lora.get("exclude_modules", []))
     if backend == "unsloth":
-        if modules_to_save:
-            raise ValueError("model-forge unsloth backend does not support modules_to_save yet; use hf_causal_lm")
         model = FastLanguageModel.get_peft_model(
             model,
             r=int(lora["r"]),
@@ -623,6 +623,8 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
             bias="none",
             use_gradient_checkpointing="unsloth" if plan["trainer"].get("gradient_checkpointing", True) else False,
             random_state=int(plan["trainer"]["seed"]),
+            modules_to_save=modules_to_save or None,
+            exclude_modules=exclude_modules or None,
         )
         FastLanguageModel.for_training(model)
     else:
@@ -633,6 +635,7 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
             bias="none",
             task_type="CAUSAL_LM",
             target_modules=list(lora["target_modules"]),
+            exclude_modules=exclude_modules or None,
             modules_to_save=modules_to_save or None,
         )
         model = get_peft_model(model, peft_config)
