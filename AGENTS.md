@@ -104,6 +104,11 @@ another backend without hard-coding Gemma behavior.
   recipe to copy.
 - Keep the fine-tune recipe model-family agnostic: source model, LoRA targets,
   context length, data blend, and output variant belong in YAML.
+- Fine-tuned PEFT outputs are adapter variants. Mark them with `adapter: true`,
+  `base_variant: <base>`, and `lora_rank` in
+  `configs/model_families/<family>.yaml`; use `./forge serve <family> local_ft`
+  so vLLM loads base weights plus the LoRA adapter instead of trying to serve
+  the adapter directory as a full model.
 - Use data manifests with explicit source roles, sample targets, schema fields,
   licenses, quality gates, and holdouts.
 - Do not train on model-forge eval prompts. Train adjacent skills and let the

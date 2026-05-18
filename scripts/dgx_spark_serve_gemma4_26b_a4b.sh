@@ -65,6 +65,19 @@ fi
 if [[ -n "${VLLM_SPECULATIVE_CONFIG:-}" ]]; then
   EXTRA_VLLM_ARGS+=(--speculative-config "$VLLM_SPECULATIVE_CONFIG")
 fi
+if [[ "${VLLM_ENABLE_LORA:-0}" == "1" || "${VLLM_ENABLE_LORA:-false}" == "true" ]]; then
+  EXTRA_VLLM_ARGS+=(--enable-lora)
+fi
+if [[ -n "${MODEL_FORGE_LORA_MODULES:-}" ]]; then
+  read -r -a LORA_MODULES <<< "$MODEL_FORGE_LORA_MODULES"
+  EXTRA_VLLM_ARGS+=(--lora-modules "${LORA_MODULES[@]}")
+fi
+if [[ -n "${VLLM_MAX_LORAS:-}" ]]; then
+  EXTRA_VLLM_ARGS+=(--max-loras "$VLLM_MAX_LORAS")
+fi
+if [[ -n "${VLLM_MAX_LORA_RANK:-}" ]]; then
+  EXTRA_VLLM_ARGS+=(--max-lora-rank "$VLLM_MAX_LORA_RANK")
+fi
 
 if [[ "$MODEL" = /* && -d "$MODELS_DIR" ]]; then
   MODEL_MOUNT="-v $MODELS_DIR:$MODELS_DIR:ro"

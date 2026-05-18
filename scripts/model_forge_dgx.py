@@ -73,6 +73,11 @@ def served_model_name(family: dict[str, Any], variant: str) -> str:
     return cfg.get("served_model_name") or cfg["repo_id"]
 
 
+def adapter_module_name(family: dict[str, Any], variant: str) -> str:
+    cfg = variant_config(family, variant)
+    return cfg.get("adapter_module_name") or served_model_name(family, variant)
+
+
 def format_template(template: str, family_name: str, variant: str) -> str:
     return template.format(family=family_name, variant=variant)
 
@@ -115,14 +120,51 @@ def format_duration(seconds: float) -> str:
     return f"{sec}s"
 
 
-def action_serve(family: dict[str, Any], family_name: str, variant: str) -> None:
+def configure_serving_variant(family: dict[str, Any], variant: str, env: dict[str, str]) -> dict[str, str]:
+    cfg = variant_config(family, variant)
     path = variant_local_path(family, variant)
     if not path.is_dir():
         raise SystemExit(f"model path does not exist: {path}")
-    serve = family["serve"]
-    env = os.environ.copy()
+
+    details = {
+        "model": str(path),
+        "served_model_name": served_model_name(family, variant),
+        "adapter": "",
+        "base_variant": "",
+    }
+
+    if cfg.get("adapter"):
+        base_variant = cfg.get("base_variant") or cfg.get("adapter_of")
+        if not base_variant:
+            raise SystemExit(f"adapter variant {variant!r} must set base_variant")
+        base_path = variant_local_path(family, str(base_variant))
+        if not base_path.is_dir():
+            raise SystemExit(f"adapter base model path does not exist: {base_path}")
+        module = f"{adapter_module_name(family, variant)}={path}"
+        env["MODEL_FORGE_MODEL"] = str(base_path)
+        env["MODEL_FORGE_SERVED_MODEL_NAME"] = cfg.get("base_served_model_name") or served_model_name(family, str(base_variant))
+        env["MODEL_FORGE_LORA_MODULES"] = module
+        env.setdefault("VLLM_ENABLE_LORA", "1")
+        env.setdefault("VLLM_MAX_LORAS", str(cfg.get("max_loras", 1)))
+        if cfg.get("lora_rank"):
+            env.setdefault("VLLM_MAX_LORA_RANK", str(cfg["lora_rank"]))
+        details.update({
+            "model": str(base_path),
+            "served_model_name": env["MODEL_FORGE_SERVED_MODEL_NAME"],
+            "adapter": module,
+            "base_variant": str(base_variant),
+        })
+        return details
+
     env["MODEL_FORGE_MODEL"] = str(path)
     env["MODEL_FORGE_SERVED_MODEL_NAME"] = served_model_name(family, variant)
+    return details
+
+
+def action_serve(family: dict[str, Any], family_name: str, variant: str) -> None:
+    serve = family["serve"]
+    env = os.environ.copy()
+    serve_details = configure_serving_variant(family, variant, env)
     env.setdefault("MODEL_FORGE_MODELS_DIR", str(models_dir(family)))
     if recommended_vllm_env is not None:
         for key, value in recommended_vllm_env(env).items():
@@ -132,6 +174,9 @@ def action_serve(family: dict[str, Any], family_name: str, variant: str) -> None
         console.print(Panel.fit(
             "\n".join([
                 f"[bold]Profile[/bold]: {profile.label}",
+                f"[bold]Model[/bold]: {serve_details['model']}",
+                f"[bold]Served name[/bold]: {env.get('MODEL_FORGE_SERVED_MODEL_NAME', '<unset>')}",
+                f"[bold]Adapter[/bold]: {serve_details['adapter'] or '<none>'}",
                 f"[bold]GPU memory util[/bold]: {env.get('GPU_MEMORY_UTILIZATION', '<unset>')}",
                 f"[bold]Max model len[/bold]: {env.get('MAX_MODEL_LEN', '<unset>')}",
                 f"[bold]Batched tokens[/bold]: {env.get('MAX_NUM_BATCHED_TOKENS', '<unset>')}",

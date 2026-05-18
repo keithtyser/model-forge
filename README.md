@@ -146,6 +146,12 @@ references.
 ./forge eval gemma4_26b_a4b local_ft
 ```
 
+Fine-tuned adapter variants should declare `adapter: true`,
+`base_variant: <base>`, and `lora_rank` in
+`configs/model_families/<family>.yaml`. `./forge serve` will load the base
+checkpoint and attach the adapter through vLLM LoRA serving, while evals keep
+using the adapter `served_model_name`.
+
 ```bash
 ./forge serve gemma4_26b_a4b abli
 ./forge eval gemma4_26b_a4b abli

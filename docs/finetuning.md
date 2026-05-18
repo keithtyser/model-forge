@@ -281,6 +281,13 @@ MODEL_FORGE_TRIALS=3 ./forge eval gemma4_26b_a4b local_ft --internal
 ./forge compare gemma4_26b_a4b
 ```
 
+`local_ft` is a PEFT/LoRA adapter variant. Model family configs should mark
+adapter outputs with `adapter: true`, `base_variant: <base>`, and the adapter's
+`lora_rank`. The serve wrapper then loads the base model and registers the
+adapter with vLLM via `--enable-lora --lora-modules`, so evaluation requests
+use the adapter's `served_model_name` while the base checkpoint remains the
+model weights source.
+
 If the FT is weaker than Jackrong, inspect failures by bucket before changing
 hyperparameters. Typical next moves:
 

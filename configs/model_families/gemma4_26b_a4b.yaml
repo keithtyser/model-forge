@@ -17,6 +17,9 @@ variants:
     repo_id: google/gemma-4-26B-A4B-it
     local_dir: gemma-4-26B-A4B-it-local-ft-v0
     served_model_name: local/gemma-4-26B-A4B-it-local-ft-v0
+    adapter: true
+    base_variant: base
+    lora_rank: 64
     downloadable: false
   abli:
     repo_id: huihui-ai/Huihui-gemma-4-26B-A4B-it-abliterated
