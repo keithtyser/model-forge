@@ -132,6 +132,19 @@ goal: 500 optimizer steps, checkpoint every 100 steps
 checkpoint gate: inspect checkpoint-100 adapter_model.safetensors before trusting the run
 ```
 
+Checkpoint-100 gate result:
+
+```text
+status: passed
+timestamp: 2026-05-18 07:01 America/New_York
+trainer_state: global_step=100, max_steps=500
+loss tail: step 100 loss=24.896150207519533
+grad_norm tail: step 100 grad_norm=0.508475661277771
+text lora_B tensors: 205/205 nonzero, max_abs=0.2190384417772293
+vision lora_B tensors: 0/189 nonzero
+decision: continue full run to step 500
+```
+
 The invalid earlier full-run output was moved aside to:
 
 ```text
