@@ -184,6 +184,24 @@ vision lora_B tensors: 0/189 nonzero
 decision: continue full run to step 500
 ```
 
+Final training result:
+
+```text
+status: completed
+timestamp: 2026-05-18 19:17 America/New_York
+container: model-forge-ft-local-v0 exited cleanly, exit=0, oom=false
+output: /home/ktyser/models/gemma-4-26B-A4B-it-local-ft-v0
+trainer_state: checkpoint-500 global_step=500, max_steps=500
+train_runtime: 5.52e+04 seconds
+train_steps_per_second: 0.009
+train_loss: 24.71
+loss tail: step 500 loss=21.54474792480469
+grad_norm tail: step 500 grad_norm=0.23804418742656708
+text lora_B tensors: 205/205 nonzero, max_abs=0.22189286351203918
+vision lora_B tensors: 0/189 nonzero
+next gate: serve/evaluate local_ft against saved Jackrong FT baseline
+```
+
 The invalid earlier full-run output was moved aside to:
 
 ```text
