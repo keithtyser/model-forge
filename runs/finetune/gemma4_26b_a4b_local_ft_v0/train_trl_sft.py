@@ -334,7 +334,8 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_source(plan), trust_remote_code=plan["model"].get("trust_remote_code", False))
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    tokenized_path = Path(plan["run_dir"]) / "tokenized_train"
+    max_seq_length = int(plan["model"]["max_seq_length"])
+    tokenized_path = Path(plan["run_dir"]) / f"tokenized_train_{max_seq_length}"
     if tokenized_path.exists():
         dataset = load_from_disk(str(tokenized_path))
     else:
@@ -344,7 +345,7 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
             tokenized = tokenizer(
                 batch["text"],
                 truncation=True,
-                max_length=int(plan["model"]["max_seq_length"]),
+                max_length=max_seq_length,
                 padding=False,
             )
             tokenized["mm_token_type_ids"] = [[0] * len(input_ids) for input_ids in tokenized["input_ids"]]
