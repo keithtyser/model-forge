@@ -28,8 +28,8 @@ For prepared datasets, pass `--repo-type dataset`.
 
 ## Fine-Tune: Gemma 4 26B A4B Local FT v0
 
-Status: corrected text-LoRA recipe smoke-tested; no full FT model has been
-produced yet.
+Status: full 500-step corrected text-LoRA run completed; merged checkpoint
+created for serving; eval pending.
 
 Hypothesis: a stricter SFT/QLoRA recipe using Jackrong-style mixed reasoning,
 code, STEM, and chat sources, plus model-forge quality gates and holdouts, can
@@ -60,13 +60,13 @@ Validation completed:
   guardrails
 - corrected 2048-token, 5-step text-LoRA smoke produced nonzero text
   `lora_B` tensors and nonzero gradients
-- no valid full training completed
-- no local FT checkpoint exists yet
+- full 500-step corrected text-LoRA training completed
+- merged full checkpoint created from the PEFT adapter for vLLM serving
 
-Current blocker: the first full run was stopped after checkpoint 100 because the
-original Gemma target modules used `.linear` suffixes. Those matched the
-`vision_tower` path only, so text loss produced zero-gradient LoRA updates.
-The recipe now targets text modules by base names and excludes `vision_tower`.
+Resolved blocker: the first full run was stopped after checkpoint 100 because
+the original Gemma target modules used `.linear` suffixes. Those matched the
+`vision_tower` path only, so text loss produced zero-gradient LoRA updates. The
+recipe now targets text modules by base names and excludes `vision_tower`.
 Future full FT runs must use the generated guarded `run.sh`, not a direct
 trainer invocation.
 
@@ -74,7 +74,8 @@ Publish status:
 
 - GitHub: recipe, data manifest, pipeline, docs, and guardrails pushed
 - Hugging Face dataset: pending because no complete prepared FT dataset exists
-- Hugging Face model: pending because no complete FT model exists
+- Hugging Face model: pending until eval determines whether this FT candidate
+  should be promoted
 
 Next run:
 
@@ -200,6 +201,22 @@ grad_norm tail: step 500 grad_norm=0.23804418742656708
 text lora_B tensors: 205/205 nonzero, max_abs=0.22189286351203918
 vision lora_B tensors: 0/189 nonzero
 next gate: serve/evaluate local_ft against saved Jackrong FT baseline
+```
+
+Serving preparation:
+
+```text
+timestamp: 2026-05-18 19:49 America/New_York
+live vLLM LoRA serving attempt: failed cleanly
+reason: vLLM MoE LoRA path raised get_expert_mapping not implemented
+decision: use merged-checkpoint serving for this Gemma4 MoE adapter
+merge output: /home/ktyser/models/gemma-4-26B-A4B-it-local-ft-v0-merged
+merge method: direct LoRA delta application, not PEFT injection
+merge duration: 61.2 seconds
+merged text tensors: 205
+skipped zero vision tensors: 189
+manifest: /home/ktyser/models/gemma-4-26B-A4B-it-local-ft-v0-merged/model_forge_merge_manifest.json
+next gate: serve merged local_ft and run internal eval
 ```
 
 The invalid earlier full-run output was moved aside to:
