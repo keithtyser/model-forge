@@ -12,6 +12,12 @@ from pathlib import Path
 
 import psutil
 import torch
+
+try:
+    import unsloth  # noqa: F401
+except ImportError:
+    unsloth = None
+
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoProcessor, AutoTokenizer
 
