@@ -171,11 +171,17 @@ Unsloth 4-bit loader:
 - 1024-token one-step QLoRA smoke passed with gradient_accumulation_steps=24.
 - Smoke train metrics: train_runtime=61.03s, train_samples_per_second=0.393,
   train_steps_per_second=0.016, train_loss=118.6.
+- 2048-token one-step QLoRA smoke passed with gradient_accumulation_steps=24.
+- 2048 smoke train metrics: train_runtime=117.5s,
+  train_samples_per_second=0.204, train_steps_per_second=0.009,
+  train_loss=97.67.
 ```
 
 Recipe changes:
 
 ```text
+model.max_seq_length=2048
+trainer.max_steps=500 for the first full local FT attempt
 trainer.backend=unsloth
 trainer.unsloth_compile_disable=true
 trainer.group_by_length=true

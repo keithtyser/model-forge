@@ -8,7 +8,7 @@ model:
   output_dir: ~/models/gemma-4-26B-A4B-it-local-ft-v0
   served_model_name: local/gemma-4-26B-A4B-it-local-ft-v0
   trust_remote_code: false
-  max_seq_length: 8192
+  max_seq_length: 2048
 
 trainer:
   backend: unsloth
@@ -26,7 +26,7 @@ trainer:
   gradient_accumulation_steps: 24
   learning_rate: 0.00012
   num_train_epochs: 1
-  max_steps:
+  max_steps: 500
   warmup_ratio: 0.04
   lr_scheduler_type: cosine
   optim: paged_adamw_8bit

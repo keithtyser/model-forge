@@ -169,7 +169,8 @@ The Gemma recipe is QLoRA by default:
 backend: unsloth
 per_device_train_batch_size: 1
 gradient_accumulation_steps: 24
-max_seq_length: 8192
+max_seq_length: 2048
+max_steps: 500
 load_in_4bit: true
 bf16: true
 gradient_checkpointing: true
@@ -193,6 +194,10 @@ Current Gemma 4 smoke status:
 1024-token Unsloth QLoRA smoke: passed
 1 optimizer step, gradient_accumulation_steps=24, train_loss=118.6
 No resource guard abort.
+
+2048-token Unsloth QLoRA smoke: passed
+1 optimizer step, gradient_accumulation_steps=24, train_loss=97.67
+Step runtime about 117.5s after model load, no resource guard abort.
 ```
 
 Spark can benefit from high preprocessing parallelism, but only enable it

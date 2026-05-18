@@ -91,11 +91,12 @@ scripts/run_finetune_spark_container.sh
 ```
 
 For Gemma 4 26B on Spark, the validated FT path currently uses
-`trainer.backend=unsloth` with `unsloth_compile_disable=true`. The HF Causal LM
-loader hit host-memory guard failures before the first training step; Unsloth's
-loader passed a 1024-token one-step QLoRA smoke. Keep the backend choice in YAML
-so other model families can use HF, Unsloth, or another backend without
-hard-coding Gemma behavior.
+`trainer.backend=unsloth` with `unsloth_compile_disable=true`,
+`max_seq_length=2048`, and `max_steps=500` for the first full attempt. The HF
+Causal LM loader hit host-memory guard failures before the first training step;
+Unsloth's loader passed 1024-token and 2048-token one-step QLoRA smokes. Keep
+the backend choice in YAML so other model families can use HF, Unsloth, or
+another backend without hard-coding Gemma behavior.
 
 ## Fine-Tuning Rules
 
