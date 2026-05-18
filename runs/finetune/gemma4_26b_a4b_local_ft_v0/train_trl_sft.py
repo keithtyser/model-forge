@@ -302,6 +302,13 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
 
 
 def train(plan: dict[str, Any], dataset_path: Path) -> None:
+    backend = str(plan["trainer"].get("backend", "hf_causal_lm")).lower()
+    FastLanguageModel = None
+    if backend == "unsloth":
+        if bool(plan["trainer"].get("unsloth_compile_disable", False)):
+            os.environ.setdefault("UNSLOTH_COMPILE_DISABLE", "1")
+        from unsloth import FastLanguageModel
+
     import inspect
     import torch
     from datasets import load_dataset, load_from_disk
@@ -309,6 +316,20 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
     from transformers import TrainerCallback
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
     from transformers import DataCollatorForLanguageModeling, Trainer, TrainingArguments
+
+    recompile_limit = int(plan["trainer"].get("torch_dynamo_recompile_limit", 0) or 0)
+    if recompile_limit > 0:
+        try:
+            import torch._dynamo
+
+            torch._dynamo.config.recompile_limit = recompile_limit
+            if hasattr(torch._dynamo.config, "accumulated_recompile_limit"):
+                torch._dynamo.config.accumulated_recompile_limit = max(
+                    torch._dynamo.config.accumulated_recompile_limit,
+                    recompile_limit * 4,
+                )
+        except Exception:
+            pass
 
     guard = ResourceGuard(plan, Path(plan["run_dir"]))
     guard.preflight()
@@ -364,39 +385,72 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
 
     model_id = plan["model"].get("local_dir") or plan["model"]["source"]
     quantization_config = None
-    if plan["trainer"].get("load_in_4bit", True):
+    if backend != "unsloth" and plan["trainer"].get("load_in_4bit", True):
         quantization_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
             bnb_4bit_compute_dtype=torch.bfloat16 if plan["trainer"].get("bf16", True) else torch.float16,
             bnb_4bit_use_double_quant=True,
         )
-    device_map = {"": 0} if plan["trainer"].get("device_map") == "single_gpu" else plan["trainer"].get("device_map", "auto")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        trust_remote_code=plan["model"].get("trust_remote_code", False),
-        quantization_config=quantization_config,
-        torch_dtype=torch.bfloat16 if plan["trainer"].get("bf16", True) else torch.float16,
-        device_map=device_map,
-        low_cpu_mem_usage=True,
-        offload_state_dict=True,
-        use_safetensors=True,
-    )
-    if quantization_config is not None:
-        model = prepare_model_for_kbit_training(model)
+    dtype = torch.bfloat16 if plan["trainer"].get("bf16", True) else torch.float16
+    if backend == "unsloth":
+        model, _processor = FastLanguageModel.from_pretrained(
+            model_name=model_id,
+            max_seq_length=max_seq_length,
+            dtype=dtype,
+            load_in_4bit=bool(plan["trainer"].get("load_in_4bit", True)),
+            load_in_8bit=bool(plan["trainer"].get("load_in_8bit", False)),
+            full_finetuning=False,
+            trust_remote_code=plan["model"].get("trust_remote_code", False),
+            attn_implementation=plan["trainer"].get("attn_implementation", "eager"),
+            low_cpu_mem_usage=True,
+            offload_state_dict=True,
+        )
+    else:
+        device_map = {"": 0} if plan["trainer"].get("device_map") == "single_gpu" else plan["trainer"].get("device_map", "auto")
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            trust_remote_code=plan["model"].get("trust_remote_code", False),
+            quantization_config=quantization_config,
+            torch_dtype=dtype,
+            device_map=device_map,
+            low_cpu_mem_usage=True,
+            offload_state_dict=True,
+            use_safetensors=True,
+        )
+        if quantization_config is not None:
+            model = prepare_model_for_kbit_training(model)
+    guard.check_runtime()
     if hasattr(model, "config"):
         model.config.use_cache = False
     lora = plan["lora"]
-    peft_config = LoraConfig(
-        r=int(lora["r"]),
-        lora_alpha=int(lora["alpha"]),
-        lora_dropout=float(lora["dropout"]),
-        bias="none",
-        task_type="CAUSAL_LM",
-        target_modules=list(lora["target_modules"]),
-        modules_to_save=list(lora.get("modules_to_save", [])) or None,
-    )
-    model = get_peft_model(model, peft_config)
+    modules_to_save = list(lora.get("modules_to_save", []))
+    if backend == "unsloth":
+        if modules_to_save:
+            raise ValueError("model-forge unsloth backend does not support modules_to_save yet; use hf_causal_lm")
+        model = FastLanguageModel.get_peft_model(
+            model,
+            r=int(lora["r"]),
+            target_modules=list(lora["target_modules"]),
+            lora_alpha=int(lora["alpha"]),
+            lora_dropout=float(lora["dropout"]),
+            bias="none",
+            use_gradient_checkpointing="unsloth" if plan["trainer"].get("gradient_checkpointing", True) else False,
+            random_state=int(plan["trainer"]["seed"]),
+        )
+        FastLanguageModel.for_training(model)
+    else:
+        peft_config = LoraConfig(
+            r=int(lora["r"]),
+            lora_alpha=int(lora["alpha"]),
+            lora_dropout=float(lora["dropout"]),
+            bias="none",
+            task_type="CAUSAL_LM",
+            target_modules=list(lora["target_modules"]),
+            modules_to_save=modules_to_save or None,
+        )
+        model = get_peft_model(model, peft_config)
+    guard.check_runtime()
 
     max_steps = plan["trainer"].get("max_steps") or -1
     if max_steps and int(max_steps) > 0:
@@ -427,6 +481,8 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
         save_strategy="steps",
         remove_unused_columns=False,
     )
+    if bool(plan["trainer"].get("group_by_length", False)):
+        training_kwargs["group_by_length"] = True
     worker_offset = int(plan.get("resource_policy", {}).get("dataloader_num_workers_max_offset", 2))
     max_workers = max(0, guard.usable_cores() - worker_offset)
     configured_workers = int(plan["trainer"].get("dataloader_num_workers", 0) or 0)
@@ -448,7 +504,11 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
         model=model,
         train_dataset=dataset,
         args=args,
-        data_collator=DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False),
+        data_collator=DataCollatorForLanguageModeling(
+            tokenizer=tokenizer,
+            mlm=False,
+            pad_to_multiple_of=int(plan["trainer"].get("pad_to_multiple_of", 0) or 0) or None,
+        ),
     )
     trainer_params = inspect.signature(Trainer.__init__).parameters
     if "processing_class" in trainer_params:

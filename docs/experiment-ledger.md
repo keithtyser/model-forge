@@ -151,6 +151,45 @@ git diff --check
 
 Result: all checks passed.
 
+## Fine-Tuning: Gemma 4 26B A4B Local FT Runtime Bring-Up
+
+Status: in progress.
+
+Purpose: train a local FT from the base model and compare it against the
+downloaded Jackrong FT reference without rerunning already-saved baseline evals.
+
+Findings so far:
+
+```text
+HF Causal LM 4-bit loader:
+- 2048-token one-step smoke stopped at resource guard: memory available 0.3% < 5%.
+- 1024-token one-step smoke stopped at resource guard: memory available 1.9% < 5%.
+- Root issue was model-load host memory pressure, not sequence length alone.
+
+Unsloth 4-bit loader:
+- Gemma 4 26B load-only probe succeeded with about 61 GiB host memory available after load.
+- 1024-token one-step QLoRA smoke passed with gradient_accumulation_steps=24.
+- Smoke train metrics: train_runtime=61.03s, train_samples_per_second=0.393,
+  train_steps_per_second=0.016, train_loss=118.6.
+```
+
+Recipe changes:
+
+```text
+trainer.backend=unsloth
+trainer.unsloth_compile_disable=true
+trainer.group_by_length=true
+trainer.pad_to_multiple_of=256
+trainer.torch_dynamo_recompile_limit=128
+tokenized_train caches are keyed by max_seq_length
+```
+
+Justification: Unsloth preserves the guarded Spark runtime while avoiding the
+HF loader's host-memory spike. Compile is disabled for this Gemma 4 recipe
+because the compiled Unsloth Gemma 4 path hit a hard Torch Dynamo fullgraph
+recompile limit during gradient accumulation. Revisit compile after a successful
+full FT and eval pass.
+
 ## Ablation: Gemma 4 26B A4B Base Local Abli
 
 Status: completed before FT work.

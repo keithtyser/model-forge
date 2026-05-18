@@ -166,17 +166,34 @@ when you want a crude emergency brake for CPU plus memory pressure.
 The Gemma recipe is QLoRA by default:
 
 ```yaml
+backend: unsloth
 per_device_train_batch_size: 1
 gradient_accumulation_steps: 24
 max_seq_length: 8192
 load_in_4bit: true
 bf16: true
 gradient_checkpointing: true
+group_by_length: true
+pad_to_multiple_of: 256
+unsloth_compile_disable: true
 ```
 
-This is intentionally conservative for DGX Spark. Increase sequence length,
-batch size, or LoRA rank only after a smoke run succeeds. Do not run a vLLM
-server while training.
+This is intentionally conservative for DGX Spark. The reusable pipeline still
+keeps the Hugging Face Causal LM path as a fallback, but Gemma 4 26B needed
+Unsloth's loader to avoid host-memory pressure during 4-bit model load. Torch
+compile is disabled for this worked recipe because the compiled Gemma 4 path hit
+a hard Dynamo fullgraph recompile limit during gradient accumulation.
+
+Increase sequence length, batch size, or LoRA rank only after a smoke run
+succeeds. Do not run a vLLM server while training.
+
+Current Gemma 4 smoke status:
+
+```text
+1024-token Unsloth QLoRA smoke: passed
+1 optimizer step, gradient_accumulation_steps=24, train_loss=118.6
+No resource guard abort.
+```
 
 Spark can benefit from high preprocessing parallelism, but only enable it
 explicitly:

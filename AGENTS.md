@@ -90,6 +90,13 @@ when host Python is CPU-only:
 scripts/run_finetune_spark_container.sh
 ```
 
+For Gemma 4 26B on Spark, the validated FT path currently uses
+`trainer.backend=unsloth` with `unsloth_compile_disable=true`. The HF Causal LM
+loader hit host-memory guard failures before the first training step; Unsloth's
+loader passed a 1024-token one-step QLoRA smoke. Keep the backend choice in YAML
+so other model families can use HF, Unsloth, or another backend without
+hard-coding Gemma behavior.
+
 ## Fine-Tuning Rules
 
 - Treat Jackrong's public notebooks as a useful baseline pattern, not a final
@@ -193,6 +200,13 @@ FT Gemopus local abli using selected t34 transfer:
 
 ```text
 configs/abliteration/gemma4_26b_a4b_ft_local_abli.yaml
+```
+
+Gemma 4 A4B local FT v0, runtime smoke passed but full training/evals still in
+progress:
+
+```text
+configs/finetuning/gemma4_26b_a4b_local_ft_v0.yaml
 ```
 
 These are examples of the general workflow. Do not hard-code future model
