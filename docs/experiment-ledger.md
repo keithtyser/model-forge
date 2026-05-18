@@ -121,6 +121,23 @@ Resume training from the completed prepared dataset with:
 MODEL_FORGE_SKIP_PREPARE=1 scripts/run_finetune_spark_container.sh
 ```
 
+Active full-run attempt:
+
+```text
+started: 2026-05-18 03:51 America/New_York
+container: model-forge-ft-local-v0
+output: /home/ktyser/models/gemma-4-26B-A4B-it-local-ft-v0
+command: guarded Docker run equivalent to MODEL_FORGE_SKIP_PREPARE=1 scripts/run_finetune_spark_container.sh
+goal: 500 optimizer steps, checkpoint every 100 steps
+checkpoint gate: inspect checkpoint-100 adapter_model.safetensors before trusting the run
+```
+
+The invalid earlier full-run output was moved aside to:
+
+```text
+/home/ktyser/models/gemma-4-26B-A4B-it-local-ft-v0.failed-vision-only-20260518-034146
+```
+
 ## Resource Guardrails
 
 Status: implemented and pushed.
