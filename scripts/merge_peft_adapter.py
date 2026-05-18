@@ -19,6 +19,7 @@ except ImportError:
     unsloth = None
 
 from peft import PeftModel
+from safetensors.torch import load_file
 from transformers import AutoModelForCausalLM, AutoProcessor, AutoTokenizer
 
 
@@ -99,12 +100,69 @@ def write_merge_manifest(args: argparse.Namespace, output_dir: Path, started_at:
         "output_dir": str(output_dir),
         "dtype": args.dtype,
         "max_shard_size": args.max_shard_size,
+        "merge_method": args.merge_method,
         "min_available_ram_fraction": args.min_available_ram_fraction,
         "started_unix": started_at,
         "finished_unix": finished_at,
         "duration_seconds": round(finished_at - started_at, 3),
     }
     (output_dir / "model_forge_merge_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+
+
+def adapter_target_name(lora_a_name: str) -> str:
+    target = lora_a_name.removeprefix("base_model.model.")
+    return target.removesuffix(".lora_A.weight") + ".weight"
+
+
+def merge_direct_lora(model: torch.nn.Module, adapter_dir: Path, guard: ResourceGuard, safe_merge: bool) -> dict[str, int]:
+    adapter_config = json.loads((adapter_dir / "adapter_config.json").read_text())
+    rank = int(adapter_config["r"])
+    alpha = float(adapter_config.get("lora_alpha", rank))
+    scaling = alpha / rank
+    state = load_file(adapter_dir / "adapter_model.safetensors")
+    parameters = dict(model.named_parameters())
+    merged = 0
+    skipped_zero = 0
+
+    for lora_a_name in sorted(key for key in state if key.endswith(".lora_A.weight")):
+        lora_b_name = lora_a_name.replace(".lora_A.weight", ".lora_B.weight")
+        if lora_b_name not in state:
+            raise RuntimeError(f"missing LoRA B tensor for {lora_a_name}")
+        target = adapter_target_name(lora_a_name)
+        if target not in parameters:
+            raise RuntimeError(f"target base parameter not found for adapter tensor {lora_a_name}: {target}")
+        weight = parameters[target]
+        lora_a = state[lora_a_name]
+        lora_b = state[lora_b_name]
+        if tuple(lora_b.shape[:-1] + lora_a.shape[1:]) != tuple(weight.shape):
+            raise RuntimeError(
+                f"shape mismatch for {target}: B{tuple(lora_b.shape)} @ A{tuple(lora_a.shape)} "
+                f"does not match W{tuple(weight.shape)}"
+            )
+        if not torch.count_nonzero(lora_b):
+            skipped_zero += 1
+            continue
+        delta = torch.matmul(lora_b.float(), lora_a.float()).mul_(scaling)
+        if safe_merge and not torch.isfinite(delta).all():
+            raise RuntimeError(f"non-finite LoRA delta for {target}")
+        weight.data.add_(delta.to(dtype=weight.dtype, device=weight.device))
+        merged += 1
+        del delta, lora_a, lora_b
+        if merged % 25 == 0:
+            print(f"[model-forge] direct-merged {merged} tensors", flush=True)
+            guard.check(f"after direct merge tensor {merged}")
+
+    return {"merged_tensors": merged, "skipped_zero_tensors": skipped_zero}
+
+
+def merge_with_peft(model: torch.nn.Module, adapter_dir: Path) -> torch.nn.Module:
+    peft_model = PeftModel.from_pretrained(
+        model,
+        adapter_dir,
+        device_map="cpu",
+        is_trainable=False,
+    )
+    return peft_model.merge_and_unload(safe_merge=True)
 
 
 def main() -> None:
@@ -114,6 +172,7 @@ def main() -> None:
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--dtype", choices=sorted(DTYPES), default="bf16")
     parser.add_argument("--max-shard-size", default="5GB")
+    parser.add_argument("--merge-method", choices=("auto", "peft", "direct"), default="auto")
     parser.add_argument("--min-available-ram-fraction", type=float, default=float(os.getenv("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", "0.05")))
     parser.add_argument("--monitor-interval-seconds", type=float, default=15.0)
     parser.add_argument("--trust-remote-code", action="store_true")
@@ -153,14 +212,21 @@ def main() -> None:
             trust_remote_code=args.trust_remote_code,
         )
         guard.check("after base load")
-        peft_model = PeftModel.from_pretrained(
-            model,
-            adapter,
-            device_map="cpu",
-            is_trainable=False,
-        )
-        guard.check("after adapter load")
-        merged_model = peft_model.merge_and_unload(safe_merge=True)
+        merge_stats: dict[str, int] = {}
+        if args.merge_method in {"auto", "peft"}:
+            try:
+                merged_model = merge_with_peft(model, adapter)
+            except Exception:
+                if args.merge_method == "peft":
+                    raise
+                print("[model-forge] PEFT merge failed; falling back to direct LoRA merge", flush=True)
+                merge_stats = merge_direct_lora(model, adapter, guard, safe_merge=True)
+                merged_model = model
+        else:
+            merge_stats = merge_direct_lora(model, adapter, guard, safe_merge=True)
+            merged_model = model
+        if merge_stats:
+            print(f"[model-forge] merge stats: {merge_stats}", flush=True)
         guard.check("after merge")
         merged_model.save_pretrained(
             output_dir,
