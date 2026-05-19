@@ -37,6 +37,7 @@ quality_thresholds:
   min_average_score: 0.70
   min_target_skill_relevance: 0.75
   max_holdout_similarity: 0.82
+  min_seed_examples_per_skill: 5
   reject_license_risk:
     - high
   reject_contamination_risk:

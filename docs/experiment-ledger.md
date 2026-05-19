@@ -331,15 +331,18 @@ status: implemented and pushed
 objective: create a no-training path for local_ft_v1 data cleanup and handoff
 commands:
   ./forge data plan gemma4_26b_a4b local_ft_v1 --overwrite
+  ./forge data gaps gemma4_26b_a4b local_ft_v1 --overwrite
   ./forge data pack gemma4_26b_a4b local_ft_v1 --overwrite
   ./forge data publish gemma4_26b_a4b local_ft_v1 --overwrite
 objective profile: configs/objectives/capability_sft.yaml
 dataset config: configs/datasets/gemma4_26b_a4b_local_ft_v1.yaml
 seed rows: datasets/seeds/gemma4_26b_a4b_local_ft_v1.jsonl
 generated artifact dir: datasets/generated/gemma4_26b_a4b_local_ft_v1
-accepted rows: 12
+accepted rows: 24
 rejected rows: 0
-mean heuristic quality score: 0.8943
+mean heuristic quality score: 0.8897
+gap rows extracted from local_ft v0 eval: 68 / 318
+top recommended seed skill: benign_safety_analysis, 39 mapped gap signals
 publish behavior: dry-run HF dataset plan only, no upload
 ```
 

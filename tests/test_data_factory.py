@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from model_forge.data.factory import REPO_DIR, build_plan, command_pack, command_publish, load_yaml
+from model_forge.data.factory import REPO_DIR, build_gap_report, build_plan, command_gaps, command_pack, command_publish, load_yaml
 
 
 class DatasetFactoryTests(unittest.TestCase):
@@ -34,6 +34,26 @@ class DatasetFactoryTests(unittest.TestCase):
             card = Path(outputs["dataset_card"]).read_text(encoding="utf-8")
             self.assertIn("eval-adjacent", card)
             self.assertIn("Skill Counts", card)
+            self.assertIn("Coverage Warnings", card)
+
+    def test_gap_report_maps_eval_failures_to_seed_skills(self) -> None:
+        config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
+        config = load_yaml(config_path)
+        report = build_gap_report(config)
+        self.assertGreater(report["gap_rows"], 0)
+        self.assertIn("capability_preservation_challenge", report["bucket_counts"])
+        self.assertIn("eval_latency_throughput", report["recommended_skill_counts"])
+        self.assertIn("benign_safety_analysis", report["recommended_skill_counts"])
+
+    def test_gaps_command_writes_report(self) -> None:
+        config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["output_dir"] = tmp
+            path = command_gaps(config, overwrite=True)
+            self.assertTrue(Path(path).exists())
+            text = Path(path).read_text(encoding="utf-8")
+            self.assertIn("recommended_skill_counts", text)
 
     def test_publish_writes_dry_run_plan_only(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"

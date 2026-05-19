@@ -203,6 +203,148 @@ def holdout_overlap(row: dict[str, Any], holdouts: list[dict[str, str]]) -> dict
     return best
 
 
+def result_path(config: dict[str, Any]) -> Path:
+    baseline = config.get("baseline", {}) if isinstance(config.get("baseline"), dict) else {}
+    raw_path = baseline.get("local_v0_result_path")
+    if not raw_path:
+        raise SystemExit("dataset config baseline.local_v0_result_path is required for gap extraction")
+    return resolve_repo_path(str(raw_path))
+
+
+def bad_metric_reasons(scores: dict[str, Any]) -> list[str]:
+    reasons = []
+    low_is_bad = {
+        "workflow_success",
+        "schema_adherence",
+        "normal_use_regression_pass_rate",
+        "benign_answer_quality_rate",
+        "safe_redirect_rate",
+    }
+    high_is_bad = {
+        "benign_refusal_rate",
+        "unsafe_overcompliance_rate",
+        "harmful_prompt_compliance_rate",
+        "harmful_detail_rate",
+    }
+    for metric, value in scores.items():
+        if not isinstance(value, int | float):
+            continue
+        if metric in low_is_bad and float(value) <= 0.0:
+            reasons.append(f"{metric}=0")
+        if metric in high_is_bad and float(value) > 0.0:
+            reasons.append(f"{metric}={value:g}")
+    return reasons
+
+
+def extract_missed_concepts(notes: list[str]) -> list[str]:
+    concepts: list[str] = []
+    for note in notes:
+        lowered = note.lower()
+        for marker in (
+            "response missed required normal-use concepts:",
+            "benign answer missed required concepts:",
+            "unsafe response contained disallowed markers:",
+        ):
+            if marker in lowered:
+                tail = note.split(":", 1)[1]
+                for item in re.split(r",|;", tail):
+                    concept = item.strip().strip(".")
+                    if concept:
+                        concepts.append(concept)
+    return concepts
+
+
+def skill_for_gap(row: dict[str, Any], notes: list[str], metric_reasons: list[str]) -> str:
+    text = " ".join([
+        str(row.get("bucket", "")),
+        str(row.get("case_id", "")),
+        str(row.get("prompt", "")),
+        " ".join(notes),
+        " ".join(metric_reasons),
+    ]).lower()
+    if any(term in text for term in ("latency", "throughput", "tokens per second", "completion", "prompt tokens", "tps")):
+        return "eval_latency_throughput"
+    if any(term in text for term in ("docker", "active container", "container", "disk cleanup")):
+        return "docker_disk_safety"
+    if any(term in text for term in ("sql", "null", "count(*)", "index", "aggregate")):
+        return "sql_edge_cases"
+    if any(term in text for term in ("shell", "rsync", "dry-run", "quote", "sync")):
+        return "shell_safety"
+    if any(term in text for term in ("json", "schema")):
+        return "json_schema_repair"
+    if any(term in text for term in ("git", "rebase", "branch", "push", "numbered steps", "observe", "verify")):
+        return "git_workflow_repair"
+    if any(term in text for term in ("yaml", "config", "variant", "prompt set", "output director")):
+        return "config_review"
+    if any(term in text for term in ("checkpoint", "eval", "compare", "baseline", "model variants")):
+        return "checkpoint_selection"
+    if any(term in text for term in ("refusal", "refused", "unsafe", "harmful", "overcompliance", "safety", "ablated")):
+        return "benign_safety_analysis"
+    return "checkpoint_selection"
+
+
+def build_gap_report(config: dict[str, Any]) -> dict[str, Any]:
+    responses_path = result_path(config) / "responses.jsonl"
+    rows = read_jsonl(responses_path)
+    gaps = []
+    bucket_counts: Counter[str] = Counter()
+    skill_counts: Counter[str] = Counter()
+    concept_counts: Counter[str] = Counter()
+    case_counts: Counter[str] = Counter()
+
+    for row in rows:
+        scores = row.get("scores", {}) if isinstance(row.get("scores"), dict) else {}
+        notes = [str(note) for note in row.get("notes", []) if str(note).strip()]
+        metric_reasons = bad_metric_reasons(scores)
+        if not notes and not metric_reasons:
+            continue
+        skill = skill_for_gap(row, notes, metric_reasons)
+        concepts = extract_missed_concepts(notes)
+        bucket = str(row.get("bucket", "unknown"))
+        case_id = str(row.get("case_id", "unknown"))
+        bucket_counts[bucket] += 1
+        skill_counts[skill] += 1
+        case_counts[f"{bucket}.{case_id}"] += 1
+        for concept in concepts:
+            concept_counts[concept] += 1
+        gaps.append({
+            "bucket": bucket,
+            "case_id": case_id,
+            "trial_index": row.get("trial_index"),
+            "recommended_skill": skill,
+            "metric_reasons": metric_reasons,
+            "notes": notes,
+            "missed_concepts": concepts,
+        })
+
+    return {
+        "dataset_id": config["id"],
+        "source_result_path": display_path(result_path(config)),
+        "responses_path": display_path(responses_path),
+        "total_rows": len(rows),
+        "gap_rows": len(gaps),
+        "bucket_counts": dict(sorted(bucket_counts.items())),
+        "recommended_skill_counts": dict(sorted(skill_counts.items())),
+        "missed_concepts": dict(sorted(concept_counts.items())),
+        "top_cases": dict(case_counts.most_common(25)),
+        "gaps": gaps,
+        "next_seed_priorities": [
+            {"skill": skill, "gap_count": count}
+            for skill, count in skill_counts.most_common()
+        ],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def command_gaps(config: dict[str, Any], overwrite: bool) -> Path:
+    output_path = resolve_repo_path(config["output_dir"]) / "gap_report.yaml"
+    if output_path.exists() and not overwrite:
+        return output_path
+    report = build_gap_report(config)
+    write_yaml(output_path, report)
+    return output_path
+
+
 def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
     output_dir = resolve_repo_path(config["output_dir"])
     objective_path = REPO_DIR / "configs" / "objectives" / f"{config['objective']}.yaml"
@@ -267,7 +409,7 @@ def command_seed(config: dict[str, Any], overwrite: bool) -> Path:
 
 
 def command_generate(config: dict[str, Any], overwrite: bool) -> Path:
-    seed_path = command_seed(config, overwrite=False)
+    seed_path = command_seed(config, overwrite=overwrite)
     output_path = resolve_repo_path(config["output_dir"]) / "candidates.jsonl"
     if output_path.exists() and not overwrite:
         return output_path
@@ -283,7 +425,7 @@ def command_generate(config: dict[str, Any], overwrite: bool) -> Path:
 
 
 def command_judge(config: dict[str, Any], overwrite: bool) -> Path:
-    candidate_path = command_generate(config, overwrite=False)
+    candidate_path = command_generate(config, overwrite=overwrite)
     output_path = resolve_repo_path(config["output_dir"]) / "judged.jsonl"
     if output_path.exists() and not overwrite:
         return output_path
@@ -321,7 +463,7 @@ def rejection_reasons(row: dict[str, Any], config: dict[str, Any], seen: set[str
 
 
 def command_filter(config: dict[str, Any], overwrite: bool) -> tuple[Path, Path]:
-    judged_path = command_judge(config, overwrite=False)
+    judged_path = command_judge(config, overwrite=overwrite)
     output_dir = resolve_repo_path(config["output_dir"])
     accepted_path = output_dir / "accepted.jsonl"
     rejected_path = output_dir / "rejected.jsonl"
@@ -351,6 +493,25 @@ def quality_report(config: dict[str, Any], accepted: list[dict[str, Any]], rejec
     skill_counts = Counter(skill for row in accepted for skill in row.get("skills", []))
     rejection_counts = Counter(reason for row in rejected for reason in row.get("rejection_reasons", []))
     averages = [float(row.get("quality_score_average", 0.0)) for row in accepted]
+    target = config.get("target_accept_count", {})
+    thresholds = config.get("quality_thresholds", {})
+    warnings = []
+    min_target = int(target.get("min", 0) or 0) if isinstance(target, dict) else 0
+    if min_target and len(accepted) < min_target:
+        warnings.append({
+            "code": "accepted_count_below_min_target",
+            "message": f"accepted rows {len(accepted)} below configured minimum {min_target}",
+        })
+    min_seed_per_skill = int(thresholds.get("min_seed_examples_per_skill", 0) or 0)
+    if min_seed_per_skill:
+        for skill in skill_targets(config):
+            count = skill_counts.get(skill, 0)
+            if count < min_seed_per_skill:
+                warnings.append({
+                    "code": "skill_below_min_seed_examples",
+                    "skill": skill,
+                    "message": f"{skill} has {count} accepted rows, below seed target {min_seed_per_skill}",
+                })
     return {
         "dataset_id": config["id"],
         "accepted_count": len(accepted),
@@ -359,12 +520,14 @@ def quality_report(config: dict[str, Any], accepted: list[dict[str, Any]], rejec
         "rejection_counts": dict(sorted(rejection_counts.items())),
         "quality_score_average": round(sum(averages) / len(averages), 4) if averages else 0.0,
         "target_accept_count": copy.deepcopy(config.get("target_accept_count", {})),
+        "warnings": warnings,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
 def dataset_card(config: dict[str, Any], report: dict[str, Any]) -> str:
     skills = "\n".join(f"- `{skill}`: {count}" for skill, count in report["skill_counts"].items()) or "- none"
+    warnings = "\n".join(f"- `{item['code']}`: {item['message']}" for item in report.get("warnings", [])) or "- none"
     return f"""---
 dataset_info:
   config_name: {config['id']}
@@ -403,6 +566,10 @@ observed fine-tuning gaps without copying held-out model-forge eval prompts.
 
 {skills}
 
+## Coverage Warnings
+
+{warnings}
+
 ## Provenance
 
 Rows are currently human-seeded and heuristically judged. Future versions can
@@ -417,12 +584,13 @@ reasons, and checks similarity against configured holdout prompt files.
 
 
 def command_pack(config: dict[str, Any], config_path: Path, overwrite: bool) -> dict[str, str]:
-    accepted_path, rejected_path = command_filter(config, overwrite=False)
+    accepted_path, rejected_path = command_filter(config, overwrite=overwrite)
     output_dir = resolve_repo_path(config["output_dir"])
     dataset_path = output_dir / "dataset.jsonl"
     manifest_path = output_dir / "manifest.yaml"
     report_path = output_dir / "quality_report.json"
     card_path = output_dir / "dataset_card.md"
+    gap_path = output_dir / "gap_report.yaml"
     if all(path.exists() for path in (dataset_path, manifest_path, report_path, card_path)) and not overwrite:
         return {
             "dataset": str(dataset_path),
@@ -457,6 +625,7 @@ def command_pack(config: dict[str, Any], config_path: Path, overwrite: bool) -> 
             "rejected": display_path(rejected_path),
             "quality_report": display_path(report_path),
             "dataset_card": display_path(card_path),
+            "gap_report": display_path(gap_path) if gap_path.exists() else None,
         },
         "quality_report": report,
     })
@@ -477,20 +646,23 @@ def command_publish(config: dict[str, Any], config_path: Path, overwrite: bool) 
     if publish_path.exists() and not overwrite:
         return publish_path
     repo_id = config.get("hub", {}).get("repo_id") or f"keithtyser/model-forge-{config['id']}"
+    files = [
+        display_path(Path(outputs["dataset"])),
+        display_path(Path(outputs["manifest"])),
+        display_path(Path(outputs["quality_report"])),
+        display_path(Path(outputs["dataset_card"])),
+        display_path(output_dir / "accepted.jsonl"),
+        display_path(output_dir / "rejected.jsonl"),
+    ]
+    if (output_dir / "gap_report.yaml").exists():
+        files.append(display_path(output_dir / "gap_report.yaml"))
     plan = {
         "dry_run": True,
         "repo_id": repo_id,
         "repo_type": "dataset",
         "dataset_id": config["id"],
         "release_class": config.get("hub", {}).get("release_class", "public_dataset_candidate"),
-        "files": [
-            display_path(Path(outputs["dataset"])),
-            display_path(Path(outputs["manifest"])),
-            display_path(Path(outputs["quality_report"])),
-            display_path(Path(outputs["dataset_card"])),
-            display_path(output_dir / "accepted.jsonl"),
-            display_path(output_dir / "rejected.jsonl"),
-        ],
+        "files": files,
         "blocked_until": [
             "human reviews dataset_card.md",
             "license/provenance checks pass",
@@ -512,7 +684,7 @@ def default_config_for(family: str, variant: str) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Plan and pack model-forge dataset-factory artifacts")
-    parser.add_argument("step", choices=["plan", "seed", "generate", "judge", "filter", "pack", "publish"])
+    parser.add_argument("step", choices=["plan", "gaps", "seed", "generate", "judge", "filter", "pack", "publish"])
     parser.add_argument("family", nargs="?")
     parser.add_argument("variant", nargs="?")
     parser.add_argument("--config", type=Path)
@@ -525,6 +697,9 @@ def main() -> None:
 
     if args.step == "plan":
         path = command_plan(config, config_path, args.overwrite)
+        console.print(f"[green]Wrote[/green] {display_path(path)}")
+    elif args.step == "gaps":
+        path = command_gaps(config, args.overwrite)
         console.print(f"[green]Wrote[/green] {display_path(path)}")
     elif args.step == "seed":
         path = command_seed(config, args.overwrite)

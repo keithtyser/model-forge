@@ -18,7 +18,7 @@ Usage:
   ./forge eval <family> [base|ft|local_ft|abli|local_abli|local_abli_sota|local_abli_huihui_like|local_abli_huihui_like_s4|local_abli_huihui_shaped] [--smoke|--internal|--artifact|--external] [tasks]
   ./forge external <family> [base|ft|local_ft|abli|local_abli|local_abli_sota|local_abli_huihui_like|local_abli_huihui_like_s4|local_abli_huihui_shaped] [tasks]
   ./forge finetune <family> [plan|prepare|run] [--execute]
-  ./forge data [plan|seed|generate|judge|filter|pack|publish] <family> <variant> [--overwrite]
+  ./forge data [plan|gaps|seed|generate|judge|filter|pack|publish] <family> <variant> [--overwrite]
   ./forge ablate <family> [plan|collect|analyze-reference|sweep-reference|export|sota-plan|sota-prepare|sota-run] [--execute]
   ./forge compare <family>
   ./forge golden-summary <family> [output-json]

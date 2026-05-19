@@ -368,6 +368,7 @@ The first no-training implementation slice is the local FT v1 dataset factory:
 
 ```bash
 ./forge data plan gemma4_26b_a4b local_ft_v1
+./forge data gaps gemma4_26b_a4b local_ft_v1
 ./forge data seed gemma4_26b_a4b local_ft_v1
 ./forge data generate gemma4_26b_a4b local_ft_v1
 ./forge data judge gemma4_26b_a4b local_ft_v1
@@ -377,9 +378,9 @@ The first no-training implementation slice is the local FT v1 dataset factory:
 ```
 
 Current MVP behavior is deterministic and local: it uses human seed rows,
-heuristic scoring, holdout-overlap checks, accepted/rejected row reports, and a
-dry-run Hugging Face publish plan. It does not call teacher models or upload
-anything.
+saved eval failure extraction, heuristic scoring, holdout-overlap checks,
+accepted/rejected row reports, coverage warnings, and a dry-run Hugging Face
+publish plan. It does not call teacher models or upload anything.
 
 Primary files:
 
@@ -391,9 +392,16 @@ datasets/generated/gemma4_26b_a4b_local_ft_v1/
 src/model_forge/data/factory.py
 ```
 
-The generated seed pack currently contains 12 accepted examples across the v0
+The generated seed pack currently contains 24 accepted examples across the v0
 failure skills. It is a scaffold and quality-control path, not the final
 `500-2000` row v1 training dataset.
+
+The gap report is generated from the saved local FT v0 internal responses and
+summarizes failed buckets, missed concepts, and recommended next dataset skills:
+
+```text
+datasets/generated/gemma4_26b_a4b_local_ft_v1/gap_report.yaml
+```
 
 ## Adding A New Model Family
 
