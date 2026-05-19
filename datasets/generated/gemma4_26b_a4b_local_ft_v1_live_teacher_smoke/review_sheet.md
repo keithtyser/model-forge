@@ -2,8 +2,8 @@
 
 ## Summary
 
-- Accepted rows: 61
-- Rejected rows: 0
+- Accepted rows: 58
+- Rejected rows: 3
 - Reviewed rows: 50 / 50
 - Ready to scale generation: true
 
@@ -20,7 +20,7 @@
 
 ## Flags
 
-- `too_long`: 2
+- none
 
 ## Sampled Rows
 
@@ -114,14 +114,14 @@
 - User: An inference benchmark shows identical request counts but higher Time-To-First-Token (TTFT), lower mean total latency, and higher output tokens per second compared to the baseline. Explain the conflicting dynamics of prefill, decode, prompt length, completion length, and batching that could cause this specific set ...
 - Assistant: This scenario presents a trade-off between prefill overhead and decode efficiency. Higher TTFT typically indicates increased prefill costs, which can stem from longer prompt tokens, chunked prefill configurations, or reduced cache hit rates. Conversely, lower total latency suggests that the average completion time per request dropped, potentially because the baseline workload contained many long-decoding requests that the new configuration optimized, or because shorter completion tokens reduced the wall-clock time. The ...
 
-### gen_b0c624d7e984f936
-- Skills: eval_latency_throughput
+### gen_67e844b17e369d81
+- Skills: docker_disk_safety
 - Method: `evol_instruct` / Source: `synthetic`
 - Quality: `0.9` / Verification: `true`
-- Copied-seed similarity: `0.1805`
-- Flags: too_long
-- User: An inference benchmark shows a scenario where the total request count is identical to the baseline, yet we observe higher Time-To-First-Token (TTFT), lower total latency per request, and a higher output tokens/sec. Explain how prefill, decode, prompt token count, completion token count, and batching ...
-- Assistant: This scenario is possible because the metrics measure different phases of the inference pipeline, which can be decoupled by request composition and batching efficiency. 1. **Higher TTFT**: This usually indicates an increase in **prefill** cost. This could be caused by a shift in the workload toward longer **prompt_tokens**, the activation of chunked prefill settings that add overhead, or a drop in KV-cache hit rates forcing a full recomputation for the ...
+- Copied-seed similarity: `0.2723`
+- Flags: none
+- User: A DGX workstation is critically low on disk space during a checkpointing run. Provide a cleanup plan that preserves active Docker containers and ensures the currently writing checkpoint is never deleted. Include one specific edge case, one potential failure mode, and a concrete verification ...
+- Assistant: 1. **Assess Current State:** Run `df -h` to identify the mounted partition, `docker system df` to view Docker-specific storage, and check the size of the run output directory. Execute `docker ps` to list active containers and ensure no cleanup actions target images, volumes, or paths currently in use by these containers. 2. **Safe Cleanup Execution:** Only after confirming active dependencies, prune stopped containers (`docker container prune`) and dangling build cache ...
 
 ### seed_eval_median_latency_vs_tps
 - Skills: eval_latency_throughput
@@ -132,14 +132,14 @@
 - User: An eval report shows lower median latency but lower tokens per second. Give a concise diagnostic explanation and the fields you would compare before changing serving flags.
 - Assistant: Lower median latency with lower tokens per second usually means the workload got shorter, less batched, or less decode-heavy. Median latency can fall when completions are shorter or prompts are easier, while tokens/sec drops if batching, cache reuse, or decode efficiency got worse. Compare prompt_tokens, completion_tokens, request count, batch/concurrency, TTFT, ITL, max_new_tokens, cache hit rate, and hardware utilization. Only tune serving flags after confirming the two runs used comparable prompt ...
 
-### gen_115ff810dbe32350
-- Skills: eval_latency_throughput
+### gen_a46774bfbd2f15b0
+- Skills: sql_edge_cases
 - Method: `instruction_backtranslation` / Source: `synthetic`
-- Quality: `0.9` / Verification: `true`
-- Copied-seed similarity: `0.2`
-- Flags: too_long
-- User: An inference benchmark report shows a scenario with identical request counts but higher Time-to-First-Token (TTFT), lower total latency, and higher output tokens per second compared to the baseline. Explain how changes in prefill, decode, prompt token count, completion token count, and batching strategies could ...
-- Assistant: These seemingly contradictory metrics can coexist due to shifts in the distribution of work between prefill and decode phases, alongside batching efficiency changes. 1. **Higher TTFT & Lower Total Latency**: Higher TTFT typically indicates increased prefill costs, often caused by a larger average prompt token count or less effective KV cache utilization. However, if the average completion token count (output length) decreased significantly, the total wall-clock time (TTFT + Decode ...
+- Quality: `0.92` / Verification: `true`
+- Copied-seed similarity: `0.1691`
+- Flags: none
+- User: Our LEFT JOIN dashboard for Total Accounts, Matched Orders, and Average Order Value is reporting inconsistent metrics. Explain why COUNT(*) and COUNT(order_id) might disagree in this context, how NULLs affect WHERE filters versus JOIN conditions, and how to correctly aggregate these values to avoid ...
+- Assistant: A LEFT JOIN retains all rows from the left table (Accounts), filling unmatched right-side columns (Orders) with NULL. This causes `COUNT(*)` to include every account, whereas `COUNT(order_id)` excludes rows where the join failed, effectively counting only matched orders. If you place a filter like `WHERE order_id IS NOT NULL` in the query, the LEFT JOIN collapses into an accidental INNER JOIN, dropping unmatched accounts entirely. To fix this, move all ...
 
 ### gen_4e927ebf0b749f57
 - Skills: eval_latency_throughput
@@ -438,15 +438,6 @@
 - User: A JSON-only evaluator rejected a response containing a valid object followed by explanatory prose. Explain the failure and provide the specific rule the model must follow to ensure the output is accepted.
 - Assistant: The failure occurred because a JSON-only parser expects the entire response to be a single, valid JSON value. Any text following the object (such as an explanation) causes the parser to reject the input as malformed. To ensure acceptance, the model must strictly return only the raw JSON value (object, array, string, number, boolean, or null). The response must adhere to these constraints: 1. Use double quotes for all keys ...
 
-### gen_67e844b17e369d81
-- Skills: docker_disk_safety
-- Method: `evol_instruct` / Source: `synthetic`
-- Quality: `0.9` / Verification: `true`
-- Copied-seed similarity: `0.2723`
-- Flags: none
-- User: A DGX workstation is critically low on disk space during a checkpointing run. Provide a cleanup plan that preserves active Docker containers and ensures the currently writing checkpoint is never deleted. Include one specific edge case, one potential failure mode, and a concrete verification ...
-- Assistant: 1. **Assess Current State:** Run `df -h` to identify the mounted partition, `docker system df` to view Docker-specific storage, and check the size of the run output directory. Execute `docker ps` to list active containers and ensure no cleanup actions target images, volumes, or paths currently in use by these containers. 2. **Safe Cleanup Execution:** Only after confirming active dependencies, prune stopped containers (`docker container prune`) and dangling build cache ...
-
 ### gen_380a3552131bdaff
 - Skills: sql_edge_cases
 - Method: `evol_instruct` / Source: `synthetic`
@@ -473,3 +464,12 @@
 - Flags: none
 - User: In a post-training repository, model variants, prompt suites, output directories, and promotion thresholds are stored in separate YAML files. What validation logic should run immediately before any evaluation job starts? Please include one specific edge case, one potential failure mode, and a concrete verification ...
 - Assistant: Before launching any evaluation job, the system must load all relevant YAML configuration files and resolve the complete run matrix. The validation logic should verify: 1) That every requested model variant ID has a valid definition; 2) That prompt suite references resolve to existing prompt files; 3) That output directories are either unique or that explicit overwrite rules are defined; 4) That critical fields like `context_length` and `served_model_name` are populated; ...
+
+### gen_d464f9d6c8de56f1
+- Skills: json_schema_repair
+- Method: `evol_instruct` / Source: `synthetic`
+- Quality: `0.92` / Verification: `true`
+- Copied-seed similarity: `0.119`
+- Flags: none
+- User: An evaluator rejected a response that contained a valid JSON object followed by an explanation of why it was correct. Explain the failure, provide the rule the model should follow, and include one edge case, one failure mode, and one verification check.
+- Assistant: The failure occurred because 'JSON-only' requires the entire string response to parse as a single JSON value. Any trailing text, such as an explanation, causes a parsing error. The rule to follow: Return strictly the requested JSON structure with double-quoted keys/strings, lowercase booleans, and no trailing commas. Do not include markdown code blocks, newlines outside the structure, or explanatory prose. Edge Case: Handling null values must preserve the literal 'null' ...

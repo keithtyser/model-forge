@@ -18,6 +18,7 @@ from model_forge.data.factory import (
     command_review,
     command_verify,
     load_yaml,
+    rejection_reasons,
 )
 
 
@@ -45,7 +46,10 @@ class DatasetFactoryTests(unittest.TestCase):
         self.assertEqual(plan["id"], "gemma4_26b_a4b_local_ft_v1_live_teacher_smoke")
         self.assertEqual(plan["generation"]["provider"]["type"], "openai_compatible")
         self.assertEqual(plan["generation"]["provider"]["base_url"], "http://127.0.0.1:8011/v1")
+        self.assertEqual(plan["generation"]["provider"]["request"]["max_tokens"], 650)
         self.assertEqual(plan["generation"]["smoke"]["max_generated_candidates"], 24)
+        self.assertTrue(plan["quality_thresholds"]["reject_length_violations"])
+        self.assertIn("too_long", plan["review"]["critical_flags"])
         self.assertTrue(plan["smoke_only"])
 
     def test_provider_env_overrides_model_base_url_and_api_key(self) -> None:
@@ -125,6 +129,44 @@ class DatasetFactoryTests(unittest.TestCase):
             report = json.loads((Path(tmp) / "generation_report.json").read_text(encoding="utf-8"))
             self.assertEqual(report["provider"]["type"], "template")
             self.assertEqual(report["source_kind_counts"]["synthetic"], len(synthetic))
+
+    def test_downstream_overwrite_does_not_regenerate_candidates(self) -> None:
+        config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["output_dir"] = tmp
+            candidate_path = command_generate(config, overwrite=True, smoke=True)
+            before = [
+                json.loads(line)
+                for line in Path(candidate_path).read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            command_verify(config, overwrite=True, smoke=True, max_generated_candidates=0)
+            after = [
+                json.loads(line)
+                for line in Path(candidate_path).read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertEqual(before, after)
+            self.assertGreater(sum(1 for row in after if row.get("source", {}).get("kind") == "synthetic"), 0)
+
+    def test_length_violations_can_reject_rows(self) -> None:
+        config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
+        config = load_yaml(config_path)
+        long_answer = " ".join(["word"] * (config["review"]["max_assistant_words"] + 1))
+        row = {
+            "id": "too_long",
+            "messages": [
+                {"role": "user", "content": "Explain a safe workflow."},
+                {"role": "assistant", "content": long_answer},
+            ],
+            "skills": ["shell_safety"],
+            "source": {"kind": "synthetic", "license": "CC-BY-4.0"},
+            "quality_scores": {"target_skill_relevance": 1.0},
+            "quality_score_average": 1.0,
+            "verification": {"passed": True},
+        }
+        self.assertIn("assistant_too_long", rejection_reasons(row, config, set(), []))
 
     def test_review_command_writes_review_gate_artifacts(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"

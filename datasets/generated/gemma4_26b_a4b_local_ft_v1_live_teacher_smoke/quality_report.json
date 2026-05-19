@@ -1,24 +1,26 @@
 {
-  "accepted_count": 61,
-  "created_at": "2026-05-19T04:58:50.215718+00:00",
+  "accepted_count": 58,
+  "created_at": "2026-05-19T05:15:40.147408+00:00",
   "dataset_id": "gemma4_26b_a4b_local_ft_v1_live_teacher_smoke",
   "generation_method_counts": {
     "eval_adjacent_generation": 6,
-    "evol_instruct": 6,
+    "evol_instruct": 5,
     "human_seed": 37,
-    "instruction_backtranslation": 6,
+    "instruction_backtranslation": 4,
     "self_instruct": 6
   },
-  "quality_score_average": 0.8966,
-  "rejected_count": 0,
-  "rejection_counts": {},
+  "quality_score_average": 0.8965,
+  "rejected_count": 3,
+  "rejection_counts": {
+    "assistant_too_long": 3
+  },
   "seed_only": false,
   "skill_counts": {
     "benign_safety_analysis": 6,
     "checkpoint_selection": 5,
     "config_review": 9,
-    "docker_disk_safety": 6,
-    "eval_latency_throughput": 7,
+    "docker_disk_safety": 5,
+    "eval_latency_throughput": 5,
     "git_workflow_repair": 5,
     "json_schema_repair": 9,
     "shell_safety": 9,
@@ -27,7 +29,7 @@
   "smoke_only": true,
   "source_kind_counts": {
     "human_seed": 37,
-    "synthetic": 24
+    "synthetic": 21
   },
   "target_accept_count": {
     "max": 80,

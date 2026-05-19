@@ -28,8 +28,8 @@ evaluation, downloaded abli evaluation, local base ablation, local FT ablation,
 and a guarded local FT recipe. The local FT v0 did not beat Jackrong on the
 primary challenge-capability gate, but it was close and improved paired benign
 quality. The next FT iteration is the local FT v1 dataset path, which currently
-has a smoke-sized gated pack and is ready for a small live-teacher generation
-smoke, not a long training run.
+has deterministic and live-teacher smoke packs with gated review artifacts. The
+next step is a medium live-teacher generation pass, not a long training run.
 
 Use [docs/status.md](docs/status.md) for the current handoff state and
 [docs/experiment-ledger.md](docs/experiment-ledger.md) for detailed experiment
@@ -113,6 +113,9 @@ Dataset factory:
 ./forge data pack gemma4_26b_a4b local_ft_v1 --smoke
 ./forge data publish gemma4_26b_a4b local_ft_v1 --smoke
 ```
+
+Use `generate --overwrite` only when replacing candidates intentionally.
+Downstream `--overwrite` refreshes derived artifacts from existing candidates.
 
 Abliteration planning:
 

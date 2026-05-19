@@ -130,6 +130,10 @@ another backend without hard-coding Gemma behavior.
   deterministic `template` generation provider; OpenAI-compatible generation is
   available only when configured explicitly. Treat `review_report.json`
   `ready_to_scale_generation=true` as the gate before scaling generation.
+  Run `generate --overwrite` only when replacing candidates intentionally;
+  downstream `--overwrite` refreshes derived artifacts from existing
+  candidates. Current local FT v1 configs reject assistant length violations
+  before packaging.
   `publish` remains a dry-run plan and does not upload artifacts.
 - Promote a local FT only if it matches or beats the downloaded FT reference on
   internal challenge capability, paired benign quality, normal-use regression,

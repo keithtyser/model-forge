@@ -22,7 +22,8 @@ This is the short handoff state for humans and agents. Use
   but it did not clear the primary challenge-capability promotion gate.
 - The local FT v1 dataset factory MVP is implemented with planning, gap
   extraction, seed rows, generation adapters, verification, filtering, review,
-  packing, and dry-run publish planning.
+  packing, dry-run publish planning, non-cascading overwrite semantics, and
+  length-violation rejection gates.
 
 ## Current Dataset State
 
@@ -48,22 +49,24 @@ It defaults to a local OpenAI-compatible endpoint at
 `http://127.0.0.1:8011/v1` and can be redirected with
 `MODEL_FORGE_DATA_PROVIDER_BASE_URL` and `MODEL_FORGE_DATA_GENERATOR_MODEL`.
 
-The live-teacher smoke pack contains 61 accepted examples:
+The live-teacher smoke pack now contains 58 accepted examples after stricter
+length filtering:
 
 - 37 human seed rows
-- 24 synthetic rows from the live teacher
+- 21 accepted synthetic rows from the live teacher
+- 3 rejected synthetic rows for `assistant_too_long`
 - generation methods: `self_instruct`, `evol_instruct`,
   `instruction_backtranslation`, and `eval_adjacent_generation`
 - review gate: `ready_to_scale_generation=true`
-- review flags: two `too_long` rows, no critical flags
+- review flags: none after length rejection
 - publish status: dry-run HF plan only; this remains a smoke artifact
 
 ## Recommended Next Work
 
-1. Tighten generation length controls before scaling, since the live smoke
-   produced two long answers.
-2. Scale to a 500-2000 accepted-row dataset only after the small live smoke
-   passes review.
+1. Run one medium live-teacher dataset generation pass, roughly 100-150
+   accepted rows, before scaling to a full training dataset.
+2. Scale to a 500-2000 accepted-row dataset only after the medium live smoke
+   passes review under the stricter length gates.
 3. Publish completed durable datasets to Hugging Face and record repo ids in
    `docs/experiment-ledger.md`.
 4. Run a short FT candidate only after dataset quality is established and Spark

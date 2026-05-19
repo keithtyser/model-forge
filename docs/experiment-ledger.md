@@ -28,6 +28,45 @@ Publishing helper:
 
 For prepared datasets, pass `--repo-type dataset`.
 
+## Dataset Factory Safety And Length-Gate Cleanup
+
+Status: completed. No model server, training run, or live generation was
+started for this cleanup.
+
+Hypothesis: dataset iteration is safer if candidate generation is an explicit
+stage. Downstream `judge`, `verify`, `filter`, `review`, `pack`, and `publish`
+should be able to overwrite derived artifacts without silently replacing
+expensive live-teacher candidates. Quality should also reject answer-length
+violations before scale-up instead of only surfacing them as review notes.
+
+Changes:
+
+- downstream data commands now call `generate` with `overwrite=False`, so
+  existing `candidates.jsonl` is reused unless `generate --overwrite` is run
+  explicitly
+- generation prompts now include the configured assistant word bounds
+- OpenAI-compatible generation can use a configurable concise system prompt
+- local FT v1 configs lower generation `max_tokens` from 900 to 650
+- local FT v1 configs set `quality_thresholds.reject_length_violations=true`
+- review config marks `too_long` as a critical flag for future sampled rows
+- tests cover non-cascading overwrite behavior and length rejection
+
+Refreshed artifacts:
+
+- deterministic smoke remains 49 accepted rows, 0 rejected rows, and
+  `ready_to_scale_generation=true`
+- live-teacher smoke now has 58 accepted rows and 3 rejected rows
+- all 3 live-teacher rejected rows were rejected for `assistant_too_long`
+- live-teacher review now has no sampled review flags and
+  `ready_to_scale_generation=true`
+
+Operational rule after this change:
+
+```text
+Run generate --overwrite only when you intend to replace candidates.
+Run downstream --overwrite to refresh derived artifacts from existing candidates.
+```
+
 ## Dataset Factory: Gemma 4 26B A4B Local FT v1 Live-Teacher Smoke
 
 Status: completed and committed as a lightweight smoke artifact. No training
@@ -81,9 +120,11 @@ Factory commands:
 ./forge data publish --config configs/datasets/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke.yaml --smoke
 ```
 
-Important workflow note: after expensive live generation, run downstream
-`verify`, `review`, `pack`, and `publish` without `--overwrite` unless you
-intentionally want to regenerate candidates.
+Important workflow note: after the safety cleanup above, downstream
+`verify`, `review`, `pack`, and `publish` can be run with `--overwrite` to
+refresh derived artifacts from existing candidates. They do not regenerate
+`candidates.jsonl`. Run `generate --overwrite` only when candidate replacement
+is intentional.
 
 Tracked artifacts:
 
@@ -93,27 +134,31 @@ datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/
 
 Results:
 
-- accepted rows: 61
-- rejected rows: 0
-- source mix: 37 human seed rows, 24 synthetic rows
+- accepted rows after strict length filtering: 58
+- rejected rows after strict length filtering: 3
+- rejection reasons: 3 `assistant_too_long`
+- source mix: 37 human seed rows, 21 accepted synthetic rows
 - synthetic methods: 6 each from `self_instruct`, `evol_instruct`,
-  `instruction_backtranslation`, and `eval_adjacent_generation`
+  `instruction_backtranslation`, and `eval_adjacent_generation` before
+  filtering
 - verification: 61 passed, 0 failed
 - review sample: 50 rows
 - review decision: `ready_to_scale_generation=true`
-- review flags: two `too_long` rows, no critical flags
+- review flags after filtering: none
 - dry-run HF target:
   `keithtyser/model-forge-gemma4_26b_a4b_local_ft_v1_live_teacher_smoke`
 
 Interpretation: the live-teacher data path is working and the generated rows
-are relevant enough for a small smoke. Before scaling, tighten answer-length
-controls and keep the same provenance, holdout-similarity, review, and dry-run
-publish gates.
+are relevant enough for a small smoke. The first quality weakness was
+overlong answers; the current config rejects those before review. Use the same
+provenance, holdout-similarity, review, length, and dry-run publish gates for
+the medium pass.
 
 Publish status:
 
 - GitHub: config, provider override support, tests, docs, and smoke artifacts
-  should be pushed with this ledger entry
+  were pushed; the stricter length-gated refresh is tracked in the safety
+  cleanup entry above
 - Hugging Face: not uploaded because this is a smoke artifact, not a completed
   durable dataset
 
@@ -455,10 +500,10 @@ commands:
   ./forge data plan gemma4_26b_a4b local_ft_v1 --overwrite
   ./forge data gaps gemma4_26b_a4b local_ft_v1 --overwrite
   ./forge data generate gemma4_26b_a4b local_ft_v1 --overwrite --smoke
-  ./forge data verify gemma4_26b_a4b local_ft_v1 --overwrite --smoke
-  ./forge data review gemma4_26b_a4b local_ft_v1 --overwrite --smoke --sample 50
-  ./forge data pack gemma4_26b_a4b local_ft_v1 --overwrite --smoke
-  ./forge data publish gemma4_26b_a4b local_ft_v1 --overwrite --smoke
+  ./forge data verify gemma4_26b_a4b local_ft_v1 --smoke
+  ./forge data review gemma4_26b_a4b local_ft_v1 --smoke --sample 50
+  ./forge data pack gemma4_26b_a4b local_ft_v1 --smoke
+  ./forge data publish gemma4_26b_a4b local_ft_v1 --smoke
 objective profile: configs/objectives/capability_sft.yaml
 dataset config: configs/datasets/gemma4_26b_a4b_local_ft_v1.yaml
 seed rows: datasets/seeds/gemma4_26b_a4b_local_ft_v1.jsonl

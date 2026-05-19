@@ -28,9 +28,9 @@ observed fine-tuning gaps without copying held-out model-forge eval prompts.
 
 ## Counts
 
-- Accepted rows: 61
-- Rejected rows: 0
-- Mean quality score: 0.8966
+- Accepted rows: 58
+- Rejected rows: 3
+- Mean quality score: 0.8965
 - Verification passed: 61
 - Verification failed: 0
 - Seed-only scaffold: false
@@ -41,8 +41,8 @@ observed fine-tuning gaps without copying held-out model-forge eval prompts.
 - `benign_safety_analysis`: 6
 - `checkpoint_selection`: 5
 - `config_review`: 9
-- `docker_disk_safety`: 6
-- `eval_latency_throughput`: 7
+- `docker_disk_safety`: 5
+- `eval_latency_throughput`: 5
 - `git_workflow_repair`: 5
 - `json_schema_repair`: 9
 - `shell_safety`: 9
@@ -51,14 +51,14 @@ observed fine-tuning gaps without copying held-out model-forge eval prompts.
 ## Source Counts
 
 - `human_seed`: 37
-- `synthetic`: 24
+- `synthetic`: 21
 
 ## Generation Method Counts
 
 - `eval_adjacent_generation`: 6
-- `evol_instruct`: 6
+- `evol_instruct`: 5
 - `human_seed`: 37
-- `instruction_backtranslation`: 6
+- `instruction_backtranslation`: 4
 - `self_instruct`: 6
 
 ## Coverage Warnings

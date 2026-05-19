@@ -44,6 +44,7 @@ quality_thresholds:
     - high
   reject_contamination_risk:
     - high
+  reject_length_violations: true
 
 generation_methods:
   enabled_now:
@@ -65,7 +66,11 @@ generation:
     model: model-forge-template-v0
     request:
       temperature: 0.7
-      max_tokens: 900
+      max_tokens: 650
+      system_prompt: >
+        Create one high-quality eval-adjacent SFT row. Return only strict
+        compact JSON with user and assistant keys. The assistant answer must be
+        concise, concrete, correct, and within the requested word limit.
   max_generated_candidates: 12
   max_seed_rows: 3
   smoke:
@@ -95,6 +100,11 @@ review:
   min_assistant_words: 35
   max_assistant_words: 260
   max_seed_similarity: 0.74
+  critical_flags:
+    - copied_seed_wording
+    - unsafe_detail
+    - poor_assistant_answer
+    - too_long
 
 skills:
   - id: eval_latency_throughput

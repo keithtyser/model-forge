@@ -394,6 +394,11 @@ Hugging Face publish plan. It does not call a live teacher model unless an
 OpenAI-compatible provider is configured explicitly, and it does not upload
 anything.
 
+Use `generate --overwrite` only when replacing candidates intentionally.
+Downstream `judge`, `verify`, `filter`, `review`, `pack`, and `publish`
+overwrite derived artifacts from the existing `candidates.jsonl` and do not
+silently regenerate live-teacher candidates.
+
 Primary files:
 
 ```text
@@ -443,9 +448,10 @@ datasets/generated/gemma4_26b_a4b_local_ft_v1/review_sheet.md
 It samples accepted rows across skills and generation methods, flags weak rows
 such as copied seed wording, unsafe detail, overly generic answers, missing
 concrete checks, and failed verification, then records a
-`ready_to_scale_generation` gate. The current smoke pack clears the per-skill
-coverage gate and has `ready_to_scale_generation: true`; it is ready for a
-small live-teacher generation smoke, not for training yet.
+`ready_to_scale_generation` gate. Current local FT v1 configs also reject
+assistant length violations before packaging. The deterministic smoke pack and
+the live-teacher smoke pack clear the scale-up gate; the next step is a medium
+live-teacher generation pass, not training yet.
 
 The gap report is generated from the saved local FT v0 internal responses and
 summarizes failed buckets, missed concepts, and recommended next dataset skills:

@@ -1,12 +1,10 @@
 {
-  "accepted_count": 61,
+  "accepted_count": 58,
   "coverage_gaps": [],
-  "created_at": "2026-05-19T04:58:45.204316+00:00",
+  "created_at": "2026-05-19T05:15:39.960286+00:00",
   "critical_flag_counts": {},
   "dataset_id": "gemma4_26b_a4b_local_ft_v1_live_teacher_smoke",
-  "flag_counts": {
-    "too_long": 2
-  },
+  "flag_counts": {},
   "gates": {
     "has_synthetic_rows": true,
     "no_critical_flags": true,
@@ -15,13 +13,13 @@
   },
   "generation_method_counts": {
     "eval_adjacent_generation": 6,
-    "evol_instruct": 6,
+    "evol_instruct": 5,
     "human_seed": 37,
-    "instruction_backtranslation": 6,
+    "instruction_backtranslation": 4,
     "self_instruct": 6
   },
   "ready_to_scale_generation": true,
-  "rejected_count": 0,
+  "rejected_count": 3,
   "reviewed_count": 50,
   "reviewed_rows": [
     {
@@ -165,19 +163,17 @@
       "verification_passed": true
     },
     {
-      "assistant": "This scenario is possible because the metrics measure different phases of the inference pipeline, which can be decoupled by request composition and batching efficiency. 1. **Higher TTFT**: This usually indicates an increase in **prefill** cost. This could be caused by a shift in the workload toward longer **prompt_tokens**, the activation of chunked prefill settings that add overhead, or a drop in KV-cache hit rates forcing a full recomputation for the ...",
-      "copied_seed_similarity": 0.1805,
-      "flags": [
-        "too_long"
-      ],
+      "assistant": "1. **Assess Current State:** Run `df -h` to identify the mounted partition, `docker system df` to view Docker-specific storage, and check the size of the run output directory. Execute `docker ps` to list active containers and ensure no cleanup actions target images, volumes, or paths currently in use by these containers. 2. **Safe Cleanup Execution:** Only after confirming active dependencies, prune stopped containers (`docker container prune`) and dangling build cache ...",
+      "copied_seed_similarity": 0.2723,
+      "flags": [],
       "generation_method": "evol_instruct",
-      "id": "gen_b0c624d7e984f936",
+      "id": "gen_67e844b17e369d81",
       "quality_score_average": 0.9,
       "skills": [
-        "eval_latency_throughput"
+        "docker_disk_safety"
       ],
       "source_kind": "synthetic",
-      "user": "An inference benchmark shows a scenario where the total request count is identical to the baseline, yet we observe higher Time-To-First-Token (TTFT), lower total latency per request, and a higher output tokens/sec. Explain how prefill, decode, prompt token count, completion token count, and batching ...",
+      "user": "A DGX workstation is critically low on disk space during a checkpointing run. Provide a cleanup plan that preserves active Docker containers and ensures the currently writing checkpoint is never deleted. Include one specific edge case, one potential failure mode, and a concrete verification ...",
       "verification_passed": true
     },
     {
@@ -195,19 +191,17 @@
       "verification_passed": true
     },
     {
-      "assistant": "These seemingly contradictory metrics can coexist due to shifts in the distribution of work between prefill and decode phases, alongside batching efficiency changes. 1. **Higher TTFT & Lower Total Latency**: Higher TTFT typically indicates increased prefill costs, often caused by a larger average prompt token count or less effective KV cache utilization. However, if the average completion token count (output length) decreased significantly, the total wall-clock time (TTFT + Decode ...",
-      "copied_seed_similarity": 0.2,
-      "flags": [
-        "too_long"
-      ],
+      "assistant": "A LEFT JOIN retains all rows from the left table (Accounts), filling unmatched right-side columns (Orders) with NULL. This causes `COUNT(*)` to include every account, whereas `COUNT(order_id)` excludes rows where the join failed, effectively counting only matched orders. If you place a filter like `WHERE order_id IS NOT NULL` in the query, the LEFT JOIN collapses into an accidental INNER JOIN, dropping unmatched accounts entirely. To fix this, move all ...",
+      "copied_seed_similarity": 0.1691,
+      "flags": [],
       "generation_method": "instruction_backtranslation",
-      "id": "gen_115ff810dbe32350",
-      "quality_score_average": 0.9,
+      "id": "gen_a46774bfbd2f15b0",
+      "quality_score_average": 0.92,
       "skills": [
-        "eval_latency_throughput"
+        "sql_edge_cases"
       ],
       "source_kind": "synthetic",
-      "user": "An inference benchmark report shows a scenario with identical request counts but higher Time-to-First-Token (TTFT), lower total latency, and higher output tokens per second compared to the baseline. Explain how changes in prefill, decode, prompt token count, completion token count, and batching strategies could ...",
+      "user": "Our LEFT JOIN dashboard for Total Accounts, Matched Orders, and Average Order Value is reporting inconsistent metrics. Explain why COUNT(*) and COUNT(order_id) might disagree in this context, how NULLs affect WHERE filters versus JOIN conditions, and how to correctly aggregate these values to avoid ...",
       "verification_passed": true
     },
     {
@@ -675,20 +669,6 @@
       "verification_passed": true
     },
     {
-      "assistant": "1. **Assess Current State:** Run `df -h` to identify the mounted partition, `docker system df` to view Docker-specific storage, and check the size of the run output directory. Execute `docker ps` to list active containers and ensure no cleanup actions target images, volumes, or paths currently in use by these containers. 2. **Safe Cleanup Execution:** Only after confirming active dependencies, prune stopped containers (`docker container prune`) and dangling build cache ...",
-      "copied_seed_similarity": 0.2723,
-      "flags": [],
-      "generation_method": "evol_instruct",
-      "id": "gen_67e844b17e369d81",
-      "quality_score_average": 0.9,
-      "skills": [
-        "docker_disk_safety"
-      ],
-      "source_kind": "synthetic",
-      "user": "A DGX workstation is critically low on disk space during a checkpointing run. Provide a cleanup plan that preserves active Docker containers and ensures the currently writing checkpoint is never deleted. Include one specific edge case, one potential failure mode, and a concrete verification ...",
-      "verification_passed": true
-    },
-    {
       "assistant": "The discrepancy arises because a LEFT JOIN preserves all rows from the `accounts` table, filling unmatched `orders` columns with `NULL`. 1. **Aggregation Difference**: `COUNT(*)` counts every row in the result set (500 accounts), including those where the join produced no match. `COUNT(order_id)` ignores `NULL` values, so it only counts the 120 rows where an actual order exists. 2. **Failure Mode**: Placing `WHERE order_id IS NOT NULL` filters out the rows ...",
       "copied_seed_similarity": 0.1783,
       "flags": [],
@@ -729,6 +709,20 @@
       "source_kind": "synthetic",
       "user": "In a post-training repository, model variants, prompt suites, output directories, and promotion thresholds are stored in separate YAML files. What validation logic should run immediately before any evaluation job starts? Please include one specific edge case, one potential failure mode, and a concrete verification ...",
       "verification_passed": true
+    },
+    {
+      "assistant": "The failure occurred because 'JSON-only' requires the entire string response to parse as a single JSON value. Any trailing text, such as an explanation, causes a parsing error. The rule to follow: Return strictly the requested JSON structure with double-quoted keys/strings, lowercase booleans, and no trailing commas. Do not include markdown code blocks, newlines outside the structure, or explanatory prose. Edge Case: Handling null values must preserve the literal 'null' ...",
+      "copied_seed_similarity": 0.119,
+      "flags": [],
+      "generation_method": "evol_instruct",
+      "id": "gen_d464f9d6c8de56f1",
+      "quality_score_average": 0.92,
+      "skills": [
+        "json_schema_repair"
+      ],
+      "source_kind": "synthetic",
+      "user": "An evaluator rejected a response that contained a valid JSON object followed by an explanation of why it was correct. Explain the failure, provide the rule the model should follow, and include one edge case, one failure mode, and one verification check.",
+      "verification_passed": true
     }
   ],
   "sample_size": 50,
@@ -736,8 +730,8 @@
     "benign_safety_analysis": 6,
     "checkpoint_selection": 5,
     "config_review": 9,
-    "docker_disk_safety": 6,
-    "eval_latency_throughput": 7,
+    "docker_disk_safety": 5,
+    "eval_latency_throughput": 5,
     "git_workflow_repair": 5,
     "json_schema_repair": 9,
     "shell_safety": 9,
@@ -745,6 +739,6 @@
   },
   "source_kind_counts": {
     "human_seed": 37,
-    "synthetic": 24
+    "synthetic": 21
   }
 }

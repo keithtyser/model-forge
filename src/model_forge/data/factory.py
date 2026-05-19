@@ -383,9 +383,24 @@ def enabled_strategies(config: dict[str, Any]) -> list[dict[str, Any]]:
     return enabled
 
 
-def prompt_template(strategy_name: str, seed: dict[str, Any], primary_skill: str, variant_index: int) -> str:
+def assistant_word_bounds(config: dict[str, Any]) -> tuple[int, int]:
+    review = config.get("review", {})
+    review = review if isinstance(review, dict) else {}
+    min_words = int(review.get("min_assistant_words", 35) or 35)
+    max_words = int(review.get("max_assistant_words", 260) or 260)
+    return min_words, max_words
+
+
+def prompt_template(
+    strategy_name: str,
+    seed: dict[str, Any],
+    primary_skill: str,
+    variant_index: int,
+    config: dict[str, Any],
+) -> str:
     scenario = SKILL_SCENARIOS.get(primary_skill, SKILL_SCENARIOS["checkpoint_selection"])
     strategy_note = STRATEGY_NOTES.get(strategy_name, STRATEGY_NOTES["self_instruct"])
+    min_words, max_words = assistant_word_bounds(config)
     return "\n".join([
         "Create one high-quality supervised fine-tuning conversation.",
         f"Strategy: {strategy_name}",
@@ -395,6 +410,7 @@ def prompt_template(strategy_name: str, seed: dict[str, Any], primary_skill: str
         f"Seed assistant summary: {compact_text(message_content(seed, 'assistant'), 120)}",
         "Return strict JSON with keys user and assistant.",
         "The conversation must be eval-adjacent and must not copy held-out prompt wording.",
+        f"The assistant answer must be {min_words}-{max_words} words, concrete, and free of filler.",
         f"Target user task: {scenario['user']} {strategy_note['user']}",
         f"Target answer content: {scenario['assistant']} {strategy_note['assistant']}",
     ])
@@ -469,7 +485,7 @@ class OpenAICompatibleProvider(GenerationProvider):
             "messages": [
                 {
                     "role": "system",
-                    "content": "You create concise, correct SFT data. Return only strict JSON with user and assistant keys.",
+                    "content": request_config["system_prompt"],
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -499,9 +515,15 @@ class OpenAICompatibleProvider(GenerationProvider):
 
 def generation_request_config(provider_config: dict[str, Any]) -> dict[str, Any]:
     request = provider_config.get("request", {}) if isinstance(provider_config.get("request"), dict) else {}
+    default_system_prompt = (
+        "You create high-quality eval-adjacent SFT data. Return only strict compact JSON with user "
+        "and assistant keys. The assistant answer must be concise, concrete, correct, and within "
+        "the requested word limit."
+    )
     return {
         "temperature": float(request.get("temperature", provider_config.get("temperature", 0.7))),
         "max_tokens": int(request.get("max_tokens", provider_config.get("max_tokens", 900))),
+        "system_prompt": str(request.get("system_prompt", provider_config.get("system_prompt", default_system_prompt))),
     }
 
 
@@ -592,7 +614,7 @@ def generated_row(
     variant_index: int,
 ) -> dict[str, Any]:
     skill = primary_skill(seed)
-    prompt = prompt_template(strategy_name, seed, skill, variant_index)
+    prompt = prompt_template(strategy_name, seed, skill, variant_index, config)
     rendered = provider.generate(prompt, seed, skill, strategy_name, variant_index)
     source = {
         "kind": "synthetic",
@@ -920,7 +942,7 @@ def command_judge(
 ) -> Path:
     candidate_path = command_generate(
         config,
-        overwrite=overwrite,
+        overwrite=False,
         smoke=smoke,
         max_generated_candidates=max_generated_candidates,
         provider_override=provider_override,
@@ -1069,6 +1091,13 @@ def rejection_reasons(row: dict[str, Any], config: dict[str, Any], seen: set[str
         reasons.append("license_risk_rejected")
     if source.get("contamination_risk") in set(thresholds.get("reject_contamination_risk", [])):
         reasons.append("contamination_risk_rejected")
+    if bool(thresholds.get("reject_length_violations", False)):
+        min_words, max_words = assistant_word_bounds(config)
+        assistant_words = len(re.findall(r"\w+", message_content(row, "assistant")))
+        if assistant_words < min_words:
+            reasons.append("assistant_too_short")
+        if assistant_words > max_words:
+            reasons.append("assistant_too_long")
     verification = row.get("verification", {}) if isinstance(row.get("verification"), dict) else {}
     if verification and not verification.get("passed", False):
         reasons.append("verification_failed")
@@ -1175,8 +1204,7 @@ def row_review_flags(row: dict[str, Any], config: dict[str, Any], seeds: dict[st
     flags = []
     assistant = message_content(row, "assistant")
     assistant_words = len(re.findall(r"\w+", assistant))
-    min_words = int(settings.get("min_assistant_words", 35) or 35)
-    max_words = int(settings.get("max_assistant_words", 260) or 260)
+    min_words, max_words = assistant_word_bounds(config)
     if assistant_words < min_words:
         flags.append("too_generic")
     if assistant_words > max_words:
@@ -1213,7 +1241,11 @@ def build_review_report(config: dict[str, Any], accepted: list[dict[str, Any]], 
     sampled = sample_review_rows(accepted, sample_size)
     reviewed_rows = []
     flag_counts: Counter[str] = Counter()
-    critical_flags = {"copied_seed_wording", "unsafe_detail", "poor_assistant_answer"}
+    configured_critical = settings.get("critical_flags")
+    if configured_critical:
+        critical_flags = {str(flag) for flag in configured_critical}
+    else:
+        critical_flags = {"copied_seed_wording", "unsafe_detail", "poor_assistant_answer"}
     critical_flag_counts: Counter[str] = Counter()
     for row in sampled:
         flags = row_review_flags(row, config, seeds)
@@ -1646,7 +1678,14 @@ def main() -> None:
     parser.add_argument("family", nargs="?")
     parser.add_argument("variant", nargs="?")
     parser.add_argument("--config", type=Path)
-    parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help=(
+            "overwrite this step's outputs; candidate replacement only happens "
+            "when this is used with the generate step"
+        ),
+    )
     parser.add_argument("--smoke", action="store_true", help="use configured smoke generation limits")
     parser.add_argument("--max-generated-candidates", type=int, help="override generated candidate limit")
     parser.add_argument("--provider", help="override generation provider type, for example template or openai_compatible")
