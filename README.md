@@ -1,44 +1,43 @@
 # model-forge
 
-model-forge is a reproducible post-training workbench for open models.
+model-forge is a reproducible post-training workbench for open models. It is
+designed to answer one practical question: did a fine-tune, refusal ablation, or
+combined post-training workflow improve the model without breaking capability,
+format following, or operational behavior?
 
-It helps answer one question: did a fine-tune, ablation, or combined
-post-training workflow make the model better without breaking something else?
+The repo is model-family driven. Gemma 4 is the first fully exercised family on
+DGX Spark, but the intended shape is general: add a model family, tune or edit
+it with calibrated configs, evaluate every candidate, then publish the recipe
+and artifacts needed to reproduce the result.
 
-The repo is evaluation-first, but the target shape is broader: one post-training
-pipeline that can be pointed at any supported open model family to fine-tune,
-ablate refusals, evaluate, compare, and publish reproducible artifacts.
+## What It Does
 
-## Model-Agnostic Goal
+- registers model families and variants in `configs/model_families/`
+- builds fine-tuning plans from YAML configs and dataset manifests
+- creates eval-adjacent SFT datasets through a gated dataset factory
+- runs refusal ablation recipes against source checkpoints
+- serves exactly one candidate at a time through hardware-aware vLLM settings
+- evaluates internal behavior, artifact quality, and external benchmark results
+- compares candidates against the source model and relevant references
+- records hypotheses, recipes, validation, and publish state for handoff
 
-model-forge is organized around model families, not one hard-coded model. A
-family config defines the base checkpoint, optional fine-tuned checkpoints,
-downloaded reference ablations, local ablation outputs, serving settings, eval
-configs, and report paths. The same loop should apply when a new open model
-drops:
+## Current State
 
-1. add a family config for the model
-2. download or fine-tune the source checkpoint
-3. ablate refusals with model-specific directions and calibrated edit settings
-4. serve each candidate with the detected hardware profile
-5. run internal, artifact, and external evals
-6. promote only if the candidate improves the intended post-training objective
-   without regressing source-model capability
-7. publish the recipe, model card, scores, and raw outputs
+Gemma 4 A4B has validated paths for base evaluation, downloaded FT/reference
+evaluation, downloaded abli evaluation, local base ablation, local FT ablation,
+and a guarded local FT recipe. The local FT v0 did not beat Jackrong on the
+primary challenge-capability gate, but it was close and improved paired benign
+quality. The next FT iteration is the local FT v1 dataset path, which currently
+has a smoke-sized gated pack and is ready for a small live-teacher generation
+smoke, not a long training run.
 
-Gemma 4 is the first fully exercised family on DGX Spark:
-
-- `google/gemma-4-26B-A4B-it`
-- `Jackrong/Gemopus-4-26B-A4B-it`
-- `huihui-ai/Huihui-gemma-4-26B-A4B-it-abliterated`
-
-Qwen configs are included as the next family to harden. They should reuse the
-same post-training/eval harness, but with Qwen-specific module targets, layer
-ranges, serving settings, and search bounds.
+Use [docs/status.md](docs/status.md) for the current handoff state and
+[docs/experiment-ledger.md](docs/experiment-ledger.md) for detailed experiment
+history.
 
 ## Quick Start
 
-Install with `uv`:
+Install and set up:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -47,26 +46,62 @@ cd model-forge
 ./forge setup all
 ```
 
-Download models:
+List configured families:
+
+```bash
+./forge families
+```
+
+Download a configured family:
 
 ```bash
 ./forge download gemma4_26b_a4b all
 ```
 
-Plan the first local fine-tune from the base checkpoint:
+Serve one model in one terminal:
+
+```bash
+./forge serve gemma4_26b_a4b base
+```
+
+Run evals from another terminal:
+
+```bash
+./forge eval gemma4_26b_a4b base --internal
+./forge eval gemma4_26b_a4b base --artifact
+./forge eval gemma4_26b_a4b base --external
+./forge compare gemma4_26b_a4b
+```
+
+Only run one large model server or training job at a time.
+
+## Core Workflows
+
+Evaluation:
+
+```bash
+./forge eval gemma4_26b_a4b base --smoke
+./forge eval gemma4_26b_a4b base --internal
+./forge eval gemma4_26b_a4b base --artifact
+./forge eval gemma4_26b_a4b base --external
+./forge compare gemma4_26b_a4b
+```
+
+Fine-tuning:
 
 ```bash
 ./forge finetune gemma4_26b_a4b plan
 ./forge finetune gemma4_26b_a4b prepare
 ```
 
-The current FT recipe is designed to beat the downloaded
-`Jackrong/Gemopus-4-26B-A4B-it` reference by keeping Jackrong's useful public
-pattern, mixed LoRA/QLoRA SFT over reasoning, coding, math, and chat data, while
-adding model-forge data quality gates, holdouts, and promotion evals. See
-`docs/finetuning.md`.
+On DGX Spark, use the guarded CUDA container launcher for full FT runs:
 
-Plan and pack the first local FT v1 eval-adjacent dataset without training:
+```bash
+./forge finetune gemma4_26b_a4b prepare --overwrite
+scripts/run_finetune_spark_container.sh
+```
+
+Dataset factory:
 
 ```bash
 ./forge data plan gemma4_26b_a4b local_ft_v1
@@ -78,245 +113,61 @@ Plan and pack the first local FT v1 eval-adjacent dataset without training:
 ./forge data publish gemma4_26b_a4b local_ft_v1 --smoke
 ```
 
-The default local FT v1 generation provider is deterministic `template` mode
-for smoke testing. The `review` step writes a curation report and scale-up
-gate. `publish` is a dry-run plan only; it does not upload to Hugging Face.
-
-Run each model. Keep `serve` running in one terminal, then run `eval` in another.
-`eval` runs the built-in checks, artifact generation, external benchmarks, and
-refreshes the comparison report for the served variant. The CLI prints phase
-progress, per-case progress, elapsed time, and ETA while it runs.
-
-```bash
-./forge serve gemma4_26b_a4b base
-./forge eval gemma4_26b_a4b base
-```
-
-Plan a local refusal ablation without loading the model:
+Abliteration planning:
 
 ```bash
 ./forge ablate gemma4_26b_a4b plan
-# Replace gemma4_26b_a4b with another configured family as support is added.
-```
-
-Prepare a SOTA abliteration recipe for the base or fine-tuned model:
-
-```bash
 ./forge ablate gemma4_26b_a4b sota-prepare --backend heretic
 ./forge ablate --config configs/abliteration/gemma4_26b_a4b_ft_local_abli.yaml sota-prepare --backend heretic
 ```
 
-The ablation workflow is not "copy Gemma constants to every model." The reusable
-part is the model-agnostic loop:
+For new families, reuse the workflow, not Gemma constants. Recalibrate module
+targets, layer ranges, direction prompts, strength/search bounds, tokenizer
+behavior, and serving settings per architecture.
 
-1. pick the source checkpoint, usually base or an already fine-tuned model
-2. collect model-specific refusal directions from matched harmful/benign prompts
-3. apply a transparent edit or run a bounded Heretic/OBLITERATUS search
-4. serve exactly one candidate at a time
-5. promote only if refusals drop while normal-use, challenge, artifact, and
-   external benchmark scores stay near the source model
+## DGX Spark Rules
 
-For nearby checkpoints within the same architecture family, a known-good recipe
-can be used as a warm start. The Gemopus r7 recipe does this: it computes fresh
-directions on `Jackrong/Gemopus-4-26B-A4B-it`, then applies the selected base
-Gemma t34 Heretic parameters. For a new architecture such as Qwen, reuse the
-workflow and prompt/eval harness, but recalibrate targets, layer ranges,
-strengths, and search parameters before trusting the result.
+DGX Spark settings are hardware policy, not model constants. Default training
+and serving paths preserve system headroom with CPU, memory, disk, dataloader,
+checkpoint, and one-model-at-a-time guardrails. Spark can benefit from high
+parallelism in preprocessing, but that does not mean multiplying large model
+forward passes.
 
-## DGX Spark Optimization
-
-Spark-specific defaults are hardware profile settings, not Gemma-only logic.
-`MODEL_FORGE_HARDWARE_PROFILE=dgx_spark` applies conservative vLLM and training
-defaults inspired by AEON-7's public Spark/NVFP4 work: SM 12.1-native serving,
-FP8 KV cache, chunked prefill, prefix caching, expandable CUDA allocation
-segments, low default sequence count, and explicit high-parallelism opt-in for
-pipeline stages that benefit from it.
-
-For ModelOpt/NVFP4 checkpoints, pass quantization and parser settings through
-environment overrides:
-
-```bash
-VLLM_QUANTIZATION=modelopt \
-VLLM_DTYPE=auto \
-VLLM_KV_CACHE_DTYPE=fp8_e4m3 \
-./forge serve <family> <variant>
-```
-
-For compatible draft models, speculative decoding is also a serving override:
-
-```bash
-VLLM_SPECULATIVE_CONFIG='{"method":"eagle3","model":"/models/drafter","num_speculative_tokens":3}' \
-./forge serve <family> <variant>
-```
-
-See `docs/spark-optimizations.md` for the full hardware policy and AEON-7
-references.
-
-```bash
-./forge serve gemma4_26b_a4b ft
-./forge eval gemma4_26b_a4b ft
-```
-
-```bash
-./forge serve gemma4_26b_a4b local_ft
-./forge eval gemma4_26b_a4b local_ft
-```
-
-Fine-tuned adapter variants should declare `adapter: true`,
-`base_variant: <base>`, and `lora_rank` in
-`configs/model_families/<family>.yaml`. `./forge serve` will load the base
-checkpoint and attach the adapter through vLLM LoRA serving when the backend
-supports it. For MoE or backend-limited paths, set `serve_strategy: merged`,
-create the merged checkpoint with `scripts/merge_peft_adapter.py`, and evals
-will still use the adapter `served_model_name`.
-
-```bash
-./forge serve gemma4_26b_a4b abli
-./forge eval gemma4_26b_a4b abli
-```
-
-`compare` prints a Rich terminal summary with internal scores, external
-benchmark scores, deltas against base, and recommendations. It also writes the
-HTML reports:
-
-```text
-reports/generated/gemma4_26b_a4b_comparison/comparison_report.html
-```
-
-Generated artifacts can be reviewed side by side here:
-
-```text
-reports/generated/gemma4_26b_a4b_comparison/artifact_compare.html
-```
-
-## Focused Commands
-
-The default `eval` command is the recommended path. Focused commands are useful
-for quick checks or debugging:
-
-```bash
-./forge eval gemma4_26b_a4b base --smoke
-./forge eval gemma4_26b_a4b base --internal
-./forge eval gemma4_26b_a4b base --artifact
-./forge eval gemma4_26b_a4b base --external
-./forge compare gemma4_26b_a4b
-```
-
-For a stronger internal baseline, run three sampled trials per prompt. This is
-intentionally expensive because the Gemma internal suite is 106 prompts per
-variant, so three trials is 318 generations per variant:
-
-```bash
-MODEL_FORGE_TRIALS=3 ./forge eval gemma4_26b_a4b base --internal
-MODEL_FORGE_TRIALS=3 ./forge eval gemma4_26b_a4b ft --internal
-MODEL_FORGE_TRIALS=3 ./forge eval gemma4_26b_a4b abli --internal
-./forge compare gemma4_26b_a4b
-./forge golden-summary gemma4_26b_a4b
-```
-
-Later, compare a refreshed report against that compact baseline without
-rerunning the models:
-
-```bash
-./forge golden-check gemma4_26b_a4b
-```
-
-## External Benchmarks
-
-Run IFEval through `lm-evaluation-harness` against the served model:
-
-```bash
-./forge eval gemma4_26b_a4b base --external
-./forge eval gemma4_26b_a4b ft --external
-./forge eval gemma4_26b_a4b abli --external
-```
-
-The external command checks the active server first, so the requested variant
-must match the model currently served by `./forge serve`.
-
-For a quick check:
-
-```bash
-MODEL_FORGE_EXTERNAL_LIMIT=20 ./forge external gemma4_26b_a4b base
-```
-
-External outputs are written to:
-
-```text
-reports/generated/gemma4_26b_a4b_external/
-```
-
-## What Gets Measured
-
-model-forge tracks:
-
-- workflow success
-- structured output adherence
-- normal-use regression
-- benign refusal rate
-- unsafe overcompliance
-- latency and tokens/sec
-- raw responses and generated artifacts
-- external benchmark outputs
-
-The built-in evals are a screening harness. Promotion decisions should also use
-external benchmarks and human inspection of raw outputs.
-
-## Families
-
-List configured families:
-
-```bash
-./forge families
-```
-
-Family definitions live in:
-
-```text
-configs/model_families/
-```
-
-A family file defines variants, local model paths, served aliases, eval configs,
-external benchmark defaults, and report locations. Adding a new model family
-should usually mean adding one YAML file plus, if needed, a serving profile and
-an abliteration config that names the architecture-specific target modules.
-
-## Useful Overrides
-
-```bash
-MODEL_FORGE_MODELS_DIR=/data/models ./forge serve gemma4_26b_a4b base
-MODEL_FORGE_HARDWARE_PROFILE=dgx_spark ./forge serve gemma4_26b_a4b base
-GPU_MEMORY_UTILIZATION=0.80 ./forge serve gemma4_26b_a4b base
-MAX_MODEL_LEN=16384 ./forge serve gemma4_26b_a4b base
-VLLM_CPU_OFFLOAD_GB=24 ./forge serve gemma4_26b_a4b base
-VLLM_QUANTIZATION=modelopt VLLM_KV_CACHE_DTYPE=fp8_e4m3 ./forge serve gemma4_26b_a4b local_abli
-VLLM_SPECULATIVE_CONFIG='{"method":"eagle3","model":"/models/drafter","num_speculative_tokens":3}' ./forge serve gemma4_26b_a4b local_abli
-MODEL_FORGE_ENABLE_HIGH_PARALLELISM=1 ./forge ablate gemma4_26b_a4b plan
-MODEL_FORGE_PARALLELISM=192 ./forge ablate gemma4_26b_a4b plan
-HF_MAX_WORKERS=16 HF_XET_NUM_CONCURRENT_RANGE_GETS=16 ./forge download gemma4_26b_a4b base
-```
+Read [docs/dgx-spark.md](docs/dgx-spark.md),
+[docs/spark-optimizations.md](docs/spark-optimizations.md), and
+[docs/finetuning.md](docs/finetuning.md) before starting long jobs.
 
 ## Repository Layout
 
 ```text
-configs/                 Experiment and family configuration
-docs/                    Detailed workflow notes
-evals/                   Prompt sets and scoring rubrics
-pipelines/               Fine-tuning and ablation pipeline notes
-reports/                 Generated comparison and external reports
-results/                 Raw evaluation outputs
-scripts/                 Internal helpers and compatibility wrappers
-src/model_forge/         Python package source
-forge                    Main user-facing command
+configs/        Model families, fine-tuning configs, ablation configs, objectives
+datasets/       Dataset manifests, seed rows, generated small packs and reports
+docs/           Workflow docs, status, roadmap, and experiment ledger
+evals/          Internal prompt buckets and rubrics
+models/         Directory conventions for local model artifacts
+pipelines/      Pipeline design notes
+recipes/        Tracked reusable run templates and known-good generated recipes
+reports/        Report conventions; generated reports are ignored
+results/        Raw eval output conventions; generated result dirs are ignored
+scripts/        Operational helpers and compatibility wrappers
+src/            `model_forge` Python package
+forge           User-facing CLI wrapper
 ```
+
+Generated run directories, model weights, tokenized datasets, large reports, and
+logs are not committed. See
+[docs/artifact-retention.md](docs/artifact-retention.md) before deciding what to
+commit, delete, or upload.
 
 ## Design Principles
 
-- Keep the public workflow short and reproducible.
-- Preserve raw outputs so results can be inspected.
-- Record experiment hypotheses, artifact paths, validation, and publish status
-  in `docs/experiment-ledger.md` so another agent can resume cleanly.
-- Use external benchmarks instead of trusting only local checks.
-- Treat ablation success as fewer refusals while preserving capability; report
-  unsafe compliance separately as risk.
-- Treat fine-tune success as better capability and structure without regressions.
+- Optimize for reproducible post-training decisions, not one-off demos.
+- Compare every edited model against the source checkpoint it came from.
+- Treat ablation success as lower refusal while preserving source capability.
+- Report unsafe overcompliance separately from capability.
+- Treat fine-tune success as better capability and format quality without
+  regressions.
+- Keep model-family support in config and reusable pipeline code.
+- Push code, configs, docs, recipes, and lightweight manifests to GitHub.
+- Upload completed models, datasets, and durable eval artifacts to Hugging Face.
+- Never commit tokens or raw model weights.

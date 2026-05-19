@@ -17,6 +17,9 @@ reusable pipeline code over one-off scripts.
 ## First Things To Inspect
 
 - `README.md`: project overview and model-agnostic workflow
+- `docs/status.md`: current short handoff state and recommended next work
+- `docs/artifact-retention.md`: what belongs in Git, local scratch, or Hugging
+  Face
 - `docs/finetuning.md`: SFT/QLoRA workflow and promotion gates
 - `docs/abliteration.md`: refusal-ablation methodology and promotion criteria
 - `docs/evaluation-strategy.md`: eval design and interpretation
@@ -26,6 +29,7 @@ reusable pipeline code over one-off scripts.
   serving/quantization lessons, and safe overrides
 - `configs/model_families/`: model family registry
 - `configs/abliteration/`: ablation recipes
+- `recipes/`: tracked reusable run templates and known-good generated recipes
 - `evals/prompts/`: internal prompt buckets and rubrics
 - `src/model_forge/`: Python package source
 - `forge`: user-facing CLI wrapper
@@ -44,8 +48,8 @@ reusable pipeline code over one-off scripts.
 8. Promote only when refusal suppression improves and source-model capability is
    preserved within expected eval variance.
 9. Save raw responses, scores, model cards, and exact recipe/config paths.
-10. Update `docs/experiment-ledger.md` before handing off or starting a long
-   run.
+10. Update `docs/status.md` and `docs/experiment-ledger.md` before handing off
+   or starting a long run.
 
 ## Useful Commands
 
@@ -115,6 +119,8 @@ another backend without hard-coding Gemma behavior.
   licenses, quality gates, and holdouts.
 - Do not train on model-forge eval prompts. Train adjacent skills and let the
   held-out eval suite decide promotion.
+- Treat `runs/finetune/<name>/` as local generated scratch. Tracked reusable
+  templates belong under `recipes/finetuning/<name>/`.
 - For FT data iteration, use
   `./forge data plan|gaps|generate|verify|review|pack <family> <variant> --smoke`
   before editing training configs. The local FT v1 pack defaults to the
@@ -159,8 +165,9 @@ Run tests:
 ## Hardware Discipline
 
 - Full fine-tuning must run through generated `runs/finetune/<name>/run.sh`, not
-  an ad hoc `python train.py` command. The launcher wraps data prep and training
-  in `systemd-run --scope` when available.
+  an ad hoc `python train.py` command. Reusable examples live under
+  `recipes/finetuning/<name>/`, but the active job runs from `runs/`. The
+  launcher wraps data prep and training in `systemd-run --scope` when available.
 - If unprivileged `systemd-run --scope` needs interactive auth, use
   `scripts/run_finetune_spark_container.sh`; it runs the generated `run.sh`
   inside `nemotron-runner:latest` with Docker CPU/memory limits and CUDA access.
@@ -239,6 +246,8 @@ When publishing a model:
   public release
 - avoid committing raw model weights into this Git repo
 - never write Hugging Face tokens into tracked files or shell scripts
+- follow `docs/artifact-retention.md` when deciding whether an artifact belongs
+  in Git, local scratch, or Hugging Face
 
 Repository link for model cards:
 

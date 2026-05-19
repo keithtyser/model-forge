@@ -43,7 +43,8 @@ model-forge keeps that useful structure but makes it stricter:
 - malformed `<think>` rejection
 - holdout list tied to model-forge eval prompts
 - promotion gates against both base and downloaded FT reference
-- generated run artifacts under `runs/finetune/<name>/`
+- generated runtime artifacts under `runs/finetune/<name>/`
+- tracked reusable recipe snapshots under `recipes/finetuning/<name>/`
 
 The goal is not to copy Jackrong's constants. The goal is to produce a better,
 auditable recipe that can be moved to Qwen, Llama, Mistral, Gemma, or a new hot
@@ -72,6 +73,12 @@ runs/finetune/gemma4_26b_a4b_local_ft_v0/
   run.sh
   eval_after_training.sh
 ```
+
+`runs/` is local runtime scratch and is intentionally ignored. If a generated
+run becomes a useful reusable reference, move only small files such as
+`plan.json`, `run.sh`, `train_trl_sft.py`, and `eval_after_training.sh` into
+`recipes/finetuning/<name>/`. Keep `train.jsonl`, tokenized caches, overlays,
+checkpoints, and logs out of Git.
 
 Start the full training run:
 

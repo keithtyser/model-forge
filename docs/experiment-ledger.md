@@ -13,6 +13,8 @@ status so another agent can resume without relying on chat history.
   Do not write the token to a file, command log, model card, config, or commit.
 - Do not upload partial or smoke-test artifacts as final models or datasets.
 - Use `HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN`; never commit tokens.
+- Follow `docs/artifact-retention.md` before committing, deleting, or uploading
+  generated artifacts.
 
 Publishing helper:
 
@@ -25,6 +27,31 @@ Publishing helper:
 ```
 
 For prepared datasets, pass `--repo-type dataset`.
+
+## Repo Hygiene: Recipes And Artifact Retention
+
+Status: completed.
+
+Hypothesis: another agent can resume faster if tracked reusable recipes are
+separated from ignored runtime scratch, and if the repo has a clear rule for
+what belongs in Git versus Hugging Face or local storage.
+
+Changes:
+
+- moved the tracked Gemma local FT v0 generated recipe files from ignored
+  `runs/finetune/gemma4_26b_a4b_local_ft_v0/` into
+  `recipes/finetuning/gemma4_26b_a4b_local_ft_v0/`
+- added `docs/artifact-retention.md`
+- added `docs/status.md`
+- shortened `README.md` into a model-agnostic repo map with links to detailed
+  docs
+- updated `AGENTS.md` so future agents know to inspect status, retention rules,
+  recipes, and the experiment ledger first
+
+Validation:
+
+- local ignored `runs/` artifacts were preserved
+- tracked files no longer live under ignored `runs/`
 
 ## Fine-Tune: Gemma 4 26B A4B Local FT v0
 
@@ -48,6 +75,12 @@ Generated run artifacts:
 
 ```text
 runs/finetune/gemma4_26b_a4b_local_ft_v0/
+```
+
+Tracked reusable recipe snapshot:
+
+```text
+recipes/finetuning/gemma4_26b_a4b_local_ft_v0/
 ```
 
 Validation completed:
