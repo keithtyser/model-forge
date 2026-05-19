@@ -89,6 +89,13 @@ generation:
       enabled: true
       variants_per_seed: 1
 
+review:
+  sample_size: 50
+  min_examples_per_skill: 5
+  min_assistant_words: 35
+  max_assistant_words: 260
+  max_seed_similarity: 0.74
+
 skills:
   - id: eval_latency_throughput
     role: eval_diagnostics

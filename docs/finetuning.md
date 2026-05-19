@@ -374,6 +374,7 @@ The first no-training implementation slice is the local FT v1 dataset factory:
 ./forge data judge gemma4_26b_a4b local_ft_v1 --smoke
 ./forge data verify gemma4_26b_a4b local_ft_v1 --smoke
 ./forge data filter gemma4_26b_a4b local_ft_v1 --smoke
+./forge data review gemma4_26b_a4b local_ft_v1 --smoke --sample 50
 ./forge data pack gemma4_26b_a4b local_ft_v1 --smoke
 ./forge data publish gemma4_26b_a4b local_ft_v1 --smoke
 ```
@@ -381,8 +382,8 @@ The first no-training implementation slice is the local FT v1 dataset factory:
 Current MVP behavior is deterministic and local: it uses human seed rows,
 saved eval failure extraction, template-provider candidate generation,
 heuristic scoring, static skill verification, holdout-overlap checks,
-accepted/rejected row reports, coverage warnings, and a dry-run Hugging Face
-publish plan. It does not call a live teacher model unless an
+accepted/rejected row reports, curation review, coverage warnings, and a dry-run
+Hugging Face publish plan. It does not call a live teacher model unless an
 OpenAI-compatible provider is configured explicitly, and it does not upload
 anything.
 
@@ -396,7 +397,7 @@ datasets/generated/gemma4_26b_a4b_local_ft_v1/
 src/model_forge/data/factory.py
 ```
 
-The generated smoke pack currently contains 36 accepted examples: 24 human seed
+The generated smoke pack currently contains 49 accepted examples: 37 human seed
 rows plus 12 deterministic synthetic rows generated across `self_instruct`,
 `evol_instruct`, `instruction_backtranslation`, and
 `eval_adjacent_generation`. It is a scaffold and quality-control path, not the
@@ -424,6 +425,20 @@ It checks message structure, source metadata, configured skills, and
 skill-specific static signals such as JSON/schema constraints, SQL NULL
 coverage, safe shell wording, eval latency fields, and checkpoint-selection
 methodology. `filter` rejects rows with failed verification before packaging.
+
+The review step writes:
+
+```text
+datasets/generated/gemma4_26b_a4b_local_ft_v1/review_report.json
+datasets/generated/gemma4_26b_a4b_local_ft_v1/review_sheet.md
+```
+
+It samples accepted rows across skills and generation methods, flags weak rows
+such as copied seed wording, unsafe detail, overly generic answers, missing
+concrete checks, and failed verification, then records a
+`ready_to_scale_generation` gate. The current smoke pack clears the per-skill
+coverage gate and has `ready_to_scale_generation: true`; it is ready for a
+small live-teacher generation smoke, not for training yet.
 
 The gap report is generated from the saved local FT v0 internal responses and
 summarizes failed buckets, missed concepts, and recommended next dataset skills:

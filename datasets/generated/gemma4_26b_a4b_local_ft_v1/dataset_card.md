@@ -28,10 +28,10 @@ observed fine-tuning gaps without copying held-out model-forge eval prompts.
 
 ## Counts
 
-- Accepted rows: 36
+- Accepted rows: 49
 - Rejected rows: 0
-- Mean quality score: 0.8998
-- Verification passed: 36
+- Mean quality score: 0.8966
+- Verification passed: 49
 - Verification failed: 0
 - Seed-only scaffold: false
 - Smoke-only scaffold: true
@@ -39,36 +39,31 @@ observed fine-tuning gaps without copying held-out model-forge eval prompts.
 ## Skill Counts
 
 - `benign_safety_analysis`: 6
-- `checkpoint_selection`: 4
-- `config_review`: 2
+- `checkpoint_selection`: 5
+- `config_review`: 5
 - `docker_disk_safety`: 6
 - `eval_latency_throughput`: 7
-- `git_workflow_repair`: 2
-- `json_schema_repair`: 2
-- `shell_safety`: 2
+- `git_workflow_repair`: 5
+- `json_schema_repair`: 5
+- `shell_safety`: 5
 - `sql_edge_cases`: 7
 
 ## Source Counts
 
-- `human_seed`: 24
+- `human_seed`: 37
 - `synthetic`: 12
 
 ## Generation Method Counts
 
 - `eval_adjacent_generation`: 3
 - `evol_instruct`: 3
-- `human_seed`: 24
+- `human_seed`: 37
 - `instruction_backtranslation`: 3
 - `self_instruct`: 3
 
 ## Coverage Warnings
 
-- `accepted_count_below_min_target`: accepted rows 36 below configured minimum 500
-- `skill_below_min_seed_examples`: shell_safety has 2 accepted rows, below seed target 5
-- `skill_below_min_seed_examples`: config_review has 2 accepted rows, below seed target 5
-- `skill_below_min_seed_examples`: json_schema_repair has 2 accepted rows, below seed target 5
-- `skill_below_min_seed_examples`: git_workflow_repair has 2 accepted rows, below seed target 5
-- `skill_below_min_seed_examples`: checkpoint_selection has 4 accepted rows, below seed target 5
+- `accepted_count_below_min_target`: accepted rows 49 below configured minimum 500
 
 ## Provenance
 

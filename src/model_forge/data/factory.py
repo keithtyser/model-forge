@@ -812,6 +812,7 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
         "holdouts": copy.deepcopy(config.get("holdouts", [])),
         "generation_methods": copy.deepcopy(config.get("generation_methods", {})),
         "generation": copy.deepcopy(generation_config(config)),
+        "review": copy.deepcopy(config.get("review", {})),
         "seed_only": bool(config.get("seed_only", False)),
         "smoke_only": bool(config.get("smoke_only", False)),
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -1111,6 +1112,240 @@ def command_filter(
     return accepted_path, rejected_path
 
 
+def review_config(config: dict[str, Any]) -> dict[str, Any]:
+    review = config.get("review", {})
+    return review if isinstance(review, dict) else {}
+
+
+def sample_review_rows(rows: list[dict[str, Any]], sample_size: int) -> list[dict[str, Any]]:
+    if sample_size <= 0 or len(rows) <= sample_size:
+        return rows
+    selected: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for skill in sorted({skill for row in rows for skill in row.get("skills", [])}):
+        for row in rows:
+            if row.get("id") in seen_ids:
+                continue
+            if skill in row.get("skills", []):
+                selected.append(row)
+                seen_ids.add(str(row.get("id")))
+                break
+    for method in sorted({str(row.get("generation_method", "unknown")) for row in rows}):
+        for row in rows:
+            if row.get("id") in seen_ids:
+                continue
+            if str(row.get("generation_method", "unknown")) == method:
+                selected.append(row)
+                seen_ids.add(str(row.get("id")))
+                break
+    for row in rows:
+        if len(selected) >= sample_size:
+            break
+        if row.get("id") in seen_ids:
+            continue
+        selected.append(row)
+        seen_ids.add(str(row.get("id")))
+    return selected[:sample_size]
+
+
+def seed_lookup(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    seeds = load_seed_rows(config)
+    return {str(row.get("id", stable_id(row))): row for row in seeds}
+
+
+def copied_seed_similarity(row: dict[str, Any], seeds: dict[str, dict[str, Any]]) -> float:
+    source = row.get("source", {}) if isinstance(row.get("source"), dict) else {}
+    generation = source.get("generation", {}) if isinstance(source.get("generation"), dict) else {}
+    seed_id = generation.get("seed_id") or str(source.get("source_uri", "")).removeprefix("seed:")
+    seed = seeds.get(str(seed_id))
+    if not seed:
+        return 0.0
+    return round(jaccard(row_text(row), row_text(seed)), 4)
+
+
+def row_review_flags(row: dict[str, Any], config: dict[str, Any], seeds: dict[str, dict[str, Any]]) -> list[str]:
+    settings = review_config(config)
+    thresholds = config.get("quality_thresholds", {}) if isinstance(config.get("quality_thresholds"), dict) else {}
+    flags = []
+    assistant = message_content(row, "assistant")
+    assistant_words = len(re.findall(r"\w+", assistant))
+    min_words = int(settings.get("min_assistant_words", 35) or 35)
+    max_words = int(settings.get("max_assistant_words", 260) or 260)
+    if assistant_words < min_words:
+        flags.append("too_generic")
+    if assistant_words > max_words:
+        flags.append("too_long")
+    concrete_terms = (
+        "check", "verify", "compare", "inspect", "run", "validate", "review",
+        "confirm", "log", "measure", "count", "require", "avoid", "include",
+        "use", "explain", "evaluate", "select", "refuse", "document", "test",
+    )
+    if not has_any(assistant, concrete_terms):
+        flags.append("missing_concrete_checks")
+    similarity = copied_seed_similarity(row, seeds)
+    max_seed_similarity = float(settings.get("max_seed_similarity", 0.74))
+    source = row.get("source", {}) if isinstance(row.get("source"), dict) else {}
+    if source.get("kind") == "synthetic" and similarity > max_seed_similarity:
+        flags.append("copied_seed_wording")
+    harmful_terms = (
+        "payload", "exploit steps", "credential theft", "delete another",
+        "doxxing", "bypass", "malware", "exfiltrate", "persistence",
+    )
+    safe_terms = ("avoid", "without", "refuse", "do not", "safe", "responsible", "not", "minimize")
+    if has_any(assistant, harmful_terms) and not has_any(assistant, safe_terms):
+        flags.append("unsafe_detail")
+    verification = row.get("verification", {}) if isinstance(row.get("verification"), dict) else {}
+    min_quality = float(thresholds.get("min_average_score", 0.0))
+    if not verification.get("passed", False) or float(row.get("quality_score_average", 0.0)) < min_quality:
+        flags.append("poor_assistant_answer")
+    return flags
+
+
+def build_review_report(config: dict[str, Any], accepted: list[dict[str, Any]], rejected: list[dict[str, Any]], sample_size: int) -> dict[str, Any]:
+    settings = review_config(config)
+    seeds = seed_lookup(config)
+    sampled = sample_review_rows(accepted, sample_size)
+    reviewed_rows = []
+    flag_counts: Counter[str] = Counter()
+    critical_flags = {"copied_seed_wording", "unsafe_detail", "poor_assistant_answer"}
+    critical_flag_counts: Counter[str] = Counter()
+    for row in sampled:
+        flags = row_review_flags(row, config, seeds)
+        for flag in flags:
+            flag_counts[flag] += 1
+            if flag in critical_flags:
+                critical_flag_counts[flag] += 1
+        reviewed_rows.append({
+            "id": row.get("id"),
+            "skills": row.get("skills", []),
+            "generation_method": row.get("generation_method", "unknown"),
+            "source_kind": row.get("source", {}).get("kind", "unknown") if isinstance(row.get("source"), dict) else "unknown",
+            "quality_score_average": row.get("quality_score_average"),
+            "verification_passed": row.get("verification", {}).get("passed") if isinstance(row.get("verification"), dict) else None,
+            "copied_seed_similarity": copied_seed_similarity(row, seeds),
+            "flags": flags,
+            "user": compact_text(message_content(row, "user"), 44),
+            "assistant": compact_text(message_content(row, "assistant"), 70),
+        })
+
+    skill_counts = Counter(skill for row in accepted for skill in row.get("skills", []))
+    method_counts = Counter(str(row.get("generation_method", "unknown")) for row in accepted)
+    source_counts = Counter(
+        str(row.get("source", {}).get("kind", "unknown"))
+        for row in accepted
+        if isinstance(row.get("source"), dict)
+    )
+    min_examples = int(settings.get("min_examples_per_skill", config.get("quality_thresholds", {}).get("min_seed_examples_per_skill", 0)) or 0)
+    coverage_gaps = [
+        {"skill": skill, "count": skill_counts.get(skill, 0), "required": min_examples}
+        for skill in skill_targets(config)
+        if min_examples and skill_counts.get(skill, 0) < min_examples
+    ]
+    gates = {
+        "sample_has_rows": bool(sampled),
+        "skill_coverage_ready": not coverage_gaps,
+        "no_critical_flags": not critical_flag_counts,
+        "has_synthetic_rows": source_counts.get("synthetic", 0) > 0,
+    }
+    ready_to_scale = all(gates.values())
+    return {
+        "dataset_id": config["id"],
+        "accepted_count": len(accepted),
+        "rejected_count": len(rejected),
+        "sample_size": sample_size,
+        "reviewed_count": len(sampled),
+        "ready_to_scale_generation": ready_to_scale,
+        "gates": gates,
+        "flag_counts": dict(sorted(flag_counts.items())),
+        "critical_flag_counts": dict(sorted(critical_flag_counts.items())),
+        "skill_counts": dict(sorted(skill_counts.items())),
+        "generation_method_counts": dict(sorted(method_counts.items())),
+        "source_kind_counts": dict(sorted(source_counts.items())),
+        "coverage_gaps": coverage_gaps,
+        "reviewed_rows": reviewed_rows,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def review_sheet(report: dict[str, Any]) -> str:
+    gates = "\n".join(f"- `{key}`: {str(value).lower()}" for key, value in report["gates"].items())
+    coverage = "\n".join(
+        f"- `{item['skill']}`: {item['count']} / {item['required']}"
+        for item in report.get("coverage_gaps", [])
+    ) or "- none"
+    flags = "\n".join(f"- `{flag}`: {count}" for flag, count in report.get("flag_counts", {}).items()) or "- none"
+    rows = []
+    for row in report.get("reviewed_rows", []):
+        rows.append(
+            "\n".join([
+                f"### {row['id']}",
+                f"- Skills: {', '.join(row.get('skills', []))}",
+                f"- Method: `{row.get('generation_method')}` / Source: `{row.get('source_kind')}`",
+                f"- Quality: `{row.get('quality_score_average')}` / Verification: `{str(row.get('verification_passed')).lower()}`",
+                f"- Copied-seed similarity: `{row.get('copied_seed_similarity')}`",
+                f"- Flags: {', '.join(row.get('flags', [])) or 'none'}",
+                f"- User: {row.get('user')}",
+                f"- Assistant: {row.get('assistant')}",
+            ])
+        )
+    sampled_rows = "\n\n".join(rows) or "No sampled rows."
+    return f"""# Dataset Review: {report['dataset_id']}
+
+## Summary
+
+- Accepted rows: {report['accepted_count']}
+- Rejected rows: {report['rejected_count']}
+- Reviewed rows: {report['reviewed_count']} / {report['sample_size']}
+- Ready to scale generation: {str(report['ready_to_scale_generation']).lower()}
+
+## Gates
+
+{gates}
+
+## Coverage Gaps
+
+{coverage}
+
+## Flags
+
+{flags}
+
+## Sampled Rows
+
+{sampled_rows}
+"""
+
+
+def command_review(
+    config: dict[str, Any],
+    overwrite: bool,
+    smoke: bool = False,
+    max_generated_candidates: int | None = None,
+    provider_override: str | None = None,
+    sample_size: int | None = None,
+) -> dict[str, str]:
+    accepted_path, rejected_path = command_filter(
+        config,
+        overwrite=overwrite,
+        smoke=smoke,
+        max_generated_candidates=max_generated_candidates,
+        provider_override=provider_override,
+    )
+    output_dir = resolve_repo_path(config["output_dir"])
+    report_path = output_dir / "review_report.json"
+    sheet_path = output_dir / "review_sheet.md"
+    if report_path.exists() and sheet_path.exists() and not overwrite:
+        return {"review_report": str(report_path), "review_sheet": str(sheet_path)}
+    settings = review_config(config)
+    size = sample_size if sample_size is not None else int(settings.get("sample_size", 50) or 50)
+    accepted = read_jsonl(accepted_path)
+    rejected = read_jsonl(rejected_path)
+    report = build_review_report(config, accepted, rejected, size)
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    sheet_path.write_text(review_sheet(report), encoding="utf-8")
+    return {"review_report": str(report_path), "review_sheet": str(sheet_path)}
+
+
 def quality_report(config: dict[str, Any], accepted: list[dict[str, Any]], rejected: list[dict[str, Any]]) -> dict[str, Any]:
     skill_counts = Counter(skill for row in accepted for skill in row.get("skills", []))
     rejection_counts = Counter(reason for row in rejected for reason in row.get("rejection_reasons", []))
@@ -1260,8 +1495,10 @@ def command_pack(
     report_path = output_dir / "quality_report.json"
     card_path = output_dir / "dataset_card.md"
     gap_path = output_dir / "gap_report.yaml"
+    review_report_path = output_dir / "review_report.json"
+    review_sheet_path = output_dir / "review_sheet.md"
     if all(path.exists() for path in (dataset_path, manifest_path, report_path, card_path, verification_path, generation_report_path)) and not overwrite:
-        return {
+        outputs = {
             "dataset": str(dataset_path),
             "manifest": str(manifest_path),
             "quality_report": str(report_path),
@@ -1269,6 +1506,11 @@ def command_pack(
             "verification": str(verification_path),
             "generation_report": str(generation_report_path),
         }
+        if review_report_path.exists():
+            outputs["review_report"] = str(review_report_path)
+        if review_sheet_path.exists():
+            outputs["review_sheet"] = str(review_sheet_path)
+        return outputs
 
     accepted = read_jsonl(accepted_path)
     rejected = read_jsonl(rejected_path)
@@ -1298,6 +1540,8 @@ def command_pack(
             "rejected": display_path(rejected_path),
             "verification": display_path(verification_path) if verification_path.exists() else None,
             "generation_report": display_path(generation_report_path) if generation_report_path.exists() else None,
+            "review_report": display_path(review_report_path) if review_report_path.exists() else None,
+            "review_sheet": display_path(review_sheet_path) if review_sheet_path.exists() else None,
             "quality_report": display_path(report_path),
             "dataset_card": display_path(card_path),
             "gap_report": display_path(gap_path) if gap_path.exists() else None,
@@ -1306,7 +1550,7 @@ def command_pack(
     })
     write_yaml(manifest_path, manifest)
     card_path.write_text(dataset_card(config, report), encoding="utf-8")
-    return {
+    outputs = {
         "dataset": str(dataset_path),
         "manifest": str(manifest_path),
         "quality_report": str(report_path),
@@ -1314,6 +1558,11 @@ def command_pack(
         "verification": str(verification_path),
         "generation_report": str(generation_report_path),
     }
+    if review_report_path.exists():
+        outputs["review_report"] = str(review_report_path)
+    if review_sheet_path.exists():
+        outputs["review_sheet"] = str(review_sheet_path)
+    return outputs
 
 
 def command_publish(
@@ -1349,8 +1598,12 @@ def command_publish(
     ]
     if (output_dir / "gap_report.yaml").exists():
         files.append(display_path(output_dir / "gap_report.yaml"))
+    if (output_dir / "review_report.json").exists():
+        files.append(display_path(output_dir / "review_report.json"))
+    if (output_dir / "review_sheet.md").exists():
+        files.append(display_path(output_dir / "review_sheet.md"))
     blocked_until = [
-        "human reviews dataset_card.md",
+        "human reviews dataset_card.md and review_sheet.md",
         "license/provenance checks pass",
         "HF publish command is run explicitly",
     ]
@@ -1383,7 +1636,7 @@ def default_config_for(family: str, variant: str) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Plan and pack model-forge dataset-factory artifacts")
-    parser.add_argument("step", choices=["plan", "gaps", "seed", "generate", "judge", "verify", "filter", "pack", "publish"])
+    parser.add_argument("step", choices=["plan", "gaps", "seed", "generate", "judge", "verify", "filter", "review", "pack", "publish"])
     parser.add_argument("family", nargs="?")
     parser.add_argument("variant", nargs="?")
     parser.add_argument("--config", type=Path)
@@ -1391,6 +1644,7 @@ def main() -> None:
     parser.add_argument("--smoke", action="store_true", help="use configured smoke generation limits")
     parser.add_argument("--max-generated-candidates", type=int, help="override generated candidate limit")
     parser.add_argument("--provider", help="override generation provider type, for example template or openai_compatible")
+    parser.add_argument("--sample", type=int, help="review sample size")
     args = parser.parse_args()
 
     config_path = args.config or default_config_for(args.family or "", args.variant or "")
@@ -1443,6 +1697,17 @@ def main() -> None:
         )
         console.print(f"[green]Wrote[/green] {display_path(accepted)}")
         console.print(f"[green]Wrote[/green] {display_path(rejected)}")
+    elif args.step == "review":
+        outputs = command_review(
+            config,
+            args.overwrite,
+            smoke=args.smoke,
+            max_generated_candidates=args.max_generated_candidates,
+            provider_override=args.provider,
+            sample_size=args.sample,
+        )
+        for path in outputs.values():
+            console.print(f"[green]Wrote[/green] {display_path(Path(path))}")
     elif args.step == "pack":
         outputs = command_pack(
             config,

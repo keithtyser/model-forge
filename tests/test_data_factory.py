@@ -13,6 +13,7 @@ from model_forge.data.factory import (
     command_gaps,
     command_pack,
     command_publish,
+    command_review,
     command_verify,
     load_yaml,
 )
@@ -31,6 +32,7 @@ class DatasetFactoryTests(unittest.TestCase):
         self.assertIn("self_instruct", plan["generation_methods"]["planned"])
         self.assertIn("self_instruct", plan["generation_methods"]["enabled_now"])
         self.assertEqual(plan["generation"]["provider"]["type"], "template")
+        self.assertEqual(plan["review"]["min_examples_per_skill"], 5)
         self.assertEqual(plan["quality_thresholds"]["max_holdout_similarity"], 0.82)
         self.assertFalse(plan["seed_only"])
         self.assertTrue(plan["smoke_only"])
@@ -74,6 +76,19 @@ class DatasetFactoryTests(unittest.TestCase):
             report = json.loads((Path(tmp) / "generation_report.json").read_text(encoding="utf-8"))
             self.assertEqual(report["provider"]["type"], "template")
             self.assertEqual(report["source_kind_counts"]["synthetic"], len(synthetic))
+
+    def test_review_command_writes_review_gate_artifacts(self) -> None:
+        config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["output_dir"] = tmp
+            outputs = command_review(config, overwrite=True, smoke=True, sample_size=12)
+            report = json.loads(Path(outputs["review_report"]).read_text(encoding="utf-8"))
+            sheet = Path(outputs["review_sheet"]).read_text(encoding="utf-8")
+            self.assertIn("ready_to_scale_generation", report)
+            self.assertEqual(report["reviewed_count"], 12)
+            self.assertIn("Dataset Review", sheet)
+            self.assertIn("Coverage Gaps", sheet)
 
     def test_verify_command_writes_static_skill_checks(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"

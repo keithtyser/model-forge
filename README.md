@@ -73,13 +73,14 @@ Plan and pack the first local FT v1 eval-adjacent dataset without training:
 ./forge data gaps gemma4_26b_a4b local_ft_v1
 ./forge data generate gemma4_26b_a4b local_ft_v1 --smoke
 ./forge data verify gemma4_26b_a4b local_ft_v1 --smoke
+./forge data review gemma4_26b_a4b local_ft_v1 --smoke --sample 50
 ./forge data pack gemma4_26b_a4b local_ft_v1 --smoke
 ./forge data publish gemma4_26b_a4b local_ft_v1 --smoke
 ```
 
 The default local FT v1 generation provider is deterministic `template` mode
-for smoke testing. `publish` is a dry-run plan only; it does not upload to
-Hugging Face.
+for smoke testing. The `review` step writes a curation report and scale-up
+gate. `publish` is a dry-run plan only; it does not upload to Hugging Face.
 
 Run each model. Keep `serve` running in one terminal, then run `eval` in another.
 `eval` runs the built-in checks, artifact generation, external benchmarks, and

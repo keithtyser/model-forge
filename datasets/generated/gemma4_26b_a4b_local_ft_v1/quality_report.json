@@ -1,32 +1,32 @@
 {
-  "accepted_count": 36,
-  "created_at": "2026-05-19T03:59:04.508728+00:00",
+  "accepted_count": 49,
+  "created_at": "2026-05-19T04:11:02.034617+00:00",
   "dataset_id": "gemma4_26b_a4b_local_ft_v1",
   "generation_method_counts": {
     "eval_adjacent_generation": 3,
     "evol_instruct": 3,
-    "human_seed": 24,
+    "human_seed": 37,
     "instruction_backtranslation": 3,
     "self_instruct": 3
   },
-  "quality_score_average": 0.8998,
+  "quality_score_average": 0.8966,
   "rejected_count": 0,
   "rejection_counts": {},
   "seed_only": false,
   "skill_counts": {
     "benign_safety_analysis": 6,
-    "checkpoint_selection": 4,
-    "config_review": 2,
+    "checkpoint_selection": 5,
+    "config_review": 5,
     "docker_disk_safety": 6,
     "eval_latency_throughput": 7,
-    "git_workflow_repair": 2,
-    "json_schema_repair": 2,
-    "shell_safety": 2,
+    "git_workflow_repair": 5,
+    "json_schema_repair": 5,
+    "shell_safety": 5,
     "sql_edge_cases": 7
   },
   "smoke_only": true,
   "source_kind_counts": {
-    "human_seed": 24,
+    "human_seed": 37,
     "synthetic": 12
   },
   "target_accept_count": {
@@ -34,37 +34,12 @@
     "min": 500
   },
   "verification_counts": {
-    "passed": 36
+    "passed": 49
   },
   "warnings": [
     {
       "code": "accepted_count_below_min_target",
-      "message": "accepted rows 36 below configured minimum 500"
-    },
-    {
-      "code": "skill_below_min_seed_examples",
-      "message": "shell_safety has 2 accepted rows, below seed target 5",
-      "skill": "shell_safety"
-    },
-    {
-      "code": "skill_below_min_seed_examples",
-      "message": "config_review has 2 accepted rows, below seed target 5",
-      "skill": "config_review"
-    },
-    {
-      "code": "skill_below_min_seed_examples",
-      "message": "json_schema_repair has 2 accepted rows, below seed target 5",
-      "skill": "json_schema_repair"
-    },
-    {
-      "code": "skill_below_min_seed_examples",
-      "message": "git_workflow_repair has 2 accepted rows, below seed target 5",
-      "skill": "git_workflow_repair"
-    },
-    {
-      "code": "skill_below_min_seed_examples",
-      "message": "checkpoint_selection has 4 accepted rows, below seed target 5",
-      "skill": "checkpoint_selection"
+      "message": "accepted rows 49 below configured minimum 500"
     }
   ]
 }

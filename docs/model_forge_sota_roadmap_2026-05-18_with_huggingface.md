@@ -3223,6 +3223,7 @@ At least one merged upstream PR and one profiler-backed perf report with end-to-
 [x] MF-0358 Add generated dataset HF publish path
 [x] MF-0359 Add Gemma local_ft_v1 eval-adjacent dataset recipe
 [x] MF-0360 Add eval-feedback loop that proposes next dataset skills from failures
+[x] MF-0361 Add forge data review with curation flags and scale-up gate
 ```
 
 ### P1: Artifact validation

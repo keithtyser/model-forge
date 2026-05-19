@@ -10,16 +10,16 @@ config_path: configs/datasets/gemma4_26b_a4b_local_ft_v1.yaml
 output_dir: datasets/generated/gemma4_26b_a4b_local_ft_v1
 seed_paths:
 - datasets/seeds/gemma4_26b_a4b_local_ft_v1.jsonl
-seed_count: 24
+seed_count: 37
 seed_skill_counts:
   benign_safety_analysis: 6
-  checkpoint_selection: 4
-  config_review: 2
+  checkpoint_selection: 5
+  config_review: 5
   docker_disk_safety: 2
   eval_latency_throughput: 3
-  git_workflow_repair: 2
-  json_schema_repair: 2
-  shell_safety: 2
+  git_workflow_repair: 5
+  json_schema_repair: 5
+  shell_safety: 5
   sql_edge_cases: 3
 target_accept_count:
   min: 500
@@ -119,45 +119,53 @@ generation:
   - name: eval_adjacent_generation
     enabled: true
     variants_per_seed: 1
+review:
+  sample_size: 50
+  min_examples_per_skill: 5
+  min_assistant_words: 35
+  max_assistant_words: 260
+  max_seed_similarity: 0.74
 seed_only: false
 smoke_only: true
-created_at: '2026-05-19T03:59:04.510037+00:00'
+created_at: '2026-05-19T04:11:02.035967+00:00'
 artifacts:
   dataset: datasets/generated/gemma4_26b_a4b_local_ft_v1/dataset.jsonl
   accepted: datasets/generated/gemma4_26b_a4b_local_ft_v1/accepted.jsonl
   rejected: datasets/generated/gemma4_26b_a4b_local_ft_v1/rejected.jsonl
   verification: datasets/generated/gemma4_26b_a4b_local_ft_v1/verification.jsonl
   generation_report: datasets/generated/gemma4_26b_a4b_local_ft_v1/generation_report.json
+  review_report: datasets/generated/gemma4_26b_a4b_local_ft_v1/review_report.json
+  review_sheet: datasets/generated/gemma4_26b_a4b_local_ft_v1/review_sheet.md
   quality_report: datasets/generated/gemma4_26b_a4b_local_ft_v1/quality_report.json
   dataset_card: datasets/generated/gemma4_26b_a4b_local_ft_v1/dataset_card.md
   gap_report: datasets/generated/gemma4_26b_a4b_local_ft_v1/gap_report.yaml
 quality_report:
   dataset_id: gemma4_26b_a4b_local_ft_v1
-  accepted_count: 36
+  accepted_count: 49
   rejected_count: 0
   skill_counts:
     benign_safety_analysis: 6
-    checkpoint_selection: 4
-    config_review: 2
+    checkpoint_selection: 5
+    config_review: 5
     docker_disk_safety: 6
     eval_latency_throughput: 7
-    git_workflow_repair: 2
-    json_schema_repair: 2
-    shell_safety: 2
+    git_workflow_repair: 5
+    json_schema_repair: 5
+    shell_safety: 5
     sql_edge_cases: 7
   rejection_counts: {}
   source_kind_counts:
-    human_seed: 24
+    human_seed: 37
     synthetic: 12
   generation_method_counts:
     eval_adjacent_generation: 3
     evol_instruct: 3
-    human_seed: 24
+    human_seed: 37
     instruction_backtranslation: 3
     self_instruct: 3
   verification_counts:
-    passed: 36
-  quality_score_average: 0.8998
+    passed: 49
+  quality_score_average: 0.8966
   target_accept_count:
     min: 500
     max: 2000
@@ -165,20 +173,5 @@ quality_report:
   smoke_only: true
   warnings:
   - code: accepted_count_below_min_target
-    message: accepted rows 36 below configured minimum 500
-  - code: skill_below_min_seed_examples
-    skill: shell_safety
-    message: shell_safety has 2 accepted rows, below seed target 5
-  - code: skill_below_min_seed_examples
-    skill: config_review
-    message: config_review has 2 accepted rows, below seed target 5
-  - code: skill_below_min_seed_examples
-    skill: json_schema_repair
-    message: json_schema_repair has 2 accepted rows, below seed target 5
-  - code: skill_below_min_seed_examples
-    skill: git_workflow_repair
-    message: git_workflow_repair has 2 accepted rows, below seed target 5
-  - code: skill_below_min_seed_examples
-    skill: checkpoint_selection
-    message: checkpoint_selection has 4 accepted rows, below seed target 5
-  created_at: '2026-05-19T03:59:04.508728+00:00'
+    message: accepted rows 49 below configured minimum 500
+  created_at: '2026-05-19T04:11:02.034617+00:00'

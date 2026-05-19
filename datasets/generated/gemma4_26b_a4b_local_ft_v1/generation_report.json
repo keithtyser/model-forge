@@ -1,11 +1,11 @@
 {
-  "candidate_rows": 36,
-  "created_at": "2026-05-19T03:59:04.438761+00:00",
+  "candidate_rows": 49,
+  "created_at": "2026-05-19T04:11:01.951387+00:00",
   "dataset_id": "gemma4_26b_a4b_local_ft_v1",
   "generation_method_counts": {
     "eval_adjacent_generation": 3,
     "evol_instruct": 3,
-    "human_seed": 24,
+    "human_seed": 37,
     "instruction_backtranslation": 3,
     "self_instruct": 3
   },
@@ -13,10 +13,10 @@
     "model": "model-forge-template-v0",
     "type": "template"
   },
-  "seed_rows": 24,
+  "seed_rows": 37,
   "smoke": true,
   "source_kind_counts": {
-    "human_seed": 24,
+    "human_seed": 37,
     "synthetic": 12
   },
   "strategies": [
