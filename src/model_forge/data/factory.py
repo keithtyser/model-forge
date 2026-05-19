@@ -19,6 +19,8 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from model_forge.data.sources import registry_summary
+
 REPO_DIR = Path(__file__).resolve().parents[3]
 console = Console()
 
@@ -823,7 +825,7 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
     objective = load_yaml(objective_path) if objective_path.exists() else {}
     seeds = load_seed_rows(config)
     seed_counts = Counter(skill for row in seeds for skill in row.get("skills", []))
-    return {
+    plan = {
         "id": config["id"],
         "family": config["family"],
         "variant": config["variant"],
@@ -845,6 +847,10 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
         "smoke_only": bool(config.get("smoke_only", False)),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+    source_summary = registry_summary(config)
+    if source_summary:
+        plan["source_registry"] = source_summary
+    return plan
 
 
 def print_plan(plan: dict[str, Any]) -> None:
@@ -1610,6 +1616,8 @@ def command_publish(
     smoke: bool = False,
     max_generated_candidates: int | None = None,
     provider_override: str | None = None,
+    execute: bool = False,
+    private: bool = False,
 ) -> Path:
     outputs = command_pack(
         config,
@@ -1621,7 +1629,7 @@ def command_publish(
     )
     output_dir = resolve_repo_path(config["output_dir"])
     publish_path = output_dir / "hf_publish_plan.json"
-    if publish_path.exists() and not overwrite:
+    if publish_path.exists() and not overwrite and not execute:
         return publish_path
     repo_id = config.get("hub", {}).get("repo_id") or f"keithtyser/model-forge-{config['id']}"
     files = [
@@ -1640,19 +1648,21 @@ def command_publish(
         files.append(display_path(output_dir / "review_report.json"))
     if (output_dir / "review_sheet.md").exists():
         files.append(display_path(output_dir / "review_sheet.md"))
-    blocked_until = [
-        "human reviews dataset_card.md and review_sheet.md",
-        "license/provenance checks pass",
-        "HF publish command is run explicitly",
-    ]
-    if bool(config.get("seed_only", False)):
-        blocked_until.append("human explicitly approves seed-only release")
-    elif bool(config.get("smoke_only", False)):
-        blocked_until.append("dataset is expanded beyond smoke-only scaffold")
-    else:
-        blocked_until.append("dataset size reaches configured target")
+    blocked_until: list[str] = []
+    if not execute:
+        blocked_until.extend([
+            "human reviews dataset_card.md and review_sheet.md",
+            "license/provenance checks pass",
+            "HF publish command is run explicitly",
+        ])
+        if bool(config.get("seed_only", False)):
+            blocked_until.append("human explicitly approves seed-only release")
+        elif bool(config.get("smoke_only", False)):
+            blocked_until.append("dataset is expanded beyond smoke-only scaffold")
+        else:
+            blocked_until.append("dataset size reaches configured target")
     plan = {
-        "dry_run": True,
+        "dry_run": not execute,
         "repo_id": repo_id,
         "repo_type": "dataset",
         "dataset_id": config["id"],
@@ -1661,8 +1671,34 @@ def command_publish(
         "blocked_until": blocked_until,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+    if execute:
+        if bool(config.get("seed_only", False)) or bool(config.get("smoke_only", False)):
+            raise SystemExit("refusing to upload seed-only or smoke-only dataset; publish durable datasets only")
+        execute_hf_dataset_publish(plan, output_dir, private=private)
+        plan["uploaded_at"] = datetime.now(timezone.utc).isoformat()
     publish_path.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return publish_path
+
+
+def execute_hf_dataset_publish(plan: dict[str, Any], output_dir: Path, private: bool = False) -> None:
+    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN")
+    if not token:
+        raise SystemExit("Set HF_TOKEN or HUGGINGFACE_HUB_TOKEN before executing HF dataset publish")
+    try:
+        from huggingface_hub import HfApi, create_repo, upload_folder
+    except ImportError as exc:
+        raise SystemExit("Install huggingface_hub before executing HF dataset publish") from exc
+    repo_id = str(plan["repo_id"])
+    api = HfApi(token=token)
+    api.whoami(token=token)
+    create_repo(repo_id=repo_id, repo_type="dataset", private=private, exist_ok=True, token=token)
+    upload_folder(
+        repo_id=repo_id,
+        repo_type="dataset",
+        folder_path=str(output_dir),
+        commit_message=f"Upload model-forge dataset {plan['dataset_id']}",
+        token=token,
+    )
 
 
 def default_config_for(family: str, variant: str) -> Path:
@@ -1690,6 +1726,8 @@ def main() -> None:
     parser.add_argument("--max-generated-candidates", type=int, help="override generated candidate limit")
     parser.add_argument("--provider", help="override generation provider type, for example template or openai_compatible")
     parser.add_argument("--sample", type=int, help="review sample size")
+    parser.add_argument("--execute", action="store_true", help="execute the publish step; currently valid only for non-smoke datasets")
+    parser.add_argument("--private", action="store_true", help="create executed HF dataset repo as private")
     args = parser.parse_args()
 
     config_path = args.config or default_config_for(args.family or "", args.variant or "")
@@ -1772,8 +1810,11 @@ def main() -> None:
             smoke=args.smoke,
             max_generated_candidates=args.max_generated_candidates,
             provider_override=args.provider,
+            execute=args.execute,
+            private=args.private,
         )
-        console.print(f"[green]Wrote dry-run publish plan[/green] {display_path(path)}")
+        label = "Wrote publish plan" if args.execute else "Wrote dry-run publish plan"
+        console.print(f"[green]{label}[/green] {display_path(path)}")
 
 
 if __name__ == "__main__":

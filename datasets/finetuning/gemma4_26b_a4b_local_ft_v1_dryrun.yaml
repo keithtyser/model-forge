@@ -1,0 +1,40 @@
+name: gemma4_26b_a4b_local_ft_v1_dryrun
+description: >
+  Dry-run fine-tuning data manifest for validating the local FT v1 training
+  path without starting a long run. It uses existing model-forge smoke data and
+  source-registry references only.
+format: messages
+chat_template: auto
+max_context_window: 4096
+random_seed: 3407
+
+source_registry: configs/data_sources/gemma4_26b_a4b_local_ft_v1.yaml
+
+quality_gates:
+  min_turn_chars: 2
+  require_assistant_content: true
+  reject_unclosed_think: true
+  dedupe_by_conversation_hash: true
+  max_tokens: 4096
+  reject_eval_prompt_overlap: true
+
+sources:
+  - id: model_forge_local_ft_v1_seeds
+    target_samples: 37
+    role: eval_adjacent_seed
+  - id: model_forge_local_ft_v1_live_teacher_smoke
+    target_samples: 58
+    role: eval_adjacent_live_teacher_smoke
+
+holdouts:
+  - evals/prompts/capability_preservation_challenge.yaml
+  - evals/prompts/normal_use_regression.yaml
+  - evals/prompts/reasoning_style_stability.yaml
+  - evals/prompts/agentic_multi_step_planning.yaml
+  - evals/prompts/refusal_paired_boundary.yaml
+  - evals/prompts/refusal_benign_boundary.yaml
+
+promotion_notes:
+  - This manifest is for config validation and one-step smoke only.
+  - Do not treat this as the durable v1 training dataset.
+  - Scale through the dataset factory and publish a durable HF dataset before a full run.

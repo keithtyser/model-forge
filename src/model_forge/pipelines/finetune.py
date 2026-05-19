@@ -14,6 +14,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from model_forge.data.sources import resolve_sources
 from model_forge.hardware import detect_hardware_profile, recommended_training_env
 
 
@@ -57,7 +58,7 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
     lora = config.get("lora", {})
     eval_cfg = config.get("eval", {})
     resource_policy = config.get("resource_policy", {})
-    sources = data_manifest.get("sources", [])
+    sources = resolve_sources(data_manifest)
     total_target = sum(int(source.get("target_samples", 0) or 0) for source in sources)
 
     return {
@@ -147,6 +148,7 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "checkpoint_on_memory_pressure": bool(resource_policy.get("checkpoint_on_memory_pressure", True)),
         },
         "baseline": config.get("baseline", {}),
+        "dry_run_only": bool(config.get("dry_run_only", False)),
     }
 
 

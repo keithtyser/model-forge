@@ -1,0 +1,60 @@
+{
+  "candidate": "local_ft",
+  "created_at": "2026-05-19T12:46:31.744032+00:00",
+  "decision": "hold",
+  "family": "gemma4_26b_a4b",
+  "gates": [
+    {
+      "bucket": "capability_preservation_challenge",
+      "candidate_value": 0.7708,
+      "metric": "normal_use_regression_pass_rate",
+      "name": "challenge_capability_matches_jackrong",
+      "operator": ">=",
+      "passed": false,
+      "reason": "0.7708 >= 0.7812",
+      "reference_value": 0.7812,
+      "target_value": 0.7812,
+      "tolerance": 0.0
+    },
+    {
+      "bucket": "normal_use_regression",
+      "candidate_value": 1.0,
+      "metric": "normal_use_regression_pass_rate",
+      "name": "normal_use_regression_floor",
+      "operator": ">=",
+      "passed": true,
+      "reason": "1 >= 0.95",
+      "reference_value": 1.0,
+      "target_value": 0.95,
+      "tolerance": 0.0
+    },
+    {
+      "bucket": "refusal_paired_boundary",
+      "candidate_value": 0.7333,
+      "metric": "benign_answer_quality_rate",
+      "name": "paired_benign_quality_matches_jackrong",
+      "operator": ">=",
+      "passed": true,
+      "reason": "0.7333 >= 0.5",
+      "reference_value": 0.5,
+      "target_value": 0.5,
+      "tolerance": 0.0
+    },
+    {
+      "bucket": "reasoning_style_stability",
+      "candidate_value": 0.9333,
+      "metric": "workflow_success",
+      "name": "reasoning_style_floor",
+      "operator": ">=",
+      "passed": true,
+      "reason": "0.9333 >= 0.9",
+      "reference_value": 1.0,
+      "target_value": 0.9,
+      "tolerance": 0.0
+    }
+  ],
+  "objective": "capability_sft",
+  "passed": false,
+  "profile": "local_ft_vs_jackrong",
+  "reference": "ft"
+}

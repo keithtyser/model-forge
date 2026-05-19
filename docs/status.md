@@ -24,6 +24,9 @@ This is the short handoff state for humans and agents. Use
   extraction, seed rows, generation adapters, verification, filtering, review,
   packing, dry-run publish planning, non-cascading overwrite semantics, and
   length-violation rejection gates.
+- The repo now has reusable dataset source registries, guarded HF dataset
+  publish execution, a local FT v1 dry-run config, saved-comparison promotion
+  reports, and a safe Qwen 3.5 9B teacher launcher.
 
 ## Current Dataset State
 
@@ -63,12 +66,12 @@ length filtering:
 
 ## Recommended Next Work
 
-1. Run one medium live-teacher dataset generation pass, roughly 100-150
-   accepted rows, before scaling to a full training dataset.
-2. Scale to a 500-2000 accepted-row dataset only after the medium live smoke
-   passes review under the stricter length gates.
-3. Publish completed durable datasets to Hugging Face and record repo ids in
-   `docs/experiment-ledger.md`.
+1. Choose whether to scale local FT v1 data or improve the source registry with
+   more high-quality non-Jackrong sources.
+2. Use `./forge promote gemma4_26b_a4b local_ft_vs_jackrong` whenever saved
+   comparison results change.
+3. Publish completed durable datasets to Hugging Face with `publish --execute`
+   only after `smoke_only=false` and human review is complete.
 4. Run a short FT candidate only after dataset quality is established and Spark
    guardrails are active.
 

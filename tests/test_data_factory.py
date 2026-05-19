@@ -20,6 +20,7 @@ from model_forge.data.factory import (
     load_yaml,
     rejection_reasons,
 )
+from model_forge.data.sources import load_source_registry, resolve_sources
 
 
 class DatasetFactoryTests(unittest.TestCase):
@@ -37,6 +38,8 @@ class DatasetFactoryTests(unittest.TestCase):
         self.assertEqual(plan["generation"]["provider"]["type"], "template")
         self.assertEqual(plan["review"]["min_examples_per_skill"], 5)
         self.assertEqual(plan["quality_thresholds"]["max_holdout_similarity"], 0.82)
+        self.assertIn("source_registry", plan)
+        self.assertIn("model_forge_local_ft_v1_seeds", plan["source_registry"]["selected_source_ids"])
         self.assertFalse(plan["seed_only"])
         self.assertTrue(plan["smoke_only"])
 
@@ -50,7 +53,18 @@ class DatasetFactoryTests(unittest.TestCase):
         self.assertEqual(plan["generation"]["smoke"]["max_generated_candidates"], 24)
         self.assertTrue(plan["quality_thresholds"]["reject_length_violations"])
         self.assertIn("too_long", plan["review"]["critical_flags"])
+        self.assertIn("model_forge_local_ft_v1_live_teacher_smoke", plan["source_registry"]["selected_source_ids"])
         self.assertTrue(plan["smoke_only"])
+
+    def test_source_registry_resolves_manifest_overrides(self) -> None:
+        registry = load_source_registry(REPO_DIR / "configs" / "data_sources" / "gemma4_26b_a4b_local_ft_v1.yaml")
+        self.assertIn("jackrong_qwen_coder_distill", registry["sources"])
+        sources = resolve_sources({
+            "source_registry": "configs/data_sources/gemma4_26b_a4b_local_ft_v1.yaml",
+            "sources": [{"id": "model_forge_local_ft_v1_live_teacher_smoke", "target_samples": 12}],
+        })
+        self.assertEqual(sources[0]["path"], "datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/dataset.jsonl")
+        self.assertEqual(sources[0]["target_samples"], 12)
 
     def test_provider_env_overrides_model_base_url_and_api_key(self) -> None:
         config = {
@@ -226,6 +240,15 @@ class DatasetFactoryTests(unittest.TestCase):
             self.assertIn('"repo_type": "dataset"', text)
             self.assertIn("verification.jsonl", text)
             self.assertIn("generation_report.json", text)
+
+    def test_publish_execute_refuses_smoke_dataset(self) -> None:
+        config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["output_dir"] = tmp
+            command_publish(config, config_path, overwrite=True)
+            with self.assertRaises(SystemExit):
+                command_publish(config, config_path, overwrite=False, execute=True)
 
 
 if __name__ == "__main__":

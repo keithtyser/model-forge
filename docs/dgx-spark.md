@@ -253,6 +253,18 @@ Preferred wrapper:
 ./scripts/dgx_spark_serve_qwen35_9b.sh
 ```
 
+For dataset generation with the small local teacher, prefer the guarded
+one-server wrapper:
+
+```bash
+./forge serve-teacher qwen35_9b
+```
+
+It refuses to start if a vLLM container is already running, mounts
+`MODEL_FORGE_MODELS_DIR` read-only, caps container memory, keeps
+`max-num-seqs=1`, and serves `local/qwen35-9b-teacher` on port `8011` by
+default.
+
 Equivalent manual command:
 
 ```bash

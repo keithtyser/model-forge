@@ -15,12 +15,15 @@ Usage:
   ./forge setup [base|external|artifacts|all]
   ./forge download <family> [base|ft|abli|all]
   ./forge serve <family> [base|ft|local_ft|abli|local_abli|local_abli_sota|local_abli_huihui_like|local_abli_huihui_like_s4|local_abli_huihui_shaped]
+  ./forge serve-teacher [qwen35_9b]
   ./forge eval <family> [base|ft|local_ft|abli|local_abli|local_abli_sota|local_abli_huihui_like|local_abli_huihui_like_s4|local_abli_huihui_shaped] [--smoke|--internal|--artifact|--external] [tasks]
   ./forge external <family> [base|ft|local_ft|abli|local_abli|local_abli_sota|local_abli_huihui_like|local_abli_huihui_like_s4|local_abli_huihui_shaped] [tasks]
   ./forge finetune <family> [plan|prepare|run] [--execute]
+  ./forge finetune --config <path> [plan|prepare|run]
   ./forge data [plan|gaps|seed|generate|judge|verify|filter|review|pack|publish] <family> <variant> [--overwrite] [--smoke]
   ./forge ablate <family> [plan|collect|analyze-reference|sweep-reference|export|sota-plan|sota-prepare|sota-run] [--execute]
   ./forge compare <family>
+  ./forge promote <family> [profile]
   ./forge golden-summary <family> [output-json]
   ./forge golden-check <family> [baseline-json]
   ./forge doctor [--json]
@@ -30,11 +33,14 @@ Examples:
   ./forge setup all
   ./forge download gemma4_26b_a4b all
   ./forge serve gemma4_26b_a4b base
+  ./forge serve-teacher qwen35_9b
   ./forge eval gemma4_26b_a4b base
   ./forge finetune gemma4_26b_a4b plan
+  ./forge finetune --config configs/finetuning/gemma4_26b_a4b_local_ft_v1_dryrun.yaml plan
   ./forge data plan gemma4_26b_a4b local_ft_v1
   ./forge ablate gemma4_26b_a4b plan
   ./forge compare gemma4_26b_a4b
+  ./forge promote gemma4_26b_a4b local_ft_vs_jackrong
   ./forge doctor
 
 By default, eval runs internal checks, artifact evals, external benchmarks,
@@ -58,6 +64,15 @@ case "$ACTION" in
     FAMILY=${1:?family is required}
     VARIANT=${2:-base}
     "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" serve "$VARIANT"
+    ;;
+  serve-teacher)
+    TEACHER=${1:-qwen35_9b}
+    case "$TEACHER" in
+      qwen35_9b)
+        exec "$REPO_DIR/scripts/serve_teacher_vllm_dgx_spark.sh"
+        ;;
+      *) echo "unknown teacher preset: $TEACHER" >&2; exit 2 ;;
+    esac
     ;;
   eval)
     FAMILY=${1:?family is required}
@@ -91,14 +106,7 @@ case "$ACTION" in
   finetune)
     FAMILY=${1:?family is required}
     shift
-    STEP=${1:-plan}
-    if [[ $# -gt 0 ]]; then
-      shift
-    fi
     case "$FAMILY" in
-      gemma4_26b_a4b)
-        CONFIG="$REPO_DIR/configs/finetuning/gemma4_26b_a4b_local_ft_v0.yaml"
-        ;;
       --config)
         CONFIG=${1:?config path is required after --config}
         shift
@@ -106,6 +114,13 @@ case "$ACTION" in
         if [[ $# -gt 0 ]]; then
           shift
         fi
+        ;;
+      gemma4_26b_a4b)
+        STEP=${1:-plan}
+        if [[ $# -gt 0 ]]; then
+          shift
+        fi
+        CONFIG="$REPO_DIR/configs/finetuning/gemma4_26b_a4b_local_ft_v0.yaml"
         ;;
       *) echo "unknown fine-tune family: $FAMILY" >&2; exit 2 ;;
     esac
@@ -136,6 +151,21 @@ case "$ACTION" in
   compare)
     FAMILY=${1:?family is required}
     "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" compare
+    ;;
+  promote)
+    FAMILY=${1:?family is required}
+    PROFILE=${2:-}
+    case "$FAMILY" in
+      gemma4_26b_a4b)
+        CONFIG="$REPO_DIR/configs/promotion/gemma4_26b_a4b.yaml"
+        ;;
+      *) echo "unknown promotion family: $FAMILY" >&2; exit 2 ;;
+    esac
+    if [[ -n "$PROFILE" ]]; then
+      "$PYTHON" -m model_forge.evals.promotion --config "$CONFIG" "$PROFILE"
+    else
+      "$PYTHON" -m model_forge.evals.promotion --config "$CONFIG"
+    fi
     ;;
   golden-summary)
     FAMILY=${1:?family is required}

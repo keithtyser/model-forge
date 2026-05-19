@@ -7,12 +7,16 @@ and experiment constants here instead of hard-coding them in scripts.
 
 - `model_families/`: source checkpoints, variants, served model names, report
   paths, and serving defaults.
+- `data_sources/`: dataset source registries with ids, provenance, licenses,
+  roles, quality tiers, and sampling caps.
 - `experiments/`: eval matrix definitions and external benchmark settings.
 - `finetuning/`: SFT/QLoRA recipes, resource contracts, LoRA targets, and
   promotion gates.
 - `datasets/`: dataset factory configs for seed, generation, verification,
   review, pack, and publish planning.
 - `objectives/`: reusable training objectives and quality criteria.
+- `promotion/`: saved comparison gates for deciding whether a candidate should
+  be promoted, held, or investigated.
 - `abliteration/`: refusal-direction and behavior-edit recipes.
 
 ## Rules

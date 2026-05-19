@@ -238,6 +238,18 @@ The report includes:
 - notable failures
 - artifact links and screenshots when available
 
+Saved-comparison promotion gates are separate from raw comparison generation:
+
+```bash
+./forge promote gemma4_26b_a4b local_ft_vs_jackrong
+./forge promote gemma4_26b_a4b local_abli_sota_vs_downloaded_abli
+```
+
+Promotion configs live under `configs/promotion/`. They encode candidate,
+reference, metric, target, and tolerance rules so another agent can decide
+promote, hold, or investigate from saved eval outputs without relying on chat
+history.
+
 ## External Benchmark Bridges
 
 model-forge owns post-training comparison. External benchmark tools should be used for broad benchmark coverage.

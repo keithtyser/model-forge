@@ -138,4 +138,41 @@ review:
   - too_long
 seed_only: false
 smoke_only: true
-created_at: '2026-05-19T05:15:39.776740+00:00'
+created_at: '2026-05-19T12:46:31.802151+00:00'
+source_registry:
+  path: configs/data_sources/gemma4_26b_a4b_local_ft_v1.yaml
+  version: 0.1.0
+  selected_source_ids:
+  - model_forge_local_ft_v1_seeds
+  - model_forge_local_ft_v1_deterministic_smoke
+  selected_sources:
+  - name: model_forge_local_ft_v1_seeds
+    type: local_jsonl
+    path: datasets/seeds/gemma4_26b_a4b_local_ft_v1.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+    - eval_adjacent_repair
+    - capability_sft
+    sampling_cap: 37
+    intended_use: 'Human-written seed rows derived from observed local FT v0 gaps
+      without copying held-out eval prompts.
+
+      '
+    id: model_forge_local_ft_v1_seeds
+    role: eval_adjacent_repair
+  - name: model_forge_local_ft_v1_deterministic_smoke
+    type: local_jsonl
+    path: datasets/generated/gemma4_26b_a4b_local_ft_v1/dataset.jsonl
+    license: CC-BY-4.0
+    quality_tier: smoke
+    roles:
+    - eval_adjacent_repair
+    - pipeline_validation
+    sampling_cap: 49
+    intended_use: 'Deterministic template-provider smoke pack for validating the dataset
+      factory and quality gates. Not a final training dataset.
+
+      '
+    id: model_forge_local_ft_v1_deterministic_smoke
+    role: eval_adjacent_repair

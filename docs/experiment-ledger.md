@@ -28,6 +28,38 @@ Publishing helper:
 
 For prepared datasets, pass `--repo-type dataset`.
 
+## Roadmap Utility Layer: Sources, Publish, Promotion, Teacher Serve
+
+Status: implemented as config/code/docs only. No model server, training run, live
+generation, or Hugging Face upload was started.
+
+Hypothesis: the repo becomes easier for future agents to operate if the common
+handoff decisions are encoded as reusable commands and registries instead of
+chat-history instructions.
+
+Changes:
+
+- added dataset source registry support under `configs/data_sources/`
+- added `configs/data_sources/gemma4_26b_a4b_local_ft_v1.yaml`
+- dataset factory plans now surface selected source registry ids
+- fine-tuning manifests can reference registry ids and override per-run targets
+- added guarded `./forge data publish ... --execute` plumbing for durable HF
+  dataset upload; execution refuses seed-only and smoke-only configs
+- added local FT v1 dry-run config:
+  `configs/finetuning/gemma4_26b_a4b_local_ft_v1_dryrun.yaml`
+- added saved-comparison promotion profiles under `configs/promotion/`
+- added `./forge promote gemma4_26b_a4b <profile>`
+- added guarded Qwen teacher launcher: `./forge serve-teacher qwen35_9b`
+
+Validation target:
+
+```bash
+./forge finetune --config configs/finetuning/gemma4_26b_a4b_local_ft_v1_dryrun.yaml plan
+./forge promote gemma4_26b_a4b local_ft_vs_jackrong
+./forge doctor
+.venv/bin/python -m unittest discover -s tests
+```
+
 ## Dataset Factory Safety And Length-Gate Cleanup
 
 Status: completed. No model server, training run, or live generation was

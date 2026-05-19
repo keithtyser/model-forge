@@ -8,6 +8,8 @@ wrappers, operational helpers, or hardware-specific launchers.
 - `setup.sh`, `download_gemma4_models.sh`: setup and model download helpers.
 - `dgx_spark_*`, `gemma4_dgx.sh`, `model_forge_dgx.py`,
   `serve_vllm_dgx_spark.sh`: DGX Spark serving/eval convenience wrappers.
+- `serve_teacher_vllm_dgx_spark.sh`: guarded one-server launcher for the small
+  local teacher used by dataset generation.
 - `run_finetune_spark_container.sh`: guarded CUDA container launcher for full
   fine-tuning on Spark.
 - `merge_peft_adapter.py`: PEFT adapter merge helper when live LoRA serving is

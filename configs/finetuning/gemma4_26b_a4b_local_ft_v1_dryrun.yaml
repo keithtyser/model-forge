@@ -1,0 +1,90 @@
+name: gemma4_26b_a4b_local_ft_v1_dryrun
+family: gemma4_26b_a4b
+run_dir: runs/finetune/gemma4_26b_a4b_local_ft_v1_dryrun
+dry_run_only: true
+
+model:
+  source: google/gemma-4-26B-A4B-it
+  local_dir: ~/models/gemma-4-26B-A4B-it
+  output_dir: ~/models/gemma-4-26B-A4B-it-local-ft-v1-dryrun
+  served_model_name: local/gemma-4-26B-A4B-it-local-ft-v1-dryrun
+  trust_remote_code: false
+  max_seq_length: 1024
+
+trainer:
+  backend: unsloth
+  method: qlora
+  device_map: single_gpu
+  load_in_4bit: true
+  attn_implementation: eager
+  unsloth_compile_disable: true
+  bf16: true
+  gradient_checkpointing: true
+  group_by_length: true
+  pad_to_multiple_of: 256
+  torch_dynamo_recompile_limit: 128
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  learning_rate: 0.00008
+  num_train_epochs: 1
+  max_steps: 5
+  warmup_ratio: 0.0
+  lr_scheduler_type: cosine
+  optim: paged_adamw_8bit
+  weight_decay: 0.001
+  logging_steps: 1
+  save_steps: 5
+  save_total_limit: 1
+  seed: 3407
+  report_to: none
+
+resource_policy:
+  cpu_quota: "80%"
+  memory_max: "85%"
+  io_weight: 100
+  nice: 10
+  reserve_cores: 1
+  min_memory_available_start: 0.05
+  min_memory_available_runtime: 0.05
+  min_disk_free: 0.15
+  monitor_interval_seconds: 30
+  dataloader_num_workers_max_offset: 2
+  persistent_workers_when_memory_tight: false
+  checkpoint_on_memory_pressure: true
+
+lora:
+  r: 32
+  alpha: 32
+  dropout: 0.0
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+  exclude_modules:
+    - vision_tower
+  modules_to_save: []
+
+data:
+  manifest: datasets/finetuning/gemma4_26b_a4b_local_ft_v1_dryrun.yaml
+
+baseline:
+  target_to_beat: Jackrong/Gemopus-4-26B-A4B-it
+  observed_baseline_role: downloaded_ft_reference_for_model_forge_evals
+  strategy_delta:
+    - Validate local FT v1 wiring against model-forge smoke data before full training.
+    - Keep the full durable run blocked until the v1 dataset is scaled and published.
+
+eval:
+  source_variant: base
+  baseline_variant: ft
+  required_gates:
+    challenge_capability_vs_jackrong_ft: ">= baseline"
+    paired_benign_quality_vs_jackrong_ft: ">= baseline"
+    normal_use_regression: ">= 0.95"
+  commands:
+    - MODEL_FORGE_TRIALS=3 ./forge eval gemma4_26b_a4b local_ft --internal
+    - ./forge promote gemma4_26b_a4b local_ft_vs_jackrong

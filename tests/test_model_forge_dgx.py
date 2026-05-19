@@ -108,6 +108,14 @@ class ModelForgeDgxServeTests(unittest.TestCase):
             self.assertNotIn("MODEL_FORGE_LORA_MODULES", env)
             self.assertEqual(details["adapter"], "")
 
+    def test_teacher_launcher_has_single_server_and_resource_guards(self) -> None:
+        script = (REPO_DIR / "scripts" / "serve_teacher_vllm_dgx_spark.sh").read_text(encoding="utf-8")
+        self.assertIn("refusing to start teacher server", script)
+        self.assertIn("--mem-limit-gb", script)
+        self.assertIn("--mem-swap-limit-gb", script)
+        self.assertIn("--max-num-seqs", script)
+        self.assertIn("local/qwen35-9b-teacher", script)
+
 
 if __name__ == "__main__":
     unittest.main()

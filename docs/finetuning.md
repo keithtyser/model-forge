@@ -403,11 +403,17 @@ Primary files:
 
 ```text
 configs/objectives/capability_sft.yaml
+configs/data_sources/gemma4_26b_a4b_local_ft_v1.yaml
 configs/datasets/gemma4_26b_a4b_local_ft_v1.yaml
 datasets/seeds/gemma4_26b_a4b_local_ft_v1.jsonl
 datasets/generated/gemma4_26b_a4b_local_ft_v1/
 src/model_forge/data/factory.py
 ```
+
+Source registries live under `configs/data_sources/`. They define reusable
+dataset ids, provenance, license notes, quality tier, roles, and sampling caps.
+Dataset factory configs and fine-tuning manifests should reference registry ids
+and override only the per-run sampling targets.
 
 The generated smoke pack currently contains 49 accepted examples: 37 human seed
 rows plus 12 deterministic synthetic rows generated across `self_instruct`,
@@ -452,6 +458,15 @@ concrete checks, and failed verification, then records a
 assistant length violations before packaging. The deterministic smoke pack and
 the live-teacher smoke pack clear the scale-up gate; the next step is a medium
 live-teacher generation pass, not training yet.
+
+The v1 dry-run fine-tune config validates wiring without a long run:
+
+```bash
+./forge finetune --config configs/finetuning/gemma4_26b_a4b_local_ft_v1_dryrun.yaml plan
+```
+
+It uses the v1 source registry and smoke artifacts, has `max_steps: 5`, and is
+for plan/prepare validation only. Do not promote it as a durable recipe.
 
 The gap report is generated from the saved local FT v0 internal responses and
 summarizes failed buckets, missed concepts, and recommended next dataset skills:

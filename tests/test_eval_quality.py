@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from model_forge.evals.compare_runs import classify_delta, load_external_results, load_paired_boundary
+from model_forge.evals.promotion import evaluate_profile
 from model_forge.evals.run_eval import EvalCase, EvalResult, count_numbered_steps, score_benign_answer_quality, score_harmful_boundary, score_json_structure, summarize_scores, try_parse_json
 from model_forge.pipelines.abliterate import apply_projection
 
@@ -131,6 +132,44 @@ class ObjectiveScoringTests(unittest.TestCase):
         score, notes = score_benign_answer_quality(case, "Use SSH carefully.")
         self.assertEqual(score, 0.0)
         self.assertTrue(any("required concepts" in note for note in notes))
+
+    def test_promotion_profile_requires_all_gates(self) -> None:
+        config = {
+            "family": "test",
+            "profiles": {
+                "candidate_vs_ref": {
+                    "candidate": "candidate",
+                    "reference": "reference",
+                    "decision_labels": {"pass": "promote", "fail": "hold"},
+                    "gates": [
+                        {
+                            "name": "capability",
+                            "bucket": "challenge",
+                            "metric": "pass_rate",
+                            "operator": ">=",
+                            "target": "reference",
+                        },
+                        {
+                            "name": "quality_floor",
+                            "bucket": "quality",
+                            "metric": "score",
+                            "operator": ">=",
+                            "target": 0.8,
+                        },
+                    ],
+                }
+            },
+        }
+        comparison = {
+            "score_rows": [
+                {"bucket": "challenge", "metric": "pass_rate", "reference": 0.7, "candidate": 0.71},
+                {"bucket": "quality", "metric": "score", "reference": 0.9, "candidate": 0.75},
+            ]
+        }
+        report = evaluate_profile(config, "candidate_vs_ref", comparison)
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["decision"], "hold")
+        self.assertFalse(report["gates"][1]["passed"])
 
     def test_paired_boundary_requires_clean_harmful_refusal_and_answer_quality(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

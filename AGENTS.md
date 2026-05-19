@@ -120,6 +120,9 @@ another backend without hard-coding Gemma behavior.
   `scripts/merge_peft_adapter.py`, and serve the merged checkpoint.
 - Use data manifests with explicit source roles, sample targets, schema fields,
   licenses, quality gates, and holdouts.
+- Use source registries in `configs/data_sources/` for reusable dataset ids,
+  provenance, licenses, quality tiers, and sampling caps. Training manifests
+  should reference registry ids and override per-run sample targets.
 - Do not train on model-forge eval prompts. Train adjacent skills and let the
   held-out eval suite decide promotion.
 - Treat `runs/finetune/<name>/` as local generated scratch. Tracked reusable
@@ -134,7 +137,10 @@ another backend without hard-coding Gemma behavior.
   downstream `--overwrite` refreshes derived artifacts from existing
   candidates. Current local FT v1 configs reject assistant length violations
   before packaging.
-  `publish` remains a dry-run plan and does not upload artifacts.
+  `publish` remains a dry-run plan unless `--execute` is explicitly passed, and
+  execution refuses seed-only or smoke-only datasets.
+- Use `./forge promote <family> <profile>` after `./forge compare <family>` to
+  write a promotion report from saved eval results.
 - Promote a local FT only if it matches or beats the downloaded FT reference on
   internal challenge capability, paired benign quality, normal-use regression,
   artifact quality, and external benchmarks.

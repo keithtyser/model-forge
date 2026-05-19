@@ -1,0 +1,128 @@
+version: 0.1.0
+description: >
+  Source registry for Gemma 4 26B A4B local FT v1 dataset iteration. This is a
+  reusable source catalog, not a training mix by itself. Training manifests pick
+  entries from this registry and set per-run sample targets.
+
+sources:
+  model_forge_local_ft_v1_seeds:
+    name: model_forge_local_ft_v1_seeds
+    type: local_jsonl
+    path: datasets/seeds/gemma4_26b_a4b_local_ft_v1.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - eval_adjacent_repair
+      - capability_sft
+    sampling_cap: 37
+    intended_use: >
+      Human-written seed rows derived from observed local FT v0 gaps without
+      copying held-out eval prompts.
+
+  model_forge_local_ft_v1_deterministic_smoke:
+    name: model_forge_local_ft_v1_deterministic_smoke
+    type: local_jsonl
+    path: datasets/generated/gemma4_26b_a4b_local_ft_v1/dataset.jsonl
+    license: CC-BY-4.0
+    quality_tier: smoke
+    roles:
+      - eval_adjacent_repair
+      - pipeline_validation
+    sampling_cap: 49
+    intended_use: >
+      Deterministic template-provider smoke pack for validating the dataset
+      factory and quality gates. Not a final training dataset.
+
+  model_forge_local_ft_v1_live_teacher_smoke:
+    name: model_forge_local_ft_v1_live_teacher_smoke
+    type: local_jsonl
+    path: datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/dataset.jsonl
+    license: CC-BY-4.0
+    quality_tier: smoke
+    generator_model: local/qwen35-9b-teacher
+    roles:
+      - eval_adjacent_repair
+      - live_teacher_validation
+    sampling_cap: 58
+    intended_use: >
+      Small live-teacher smoke pack that passed verification and review after
+      strict length filtering. Use for smoke validation, not durable training.
+
+  jackrong_competitive_programming_python:
+    name: competitive_programming_python
+    type: hf_dataset
+    dataset: Jackrong/Competitive-Programming-python-blend
+    split: train
+    messages_field: messages
+    license: mixed-upstream
+    quality_tier: external_candidate
+    roles:
+      - code_reasoning
+    intended_use: Python-first competitive programming and code reasoning.
+
+  jackrong_qwen_coder_distill:
+    name: qwen_coder_distill
+    type: hf_dataset
+    dataset: Jackrong/qwen3-coder-480b-distill-mini
+    split: train
+    input_field: Input
+    output_field: code_output
+    license: Apache-2.0
+    quality_tier: external_candidate
+    roles:
+      - code_generation_and_debugging
+    intended_use: Shorter code generation and debugging supervision.
+
+  jackrong_logicmind_chat_reasoning:
+    name: logicmind_chat_reasoning
+    type: hf_dataset
+    dataset: Jackrong/LogicMind-Chat-Reasoning-SFT-300K
+    split: train
+    messages_field: conversations
+    license: check-dataset-card
+    quality_tier: external_candidate
+    roles:
+      - multi_turn_reasoning_chat
+    intended_use: Multi-turn reasoning and chat behavior coverage.
+
+  jackrong_natural_reasoning_gpt_oss_120b:
+    name: natural_reasoning_gpt_oss_120b
+    type: hf_dataset
+    dataset: Jackrong/Natural-Reasoning-gpt-oss-120B-S1
+    split: train
+    input_field: question
+    reasoning_field: CoT_reasoning
+    output_field: anwser
+    wrap_reasoning: true
+    license: check-dataset-card
+    quality_tier: external_candidate
+    roles:
+      - natural_reasoning
+    intended_use: Natural-language reasoning traces for challenge capability.
+
+  jackrong_stem_reasoning_gpt_oss_120b:
+    name: stem_reasoning_gpt_oss_120b
+    type: hf_dataset
+    dataset: Jackrong/gpt-oss-120b-reasoning-STEM-5K
+    split: train
+    input_field: Input
+    reasoning_field: "CoT_Native--reasoning"
+    output_field: Anwser
+    wrap_reasoning: true
+    license: CC-BY-4.0
+    quality_tier: external_candidate
+    roles:
+      - stem_reasoning
+    intended_use: STEM reasoning with explicit answers.
+
+  jackrong_sharegpt_reasoning_chat:
+    name: sharegpt_reasoning_chat
+    type: hf_dataset
+    dataset: Jackrong/ShareGPT-gpt-oss-120B-reasoning
+    split: train
+    messages_field: conversation
+    license: check-dataset-card
+    quality_tier: external_candidate
+    roles:
+      - instruction_following_chat
+    intended_use: General chat and instruction-following behavior coverage.

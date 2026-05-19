@@ -17,7 +17,9 @@ datasets/generated/*
 !datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/**
 results/*
 !results/.gitkeep
-reports/generated/
+reports/generated/*
+!reports/generated/gemma4_26b_a4b_promotion/
+!reports/generated/gemma4_26b_a4b_promotion/**
 runs/
 logs/
 plans/

@@ -9,6 +9,7 @@ description = "Reusable post-training pipelines for fine-tuning, abliteration, a
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+  "huggingface_hub>=0.23",
   "psutil>=5.9",
   "pyyaml>=6.0",
   "rich>=13.7",
@@ -46,6 +47,7 @@ finetuning = [
 model-forge-eval = "model_forge.evals.run_eval:main"
 model-forge-compare = "model_forge.evals.compare_runs:main"
 model-forge-golden-summary = "model_forge.evals.golden_summary:main"
+model-forge-promote = "model_forge.evals.promotion:main"
 model-forge-matrix = "model_forge.evals.run_matrix:main"
 model-forge-external = "model_forge.evals.external:main"
 model-forge-abliterate = "model_forge.pipelines.abliterate:main"

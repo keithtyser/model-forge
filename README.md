@@ -15,10 +15,12 @@ and artifacts needed to reproduce the result.
 - registers model families and variants in `configs/model_families/`
 - builds fine-tuning plans from YAML configs and dataset manifests
 - creates eval-adjacent SFT datasets through a gated dataset factory
+- tracks dataset source registries with licenses, roles, quality tiers, and sampling caps
 - runs refusal ablation recipes against source checkpoints
 - serves exactly one candidate at a time through hardware-aware vLLM settings
 - evaluates internal behavior, artifact quality, and external benchmark results
 - compares candidates against the source model and relevant references
+- writes promotion reports from saved comparisons
 - records hypotheses, recipes, validation, and publish state for handoff
 
 ## Current State
@@ -64,6 +66,12 @@ Serve one model in one terminal:
 ./forge serve gemma4_26b_a4b base
 ```
 
+Serve a small teacher for dataset generation:
+
+```bash
+./forge serve-teacher qwen35_9b
+```
+
 Run evals from another terminal:
 
 ```bash
@@ -71,6 +79,7 @@ Run evals from another terminal:
 ./forge eval gemma4_26b_a4b base --artifact
 ./forge eval gemma4_26b_a4b base --external
 ./forge compare gemma4_26b_a4b
+./forge promote gemma4_26b_a4b local_ft_vs_jackrong
 ./forge doctor
 ```
 
@@ -86,6 +95,7 @@ Evaluation:
 ./forge eval gemma4_26b_a4b base --artifact
 ./forge eval gemma4_26b_a4b base --external
 ./forge compare gemma4_26b_a4b
+./forge promote gemma4_26b_a4b local_ft_vs_jackrong
 ```
 
 Fine-tuning:
@@ -93,6 +103,7 @@ Fine-tuning:
 ```bash
 ./forge finetune gemma4_26b_a4b plan
 ./forge finetune gemma4_26b_a4b prepare
+./forge finetune --config configs/finetuning/gemma4_26b_a4b_local_ft_v1_dryrun.yaml plan
 ```
 
 On DGX Spark, use the guarded CUDA container launcher for full FT runs:
@@ -116,6 +127,15 @@ Dataset factory:
 
 Use `generate --overwrite` only when replacing candidates intentionally.
 Downstream `--overwrite` refreshes derived artifacts from existing candidates.
+`publish` writes a dry-run HF plan by default; `publish --execute` refuses
+seed-only and smoke-only datasets.
+
+Promotion reports:
+
+```bash
+./forge promote gemma4_26b_a4b local_ft_vs_jackrong
+./forge promote gemma4_26b_a4b local_abli_sota_vs_downloaded_abli
+```
 
 Abliteration planning:
 
@@ -144,7 +164,7 @@ Read [docs/dgx-spark.md](docs/dgx-spark.md),
 ## Repository Layout
 
 ```text
-configs/        Model families, fine-tuning configs, ablation configs, objectives
+configs/        Model families, source registries, training/editing configs
 datasets/       Dataset manifests, seed rows, generated small packs and reports
 docs/           Workflow docs, status, roadmap, and experiment ledger
 docs/roadmaps/  Long-form planning documents and archived roadmap material

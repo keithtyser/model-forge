@@ -27,6 +27,11 @@ target_accept_count:
 seed_paths:
   - datasets/seeds/gemma4_26b_a4b_local_ft_v1.jsonl
 
+source_registry: configs/data_sources/gemma4_26b_a4b_local_ft_v1.yaml
+source_ids:
+  - model_forge_local_ft_v1_seeds
+  - model_forge_local_ft_v1_deterministic_smoke
+
 holdouts:
   - evals/prompts/capability_preservation_challenge.yaml
   - evals/prompts/normal_use_regression.yaml

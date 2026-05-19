@@ -52,6 +52,19 @@ class FinetunePlanTests(unittest.TestCase):
         self.assertTrue(plan["data"]["quality_gates"]["dedupe_by_conversation_hash"])
         self.assertTrue(plan["data"]["quality_gates"]["reject_eval_prompt_overlap"])
 
+    def test_local_ft_v1_dryrun_plan_uses_source_registry(self) -> None:
+        config_path = REPO_DIR / "configs" / "finetuning" / "gemma4_26b_a4b_local_ft_v1_dryrun.yaml"
+        with mock.patch.dict(os.environ, {"MODEL_FORGE_HARDWARE_PROFILE": "dgx_spark"}):
+            plan = build_plan(load_yaml(config_path), config_path)
+        self.assertTrue(plan["dry_run_only"])
+        self.assertEqual(plan["name"], "gemma4_26b_a4b_local_ft_v1_dryrun")
+        self.assertEqual(plan["trainer"]["max_steps"], 5)
+        self.assertEqual(plan["model"]["max_seq_length"], 1024)
+        self.assertEqual(plan["data"]["target_samples"], 95)
+        source_ids = {source["id"] for source in plan["data"]["sources"]}
+        self.assertIn("model_forge_local_ft_v1_seeds", source_ids)
+        self.assertIn("model_forge_local_ft_v1_live_teacher_smoke", source_ids)
+
     def test_prepare_writes_dry_run_artifacts(self) -> None:
         config_path = REPO_DIR / "configs" / "finetuning" / "gemma4_26b_a4b_local_ft_v0.yaml"
         config = load_yaml(config_path)
