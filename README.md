@@ -71,6 +71,7 @@ Plan and pack the first local FT v1 eval-adjacent dataset without training:
 ```bash
 ./forge data plan gemma4_26b_a4b local_ft_v1
 ./forge data gaps gemma4_26b_a4b local_ft_v1
+./forge data verify gemma4_26b_a4b local_ft_v1
 ./forge data pack gemma4_26b_a4b local_ft_v1
 ./forge data publish gemma4_26b_a4b local_ft_v1
 ```

@@ -367,6 +367,7 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
         "quality_thresholds": copy.deepcopy(config.get("quality_thresholds", {})),
         "holdouts": copy.deepcopy(config.get("holdouts", [])),
         "generation_methods": copy.deepcopy(config.get("generation_methods", {})),
+        "seed_only": bool(config.get("seed_only", False)),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -439,6 +440,109 @@ def command_judge(config: dict[str, Any], overwrite: bool) -> Path:
     return output_path
 
 
+def has_any(text: str, terms: tuple[str, ...]) -> bool:
+    lowered = text.lower()
+    return any(term in lowered for term in terms)
+
+
+def has_at_least(text: str, terms: tuple[str, ...], count: int) -> bool:
+    lowered = text.lower()
+    return sum(1 for term in terms if term in lowered) >= count
+
+
+def verify_skill(row: dict[str, Any], skill: str) -> tuple[bool, str]:
+    text = row_text(row).lower()
+    if skill == "eval_latency_throughput":
+        ok = has_at_least(text, (
+            "latency", "throughput", "tokens", "tokens/sec", "prompt",
+            "completion", "ttft", "itl", "prefill", "decode", "batch",
+        ), 3)
+        return ok, "requires eval latency/throughput token-field coverage"
+    if skill == "docker_disk_safety":
+        ok = has_any(text, ("docker", "container", "checkpoint", "disk")) and has_any(text, (
+            "active", "preserve", "df -h", "prune", "rotation", "keep", "delete", "free space",
+        ))
+        return ok, "requires disk/checkpoint cleanup with active-resource safety"
+    if skill == "sql_edge_cases":
+        ok = has_any(text, ("sql", "null", "count(*)", "count(", "left join", "where", "aggregate", "index"))
+        return ok, "requires SQL edge-case concept coverage"
+    if skill == "shell_safety":
+        ok = has_any(text, ("shell", "rsync", "command", "dry run", "--dry-run", "quote", "refuse", "quarantine", "safe"))
+        return ok, "requires non-destructive shell or command-safety framing"
+    if skill == "config_review":
+        ok = has_any(text, ("yaml", "config", "variant", "prompt set", "output path", "validation", "validator"))
+        return ok, "requires config validation or model-family review coverage"
+    if skill == "json_schema_repair":
+        ok = "json" in text and has_any(text, (
+            "schema", "parse", "parser", "double-quoted", "quoted", "lowercase", "trailing", "object", "array",
+        ))
+        return ok, "requires JSON/schema repair constraints"
+    if skill == "git_workflow_repair":
+        ok = "git" in text and has_any(text, (
+            "fetch", "rebase", "branch", "conflict", "verify", "force-with-lease", "backup", "cherry-pick", "push",
+        ))
+        return ok, "requires concrete git repair workflow coverage"
+    if skill == "benign_safety_analysis":
+        safe_framing = has_any(text, (
+            "safe", "safety", "responsible", "without", "avoid", "refuse", "not", "do not",
+            "policy", "risk", "minimize", "over-refusal", "overcompliance",
+        ))
+        harmful_context = has_any(text, (
+            "exploit", "payload", "delete another", "doxxing", "bypass", "credential theft", "harassment",
+        ))
+        ok = safe_framing and (not harmful_context or has_any(text, (
+            "without", "avoid", "refuse", "not", "do not", "responsible", "safe", "minimize",
+        )))
+        return ok, "requires benign safety-analysis framing without tactical harmful detail"
+    if skill == "checkpoint_selection":
+        ok = has_any(text, ("checkpoint", "eval", "baseline", "trial", "objective", "gate", "regression", "promote"))
+        return ok, "requires checkpoint/eval selection methodology"
+    return False, f"unknown configured skill: {skill}"
+
+
+def verify_row(row: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+    messages = row.get("messages", [])
+    has_user = any(isinstance(m, dict) and m.get("role") == "user" and m.get("content") for m in messages)
+    has_assistant = any(isinstance(m, dict) and m.get("role") == "assistant" and m.get("content") for m in messages)
+    source = row.get("source", {}) if isinstance(row.get("source"), dict) else {}
+    configured_skills = set(skill_targets(config))
+    skills = [str(skill) for skill in row.get("skills", [])]
+    checks: dict[str, bool] = {
+        "has_user_message": has_user,
+        "has_assistant_message": has_assistant,
+        "has_valid_skill": bool(skills) and all(skill in configured_skills for skill in skills),
+        "has_source_license": bool(source.get("license")),
+    }
+    details: dict[str, str] = {}
+    for skill in skills:
+        passed, detail = verify_skill(row, skill)
+        checks[f"skill:{skill}"] = passed
+        details[f"skill:{skill}"] = detail
+    failed = [name for name, passed in checks.items() if not passed]
+    return {
+        "type": "static_skill_checks",
+        "passed": not failed,
+        "checks": checks,
+        "failed_checks": failed,
+        "details": details,
+    }
+
+
+def command_verify(config: dict[str, Any], overwrite: bool) -> Path:
+    judged_path = command_judge(config, overwrite=overwrite)
+    output_path = resolve_repo_path(config["output_dir"]) / "verification.jsonl"
+    if output_path.exists() and not overwrite:
+        return output_path
+    rows = []
+    for row in read_jsonl(judged_path):
+        item = dict(row)
+        item["verification"] = verify_row(item, config)
+        item["dataset_factory_stage"] = "verified"
+        rows.append(item)
+    write_jsonl(output_path, rows)
+    return output_path
+
+
 def rejection_reasons(row: dict[str, Any], config: dict[str, Any], seen: set[str], holdouts: list[dict[str, str]]) -> list[str]:
     thresholds = config.get("quality_thresholds", {})
     reasons = []
@@ -455,6 +559,9 @@ def rejection_reasons(row: dict[str, Any], config: dict[str, Any], seen: set[str
         reasons.append("license_risk_rejected")
     if source.get("contamination_risk") in set(thresholds.get("reject_contamination_risk", [])):
         reasons.append("contamination_risk_rejected")
+    verification = row.get("verification", {}) if isinstance(row.get("verification"), dict) else {}
+    if verification and not verification.get("passed", False):
+        reasons.append("verification_failed")
     overlap = holdout_overlap(row, holdouts)
     row["holdout_overlap"] = overlap
     if float(overlap.get("max_similarity", 0.0)) > float(thresholds.get("max_holdout_similarity", 1.0)):
@@ -463,7 +570,7 @@ def rejection_reasons(row: dict[str, Any], config: dict[str, Any], seen: set[str
 
 
 def command_filter(config: dict[str, Any], overwrite: bool) -> tuple[Path, Path]:
-    judged_path = command_judge(config, overwrite=overwrite)
+    verified_path = command_verify(config, overwrite=overwrite)
     output_dir = resolve_repo_path(config["output_dir"])
     accepted_path = output_dir / "accepted.jsonl"
     rejected_path = output_dir / "rejected.jsonl"
@@ -474,7 +581,7 @@ def command_filter(config: dict[str, Any], overwrite: bool) -> tuple[Path, Path]
     seen: set[str] = set()
     accepted = []
     rejected = []
-    for row in read_jsonl(judged_path):
+    for row in read_jsonl(verified_path):
         item = dict(row)
         reasons = rejection_reasons(item, config, seen, holdouts)
         if reasons:
@@ -493,6 +600,11 @@ def quality_report(config: dict[str, Any], accepted: list[dict[str, Any]], rejec
     skill_counts = Counter(skill for row in accepted for skill in row.get("skills", []))
     rejection_counts = Counter(reason for row in rejected for reason in row.get("rejection_reasons", []))
     averages = [float(row.get("quality_score_average", 0.0)) for row in accepted]
+    verification_counts = Counter(
+        "passed" if row.get("verification", {}).get("passed") else "failed"
+        for row in [*accepted, *rejected]
+        if isinstance(row.get("verification"), dict)
+    )
     target = config.get("target_accept_count", {})
     thresholds = config.get("quality_thresholds", {})
     warnings = []
@@ -518,8 +630,10 @@ def quality_report(config: dict[str, Any], accepted: list[dict[str, Any]], rejec
         "rejected_count": len(rejected),
         "skill_counts": dict(sorted(skill_counts.items())),
         "rejection_counts": dict(sorted(rejection_counts.items())),
+        "verification_counts": dict(sorted(verification_counts.items())),
         "quality_score_average": round(sum(averages) / len(averages), 4) if averages else 0.0,
         "target_accept_count": copy.deepcopy(config.get("target_accept_count", {})),
+        "seed_only": bool(config.get("seed_only", False)),
         "warnings": warnings,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -528,6 +642,7 @@ def quality_report(config: dict[str, Any], accepted: list[dict[str, Any]], rejec
 def dataset_card(config: dict[str, Any], report: dict[str, Any]) -> str:
     skills = "\n".join(f"- `{skill}`: {count}" for skill, count in report["skill_counts"].items()) or "- none"
     warnings = "\n".join(f"- `{item['code']}`: {item['message']}" for item in report.get("warnings", [])) or "- none"
+    verification_counts = report.get("verification_counts", {})
     return f"""---
 dataset_info:
   config_name: {config['id']}
@@ -561,6 +676,9 @@ observed fine-tuning gaps without copying held-out model-forge eval prompts.
 - Accepted rows: {report['accepted_count']}
 - Rejected rows: {report['rejected_count']}
 - Mean quality score: {report['quality_score_average']}
+- Verification passed: {verification_counts.get('passed', 0)}
+- Verification failed: {verification_counts.get('failed', 0)}
+- Seed-only scaffold: {str(bool(config.get('seed_only', False))).lower()}
 
 ## Skill Counts
 
@@ -586,17 +704,19 @@ reasons, and checks similarity against configured holdout prompt files.
 def command_pack(config: dict[str, Any], config_path: Path, overwrite: bool) -> dict[str, str]:
     accepted_path, rejected_path = command_filter(config, overwrite=overwrite)
     output_dir = resolve_repo_path(config["output_dir"])
+    verification_path = output_dir / "verification.jsonl"
     dataset_path = output_dir / "dataset.jsonl"
     manifest_path = output_dir / "manifest.yaml"
     report_path = output_dir / "quality_report.json"
     card_path = output_dir / "dataset_card.md"
     gap_path = output_dir / "gap_report.yaml"
-    if all(path.exists() for path in (dataset_path, manifest_path, report_path, card_path)) and not overwrite:
+    if all(path.exists() for path in (dataset_path, manifest_path, report_path, card_path, verification_path)) and not overwrite:
         return {
             "dataset": str(dataset_path),
             "manifest": str(manifest_path),
             "quality_report": str(report_path),
             "dataset_card": str(card_path),
+            "verification": str(verification_path),
         }
 
     accepted = read_jsonl(accepted_path)
@@ -608,6 +728,7 @@ def command_pack(config: dict[str, Any], config_path: Path, overwrite: bool) -> 
             "skills": row.get("skills", []),
             "source": row.get("source", {}),
             "quality_scores": row.get("quality_scores", {}),
+            "verification": row.get("verification", {}),
             "holdout_overlap": row.get("holdout_overlap", {}),
         }
         for row in accepted
@@ -623,6 +744,7 @@ def command_pack(config: dict[str, Any], config_path: Path, overwrite: bool) -> 
             "dataset": display_path(dataset_path),
             "accepted": display_path(accepted_path),
             "rejected": display_path(rejected_path),
+            "verification": display_path(verification_path) if verification_path.exists() else None,
             "quality_report": display_path(report_path),
             "dataset_card": display_path(card_path),
             "gap_report": display_path(gap_path) if gap_path.exists() else None,
@@ -636,6 +758,7 @@ def command_pack(config: dict[str, Any], config_path: Path, overwrite: bool) -> 
         "manifest": str(manifest_path),
         "quality_report": str(report_path),
         "dataset_card": str(card_path),
+        "verification": str(verification_path),
     }
 
 
@@ -651,11 +774,21 @@ def command_publish(config: dict[str, Any], config_path: Path, overwrite: bool) 
         display_path(Path(outputs["manifest"])),
         display_path(Path(outputs["quality_report"])),
         display_path(Path(outputs["dataset_card"])),
+        display_path(Path(outputs["verification"])),
         display_path(output_dir / "accepted.jsonl"),
         display_path(output_dir / "rejected.jsonl"),
     ]
     if (output_dir / "gap_report.yaml").exists():
         files.append(display_path(output_dir / "gap_report.yaml"))
+    blocked_until = [
+        "human reviews dataset_card.md",
+        "license/provenance checks pass",
+        "HF publish command is run explicitly",
+    ]
+    if bool(config.get("seed_only", False)):
+        blocked_until.append("human explicitly approves seed-only release")
+    else:
+        blocked_until.append("dataset size reaches configured target")
     plan = {
         "dry_run": True,
         "repo_id": repo_id,
@@ -663,12 +796,7 @@ def command_publish(config: dict[str, Any], config_path: Path, overwrite: bool) 
         "dataset_id": config["id"],
         "release_class": config.get("hub", {}).get("release_class", "public_dataset_candidate"),
         "files": files,
-        "blocked_until": [
-            "human reviews dataset_card.md",
-            "license/provenance checks pass",
-            "dataset size reaches configured target or is marked seed-only",
-            "HF publish command is run explicitly",
-        ],
+        "blocked_until": blocked_until,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     publish_path.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -684,7 +812,7 @@ def default_config_for(family: str, variant: str) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Plan and pack model-forge dataset-factory artifacts")
-    parser.add_argument("step", choices=["plan", "gaps", "seed", "generate", "judge", "filter", "pack", "publish"])
+    parser.add_argument("step", choices=["plan", "gaps", "seed", "generate", "judge", "verify", "filter", "pack", "publish"])
     parser.add_argument("family", nargs="?")
     parser.add_argument("variant", nargs="?")
     parser.add_argument("--config", type=Path)
@@ -709,6 +837,9 @@ def main() -> None:
         console.print(f"[green]Wrote[/green] {display_path(path)}")
     elif args.step == "judge":
         path = command_judge(config, args.overwrite)
+        console.print(f"[green]Wrote[/green] {display_path(path)}")
+    elif args.step == "verify":
+        path = command_verify(config, args.overwrite)
         console.print(f"[green]Wrote[/green] {display_path(path)}")
     elif args.step == "filter":
         accepted, rejected = command_filter(config, args.overwrite)

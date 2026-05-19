@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from model_forge.data.factory import REPO_DIR, build_gap_report, build_plan, command_gaps, command_pack, command_publish, load_yaml
+from model_forge.data.factory import (
+    REPO_DIR,
+    build_gap_report,
+    build_plan,
+    command_gaps,
+    command_pack,
+    command_publish,
+    command_verify,
+    load_yaml,
+)
 
 
 class DatasetFactoryTests(unittest.TestCase):
@@ -19,6 +29,7 @@ class DatasetFactoryTests(unittest.TestCase):
         self.assertIn("benign_safety_analysis", plan["seed_skill_counts"])
         self.assertIn("self_instruct", plan["generation_methods"]["planned"])
         self.assertEqual(plan["quality_thresholds"]["max_holdout_similarity"], 0.82)
+        self.assertTrue(plan["seed_only"])
 
     def test_pack_writes_dataset_card_and_rejection_report(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
@@ -35,6 +46,25 @@ class DatasetFactoryTests(unittest.TestCase):
             self.assertIn("eval-adjacent", card)
             self.assertIn("Skill Counts", card)
             self.assertIn("Coverage Warnings", card)
+            self.assertIn("Verification passed", card)
+            manifest = load_yaml(Path(outputs["manifest"]))
+            self.assertIn("verification", manifest["artifacts"])
+            self.assertEqual(manifest["quality_report"]["verification_counts"]["passed"], len(dataset_rows))
+
+    def test_verify_command_writes_static_skill_checks(self) -> None:
+        config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["output_dir"] = tmp
+            path = command_verify(config, overwrite=True)
+            rows = [
+                json.loads(line)
+                for line in Path(path).read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertGreaterEqual(len(rows), 10)
+            self.assertTrue(all(row["verification"]["passed"] for row in rows))
+            self.assertTrue(all(row["verification"]["type"] == "static_skill_checks" for row in rows))
 
     def test_gap_report_maps_eval_failures_to_seed_skills(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
@@ -64,6 +94,7 @@ class DatasetFactoryTests(unittest.TestCase):
             text = Path(publish_plan).read_text(encoding="utf-8")
             self.assertIn('"dry_run": true', text)
             self.assertIn('"repo_type": "dataset"', text)
+            self.assertIn("verification.jsonl", text)
 
 
 if __name__ == "__main__":

@@ -14,9 +14,9 @@ seed_count: 24
 seed_skill_counts:
   benign_safety_analysis: 6
   checkpoint_selection: 4
-  config_review: 3
+  config_review: 2
   docker_disk_safety: 2
-  eval_latency_throughput: 4
+  eval_latency_throughput: 3
   git_workflow_repair: 2
   json_schema_repair: 2
   shell_safety: 2
@@ -86,11 +86,13 @@ generation_methods:
   - instruction_backtranslation
   - self_code_align
   - eval_adjacent_generation
-created_at: '2026-05-19T03:35:22.888505+00:00'
+seed_only: true
+created_at: '2026-05-19T03:46:48.817238+00:00'
 artifacts:
   dataset: datasets/generated/gemma4_26b_a4b_local_ft_v1/dataset.jsonl
   accepted: datasets/generated/gemma4_26b_a4b_local_ft_v1/accepted.jsonl
   rejected: datasets/generated/gemma4_26b_a4b_local_ft_v1/rejected.jsonl
+  verification: datasets/generated/gemma4_26b_a4b_local_ft_v1/verification.jsonl
   quality_report: datasets/generated/gemma4_26b_a4b_local_ft_v1/quality_report.json
   dataset_card: datasets/generated/gemma4_26b_a4b_local_ft_v1/dataset_card.md
   gap_report: datasets/generated/gemma4_26b_a4b_local_ft_v1/gap_report.yaml
@@ -101,24 +103,27 @@ quality_report:
   skill_counts:
     benign_safety_analysis: 6
     checkpoint_selection: 4
-    config_review: 3
+    config_review: 2
     docker_disk_safety: 2
-    eval_latency_throughput: 4
+    eval_latency_throughput: 3
     git_workflow_repair: 2
     json_schema_repair: 2
     shell_safety: 2
     sql_edge_cases: 3
   rejection_counts: {}
+  verification_counts:
+    passed: 24
   quality_score_average: 0.8897
   target_accept_count:
     min: 500
     max: 2000
+  seed_only: true
   warnings:
   - code: accepted_count_below_min_target
     message: accepted rows 24 below configured minimum 500
   - code: skill_below_min_seed_examples
     skill: eval_latency_throughput
-    message: eval_latency_throughput has 4 accepted rows, below seed target 5
+    message: eval_latency_throughput has 3 accepted rows, below seed target 5
   - code: skill_below_min_seed_examples
     skill: docker_disk_safety
     message: docker_disk_safety has 2 accepted rows, below seed target 5
@@ -130,7 +135,7 @@ quality_report:
     message: shell_safety has 2 accepted rows, below seed target 5
   - code: skill_below_min_seed_examples
     skill: config_review
-    message: config_review has 3 accepted rows, below seed target 5
+    message: config_review has 2 accepted rows, below seed target 5
   - code: skill_below_min_seed_examples
     skill: json_schema_repair
     message: json_schema_repair has 2 accepted rows, below seed target 5
@@ -140,4 +145,4 @@ quality_report:
   - code: skill_below_min_seed_examples
     skill: checkpoint_selection
     message: checkpoint_selection has 4 accepted rows, below seed target 5
-  created_at: '2026-05-19T03:35:22.887352+00:00'
+  created_at: '2026-05-19T03:46:48.816052+00:00'

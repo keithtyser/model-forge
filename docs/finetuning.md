@@ -372,15 +372,17 @@ The first no-training implementation slice is the local FT v1 dataset factory:
 ./forge data seed gemma4_26b_a4b local_ft_v1
 ./forge data generate gemma4_26b_a4b local_ft_v1
 ./forge data judge gemma4_26b_a4b local_ft_v1
+./forge data verify gemma4_26b_a4b local_ft_v1
 ./forge data filter gemma4_26b_a4b local_ft_v1
 ./forge data pack gemma4_26b_a4b local_ft_v1
 ./forge data publish gemma4_26b_a4b local_ft_v1
 ```
 
 Current MVP behavior is deterministic and local: it uses human seed rows,
-saved eval failure extraction, heuristic scoring, holdout-overlap checks,
-accepted/rejected row reports, coverage warnings, and a dry-run Hugging Face
-publish plan. It does not call teacher models or upload anything.
+saved eval failure extraction, heuristic scoring, static skill verification,
+holdout-overlap checks, accepted/rejected row reports, coverage warnings, and a
+dry-run Hugging Face publish plan. It does not call teacher models or upload
+anything.
 
 Primary files:
 
@@ -395,6 +397,17 @@ src/model_forge/data/factory.py
 The generated seed pack currently contains 24 accepted examples across the v0
 failure skills. It is a scaffold and quality-control path, not the final
 `500-2000` row v1 training dataset.
+
+The verification step writes:
+
+```text
+datasets/generated/gemma4_26b_a4b_local_ft_v1/verification.jsonl
+```
+
+It checks message structure, source metadata, configured skills, and
+skill-specific static signals such as JSON/schema constraints, SQL NULL
+coverage, safe shell wording, eval latency fields, and checkpoint-selection
+methodology. `filter` rejects rows with failed verification before packaging.
 
 The gap report is generated from the saved local FT v0 internal responses and
 summarizes failed buckets, missed concepts, and recommended next dataset skills:

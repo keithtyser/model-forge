@@ -3,6 +3,7 @@ family: gemma4_26b_a4b
 variant: local_ft_v1
 objective: capability_sft
 version: 0.1.0
+seed_only: true
 description: >
   Eval-adjacent dataset factory plan for the next Gemma 4 26B-A4B local
   fine-tune. It targets the v0 gaps without copying model-forge eval prompts.

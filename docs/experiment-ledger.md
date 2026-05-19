@@ -332,6 +332,7 @@ objective: create a no-training path for local_ft_v1 data cleanup and handoff
 commands:
   ./forge data plan gemma4_26b_a4b local_ft_v1 --overwrite
   ./forge data gaps gemma4_26b_a4b local_ft_v1 --overwrite
+  ./forge data verify gemma4_26b_a4b local_ft_v1 --overwrite
   ./forge data pack gemma4_26b_a4b local_ft_v1 --overwrite
   ./forge data publish gemma4_26b_a4b local_ft_v1 --overwrite
 objective profile: configs/objectives/capability_sft.yaml
@@ -340,6 +341,8 @@ seed rows: datasets/seeds/gemma4_26b_a4b_local_ft_v1.jsonl
 generated artifact dir: datasets/generated/gemma4_26b_a4b_local_ft_v1
 accepted rows: 24
 rejected rows: 0
+verification passed: 24
+verification failed: 0
 mean heuristic quality score: 0.8897
 gap rows extracted from local_ft v0 eval: 68 / 318
 top recommended seed skill: benign_safety_analysis, 39 mapped gap signals
@@ -348,10 +351,10 @@ publish behavior: dry-run HF dataset plan only, no upload
 
 This is not enough data for a v1 training run. It is the first repo-cleanup
 slice of the dataset factory: plan, seed, candidate copy, heuristic judge,
-holdout-overlap filter, pack, dataset card, quality report, and dry-run publish
-plan. Next easy extensions are teacher-generation adapters, executable
-verification, and enough accepted examples to reach the configured `500-2000`
-row target.
+static skill verification, holdout-overlap filter, pack, dataset card, quality
+report, and dry-run publish plan. Next easy extensions are teacher-generation
+adapters, executable verification beyond static checks, and enough accepted
+examples to reach the configured `500-2000` row target.
 
 The invalid earlier full-run output was moved aside to:
 

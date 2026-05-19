@@ -115,9 +115,10 @@ another backend without hard-coding Gemma behavior.
   licenses, quality gates, and holdouts.
 - Do not train on model-forge eval prompts. Train adjacent skills and let the
   held-out eval suite decide promotion.
-- For FT data iteration, use `./forge data plan|gaps|pack <family> <variant>`
-  before editing training configs. The local FT v1 seed pack is deterministic
-  and does not run teacher-model generation or upload artifacts.
+- For FT data iteration, use
+  `./forge data plan|gaps|verify|pack <family> <variant>` before editing
+  training configs. The local FT v1 seed pack is deterministic and does not run
+  teacher-model generation or upload artifacts.
 - Promote a local FT only if it matches or beats the downloaded FT reference on
   internal challenge capability, paired benign quality, normal-use regression,
   artifact quality, and external benchmarks.

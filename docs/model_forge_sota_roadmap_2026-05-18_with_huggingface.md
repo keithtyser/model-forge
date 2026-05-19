@@ -3216,7 +3216,7 @@ At least one merged upstream PR and one profiler-backed perf report with end-to-
 [ ] MF-0351 Add configs/datasets/*.yaml plan schema
 [ ] MF-0352 Add forge data plan/seed/generate
 [ ] MF-0353 Add forge data judge with multi-axis quality scores
-[ ] MF-0354 Add forge data verify for JSON/code/artifact examples
+[x] MF-0354 Add forge data verify for JSON/code/artifact examples
 [ ] MF-0355 Add forge data filter with dedupe, holdout-overlap, and license checks
 [ ] MF-0356 Add forge data pack with dataset.jsonl, manifest.yaml, and dataset_card.md
 [ ] MF-0357 Add accepted/rejected row reports with rejection reasons
