@@ -53,6 +53,7 @@ model-forge-external = "model_forge.evals.external:main"
 model-forge-abliterate = "model_forge.pipelines.abliterate:main"
 model-forge-finetune = "model_forge.pipelines.finetune:main"
 model-forge-data = "model_forge.data.factory:main"
+model-forge-research = "model_forge.research.registry:main"
 model-forge-doctor = "model_forge.doctor:main"
 
 [tool.setuptools]

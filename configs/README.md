@@ -9,6 +9,8 @@ and experiment constants here instead of hard-coding them in scripts.
   paths, and serving defaults.
 - `data_sources/`: dataset source registries with ids, provenance, licenses,
   roles, quality tiers, and sampling caps.
+- `research_registry.yaml`: dated research claims with implementation hooks,
+  eval hooks, and limitations. Validate with `./forge research audit`.
 - `experiments/`: eval matrix definitions and external benchmark settings.
 - `finetuning/`: SFT/QLoRA recipes, resource contracts, LoRA targets, and
   promotion gates.

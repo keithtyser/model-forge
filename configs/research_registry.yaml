@@ -1,0 +1,529 @@
+version: 2026-05-18
+snapshot_date: 2026-05-18
+last_verified: 2026-05-19
+description: >
+  Machine-readable research basis for Model Forge. Entries map research claims
+  to implementation hooks, eval hooks, limitations, and objective profiles.
+
+entries:
+  sft_lora_qlora:
+    title: "LoRA and QLoRA for memory-efficient supervised fine-tuning"
+    kind: method_bundle
+    year: 2023
+    status: implemented_baseline
+    url: https://arxiv.org/abs/2305.14314
+    related_urls:
+      - https://arxiv.org/abs/2106.09685
+    areas:
+      - fine_tuning
+      - parameter_efficient_training
+    claims:
+      - LoRA freezes base weights and trains low-rank adapter matrices.
+      - QLoRA combines low-rank adapters with quantized model loading to reduce fine-tuning memory.
+    implementation_hooks:
+      - configs/finetuning/*.yaml
+      - src/model_forge/pipelines/finetune.py
+      - recipes/finetuning/
+    eval_hooks:
+      - evals/prompts/capability_preservation_challenge.yaml
+      - evals/prompts/normal_use_regression.yaml
+      - configs/promotion/
+    limitations:
+      - Adapter rank, target modules, context length, and packing constants must be recalibrated per model family.
+      - Memory-efficient fine-tuning can still regress capability if the data mixture is weak or too narrow.
+
+  self_instruct:
+    title: "Self-Instruct: Aligning Language Models with Self-Generated Instructions"
+    kind: paper
+    year: 2022
+    status: implemented_baseline
+    url: https://arxiv.org/abs/2212.10560
+    areas:
+      - dataset_factory
+      - synthetic_data
+    claims:
+      - A model can bootstrap instruction, input, and output candidates from seed tasks.
+      - Synthetic candidates need filtering for invalid, duplicate, low-diversity, and low-quality rows.
+    implementation_hooks:
+      - src/model_forge/data/factory.py
+      - configs/datasets/*.yaml
+    eval_hooks:
+      - datasets/generated/*/review_report.json
+      - datasets/generated/*/quality_report.json
+      - evals/prompts/normal_use_regression.yaml
+    limitations:
+      - Self-generated rows can amplify model blind spots unless judged, deduped, and checked against eval holdouts.
+      - It is a generation pattern, not a quality guarantee.
+
+  evol_instruct:
+    title: "WizardLM and WizardCoder Evol-Instruct"
+    kind: paper_family
+    year: 2023
+    status: implemented_baseline
+    url: https://arxiv.org/abs/2304.12244
+    related_urls:
+      - https://arxiv.org/abs/2306.08568
+    areas:
+      - dataset_factory
+      - synthetic_data
+      - code_data
+    claims:
+      - Instruction rewriting can increase complexity and coverage from simpler seed instructions.
+      - Code-specific evolution can target debugging, generation, and reasoning skills.
+    implementation_hooks:
+      - configs/datasets/*.yaml
+      - src/model_forge/data/factory.py
+    eval_hooks:
+      - evals/prompts/agentic_code_debug.yaml
+      - evals/prompts/capability_preservation_challenge.yaml
+      - datasets/generated/*/gap_report.yaml
+    limitations:
+      - Complexity rewrites can produce verbose or unrealistic prompts without length and usefulness filters.
+      - Evolved data must stay eval-adjacent rather than copying held-out eval prompts.
+
+  instruction_backtranslation:
+    title: "Self-Alignment with Instruction Backtranslation"
+    kind: paper
+    year: 2023
+    status: implemented_baseline
+    url: https://arxiv.org/abs/2308.06259
+    areas:
+      - dataset_factory
+      - synthetic_data
+      - self_curation
+    claims:
+      - Instruction backtranslation creates instruction-response pairs from unlabelled or weakly labelled source text.
+      - Iterative self-augmentation and self-curation can improve instruction-following data quality.
+    implementation_hooks:
+      - configs/datasets/*.yaml
+      - configs/data_sources/*.yaml
+      - src/model_forge/data/factory.py
+    eval_hooks:
+      - datasets/generated/*/review_report.json
+      - datasets/generated/*/manifest.yaml
+    limitations:
+      - Source text licenses and provenance remain first-class gates.
+      - Weak teacher models can generate plausible but unhelpful instructions.
+
+  deita:
+    title: "DEITA: Data-Efficient Instruction Tuning for Alignment"
+    kind: paper
+    year: 2024
+    status: implemented_baseline
+    url: https://arxiv.org/abs/2312.15685
+    related_urls:
+      - https://proceedings.iclr.cc/paper_files/paper/2024/hash/6091f2bb355e960600f62566ac0e2862-Abstract-Conference.html
+    areas:
+      - dataset_factory
+      - data_selection
+    claims:
+      - Instruction data should be selected for quality, complexity, and diversity rather than volume alone.
+      - Small curated sets can compete with much larger weaker mixtures.
+    implementation_hooks:
+      - configs/datasets/*.yaml
+      - src/model_forge/data/factory.py
+    eval_hooks:
+      - datasets/generated/*/quality_report.json
+      - datasets/generated/*/review_sheet.md
+    limitations:
+      - Automatic quality scores are only triage; human review remains required before large training runs.
+      - Diversity metrics need model-family and objective-specific calibration.
+
+  lima:
+    title: "LIMA: Less Is More for Alignment"
+    kind: paper
+    year: 2023
+    status: tracked_basis
+    url: https://arxiv.org/abs/2305.11206
+    areas:
+      - fine_tuning
+      - data_quality
+    claims:
+      - A small number of carefully curated examples can strongly shape response style and instruction following.
+      - Data quality can dominate dataset size for some alignment objectives.
+    implementation_hooks:
+      - configs/datasets/*.yaml
+      - docs/finetuning.md
+    eval_hooks:
+      - evals/prompts/reasoning_style_stability.yaml
+      - evals/prompts/refusal_paired_boundary.yaml
+    limitations:
+      - Small datasets are fragile if coverage gaps are not measured.
+      - Style improvements can mask capability loss unless challenge evals are held out.
+
+  arditi_2024_refusal_direction:
+    title: "Refusal in Language Models Is Mediated by a Single Direction"
+    kind: paper
+    year: 2024
+    status: implemented_baseline
+    url: https://arxiv.org/abs/2406.11717
+    areas:
+      - behavior_editing
+      - interpretability
+      - refusal_suppression
+    claims:
+      - A refusal-related activation direction can be estimated from harmful and harmless prompt representations.
+      - Projecting or editing that direction can reduce refusal behavior with less cost than fine-tuning.
+    implementation_hooks:
+      - configs/abliteration/*.yaml
+      - src/model_forge/pipelines/abliterate.py
+      - docs/abliteration.md
+    eval_hooks:
+      - evals/prompts/refusal_paired_boundary.yaml
+      - evals/prompts/refusal_calibration_benign.yaml
+      - evals/prompts/refusal_calibration_unsafe.yaml
+    limitations:
+      - A single direction is a baseline, not a guarantee that every model or refusal type is captured.
+      - Refusal suppression must be evaluated separately from source capability retention.
+
+  more_than_single_refusal_direction_2026:
+    title: "There Is More to Refusal in Large Language Models than a Single Direction"
+    kind: paper
+    year: 2026
+    status: tracked_sota
+    url: https://arxiv.org/abs/2602.02132
+    areas:
+      - behavior_editing
+      - interpretability
+      - refusal_taxonomy
+    claims:
+      - Different refusal and noncompliance categories can map to geometrically distinct directions.
+      - Linear steering may still behave like a shared control knob, so direction choice affects refusal style as well as rate.
+    implementation_hooks:
+      - configs/abliteration/*.yaml
+      - future:src/model_forge/behavior_editing/noncompliance_taxonomy.py
+    eval_hooks:
+      - evals/prompts/refusal_benign_boundary.yaml
+      - evals/prompts/refusal_paired_boundary.yaml
+    limitations:
+      - Requires taxonomy-aware prompt sets before Model Forge can claim category-level refusal control.
+      - Should not replace source-relative capability gates.
+
+  som_multidirectional_refusal_2026:
+    title: "SOM Directions Are Better than One: Multi-Directional Refusal Suppression in Language Models"
+    kind: paper
+    year: 2026
+    status: tracked_sota
+    url: https://ojs.aaai.org/index.php/AAAI/article/view/40551
+    areas:
+      - behavior_editing
+      - refusal_suppression
+      - interpretability
+    claims:
+      - Multiple refusal directions can outperform a single-direction baseline for refusal suppression.
+      - Self-organizing maps are one path to discover multiple refusal-related directions.
+    implementation_hooks:
+      - configs/abliteration/*.yaml
+      - future:src/model_forge/behavior_editing/multidirectional.py
+    eval_hooks:
+      - evals/prompts/refusal_paired_boundary.yaml
+      - configs/promotion/
+    limitations:
+      - Multi-direction methods increase sweep surface area and must be bounded by resource guardrails.
+      - More suppression is only useful for this repo when source capability is preserved.
+
+  xstest:
+    title: "XSTest: A Test Suite for Identifying Exaggerated Safety Behaviours"
+    kind: benchmark
+    year: 2023
+    status: evaluation_standard
+    url: https://arxiv.org/abs/2308.01263
+    areas:
+      - evals
+      - safety_calibration
+      - overrefusal
+    claims:
+      - Safe prompts with unsafe-looking surface forms expose exaggerated safety and benign overrefusal.
+      - Unsafe contrast prompts help distinguish calibrated refusal from blanket compliance.
+    implementation_hooks:
+      - evals/prompts/refusal_calibration_benign.yaml
+      - evals/prompts/refusal_benign_boundary.yaml
+    eval_hooks:
+      - evals/prompts/refusal_calibration_benign.yaml
+      - evals/prompts/refusal_calibration_unsafe.yaml
+    limitations:
+      - It is a single-turn calibration benchmark and does not measure full capability preservation.
+      - Prompt categories should be expanded as new model failure modes appear.
+
+  harmbench:
+    title: "HarmBench: A Standardized Evaluation Framework for Automated Red Teaming and Robust Refusal"
+    kind: benchmark
+    year: 2024
+    status: evaluation_standard
+    url: https://arxiv.org/abs/2402.04249
+    related_urls:
+      - https://github.com/centerforaisafety/HarmBench
+    areas:
+      - evals
+      - safety
+      - red_teaming
+    claims:
+      - Standardized harmful behavior prompts and classifiers make red-team comparisons more reproducible.
+      - Safety evaluation needs attack and defense co-development, not only static refusal checks.
+    implementation_hooks:
+      - future:src/model_forge/evals/external_harmbench.py
+      - docs/evaluation-strategy.md
+    eval_hooks:
+      - evals/prompts/unsafe_overcompliance.yaml
+      - external:harmbench
+    limitations:
+      - For refusal-removal research, high unsafe compliance can be an expected behavior outcome, not an automatic failure.
+      - Reports must separate behavior objective success from deployment safety.
+
+  strongreject:
+    title: "A StrongREJECT for Empty Jailbreaks"
+    kind: benchmark
+    year: 2024
+    status: evaluation_standard
+    url: https://arxiv.org/abs/2402.10260
+    related_urls:
+      - https://strong-reject.readthedocs.io/
+    areas:
+      - evals
+      - jailbreaks
+      - refusal_suppression
+    claims:
+      - Jailbreak success metrics can overstate effectiveness when they do not measure useful harmful compliance.
+      - A benchmark should compare automated scores against human judgment.
+    implementation_hooks:
+      - future:src/model_forge/evals/external_strongreject.py
+      - docs/evaluation-strategy.md
+    eval_hooks:
+      - evals/prompts/refusal_paired_boundary.yaml
+      - evals/prompts/unsafe_overcompliance.yaml
+    limitations:
+      - Stronger harmful compliance should be interpreted through the active objective profile.
+      - Refusal suppression can reduce capability, so capability evals must be paired.
+
+  mlcommons_ailuminate:
+    title: "MLCommons AILuminate"
+    kind: benchmark
+    year: 2025
+    status: evaluation_standard
+    url: https://mlcommons.org/benchmarks/ailuminate/
+    areas:
+      - evals
+      - safety
+      - hazard_taxonomy
+    claims:
+      - Safety evaluation benefits from explicit hazard categories, public practice prompts, and private official prompts.
+      - Graded safety reports should include category-specific breakdowns rather than a single refusal score.
+    implementation_hooks:
+      - future:src/model_forge/evals/external_ailuminate.py
+      - future:configs/evals/ailuminate.yaml
+    eval_hooks:
+      - evals/prompts/unsafe_overcompliance.yaml
+      - reports/generated/
+    limitations:
+      - Private official sets cannot be reproduced from public repo data.
+      - AILuminate-style safety grades are deployment signals, not the same as ablation objective success.
+
+  ifeval:
+    title: "Instruction-Following Evaluation for Large Language Models"
+    kind: benchmark
+    year: 2023
+    status: evaluation_standard
+    url: https://arxiv.org/abs/2311.07911
+    areas:
+      - evals
+      - instruction_following
+    claims:
+      - Verifiable instruction constraints make instruction-following evals more reproducible than free-form judge scoring alone.
+      - Format, keyword, count, and language constraints catch regressions missed by broad capability prompts.
+    implementation_hooks:
+      - src/model_forge/evals/external.py
+      - configs/experiments/*.yaml
+    eval_hooks:
+      - external:ifeval
+      - evals/prompts/agentic_tool_use_json.yaml
+    limitations:
+      - Constraint-following is not the same as usefulness or reasoning quality.
+      - External benchmark versions must be recorded with run manifests.
+
+  livecodebench:
+    title: "LiveCodeBench"
+    kind: benchmark
+    year: 2024
+    status: evaluation_standard
+    url: https://huggingface.co/livecodebench
+    areas:
+      - evals
+      - coding
+      - contamination_resistance
+    claims:
+      - Recently released programming problems help reduce benchmark contamination.
+      - Coding evaluation should include generation, repair, execution, and output prediction styles.
+    implementation_hooks:
+      - future:src/model_forge/evals/external_livecodebench.py
+      - evals/prompts/agentic_code_debug.yaml
+    eval_hooks:
+      - evals/prompts/agentic_code_debug.yaml
+      - external:livecodebench
+    limitations:
+      - Live external datasets change over time, so exact snapshot/version metadata is mandatory.
+      - Competitive programming performance does not cover all agentic coding workflows.
+
+  simpleqa:
+    title: "SimpleQA"
+    kind: benchmark
+    year: 2024
+    status: tracked_basis
+    url: https://openai.com/index/introducing-simpleqa/
+    areas:
+      - evals
+      - factuality
+      - calibration
+    claims:
+      - Short factual questions with agreed answers can expose precision, calibration, and abstention behavior.
+      - Factuality evals should distinguish incorrect answers from not-attempted answers.
+    implementation_hooks:
+      - future:src/model_forge/evals/external_simpleqa.py
+      - docs/evaluation-strategy.md
+    eval_hooks:
+      - external:simpleqa
+      - evals/prompts/normal_use_regression.yaml
+    limitations:
+      - Factual QA is sensitive to temporal drift and answer-key staleness.
+      - It should complement, not replace, repo-specific task evals.
+
+  llm_as_judge_mt_bench:
+    title: "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena"
+    kind: paper
+    year: 2023
+    status: tracked_basis
+    url: https://arxiv.org/abs/2306.05685
+    areas:
+      - evals
+      - judging
+      - pairwise_preference
+    claims:
+      - LLM judges can be useful for scalable model comparison when paired with rubrics and calibration.
+      - Human preference agreement and judge bias must be measured rather than assumed.
+    implementation_hooks:
+      - evals/rubrics/
+      - src/model_forge/evals/run_eval.py
+    eval_hooks:
+      - tests/test_eval_quality.py
+      - reports/generated/
+    limitations:
+      - Single-judge scoring is vulnerable to verbosity, position, and model-family biases.
+      - Objective checks and artifact execution should replace judge scoring where possible.
+
+  vllm_paged_attention:
+    title: "Efficient Memory Management for Large Language Model Serving with PagedAttention"
+    kind: paper
+    year: 2023
+    status: serving_standard
+    url: https://arxiv.org/abs/2309.06180
+    areas:
+      - serving
+      - inference
+      - memory
+    claims:
+      - PagedAttention reduces KV-cache memory waste and improves serving throughput.
+      - Serving benchmarks must measure latency and throughput under realistic request mixes.
+    implementation_hooks:
+      - scripts/serve_vllm_dgx_spark.sh
+      - scripts/dgx_spark_serve_*.sh
+      - future:src/model_forge/benchmarks/serve.py
+    eval_hooks:
+      - future:reports/generated/*/serving_card.md
+      - evals/prompts/normal_use_regression.yaml
+    limitations:
+      - Engine flags are hardware and version dependent.
+      - Faster serving is not enough if quality or refusal behavior drifts.
+
+  vllm_fp8_kv_cache:
+    title: "vLLM Quantized KV Cache"
+    kind: documentation
+    year: 2026
+    status: serving_standard
+    url: https://docs.vllm.ai/en/v0.20.0/features/quantization/quantized_kvcache/
+    areas:
+      - serving
+      - quantization
+      - memory
+    claims:
+      - FP8 KV cache can reduce KV memory pressure for long contexts and higher concurrency.
+      - KV quantization settings must be captured with model, engine, and hardware metadata.
+    implementation_hooks:
+      - scripts/serve_vllm_dgx_spark.sh
+      - docs/spark-optimizations.md
+      - future:configs/serving/*.yaml
+    eval_hooks:
+      - future:./forge bench serve
+      - evals/prompts/normal_use_regression.yaml
+    limitations:
+      - FP8 KV behavior can be model and vLLM-version sensitive.
+      - Quality and behavior sampled evals should run under the same serving config being benchmarked.
+
+  vllm_fp8_w8a8:
+    title: "vLLM FP8 W8A8 Quantization"
+    kind: documentation
+    year: 2024
+    status: serving_standard
+    url: https://docs.vllm.ai/en/v0.6.3.post1/quantization/fp8.html
+    areas:
+      - serving
+      - quantization
+      - throughput
+    claims:
+      - FP8 model quantization can reduce memory footprint and improve throughput on supported hardware.
+      - Dynamic and calibrated quantization paths have different quality and portability tradeoffs.
+    implementation_hooks:
+      - future:src/model_forge/quantization/
+      - docs/spark-optimizations.md
+    eval_hooks:
+      - future:reports/generated/*/quantization_card.md
+      - evals/prompts/capability_preservation_challenge.yaml
+    limitations:
+      - Claimed speedups are not portable across models, GPUs, or serving versions.
+      - Weight/activation quantization needs behavior-preservation gates, not only memory metrics.
+
+  nvidia_nvfp4:
+    title: "Introducing NVFP4 for Efficient and Accurate Low-Precision Inference"
+    kind: documentation
+    year: 2025
+    status: serving_standard
+    url: https://developer.nvidia.com/blog/introducing-nvfp4-for-efficient-and-accurate-low-precision-inference/
+    areas:
+      - quantization
+      - dgx_spark
+      - blackwell
+    claims:
+      - NVFP4 is a Blackwell-oriented 4-bit floating-point format with microscaling for lower quantization error.
+      - NVFP4 should be treated as a candidate compression path with explicit accuracy and behavior checks.
+    implementation_hooks:
+      - docs/spark-optimizations.md
+      - future:src/model_forge/quantization/modelopt.py
+    eval_hooks:
+      - future:reports/generated/*/quantization_card.md
+      - evals/prompts/refusal_paired_boundary.yaml
+    limitations:
+      - NVFP4 support depends on hardware, ModelOpt, engine, and checkpoint format compatibility.
+      - MoE routers, embeddings, norms, and multimodal components may need precision exceptions.
+
+  nvidia_modelopt:
+    title: "NVIDIA Model Optimizer"
+    kind: documentation
+    year: 2026
+    status: serving_standard
+    url: https://github.com/NVIDIA/Model-Optimizer
+    related_urls:
+      - https://nvidia.github.io/TensorRT-Model-Optimizer/
+    areas:
+      - quantization
+      - serving
+      - model_export
+    claims:
+      - ModelOpt provides PTQ, QAT, distillation, pruning, speculative decoding, and export paths for deployment engines.
+      - Quantized checkpoints should be exportable and tied to calibration data and runtime validation.
+    implementation_hooks:
+      - future:src/model_forge/quantization/modelopt.py
+      - future:configs/quantization/*.yaml
+    eval_hooks:
+      - future:reports/generated/*/hub_publish.json
+      - future:reports/generated/*/quantization_card.md
+    limitations:
+      - ModelOpt workflows can change quickly and must be version-pinned in manifests.
+      - PTQ simulation does not guarantee end-to-end runtime speedup without deployment-engine validation.

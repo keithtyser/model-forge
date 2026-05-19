@@ -26,9 +26,13 @@ reusable pipeline code over one-off scripts.
 - `docs/experiment-ledger.md`: handoff ledger for hypotheses, experiments,
   artifacts, validation, and publish status
 - `docs/roadmaps/`: long-form roadmap and archived planning documents
+- `docs/research/sota-2026-05-18.md`: dated SOTA snapshot behind current
+  roadmap decisions
 - `docs/spark-optimizations.md`: DGX Spark hardware profile, AEON-7-derived
   serving/quantization lessons, and safe overrides
 - `configs/README.md`: config directory map and portability rules
+- `configs/research_registry.yaml`: machine-readable research basis for
+  methods, evals, serving, and quantization work
 - `scripts/README.md`: script directory map and operational rules
 - `configs/model_families/`: model family registry
 - `configs/abliteration/`: ablation recipes
@@ -163,6 +167,17 @@ Run repo hygiene checks:
 ```bash
 ./forge doctor
 ```
+
+Inspect or validate the research basis:
+
+```bash
+./forge research list
+./forge research show arditi_2024_refusal_direction
+./forge research audit
+```
+
+When adding a new method, benchmark adapter, objective profile, or public report,
+connect it to `configs/research_registry.yaml` and keep the limitations explicit.
 
 ## Abliteration Rules
 

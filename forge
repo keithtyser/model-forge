@@ -24,6 +24,7 @@ Usage:
   ./forge ablate <family> [plan|collect|analyze-reference|sweep-reference|export|sota-plan|sota-prepare|sota-run] [--execute]
   ./forge compare <family>
   ./forge promote <family> [profile]
+  ./forge research [list|show|audit]
   ./forge golden-summary <family> [output-json]
   ./forge golden-check <family> [baseline-json]
   ./forge doctor [--json]
@@ -41,6 +42,7 @@ Examples:
   ./forge ablate gemma4_26b_a4b plan
   ./forge compare gemma4_26b_a4b
   ./forge promote gemma4_26b_a4b local_ft_vs_jackrong
+  ./forge research audit
   ./forge doctor
 
 By default, eval runs internal checks, artifact evals, external benchmarks,
@@ -166,6 +168,9 @@ case "$ACTION" in
     else
       "$PYTHON" -m model_forge.evals.promotion --config "$CONFIG"
     fi
+    ;;
+  research)
+    "$PYTHON" -m model_forge.research.registry "$@"
     ;;
   golden-summary)
     FAMILY=${1:?family is required}

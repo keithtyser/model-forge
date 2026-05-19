@@ -27,6 +27,9 @@ This is the short handoff state for humans and agents. Use
 - The repo now has reusable dataset source registries, guarded HF dataset
   publish execution, a local FT v1 dry-run config, saved-comparison promotion
   reports, and a safe Qwen 3.5 9B teacher launcher.
+- The roadmap foundation now has a dated SOTA snapshot, a machine-readable
+  research registry, and `./forge research list/show/audit` for checking that
+  objective profiles reference known research entries.
 
 ## Current Dataset State
 
@@ -66,8 +69,9 @@ length filtering:
 
 ## Recommended Next Work
 
-1. Choose whether to scale local FT v1 data or improve the source registry with
-   more high-quality non-Jackrong sources.
+1. Add objective profiles for `zero_refusal_capability_retention`,
+   `quantized_quality_retention`, and `dgx_spark_latency_throughput`, then make
+   comparison reports include objective profile and research basis.
 2. Use `./forge promote gemma4_26b_a4b local_ft_vs_jackrong` whenever saved
    comparison results change.
 3. Publish completed durable datasets to Hugging Face with `publish --execute`

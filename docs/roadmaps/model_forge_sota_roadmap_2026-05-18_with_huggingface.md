@@ -3158,9 +3158,9 @@ At least one merged upstream PR and one profiler-backed perf report with end-to-
 ### P0: Foundation
 
 ```text
-[ ] MF-0001 Add docs/research/sota-2026-05-18.md
-[ ] MF-0002 Add configs/research_registry.yaml
-[ ] MF-0003 Add ./forge research list/show/audit
+[x] MF-0001 Add docs/research/sota-2026-05-18.md
+[x] MF-0002 Add configs/research_registry.yaml
+[x] MF-0003 Add ./forge research list/show/audit
 [ ] MF-0004 Add objective profile loader
 [ ] MF-0005 Add configs/objectives/*.yaml
 [ ] MF-0006 Add canonical run manifest
@@ -3427,19 +3427,20 @@ raw outputs, and repro commands.
 Do these in order:
 
 ```text
-1. Add docs/research/sota-2026-05-18.md.
-2. Add configs/research_registry.yaml.
-3. Add configs/objectives/zero_refusal_capability_retention.yaml.
-4. Add configs/objectives/quantized_quality_retention.yaml.
-5. Add configs/objectives/dgx_spark_latency_throughput.yaml.
-6. Add canonical manifest writer.
-7. Make compare report include Objective Profile and Research Basis.
-8. Add noncompliance taxonomy.
-9. Finish/evaluate Gemma local FT.
-10. Add forge bench serve MVP.
-11. Add configs/publishing/huggingface.example.yaml.
-12. Add `./forge hf doctor` and `./forge hf plan-upload`.
-13. Generate Hugging Face Model Card / Dataset Card / Report Card from manifests.
+[x] Add docs/research/sota-2026-05-18.md.
+[x] Add configs/research_registry.yaml.
+[x] Add `./forge research list/show/audit`.
+[ ] Add configs/objectives/zero_refusal_capability_retention.yaml.
+[ ] Add configs/objectives/quantized_quality_retention.yaml.
+[ ] Add configs/objectives/dgx_spark_latency_throughput.yaml.
+[ ] Add canonical manifest writer.
+[ ] Make compare report include Objective Profile and Research Basis.
+[ ] Add noncompliance taxonomy.
+[ ] Finish/evaluate Gemma local FT.
+[ ] Add forge bench serve MVP.
+[ ] Add configs/publishing/huggingface.example.yaml.
+[ ] Add `./forge hf doctor` and `./forge hf plan-upload`.
+[ ] Generate Hugging Face Model Card / Dataset Card / Report Card from manifests.
 ```
 
 A strong first public post:
@@ -3450,7 +3451,8 @@ A strong first public post:
 
 ## 20. Source registry
 
-The following sources ground this roadmap. The project should copy these into `configs/research_registry.yaml` with feature/test hooks.
+The following sources ground this roadmap. Current tracked entries live in
+`configs/research_registry.yaml`; validate them with `./forge research audit`.
 
 ### Current Model Forge repo
 

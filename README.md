@@ -16,6 +16,7 @@ and artifacts needed to reproduce the result.
 - builds fine-tuning plans from YAML configs and dataset manifests
 - creates eval-adjacent SFT datasets through a gated dataset factory
 - tracks dataset source registries with licenses, roles, quality tiers, and sampling caps
+- tracks a dated research registry so methods, evals, and limitations stay explicit
 - runs refusal ablation recipes against source checkpoints
 - serves exactly one candidate at a time through hardware-aware vLLM settings
 - evaluates internal behavior, artifact quality, and external benchmark results
@@ -80,6 +81,7 @@ Run evals from another terminal:
 ./forge eval gemma4_26b_a4b base --external
 ./forge compare gemma4_26b_a4b
 ./forge promote gemma4_26b_a4b local_ft_vs_jackrong
+./forge research audit
 ./forge doctor
 ```
 
@@ -137,6 +139,14 @@ Promotion reports:
 ./forge promote gemma4_26b_a4b local_abli_sota_vs_downloaded_abli
 ```
 
+Research registry:
+
+```bash
+./forge research list
+./forge research show arditi_2024_refusal_direction
+./forge research audit
+```
+
 Abliteration planning:
 
 ```bash
@@ -166,7 +176,7 @@ Read [docs/dgx-spark.md](docs/dgx-spark.md),
 ```text
 configs/        Model families, source registries, training/editing configs
 datasets/       Dataset manifests, seed rows, generated small packs and reports
-docs/           Workflow docs, status, roadmap, and experiment ledger
+docs/           Workflow docs, research snapshots, status, roadmap, and ledger
 docs/roadmaps/  Long-form planning documents and archived roadmap material
 evals/          Internal prompt buckets and rubrics
 models/         Directory conventions for local model artifacts
