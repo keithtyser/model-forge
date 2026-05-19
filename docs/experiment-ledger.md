@@ -29,7 +29,9 @@ For prepared datasets, pass `--repo-type dataset`.
 ## Fine-Tune: Gemma 4 26B A4B Local FT v0
 
 Status: full 500-step corrected text-LoRA run completed; merged checkpoint
-created for serving; eval pending.
+created for serving; internal eval completed. Candidate is promising but has
+not yet beaten the downloaded Jackrong FT on the primary challenge-capability
+gate.
 
 Hypothesis: a stricter SFT/QLoRA recipe using Jackrong-style mixed reasoning,
 code, STEM, and chat sources, plus model-forge quality gates and holdouts, can
@@ -218,6 +220,62 @@ skipped zero vision tensors: 189
 manifest: /home/ktyser/models/gemma-4-26B-A4B-it-local-ft-v0-merged/model_forge_merge_manifest.json
 next gate: serve merged local_ft and run internal eval
 ```
+
+Internal eval result:
+
+```text
+timestamp: 2026-05-19 00:04 UTC eval start metadata; comparison refreshed 2026-05-18 22:02 America/New_York
+result path: results/gemma4_26b_a4b_v0/base/gemma4_26b_a4b_local_ft_dgx_spark
+command: MODEL_FORGE_TRIALS=3 MODEL_FORGE_BASE_URL=http://127.0.0.1:8000/v1 MODEL_FORGE_CONTEXT_LENGTH=32768 ./forge eval gemma4_26b_a4b local_ft --internal
+total prompts: 106
+trials: 3
+total cases: 318
+server: merged checkpoint served by vLLM as local/gemma-4-26B-A4B-it-local-ft-v0
+```
+
+Key internal comparison against saved base and Jackrong FT runs:
+
+```text
+capability_preservation_challenge:
+  base:     0.6875
+  jackrong: 0.7812
+  local_ft: 0.7708
+  decision: close but below Jackrong by 0.0104, so not a clean beat
+
+refusal_paired_boundary.benign_answer_quality_rate:
+  base:     0.5500
+  jackrong: 0.5000
+  local_ft: 0.7333
+  decision: local FT beats Jackrong and base
+
+normal_use_regression.normal_use_regression_pass_rate:
+  base:     1.0000
+  jackrong: 1.0000
+  local_ft: 1.0000
+  decision: tied
+
+agentic_multi_step_planning.workflow_success:
+  base:     0.6667
+  jackrong: 0.6667
+  local_ft: 0.8889
+  decision: local FT beats Jackrong and base
+
+reasoning_style_stability.workflow_success:
+  base:     1.0000
+  jackrong: 1.0000
+  local_ft: 0.9333
+  decision: local FT regressed slightly
+```
+
+Interpretation: local FT v0 is a useful recipe candidate and appears stronger
+than Jackrong on paired benign quality and some agentic workflow buckets, but it
+does not satisfy the stated "beat Jackrong FT" gate because challenge capability
+is slightly lower. Do not upload this checkpoint as the promoted FT model yet.
+Next recipe iteration should target capability lift without losing the improved
+paired-benign behavior. Likely moves: increase high-quality code/math reasoning
+share, add stronger held-out challenge-style data that does not overlap eval
+prompts, train longer from this validated setup, and keep the same resource
+guardrails.
 
 The invalid earlier full-run output was moved aside to:
 
