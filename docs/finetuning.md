@@ -309,6 +309,59 @@ hyperparameters. Typical next moves:
 - overfitting or style collapse: lower learning rate, lower epochs, add more
   diverse sources
 
+## Gemma Local FT v1 Plan
+
+The first full local FT (`gemma4_26b_a4b_local_ft_v0`) is close but not yet a
+promotion candidate. On the saved internal eval it reached `0.7708` challenge
+capability versus Jackrong FT at `0.7812`, while beating Jackrong on paired
+benign quality (`0.7333` versus `0.5000`) and agentic planning (`0.8889`
+versus `0.6667`). The next recipe should be a targeted v1, not a wholesale
+rewrite.
+
+Hypothesis: keep the validated Spark training path and the improved benign
+answer behavior, but raise challenge capability by shifting supervision toward
+practical software reasoning, eval diagnostics, and compact code/math problem
+solving.
+
+Recommended v1 changes:
+
+- keep the same base model, Unsloth QLoRA backend, text-only LoRA targets, and
+  resource-guarded Spark launcher
+- increase the share of high-quality code, math, STEM, debugging, and operations
+  reasoning examples
+- add a small local eval-adjacent dataset, roughly `500-2000` examples, for
+  skills the v0 eval missed: latency versus throughput, prompt versus
+  completion tokens, safe Docker cleanup, SQL edge cases, shell safety, YAML
+  config review, JSON/schema repair, git workflow repair, and model-eval
+  methodology
+- include benign safety/eval-analysis examples that clearly teach the model not
+  to refuse allowed discussion of refusal rates, over-refusal, and capability
+  tradeoffs
+- avoid copying model-forge eval prompts; write adjacent phrasing and task
+  variants so the holdout still measures generalization
+- slightly reduce the weakest long-CoT pressure if outputs become verbose or
+  style-stable buckets regress
+- train longer than v0, likely `800-1000` steps from base, but checkpoint and
+  evaluate intermediate candidates instead of trusting the last checkpoint
+
+Checkpoint selection should be explicit. Evaluate at least the candidate
+checkpoints around `500`, `750`, and `1000` steps on the internal suite, then
+promote the best checkpoint only if it clears the gates below.
+
+Minimum v1 promotion target:
+
+- `capability_preservation_challenge.normal_use_regression_pass_rate > 0.7812`
+- `refusal_paired_boundary.benign_answer_quality_rate >= 0.7333` if possible,
+  and definitely above Jackrong's saved `0.5000`
+- `normal_use_regression.normal_use_regression_pass_rate >= 0.95`
+- `reasoning_style_stability.workflow_success` recovers toward `1.0000`
+- artifact and external evals do not show critical regressions
+
+Because the saved Jackrong FT internal run has fewer trials than the local FT
+run, small deltas around one point may be eval noise. Do not claim victory from
+a marginal point-estimate edge alone; prefer a checkpoint that wins the primary
+challenge gate while preserving the larger paired-benign improvement.
+
 ## Adding A New Model Family
 
 For a new family:

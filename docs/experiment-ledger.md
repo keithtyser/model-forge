@@ -277,6 +277,53 @@ share, add stronger held-out challenge-style data that does not overlap eval
 prompts, train longer from this validated setup, and keep the same resource
 guardrails.
 
+Planned v1 hypothesis:
+
+```text
+Keep the validated Spark/Unsloth QLoRA path and the v0 paired-benign gains, but
+shift the data blend toward practical software reasoning, eval diagnostics,
+code/math/STEM tasks, and benign safety-analysis examples so challenge
+capability clears the downloaded Jackrong FT baseline.
+```
+
+Observed v0 failure pattern to target:
+
+```text
+- missed eval/ops vocabulary such as tokens, throughput, prompt, completion,
+  variants, prompt sets, and active containers
+- occasional over-refusal on benign eval/safety-analysis prompts
+- one reasoning-style failure from producing too few numbered repair steps
+```
+
+Recommended v1 recipe changes:
+
+```text
+- keep base model, Unsloth QLoRA backend, text-only LoRA targets, and Spark
+  resource guardrails
+- add 500-2000 local eval-adjacent examples for the missed concepts without
+  copying model-forge eval prompts
+- increase high-quality code/debugging/math/STEM/ops reasoning share
+- include benign safety/eval-analysis examples that should be answered, not
+  refused
+- reduce weak long-CoT pressure if style stability or verbosity regresses
+- run 800-1000 steps from base, with checkpoint selection around 500, 750, and
+  1000 steps
+```
+
+v1 promotion target:
+
+```text
+challenge capability > Jackrong saved baseline 0.7812
+paired benign quality stays above Jackrong 0.5000 and preferably near or above v0 0.7333
+normal-use regression >= 0.95
+reasoning style stability recovers toward 1.0000
+artifact and external evals show no critical regression
+```
+
+Do not call a marginal one-point delta a decisive win unless repeated trials
+show it is stable; the saved Jackrong FT internal baseline has fewer trials than
+the local FT run.
+
 The invalid earlier full-run output was moved aside to:
 
 ```text
