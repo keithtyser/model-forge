@@ -25,6 +25,7 @@ reusable pipeline code over one-off scripts.
 - `docs/evaluation-strategy.md`: eval design and interpretation
 - `docs/experiment-ledger.md`: handoff ledger for hypotheses, experiments,
   artifacts, validation, and publish status
+- `docs/run-manifests.md`: canonical run manifest schema and handoff rules
 - `docs/roadmaps/`: long-form roadmap and archived planning documents
 - `docs/research/sota-2026-05-18.md`: dated SOTA snapshot behind current
   roadmap decisions
@@ -178,6 +179,23 @@ Inspect or validate the research basis:
 
 When adding a new method, benchmark adapter, objective profile, or public report,
 connect it to `configs/research_registry.yaml` and keep the limitations explicit.
+
+Write or inspect a run manifest:
+
+```bash
+./forge manifest write \
+  --run-type eval \
+  --status planned \
+  --family gemma4_26b_a4b \
+  --variant base \
+  --config configs/experiments/gemma4_26b_a4b_v0.yaml \
+  --command './forge eval gemma4_26b_a4b base --internal'
+```
+
+Use manifests for planned, running, completed, and failed work. They preserve
+git state, config hashes, command lines, hardware, safe environment variables,
+outputs, artifacts, metrics, and notes. Never pass secrets through manifest
+metadata or notes.
 
 ## Abliteration Rules
 

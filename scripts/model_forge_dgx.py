@@ -226,6 +226,7 @@ def action_eval(family: dict[str, Any], family_name: str, variant: str, kind: st
     suffix = format_template(eval_cfg[suffix_key], family_name, variant)
     env = os.environ.copy()
     env["MODEL_FORGE_MODEL"] = served_model_name(family, variant)
+    env["MODEL_FORGE_FAMILY"] = family_name
     env["MODEL_FORGE_VARIANT"] = variant
     if kind == "smoke":
         env.setdefault("MODEL_FORGE_MAX_CASES", "4")

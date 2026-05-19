@@ -30,6 +30,9 @@ This is the short handoff state for humans and agents. Use
 - The roadmap foundation now has a dated SOTA snapshot, a machine-readable
   research registry, and `./forge research list/show/audit` for checking that
   objective profiles reference known research entries.
+- Canonical run manifest writing is implemented through `./forge manifest
+  write/show`; eval manifests now include the shared `canonical` provenance
+  block while preserving the existing eval manifest layout.
 
 ## Current Dataset State
 
@@ -69,9 +72,9 @@ length filtering:
 
 ## Recommended Next Work
 
-1. Add objective profiles for `zero_refusal_capability_retention`,
-   `quantized_quality_retention`, and `dgx_spark_latency_throughput`, then make
-   comparison reports include objective profile and research basis.
+1. Make comparison reports include research basis and canonical manifest
+   provenance. Keep objective profile fields optional until the objective
+   profile layer is revisited.
 2. Use `./forge promote gemma4_26b_a4b local_ft_vs_jackrong` whenever saved
    comparison results change.
 3. Publish completed durable datasets to Hugging Face with `publish --execute`

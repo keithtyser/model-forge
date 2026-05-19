@@ -82,6 +82,7 @@ Run evals from another terminal:
 ./forge compare gemma4_26b_a4b
 ./forge promote gemma4_26b_a4b local_ft_vs_jackrong
 ./forge research audit
+./forge manifest write --run-type eval --family gemma4_26b_a4b --variant base --command './forge eval gemma4_26b_a4b base --internal'
 ./forge doctor
 ```
 
@@ -146,6 +147,22 @@ Research registry:
 ./forge research show arditi_2024_refusal_direction
 ./forge research audit
 ```
+
+Run manifests:
+
+```bash
+./forge manifest write \
+  --run-type eval \
+  --status planned \
+  --family gemma4_26b_a4b \
+  --variant base \
+  --config configs/experiments/gemma4_26b_a4b_v0.yaml \
+  --run-output-dir results/gemma4_26b_a4b_v0/base \
+  --command './forge eval gemma4_26b_a4b base --internal'
+```
+
+See [docs/run-manifests.md](docs/run-manifests.md) for the canonical schema and
+handoff rules.
 
 Abliteration planning:
 

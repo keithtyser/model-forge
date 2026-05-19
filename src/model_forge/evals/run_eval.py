@@ -27,6 +27,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from model_forge.runs.manifest import build_canonical_manifest
+
 console = Console(stderr=True)
 
 REFUSAL_PATTERNS = [
@@ -63,6 +65,7 @@ NUMBERED_STEP_RE = re.compile(r"^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?(?:[*_]{1,2})?\d+[
 @dataclass
 class EvalConfig:
     experiment_name: str
+    family: str
     model_id: str
     variant: str
     prompt_sets: list[str]
@@ -145,6 +148,7 @@ def load_config(path: Path) -> EvalConfig:
     raw = yaml.safe_load(path.read_text())
     return EvalConfig(
         experiment_name=raw["experiment_name"],
+        family=raw["model"].get("family", ""),
         model_id=raw["model"]["id"],
         variant=raw["model"].get("variant", "base"),
         prompt_sets=raw["eval"]["prompt_sets"],
@@ -157,6 +161,7 @@ def load_config(path: Path) -> EvalConfig:
 
 def apply_runtime_overrides(cfg: EvalConfig, output_suffix: str | None) -> EvalConfig:
     backend = dict(cfg.backend)
+    family = os.getenv("MODEL_FORGE_FAMILY", cfg.family)
     if os.getenv("MODEL_FORGE_BASE_URL"):
         backend["base_url"] = os.environ["MODEL_FORGE_BASE_URL"]
     if os.getenv("MODEL_FORGE_MODEL"):
@@ -178,7 +183,7 @@ def apply_runtime_overrides(cfg: EvalConfig, output_suffix: str | None) -> EvalC
     if output_suffix:
         output_dir = str(Path(output_dir) / output_suffix)
 
-    return replace(cfg, backend=backend, output_dir=output_dir)
+    return replace(cfg, family=family, backend=backend, output_dir=output_dir)
 
 
 def load_prompt_set(path: Path) -> list[EvalCase]:
@@ -556,12 +561,43 @@ def collect_runtime_metadata(cfg: EvalConfig, dry_run: bool) -> dict[str, Any]:
     return runtime
 
 
-def build_manifest(cfg: EvalConfig, cases: list[EvalCase], dry_run: bool, trials: int = 1) -> dict[str, Any]:
+def build_manifest(
+    cfg: EvalConfig,
+    cases: list[EvalCase],
+    dry_run: bool,
+    trials: int = 1,
+    config_path: Path | None = None,
+    command: list[str] | None = None,
+) -> dict[str, Any]:
     bucket_counts: dict[str, int] = {}
     for case in cases:
         bucket_counts[case.bucket] = bucket_counts.get(case.bucket, 0) + 1
+    output_artifacts = {
+        "manifest_json": "manifest.json",
+        "responses_jsonl": "responses.jsonl",
+        "scores_csv": "scores.csv",
+        "examples_md": "examples.md",
+    }
+    canonical = build_canonical_manifest(
+        run_type="eval",
+        status="completed",
+        family=cfg.family or None,
+        variant=os.getenv("MODEL_FORGE_VARIANT", cfg.variant),
+        command=command or [],
+        config_paths=[config_path] if config_path else [],
+        output_dir=cfg.output_dir,
+        artifacts=output_artifacts,
+        metadata={
+            "experiment_name": cfg.experiment_name,
+            "model_id": cfg.model_id,
+            "dry_run": dry_run,
+            "prompt_sets": cfg.prompt_sets,
+            "trials": trials,
+        },
+    )
     return {
         "experiment_name": cfg.experiment_name,
+        "family": cfg.family,
         "model_id": cfg.model_id,
         "variant": cfg.variant,
         "backend": cfg.backend,
@@ -573,6 +609,7 @@ def build_manifest(cfg: EvalConfig, cases: list[EvalCase], dry_run: bool, trials
         "dry_run": dry_run,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "runtime": collect_runtime_metadata(cfg, dry_run),
+        "canonical": canonical,
     }
 
 
@@ -1209,7 +1246,14 @@ def main() -> None:
     prompt_root = repo_root / "evals" / "prompts"
     cases = collect_cases(prompt_root, cfg.prompt_sets)
     cases = filter_cases(cases, buckets=args.bucket, max_cases=args.max_cases)
-    manifest = build_manifest(cfg, cases, dry_run=args.dry_run, trials=args.trials)
+    manifest = build_manifest(
+        cfg,
+        cases,
+        dry_run=args.dry_run,
+        trials=args.trials,
+        config_path=config_path,
+        command=sys.argv,
+    )
     results = run_cases_with_progress(cases, cfg, dry_run=args.dry_run, trials=args.trials)
     output_root = repo_root / cfg.output_dir
     write_outputs(output_root, manifest, results)

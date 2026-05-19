@@ -3163,7 +3163,7 @@ At least one merged upstream PR and one profiler-backed perf report with end-to-
 [x] MF-0003 Add ./forge research list/show/audit
 [ ] MF-0004 Add objective profile loader
 [ ] MF-0005 Add configs/objectives/*.yaml
-[ ] MF-0006 Add canonical run manifest
+[x] MF-0006 Add canonical run manifest
 [ ] MF-0007 Add comparison report v2
 [ ] MF-0008 Add research-basis report section
 [ ] MF-0009 Add eval provenance card
@@ -3433,7 +3433,7 @@ Do these in order:
 [ ] Add configs/objectives/zero_refusal_capability_retention.yaml.
 [ ] Add configs/objectives/quantized_quality_retention.yaml.
 [ ] Add configs/objectives/dgx_spark_latency_throughput.yaml.
-[ ] Add canonical manifest writer.
+[x] Add canonical manifest writer.
 [ ] Make compare report include Objective Profile and Research Basis.
 [ ] Add noncompliance taxonomy.
 [ ] Finish/evaluate Gemma local FT.

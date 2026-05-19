@@ -17,6 +17,8 @@ Commit lightweight, durable project state:
   publish plans
 - compact result summaries, golden baselines, and manifests that point to full
   external artifacts
+- manifest tooling and schema docs; generated manifests stay ignored unless a
+  small example is intentionally moved into a tracked report or recipe
 
 ## Do Not Commit
 
@@ -27,6 +29,7 @@ Keep large or local-machine-specific outputs out of Git:
   checkpoint rotations
 - raw high-volume eval outputs under `results/`
 - generated HTML reports and large report bundles under `reports/generated/`
+- generated canonical run manifests under `reports/generated/manifests/`
 - logs, container homes, package caches, pycache, and local `.env` files
 - Hugging Face tokens or any other credentials
 
