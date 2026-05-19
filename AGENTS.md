@@ -27,6 +27,8 @@ reusable pipeline code over one-off scripts.
   artifacts, validation, and publish status
 - `docs/spark-optimizations.md`: DGX Spark hardware profile, AEON-7-derived
   serving/quantization lessons, and safe overrides
+- `configs/README.md`: config directory map and portability rules
+- `scripts/README.md`: script directory map and operational rules
 - `configs/model_families/`: model family registry
 - `configs/abliteration/`: ablation recipes
 - `recipes/`: tracked reusable run templates and known-good generated recipes

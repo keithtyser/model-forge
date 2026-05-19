@@ -1,12 +1,12 @@
 {
   "name": "gemma4_26b_a4b_local_ft_v0",
   "family": "gemma4_26b_a4b",
-  "config_path": "/home/ktyser/projects/model-forge/configs/finetuning/gemma4_26b_a4b_local_ft_v0.yaml",
-  "run_dir": "/home/ktyser/projects/model-forge/runs/finetune/gemma4_26b_a4b_local_ft_v0",
+  "config_path": "configs/finetuning/gemma4_26b_a4b_local_ft_v0.yaml",
+  "run_dir": "runs/finetune/gemma4_26b_a4b_local_ft_v0",
   "model": {
     "source": "google/gemma-4-26B-A4B-it",
-    "local_dir": "/home/ktyser/models/gemma-4-26B-A4B-it",
-    "output_dir": "/home/ktyser/models/gemma-4-26B-A4B-it-local-ft-v0",
+    "local_dir": "~/models/gemma-4-26B-A4B-it",
+    "output_dir": "~/models/gemma-4-26B-A4B-it-local-ft-v0",
     "served_model_name": "local/gemma-4-26B-A4B-it-local-ft-v0",
     "trust_remote_code": false,
     "max_seq_length": 2048
@@ -58,7 +58,7 @@
     "modules_to_save": []
   },
   "data": {
-    "manifest": "/home/ktyser/projects/model-forge/datasets/finetuning/gemma4_26b_a4b_local_ft_v0.yaml",
+    "manifest": "datasets/finetuning/gemma4_26b_a4b_local_ft_v0.yaml",
     "format": "messages",
     "chat_template": "auto",
     "max_context_window": 8192,

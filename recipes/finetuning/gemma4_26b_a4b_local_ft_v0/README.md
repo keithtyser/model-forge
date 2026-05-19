@@ -2,7 +2,8 @@
 
 This directory preserves the small generated files from the validated Gemma
 local FT v0 workflow. It is a reusable reference, not the active runtime
-directory.
+directory. Paths are normalized to repo-relative or `~/models/...` forms so the
+snapshot is readable outside the original workstation.
 
 Source config:
 

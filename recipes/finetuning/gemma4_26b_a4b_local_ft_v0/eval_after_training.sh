@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd /home/ktyser/projects/model-forge
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+cd "$REPO_DIR"
 MODEL_FORGE_TRIALS=3 ./forge eval gemma4_26b_a4b local_ft --internal
 ./forge eval gemma4_26b_a4b local_ft --artifact
 ./forge eval gemma4_26b_a4b local_ft --external

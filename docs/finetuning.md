@@ -296,9 +296,9 @@ set `serve_strategy: merged` and `merged_local_dir`, then merge once:
 ```bash
 PYTHONPATH=runs/finetune/gemma4_26b_a4b_local_ft_v0/python_overlay \
 nice -n 10 .venv/bin/python scripts/merge_peft_adapter.py \
-  --base-model /home/ktyser/models/gemma-4-26B-A4B-it \
-  --adapter /home/ktyser/models/gemma-4-26B-A4B-it-local-ft-v0 \
-  --output-dir /home/ktyser/models/gemma-4-26B-A4B-it-local-ft-v0-merged
+  --base-model ~/models/gemma-4-26B-A4B-it \
+  --adapter ~/models/gemma-4-26B-A4B-it-local-ft-v0 \
+  --output-dir ~/models/gemma-4-26B-A4B-it-local-ft-v0-merged
 ```
 
 For non-MoE or LoRA-compatible backends, adapter variants can use live vLLM LoRA

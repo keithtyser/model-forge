@@ -139,9 +139,9 @@ workflow exports `MODEL_FORGE_LORA_MODULES=<served_adapter_name>=<adapter_path>`
 and enables vLLM LoRA serving automatically. Manual override:
 
 ```bash
-MODEL_FORGE_MODEL=/home/ktyser/models/base-model \
+MODEL_FORGE_MODEL=~/models/base-model \
 MODEL_FORGE_SERVED_MODEL_NAME=org/base-model \
-MODEL_FORGE_LORA_MODULES=local/my-ft=/home/ktyser/models/my-ft-adapter \
+MODEL_FORGE_LORA_MODULES=local/my-ft=~/models/my-ft-adapter \
 VLLM_ENABLE_LORA=1 \
 VLLM_MAX_LORA_RANK=64 \
 ./scripts/dgx_spark_serve_gemma4_26b_a4b.sh

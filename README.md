@@ -154,6 +154,9 @@ src/            `model_forge` Python package
 forge           User-facing CLI wrapper
 ```
 
+See [configs/README.md](configs/README.md) and
+[scripts/README.md](scripts/README.md) for directory-specific guidance.
+
 Generated run directories, model weights, tokenized datasets, large reports, and
 logs are not committed. See
 [docs/artifact-retention.md](docs/artifact-retention.md) before deciding what to

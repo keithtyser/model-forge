@@ -162,7 +162,7 @@ Active full-run attempt:
 ```text
 started: 2026-05-18 03:51 America/New_York
 container: model-forge-ft-local-v0
-output: /home/ktyser/models/gemma-4-26B-A4B-it-local-ft-v0
+output: ~/models/gemma-4-26B-A4B-it-local-ft-v0
 command: guarded Docker run equivalent to MODEL_FORGE_SKIP_PREPARE=1 scripts/run_finetune_spark_container.sh
 goal: 500 optimizer steps, checkpoint every 100 steps
 checkpoint gate: inspect checkpoint-100 adapter_model.safetensors before trusting the run
@@ -226,7 +226,7 @@ Final training result:
 status: completed
 timestamp: 2026-05-18 19:17 America/New_York
 container: model-forge-ft-local-v0 exited cleanly, exit=0, oom=false
-output: /home/ktyser/models/gemma-4-26B-A4B-it-local-ft-v0
+output: ~/models/gemma-4-26B-A4B-it-local-ft-v0
 trainer_state: checkpoint-500 global_step=500, max_steps=500
 train_runtime: 5.52e+04 seconds
 train_steps_per_second: 0.009
@@ -245,12 +245,12 @@ timestamp: 2026-05-18 19:49 America/New_York
 live vLLM LoRA serving attempt: failed cleanly
 reason: vLLM MoE LoRA path raised get_expert_mapping not implemented
 decision: use merged-checkpoint serving for this Gemma4 MoE adapter
-merge output: /home/ktyser/models/gemma-4-26B-A4B-it-local-ft-v0-merged
+merge output: ~/models/gemma-4-26B-A4B-it-local-ft-v0-merged
 merge method: direct LoRA delta application, not PEFT injection
 merge duration: 61.2 seconds
 merged text tensors: 205
 skipped zero vision tensors: 189
-manifest: /home/ktyser/models/gemma-4-26B-A4B-it-local-ft-v0-merged/model_forge_merge_manifest.json
+manifest: ~/models/gemma-4-26B-A4B-it-local-ft-v0-merged/model_forge_merge_manifest.json
 next gate: serve merged local_ft and run internal eval
 ```
 
@@ -400,7 +400,7 @@ and enough accepted examples to reach the configured `500-2000` row target.
 The invalid earlier full-run output was moved aside to:
 
 ```text
-/home/ktyser/models/gemma-4-26B-A4B-it-local-ft-v0.failed-vision-only-20260518-034146
+~/models/gemma-4-26B-A4B-it-local-ft-v0.failed-vision-only-20260518-034146
 ```
 
 ## Resource Guardrails

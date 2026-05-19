@@ -3,8 +3,8 @@ method: huihui_style_single_refusal_direction
 
 model:
   source: google/gemma-4-26B-A4B-it
-  local_dir: /home/ktyser/models/gemma-4-26B-A4B-it
-  output_dir: /home/ktyser/models/gemma-4-26B-A4B-it-local-abliterated-huihui-like
+  local_dir: ~/models/gemma-4-26B-A4B-it
+  output_dir: ~/models/gemma-4-26B-A4B-it-local-abliterated-huihui-like
   dtype: bfloat16
   device_map: cuda
   trust_remote_code: false
@@ -55,4 +55,4 @@ safety:
 artifacts_dir: artifacts/abliteration/gemma4_26b_a4b_huihui_like
 
 diagnostics:
-  reference_model: /home/ktyser/models/Huihui-gemma-4-26B-A4B-it-abliterated
+  reference_model: ~/models/Huihui-gemma-4-26B-A4B-it-abliterated

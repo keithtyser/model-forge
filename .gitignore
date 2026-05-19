@@ -19,6 +19,7 @@ plans/
 models/checkpoints/
 models/merged/
 models/quantized/
+models/adapters/
 
 # OS/editor
 .DS_Store

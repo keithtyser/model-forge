@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd /home/ktyser/projects/model-forge
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+RUN_DIR="${MODEL_FORGE_FINETUNE_RUN_DIR:-$REPO_DIR/runs/finetune/gemma4_26b_a4b_local_ft_v0}"
+cd "$REPO_DIR"
 
 export MODEL_FORGE_PARALLELISM=32
 export MODEL_FORGE_HIGH_PARALLELISM=192
 export TOKENIZERS_PARALLELISM=true
 export OMP_NUM_THREADS=1
 
-PYTHON=${PYTHON:-/home/ktyser/projects/model-forge/.venv/bin/python}
+PYTHON=${PYTHON:-$REPO_DIR/.venv/bin/python}
 CPU_QUOTA=${MODEL_FORGE_CPU_QUOTA:-80%}
 MEMORY_MAX=${MODEL_FORGE_MEMORY_MAX:-85%}
 IO_WEIGHT=${MODEL_FORGE_IO_WEIGHT:-100}
@@ -40,9 +43,9 @@ run_limited() {
   fi
 }
 
-if [[ "${MODEL_FORGE_SKIP_PREPARE:-0}" == "1" && -s /home/ktyser/projects/model-forge/runs/finetune/gemma4_26b_a4b_local_ft_v0/train.jsonl ]]; then
+if [[ "${MODEL_FORGE_SKIP_PREPARE:-0}" == "1" && -s "$RUN_DIR/train.jsonl" ]]; then
   echo "[model-forge] skipping data prep; existing train.jsonl found"
 else
-  run_limited "$PYTHON" /home/ktyser/projects/model-forge/runs/finetune/gemma4_26b_a4b_local_ft_v0/train_trl_sft.py --plan /home/ktyser/projects/model-forge/runs/finetune/gemma4_26b_a4b_local_ft_v0/plan.json --prepare-data
+  run_limited "$PYTHON" "$RUN_DIR/train_trl_sft.py" --plan "$RUN_DIR/plan.json" --prepare-data
 fi
-run_limited "$PYTHON" /home/ktyser/projects/model-forge/runs/finetune/gemma4_26b_a4b_local_ft_v0/train_trl_sft.py --plan /home/ktyser/projects/model-forge/runs/finetune/gemma4_26b_a4b_local_ft_v0/plan.json --train
+run_limited "$PYTHON" "$RUN_DIR/train_trl_sft.py" --plan "$RUN_DIR/plan.json" --train
