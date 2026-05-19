@@ -13,6 +13,8 @@ artifacts/
 datasets/generated/*
 !datasets/generated/gemma4_26b_a4b_local_ft_v1/
 !datasets/generated/gemma4_26b_a4b_local_ft_v1/**
+!datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/
+!datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/**
 results/*
 !results/.gitkeep
 reports/generated/

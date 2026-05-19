@@ -1,0 +1,28 @@
+{
+  "candidate_rows": 61,
+  "created_at": "2026-05-19T04:57:37.374096+00:00",
+  "dataset_id": "gemma4_26b_a4b_local_ft_v1_live_teacher_smoke",
+  "generation_method_counts": {
+    "eval_adjacent_generation": 6,
+    "evol_instruct": 6,
+    "human_seed": 37,
+    "instruction_backtranslation": 6,
+    "self_instruct": 6
+  },
+  "provider": {
+    "model": "local/qwen35-9b-teacher",
+    "type": "openai_compatible"
+  },
+  "seed_rows": 37,
+  "smoke": true,
+  "source_kind_counts": {
+    "human_seed": 37,
+    "synthetic": 24
+  },
+  "strategies": [
+    "self_instruct",
+    "evol_instruct",
+    "instruction_backtranslation",
+    "eval_adjacent_generation"
+  ]
+}

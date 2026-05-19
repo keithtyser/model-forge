@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 
 from model_forge.data.factory import (
     REPO_DIR,
+    build_provider,
     build_gap_report,
     build_plan,
     command_generate,
@@ -36,6 +38,53 @@ class DatasetFactoryTests(unittest.TestCase):
         self.assertEqual(plan["quality_thresholds"]["max_holdout_similarity"], 0.82)
         self.assertFalse(plan["seed_only"])
         self.assertTrue(plan["smoke_only"])
+
+    def test_live_teacher_smoke_config_uses_openai_compatible_provider(self) -> None:
+        config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1_live_teacher_smoke.yaml"
+        plan = build_plan(load_yaml(config_path), config_path)
+        self.assertEqual(plan["id"], "gemma4_26b_a4b_local_ft_v1_live_teacher_smoke")
+        self.assertEqual(plan["generation"]["provider"]["type"], "openai_compatible")
+        self.assertEqual(plan["generation"]["provider"]["base_url"], "http://127.0.0.1:8011/v1")
+        self.assertEqual(plan["generation"]["smoke"]["max_generated_candidates"], 24)
+        self.assertTrue(plan["smoke_only"])
+
+    def test_provider_env_overrides_model_base_url_and_api_key(self) -> None:
+        config = {
+            "generation": {
+                "provider": {
+                    "type": "openai_compatible",
+                    "model": "default-model",
+                    "model_env": "MODEL_FORGE_TEST_PROVIDER_MODEL",
+                    "base_url": "http://default.invalid/v1",
+                    "base_url_env": "MODEL_FORGE_TEST_PROVIDER_BASE_URL",
+                    "api_key_env": "MODEL_FORGE_TEST_PROVIDER_API_KEY",
+                }
+            }
+        }
+        old_model = os.environ.get("MODEL_FORGE_TEST_PROVIDER_MODEL")
+        old_base = os.environ.get("MODEL_FORGE_TEST_PROVIDER_BASE_URL")
+        old_key = os.environ.get("MODEL_FORGE_TEST_PROVIDER_API_KEY")
+        try:
+            os.environ["MODEL_FORGE_TEST_PROVIDER_MODEL"] = "override-model"
+            os.environ["MODEL_FORGE_TEST_PROVIDER_BASE_URL"] = "http://127.0.0.1:9999/v1"
+            os.environ["MODEL_FORGE_TEST_PROVIDER_API_KEY"] = "test-token"
+            provider = build_provider(config)
+        finally:
+            if old_model is None:
+                os.environ.pop("MODEL_FORGE_TEST_PROVIDER_MODEL", None)
+            else:
+                os.environ["MODEL_FORGE_TEST_PROVIDER_MODEL"] = old_model
+            if old_base is None:
+                os.environ.pop("MODEL_FORGE_TEST_PROVIDER_BASE_URL", None)
+            else:
+                os.environ["MODEL_FORGE_TEST_PROVIDER_BASE_URL"] = old_base
+            if old_key is None:
+                os.environ.pop("MODEL_FORGE_TEST_PROVIDER_API_KEY", None)
+            else:
+                os.environ["MODEL_FORGE_TEST_PROVIDER_API_KEY"] = old_key
+        self.assertEqual(provider.model_name, "override-model")
+        self.assertEqual(provider.config["base_url"], "http://127.0.0.1:9999/v1")
+        self.assertEqual(provider.config["api_key"], "test-token")
 
     def test_pack_writes_dataset_card_and_rejection_report(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"

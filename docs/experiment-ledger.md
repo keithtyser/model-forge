@@ -28,6 +28,95 @@ Publishing helper:
 
 For prepared datasets, pass `--repo-type dataset`.
 
+## Dataset Factory: Gemma 4 26B A4B Local FT v1 Live-Teacher Smoke
+
+Status: completed and committed as a lightweight smoke artifact. No training
+run was started.
+
+Hypothesis: a local OpenAI-compatible teacher can generate eval-adjacent SFT
+rows from the v1 seed set while preserving provenance, holdout separation,
+verification metadata, review artifacts, and a dry-run Hugging Face publish
+plan. Passing this smoke means the factory path is ready to scale; it does not
+mean the dataset is large enough for a durable fine-tune.
+
+Config:
+
+```text
+configs/datasets/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke.yaml
+```
+
+Teacher setup used for the smoke:
+
+```bash
+MODEL_FORGE_MODELS_DIR="${MODEL_FORGE_MODELS_DIR:-${HOME}/models}"
+SPARK_VLLM_DOCKER_DIR="${SPARK_VLLM_DOCKER_DIR:-../spark-vllm-docker}"
+VLLM_SPARK_EXTRA_DOCKER_ARGS="-v ${MODEL_FORGE_MODELS_DIR}:${MODEL_FORGE_MODELS_DIR}:ro" \
+  "${SPARK_VLLM_DOCKER_DIR}/launch-cluster.sh" \
+  --solo --non-privileged --mem-limit-gb 90 --mem-swap-limit-gb 90 \
+  --pids-limit 4096 --shm-size-gb 32 exec \
+  vllm serve "${MODEL_FORGE_MODELS_DIR}/Qwen3.5-9B" \
+  --host 0.0.0.0 --port 8011 \
+  --gpu-memory-utilization 0.60 \
+  --max-model-len 4096 \
+  --served-model-name local/qwen35-9b-teacher \
+  --reasoning-parser qwen3 \
+  --default-chat-template-kwargs '{"enable_thinking": false}' \
+  --language-model-only \
+  --enable-prefix-caching \
+  --max-num-batched-tokens 4096 \
+  --enable-chunked-prefill \
+  --kv-cache-dtype fp8_e4m3 \
+  --max-num-seqs 1
+```
+
+Factory commands:
+
+```bash
+./forge data plan --config configs/datasets/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke.yaml --overwrite
+./forge data gaps --config configs/datasets/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke.yaml --overwrite
+./forge data generate --config configs/datasets/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke.yaml --overwrite --smoke
+./forge data verify --config configs/datasets/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke.yaml --smoke
+./forge data review --config configs/datasets/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke.yaml --smoke --sample 50
+./forge data pack --config configs/datasets/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke.yaml --smoke
+./forge data publish --config configs/datasets/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke.yaml --smoke
+```
+
+Important workflow note: after expensive live generation, run downstream
+`verify`, `review`, `pack`, and `publish` without `--overwrite` unless you
+intentionally want to regenerate candidates.
+
+Tracked artifacts:
+
+```text
+datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/
+```
+
+Results:
+
+- accepted rows: 61
+- rejected rows: 0
+- source mix: 37 human seed rows, 24 synthetic rows
+- synthetic methods: 6 each from `self_instruct`, `evol_instruct`,
+  `instruction_backtranslation`, and `eval_adjacent_generation`
+- verification: 61 passed, 0 failed
+- review sample: 50 rows
+- review decision: `ready_to_scale_generation=true`
+- review flags: two `too_long` rows, no critical flags
+- dry-run HF target:
+  `keithtyser/model-forge-gemma4_26b_a4b_local_ft_v1_live_teacher_smoke`
+
+Interpretation: the live-teacher data path is working and the generated rows
+are relevant enough for a small smoke. Before scaling, tighten answer-length
+controls and keep the same provenance, holdout-similarity, review, and dry-run
+publish gates.
+
+Publish status:
+
+- GitHub: config, provider override support, tests, docs, and smoke artifacts
+  should be pushed with this ledger entry
+- Hugging Face: not uploaded because this is a smoke artifact, not a completed
+  durable dataset
+
 ## Repo Hygiene: Recipes And Artifact Retention
 
 Status: completed.

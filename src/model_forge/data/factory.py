@@ -459,8 +459,10 @@ class OpenAICompatibleProvider(GenerationProvider):
             endpoint = f"{base_url}/chat/completions"
         else:
             endpoint = f"{base_url}/v1/chat/completions"
+        api_key = str(self.config.get("api_key", ""))
         api_key_env = str(self.config.get("api_key_env", ""))
-        api_key = os.environ.get(api_key_env, "") if api_key_env else ""
+        if not api_key and api_key_env:
+            api_key = os.environ.get(api_key_env, "")
         request_config = generation_request_config(self.config)
         payload = {
             "model": self.model_name,
@@ -509,6 +511,10 @@ def build_provider(config: dict[str, Any], provider_override: str | None = None)
         provider_config = {}
     if provider_override:
         provider_config["type"] = provider_override
+    for config_key in ("base_url", "model", "api_key"):
+        env_name = str(provider_config.get(f"{config_key}_env", ""))
+        if env_name and os.environ.get(env_name):
+            provider_config[config_key] = os.environ[env_name]
     provider_type = str(provider_config.get("type", "template"))
     if provider_type == "template":
         provider_config.setdefault("model", "model-forge-template-v0")

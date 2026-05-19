@@ -1,0 +1,27 @@
+{
+  "blocked_until": [
+    "human reviews dataset_card.md and review_sheet.md",
+    "license/provenance checks pass",
+    "HF publish command is run explicitly",
+    "dataset is expanded beyond smoke-only scaffold"
+  ],
+  "created_at": "2026-05-19T04:58:55.814787+00:00",
+  "dataset_id": "gemma4_26b_a4b_local_ft_v1_live_teacher_smoke",
+  "dry_run": true,
+  "files": [
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/dataset.jsonl",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/manifest.yaml",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/quality_report.json",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/dataset_card.md",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/verification.jsonl",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/generation_report.json",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/accepted.jsonl",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/rejected.jsonl",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/gap_report.yaml",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/review_report.json",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/review_sheet.md"
+  ],
+  "release_class": "public_dataset_candidate",
+  "repo_id": "keithtyser/model-forge-gemma4_26b_a4b_local_ft_v1_live_teacher_smoke",
+  "repo_type": "dataset"
+}

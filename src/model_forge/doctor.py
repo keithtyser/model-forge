@@ -17,6 +17,7 @@ ARCHIVE_PREFIXES = (
 )
 ALLOWED_GENERATED_DATASET_PREFIXES = (
     "datasets/generated/gemma4_26b_a4b_local_ft_v1/",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke/",
 )
 REQUIRED_FILES = (
     "README.md",

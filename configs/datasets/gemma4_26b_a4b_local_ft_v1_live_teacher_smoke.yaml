@@ -1,0 +1,149 @@
+id: gemma4_26b_a4b_local_ft_v1_live_teacher_smoke
+family: gemma4_26b_a4b
+variant: local_ft_v1
+objective: capability_sft
+version: 0.1.0
+seed_only: false
+smoke_only: true
+description: >
+  Small live-teacher smoke for the local FT v1 dataset factory. This exercises
+  the OpenAI-compatible provider path without starting a training run.
+
+output_dir: datasets/generated/gemma4_26b_a4b_local_ft_v1_live_teacher_smoke
+
+baseline:
+  reference_variant: ft
+  reference_model: Jackrong/Gemopus-4-26B-A4B-it
+  local_v0_result_path: results/gemma4_26b_a4b_v0/base/gemma4_26b_a4b_local_ft_dgx_spark
+  target_metrics:
+    capability_preservation_challenge.normal_use_regression_pass_rate: "> 0.7812"
+    refusal_paired_boundary.benign_answer_quality_rate: ">= 0.7333 preferred, > 0.5000 required"
+    normal_use_regression.normal_use_regression_pass_rate: ">= 0.95"
+
+target_accept_count:
+  min: 20
+  max: 80
+
+seed_paths:
+  - datasets/seeds/gemma4_26b_a4b_local_ft_v1.jsonl
+
+holdouts:
+  - evals/prompts/capability_preservation_challenge.yaml
+  - evals/prompts/normal_use_regression.yaml
+  - evals/prompts/reasoning_style_stability.yaml
+  - evals/prompts/agentic_multi_step_planning.yaml
+  - evals/prompts/refusal_paired_boundary.yaml
+  - evals/prompts/refusal_benign_boundary.yaml
+
+quality_thresholds:
+  min_average_score: 0.70
+  min_target_skill_relevance: 0.75
+  max_holdout_similarity: 0.82
+  min_seed_examples_per_skill: 5
+  reject_license_risk:
+    - high
+  reject_contamination_risk:
+    - high
+
+generation_methods:
+  enabled_now:
+    - human_seed
+    - self_instruct
+    - evol_instruct
+    - instruction_backtranslation
+    - eval_adjacent_generation
+  planned:
+    - self_instruct
+    - evol_instruct
+    - instruction_backtranslation
+    - self_code_align
+    - eval_adjacent_generation
+
+generation:
+  provider:
+    type: openai_compatible
+    model: local/qwen35-9b-teacher
+    model_env: MODEL_FORGE_DATA_GENERATOR_MODEL
+    base_url: http://127.0.0.1:8011/v1
+    base_url_env: MODEL_FORGE_DATA_PROVIDER_BASE_URL
+    api_key_env: MODEL_FORGE_DATA_PROVIDER_API_KEY
+    timeout_seconds: 120
+    request:
+      temperature: 0.7
+      max_tokens: 900
+  max_generated_candidates: 24
+  max_seed_rows: 6
+  smoke:
+    max_generated_candidates: 24
+    max_seed_rows: 6
+  resource_limits:
+    max_candidates_per_run: 80
+    min_free_memory_ratio: 0.05
+    min_free_disk_ratio: 0.15
+  strategies:
+    - name: self_instruct
+      enabled: true
+      variants_per_seed: 1
+    - name: evol_instruct
+      enabled: true
+      variants_per_seed: 1
+    - name: instruction_backtranslation
+      enabled: true
+      variants_per_seed: 1
+    - name: eval_adjacent_generation
+      enabled: true
+      variants_per_seed: 1
+
+review:
+  sample_size: 50
+  min_examples_per_skill: 5
+  min_assistant_words: 35
+  max_assistant_words: 260
+  max_seed_similarity: 0.74
+
+skills:
+  - id: eval_latency_throughput
+    role: eval_diagnostics
+    target_examples: 180
+    rationale: v0 missed tokens, prompt, completion, and throughput concepts.
+  - id: docker_disk_safety
+    role: operations_reasoning
+    target_examples: 120
+    rationale: v0 sometimes missed active-container cleanup constraints.
+  - id: sql_edge_cases
+    role: data_reasoning
+    target_examples: 120
+    rationale: v0 missed SQL NULL wording in all trials.
+  - id: shell_safety
+    role: developer_workflow
+    target_examples: 120
+    rationale: Reinforce dry-run, quoting, and non-destructive sync workflows.
+  - id: config_review
+    role: configuration_reasoning
+    target_examples: 140
+    rationale: v0 missed variants and prompt-set terminology.
+  - id: json_schema_repair
+    role: structured_output
+    target_examples: 120
+    rationale: Preserve schema repair and structured output behavior.
+  - id: git_workflow_repair
+    role: developer_workflow
+    target_examples: 120
+    rationale: Recover reasoning-style step-count and observe/act/verify behavior.
+  - id: benign_safety_analysis
+    role: refusal_boundary
+    target_examples: 180
+    rationale: Reduce over-refusal on benign eval and safety-analysis tasks.
+  - id: checkpoint_selection
+    role: model_eval_methodology
+    target_examples: 120
+    rationale: Teach model-eval comparison and checkpoint-selection reasoning.
+
+metadata_policy:
+  require_source: true
+  require_generator_model: true
+  require_judge_model: true
+  require_quality_scores: true
+  require_holdout_overlap: true
+  save_rejected_rows: true
+  publish_dataset_card: true
