@@ -1,0 +1,22 @@
+{
+  "blocked_until": [
+    "human reviews dataset_card.md",
+    "license/provenance checks pass",
+    "dataset size reaches configured target or is marked seed-only",
+    "HF publish command is run explicitly"
+  ],
+  "created_at": "2026-05-19T03:14:36.709940+00:00",
+  "dataset_id": "gemma4_26b_a4b_local_ft_v1",
+  "dry_run": true,
+  "files": [
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1/dataset.jsonl",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1/manifest.yaml",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1/quality_report.json",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1/dataset_card.md",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1/accepted.jsonl",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1/rejected.jsonl"
+  ],
+  "release_class": "public_dataset_candidate",
+  "repo_id": "keithtyser/model-forge-gemma4_26b_a4b_local_ft_v1",
+  "repo_type": "dataset"
+}

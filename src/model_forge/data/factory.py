@@ -1,0 +1,552 @@
+from __future__ import annotations
+
+import argparse
+import copy
+import hashlib
+import json
+import re
+from collections import Counter
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import yaml
+from rich.console import Console
+from rich.table import Table
+
+REPO_DIR = Path(__file__).resolve().parents[3]
+console = Console()
+
+
+def load_yaml(path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8") as handle:
+        data = yaml.safe_load(handle) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"expected mapping in {path}")
+    return data
+
+
+def write_yaml(path: Path, data: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        yaml.safe_dump(data, handle, sort_keys=False, allow_unicode=False)
+
+
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    if not path.exists():
+        return rows
+    with path.open("r", encoding="utf-8") as handle:
+        for line_no, line in enumerate(handle, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            item = json.loads(line)
+            if not isinstance(item, dict):
+                raise ValueError(f"{path}:{line_no} is not a JSON object")
+            rows.append(item)
+    return rows
+
+
+def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def resolve_repo_path(value: str | Path) -> Path:
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = REPO_DIR / path
+    return path
+
+
+def display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(REPO_DIR))
+    except ValueError:
+        return str(path)
+
+
+def row_text(row: dict[str, Any]) -> str:
+    messages = row.get("messages", [])
+    if not isinstance(messages, list):
+        return ""
+    parts = []
+    for message in messages:
+        if isinstance(message, dict) and isinstance(message.get("content"), str):
+            parts.append(message["content"])
+    return "\n".join(parts)
+
+
+def stable_id(row: dict[str, Any]) -> str:
+    payload = {
+        "messages": row.get("messages", []),
+        "skills": row.get("skills", []),
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+
+
+def tokens(text: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9_*+-]+", text.lower()))
+
+
+def jaccard(left: str, right: str) -> float:
+    left_tokens = tokens(left)
+    right_tokens = tokens(right)
+    if not left_tokens or not right_tokens:
+        return 0.0
+    return len(left_tokens & right_tokens) / len(left_tokens | right_tokens)
+
+
+def load_holdout_prompts(config: dict[str, Any]) -> list[dict[str, str]]:
+    prompts: list[dict[str, str]] = []
+    for raw_path in config.get("holdouts", []):
+        path = resolve_repo_path(raw_path)
+        if not path.exists():
+            continue
+        data = load_yaml(path)
+        for case in data.get("cases", []):
+            if isinstance(case, dict) and isinstance(case.get("prompt"), str):
+                prompts.append({
+                    "path": str(path.relative_to(REPO_DIR)),
+                    "case_id": str(case.get("id", "")),
+                    "prompt": case["prompt"],
+                })
+    return prompts
+
+
+def load_seed_rows(config: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for raw_path in config.get("seed_paths", []):
+        path = resolve_repo_path(raw_path)
+        rows.extend(read_jsonl(path))
+    for row in config.get("seeds", []):
+        if isinstance(row, dict):
+            rows.append(row)
+    normalized = []
+    for row in rows:
+        item = dict(row)
+        item.setdefault("id", stable_id(item))
+        item.setdefault("skills", [])
+        item.setdefault("source", {})
+        item["source"].setdefault("kind", "human_seed")
+        item["source"].setdefault("generator_model", "human")
+        item["source"].setdefault("judge_model", "heuristic")
+        item["source"].setdefault("license", "unknown")
+        normalized.append(item)
+    return normalized
+
+
+def skill_targets(config: dict[str, Any]) -> dict[str, int]:
+    targets = {}
+    for skill in config.get("skills", []):
+        if isinstance(skill, dict):
+            targets[str(skill["id"])] = int(skill.get("target_examples", 0) or 0)
+    return targets
+
+
+def score_row(row: dict[str, Any], config: dict[str, Any]) -> dict[str, float]:
+    text = row_text(row)
+    word_count = len(re.findall(r"\w+", text))
+    has_assistant = any(m.get("role") == "assistant" and m.get("content") for m in row.get("messages", []) if isinstance(m, dict))
+    skills = [str(skill) for skill in row.get("skills", [])]
+    configured_skills = set(skill_targets(config))
+    source = row.get("source", {}) if isinstance(row.get("source"), dict) else {}
+    has_source = all(source.get(key) for key in ("kind", "generator_model", "judge_model", "license"))
+
+    specificity = min(1.0, word_count / 90.0)
+    instruction_following = 1.0 if has_assistant and len(row.get("messages", [])) >= 2 else 0.0
+    target_skill_relevance = 1.0 if skills and all(skill in configured_skills for skill in skills) else 0.4
+    answer_completeness = min(1.0, word_count / 120.0) if has_assistant else 0.0
+    novelty = 0.85
+    difficulty = 0.65 + min(0.25, max(0, word_count - 60) / 240.0)
+    correctness = 0.80 if has_assistant else 0.0
+    style_fit = 0.85 if word_count <= 220 else 0.65
+    refusal_boundary_fit = 1.0 if "benign_safety_analysis" in skills else 0.8
+    provenance = 1.0 if has_source else 0.5
+
+    return {
+        "correctness": round(correctness, 4),
+        "instruction_following": round(instruction_following, 4),
+        "specificity": round(specificity, 4),
+        "difficulty": round(difficulty, 4),
+        "novelty": round(novelty, 4),
+        "target_skill_relevance": round(target_skill_relevance, 4),
+        "answer_completeness": round(answer_completeness, 4),
+        "style_fit": round(style_fit, 4),
+        "refusal_boundary_fit": round(refusal_boundary_fit, 4),
+        "provenance": round(provenance, 4),
+    }
+
+
+def average_score(scores: dict[str, float]) -> float:
+    if not scores:
+        return 0.0
+    return sum(float(value) for value in scores.values()) / len(scores)
+
+
+def holdout_overlap(row: dict[str, Any], holdouts: list[dict[str, str]]) -> dict[str, Any]:
+    text = row_text(row)
+    best = {"max_similarity": 0.0, "nearest_holdout": None}
+    for holdout in holdouts:
+        score = jaccard(text, holdout["prompt"])
+        if score > best["max_similarity"]:
+            best = {
+                "max_similarity": round(score, 4),
+                "nearest_holdout": {
+                    "path": holdout["path"],
+                    "case_id": holdout["case_id"],
+                },
+            }
+    return best
+
+
+def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
+    output_dir = resolve_repo_path(config["output_dir"])
+    objective_path = REPO_DIR / "configs" / "objectives" / f"{config['objective']}.yaml"
+    objective = load_yaml(objective_path) if objective_path.exists() else {}
+    seeds = load_seed_rows(config)
+    seed_counts = Counter(skill for row in seeds for skill in row.get("skills", []))
+    return {
+        "id": config["id"],
+        "family": config["family"],
+        "variant": config["variant"],
+        "objective": config["objective"],
+        "objective_description": objective.get("description", ""),
+        "config_path": display_path(config_path),
+        "output_dir": display_path(output_dir),
+        "seed_paths": list(config.get("seed_paths", [])),
+        "seed_count": len(seeds),
+        "seed_skill_counts": dict(sorted(seed_counts.items())),
+        "target_accept_count": copy.deepcopy(config.get("target_accept_count", {})),
+        "skills": copy.deepcopy(config.get("skills", [])),
+        "quality_thresholds": copy.deepcopy(config.get("quality_thresholds", {})),
+        "holdouts": copy.deepcopy(config.get("holdouts", [])),
+        "generation_methods": copy.deepcopy(config.get("generation_methods", {})),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def print_plan(plan: dict[str, Any]) -> None:
+    table = Table(title=f"Dataset Factory Plan: {plan['id']}")
+    table.add_column("Field", style="cyan")
+    table.add_column("Value")
+    for key in ("family", "variant", "objective", "seed_count", "output_dir"):
+        table.add_row(key, str(plan.get(key, "")))
+    console.print(table)
+
+    skills = Table(title="Skill Targets")
+    skills.add_column("Skill", style="cyan")
+    skills.add_column("Target", justify="right")
+    skills.add_column("Seed rows", justify="right")
+    counts = plan.get("seed_skill_counts", {})
+    for item in plan.get("skills", []):
+        skills.add_row(str(item["id"]), str(item.get("target_examples", "")), str(counts.get(item["id"], 0)))
+    console.print(skills)
+
+
+def command_plan(config: dict[str, Any], config_path: Path, overwrite: bool) -> Path:
+    plan = build_plan(config, config_path)
+    print_plan(plan)
+    output_path = resolve_repo_path(config["output_dir"]) / "dataset_plan.yaml"
+    if output_path.exists() and not overwrite:
+        return output_path
+    write_yaml(output_path, plan)
+    return output_path
+
+
+def command_seed(config: dict[str, Any], overwrite: bool) -> Path:
+    output_path = resolve_repo_path(config["output_dir"]) / "seeds.jsonl"
+    if output_path.exists() and not overwrite:
+        return output_path
+    rows = load_seed_rows(config)
+    write_jsonl(output_path, rows)
+    return output_path
+
+
+def command_generate(config: dict[str, Any], overwrite: bool) -> Path:
+    seed_path = command_seed(config, overwrite=False)
+    output_path = resolve_repo_path(config["output_dir"]) / "candidates.jsonl"
+    if output_path.exists() and not overwrite:
+        return output_path
+    rows = read_jsonl(seed_path)
+    candidates = []
+    for row in rows:
+        item = dict(row)
+        item["generation_method"] = item.get("source", {}).get("kind", "human_seed")
+        item["dataset_factory_stage"] = "candidate"
+        candidates.append(item)
+    write_jsonl(output_path, candidates)
+    return output_path
+
+
+def command_judge(config: dict[str, Any], overwrite: bool) -> Path:
+    candidate_path = command_generate(config, overwrite=False)
+    output_path = resolve_repo_path(config["output_dir"]) / "judged.jsonl"
+    if output_path.exists() and not overwrite:
+        return output_path
+    rows = []
+    for row in read_jsonl(candidate_path):
+        item = dict(row)
+        item["quality_scores"] = score_row(item, config)
+        item["quality_score_average"] = round(average_score(item["quality_scores"]), 4)
+        rows.append(item)
+    write_jsonl(output_path, rows)
+    return output_path
+
+
+def rejection_reasons(row: dict[str, Any], config: dict[str, Any], seen: set[str], holdouts: list[dict[str, str]]) -> list[str]:
+    thresholds = config.get("quality_thresholds", {})
+    reasons = []
+    digest = stable_id(row)
+    if digest in seen:
+        reasons.append("duplicate_conversation")
+    scores = row.get("quality_scores", {})
+    if row.get("quality_score_average", average_score(scores)) < float(thresholds.get("min_average_score", 0.0)):
+        reasons.append("average_quality_below_threshold")
+    if float(scores.get("target_skill_relevance", 0.0)) < float(thresholds.get("min_target_skill_relevance", 0.0)):
+        reasons.append("target_skill_relevance_below_threshold")
+    source = row.get("source", {}) if isinstance(row.get("source"), dict) else {}
+    if source.get("license_risk") in set(thresholds.get("reject_license_risk", [])):
+        reasons.append("license_risk_rejected")
+    if source.get("contamination_risk") in set(thresholds.get("reject_contamination_risk", [])):
+        reasons.append("contamination_risk_rejected")
+    overlap = holdout_overlap(row, holdouts)
+    row["holdout_overlap"] = overlap
+    if float(overlap.get("max_similarity", 0.0)) > float(thresholds.get("max_holdout_similarity", 1.0)):
+        reasons.append("holdout_overlap_above_threshold")
+    return reasons
+
+
+def command_filter(config: dict[str, Any], overwrite: bool) -> tuple[Path, Path]:
+    judged_path = command_judge(config, overwrite=False)
+    output_dir = resolve_repo_path(config["output_dir"])
+    accepted_path = output_dir / "accepted.jsonl"
+    rejected_path = output_dir / "rejected.jsonl"
+    if accepted_path.exists() and rejected_path.exists() and not overwrite:
+        return accepted_path, rejected_path
+
+    holdouts = load_holdout_prompts(config)
+    seen: set[str] = set()
+    accepted = []
+    rejected = []
+    for row in read_jsonl(judged_path):
+        item = dict(row)
+        reasons = rejection_reasons(item, config, seen, holdouts)
+        if reasons:
+            item["rejection_reasons"] = reasons
+            rejected.append(item)
+        else:
+            seen.add(stable_id(item))
+            item["dataset_factory_stage"] = "accepted"
+            accepted.append(item)
+    write_jsonl(accepted_path, accepted)
+    write_jsonl(rejected_path, rejected)
+    return accepted_path, rejected_path
+
+
+def quality_report(config: dict[str, Any], accepted: list[dict[str, Any]], rejected: list[dict[str, Any]]) -> dict[str, Any]:
+    skill_counts = Counter(skill for row in accepted for skill in row.get("skills", []))
+    rejection_counts = Counter(reason for row in rejected for reason in row.get("rejection_reasons", []))
+    averages = [float(row.get("quality_score_average", 0.0)) for row in accepted]
+    return {
+        "dataset_id": config["id"],
+        "accepted_count": len(accepted),
+        "rejected_count": len(rejected),
+        "skill_counts": dict(sorted(skill_counts.items())),
+        "rejection_counts": dict(sorted(rejection_counts.items())),
+        "quality_score_average": round(sum(averages) / len(averages), 4) if averages else 0.0,
+        "target_accept_count": copy.deepcopy(config.get("target_accept_count", {})),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def dataset_card(config: dict[str, Any], report: dict[str, Any]) -> str:
+    skills = "\n".join(f"- `{skill}`: {count}" for skill, count in report["skill_counts"].items()) or "- none"
+    return f"""---
+dataset_info:
+  config_name: {config['id']}
+  features:
+    - name: messages
+      dtype: list
+    - name: skills
+      dtype: list
+license: cc-by-4.0
+task_categories:
+  - text-generation
+  - question-answering
+tags:
+  - model-forge
+  - supervised-fine-tuning
+  - eval-adjacent
+---
+
+# {config['id']}
+
+{config.get('description', '').strip()}
+
+## Purpose
+
+This is a Model Forge dataset-factory artifact for `{config['family']}` /
+`{config['variant']}` under the `{config['objective']}` objective. It targets
+observed fine-tuning gaps without copying held-out model-forge eval prompts.
+
+## Counts
+
+- Accepted rows: {report['accepted_count']}
+- Rejected rows: {report['rejected_count']}
+- Mean quality score: {report['quality_score_average']}
+
+## Skill Counts
+
+{skills}
+
+## Provenance
+
+Rows are currently human-seeded and heuristically judged. Future versions can
+add teacher-model generation, executable verification, and HF publication using
+the same manifest layout.
+
+## Safety And Contamination
+
+The pack step writes `accepted.jsonl` and `rejected.jsonl`, records rejection
+reasons, and checks similarity against configured holdout prompt files.
+"""
+
+
+def command_pack(config: dict[str, Any], config_path: Path, overwrite: bool) -> dict[str, str]:
+    accepted_path, rejected_path = command_filter(config, overwrite=False)
+    output_dir = resolve_repo_path(config["output_dir"])
+    dataset_path = output_dir / "dataset.jsonl"
+    manifest_path = output_dir / "manifest.yaml"
+    report_path = output_dir / "quality_report.json"
+    card_path = output_dir / "dataset_card.md"
+    if all(path.exists() for path in (dataset_path, manifest_path, report_path, card_path)) and not overwrite:
+        return {
+            "dataset": str(dataset_path),
+            "manifest": str(manifest_path),
+            "quality_report": str(report_path),
+            "dataset_card": str(card_path),
+        }
+
+    accepted = read_jsonl(accepted_path)
+    rejected = read_jsonl(rejected_path)
+    dataset_rows = [
+        {
+            "id": row["id"],
+            "messages": row["messages"],
+            "skills": row.get("skills", []),
+            "source": row.get("source", {}),
+            "quality_scores": row.get("quality_scores", {}),
+            "holdout_overlap": row.get("holdout_overlap", {}),
+        }
+        for row in accepted
+    ]
+    write_jsonl(dataset_path, dataset_rows)
+
+    report = quality_report(config, accepted, rejected)
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    manifest = build_plan(config, config_path)
+    manifest.update({
+        "artifacts": {
+            "dataset": display_path(dataset_path),
+            "accepted": display_path(accepted_path),
+            "rejected": display_path(rejected_path),
+            "quality_report": display_path(report_path),
+            "dataset_card": display_path(card_path),
+        },
+        "quality_report": report,
+    })
+    write_yaml(manifest_path, manifest)
+    card_path.write_text(dataset_card(config, report), encoding="utf-8")
+    return {
+        "dataset": str(dataset_path),
+        "manifest": str(manifest_path),
+        "quality_report": str(report_path),
+        "dataset_card": str(card_path),
+    }
+
+
+def command_publish(config: dict[str, Any], config_path: Path, overwrite: bool) -> Path:
+    outputs = command_pack(config, config_path, overwrite=False)
+    output_dir = resolve_repo_path(config["output_dir"])
+    publish_path = output_dir / "hf_publish_plan.json"
+    if publish_path.exists() and not overwrite:
+        return publish_path
+    repo_id = config.get("hub", {}).get("repo_id") or f"keithtyser/model-forge-{config['id']}"
+    plan = {
+        "dry_run": True,
+        "repo_id": repo_id,
+        "repo_type": "dataset",
+        "dataset_id": config["id"],
+        "release_class": config.get("hub", {}).get("release_class", "public_dataset_candidate"),
+        "files": [
+            display_path(Path(outputs["dataset"])),
+            display_path(Path(outputs["manifest"])),
+            display_path(Path(outputs["quality_report"])),
+            display_path(Path(outputs["dataset_card"])),
+            display_path(output_dir / "accepted.jsonl"),
+            display_path(output_dir / "rejected.jsonl"),
+        ],
+        "blocked_until": [
+            "human reviews dataset_card.md",
+            "license/provenance checks pass",
+            "dataset size reaches configured target or is marked seed-only",
+            "HF publish command is run explicitly",
+        ],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    publish_path.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return publish_path
+
+
+def default_config_for(family: str, variant: str) -> Path:
+    path = REPO_DIR / "configs" / "datasets" / f"{family}_{variant}.yaml"
+    if not path.exists():
+        raise SystemExit(f"dataset config not found: {path.relative_to(REPO_DIR)}")
+    return path
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Plan and pack model-forge dataset-factory artifacts")
+    parser.add_argument("step", choices=["plan", "seed", "generate", "judge", "filter", "pack", "publish"])
+    parser.add_argument("family", nargs="?")
+    parser.add_argument("variant", nargs="?")
+    parser.add_argument("--config", type=Path)
+    parser.add_argument("--overwrite", action="store_true")
+    args = parser.parse_args()
+
+    config_path = args.config or default_config_for(args.family or "", args.variant or "")
+    config_path = resolve_repo_path(config_path)
+    config = load_yaml(config_path)
+
+    if args.step == "plan":
+        path = command_plan(config, config_path, args.overwrite)
+        console.print(f"[green]Wrote[/green] {display_path(path)}")
+    elif args.step == "seed":
+        path = command_seed(config, args.overwrite)
+        console.print(f"[green]Wrote[/green] {display_path(path)}")
+    elif args.step == "generate":
+        path = command_generate(config, args.overwrite)
+        console.print(f"[green]Wrote[/green] {display_path(path)}")
+    elif args.step == "judge":
+        path = command_judge(config, args.overwrite)
+        console.print(f"[green]Wrote[/green] {display_path(path)}")
+    elif args.step == "filter":
+        accepted, rejected = command_filter(config, args.overwrite)
+        console.print(f"[green]Wrote[/green] {display_path(accepted)}")
+        console.print(f"[green]Wrote[/green] {display_path(rejected)}")
+    elif args.step == "pack":
+        outputs = command_pack(config, config_path, args.overwrite)
+        for path in outputs.values():
+            console.print(f"[green]Wrote[/green] {display_path(Path(path))}")
+    elif args.step == "publish":
+        path = command_publish(config, config_path, args.overwrite)
+        console.print(f"[green]Wrote dry-run publish plan[/green] {display_path(path)}")
+
+
+if __name__ == "__main__":
+    main()

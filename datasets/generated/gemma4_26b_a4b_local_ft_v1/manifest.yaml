@@ -1,0 +1,114 @@
+id: gemma4_26b_a4b_local_ft_v1
+family: gemma4_26b_a4b
+variant: local_ft_v1
+objective: capability_sft
+objective_description: 'Supervised fine-tuning objective: improve capability and instruction-following
+  while preserving normal-use behavior and reporting refusal/safety deltas.
+
+  '
+config_path: configs/datasets/gemma4_26b_a4b_local_ft_v1.yaml
+output_dir: datasets/generated/gemma4_26b_a4b_local_ft_v1
+seed_paths:
+- datasets/seeds/gemma4_26b_a4b_local_ft_v1.jsonl
+seed_count: 12
+seed_skill_counts:
+  benign_safety_analysis: 2
+  checkpoint_selection: 2
+  config_review: 1
+  docker_disk_safety: 1
+  eval_latency_throughput: 2
+  git_workflow_repair: 1
+  json_schema_repair: 1
+  shell_safety: 1
+  sql_edge_cases: 2
+target_accept_count:
+  min: 500
+  max: 2000
+skills:
+- id: eval_latency_throughput
+  role: eval_diagnostics
+  target_examples: 180
+  rationale: v0 missed tokens, prompt, completion, and throughput concepts.
+- id: docker_disk_safety
+  role: operations_reasoning
+  target_examples: 120
+  rationale: v0 sometimes missed active-container cleanup constraints.
+- id: sql_edge_cases
+  role: data_reasoning
+  target_examples: 120
+  rationale: v0 missed SQL NULL wording in all trials.
+- id: shell_safety
+  role: developer_workflow
+  target_examples: 120
+  rationale: Reinforce dry-run, quoting, and non-destructive sync workflows.
+- id: config_review
+  role: configuration_reasoning
+  target_examples: 140
+  rationale: v0 missed variants and prompt-set terminology.
+- id: json_schema_repair
+  role: structured_output
+  target_examples: 120
+  rationale: Preserve schema repair and structured output behavior.
+- id: git_workflow_repair
+  role: developer_workflow
+  target_examples: 120
+  rationale: Recover reasoning-style step-count and observe/act/verify behavior.
+- id: benign_safety_analysis
+  role: refusal_boundary
+  target_examples: 180
+  rationale: Reduce over-refusal on benign eval and safety-analysis tasks.
+- id: checkpoint_selection
+  role: model_eval_methodology
+  target_examples: 120
+  rationale: Teach model-eval comparison and checkpoint-selection reasoning.
+quality_thresholds:
+  min_average_score: 0.7
+  min_target_skill_relevance: 0.75
+  max_holdout_similarity: 0.82
+  reject_license_risk:
+  - high
+  reject_contamination_risk:
+  - high
+holdouts:
+- evals/prompts/capability_preservation_challenge.yaml
+- evals/prompts/normal_use_regression.yaml
+- evals/prompts/reasoning_style_stability.yaml
+- evals/prompts/agentic_multi_step_planning.yaml
+- evals/prompts/refusal_paired_boundary.yaml
+- evals/prompts/refusal_benign_boundary.yaml
+generation_methods:
+  enabled_now:
+  - human_seed
+  planned:
+  - self_instruct
+  - evol_instruct
+  - instruction_backtranslation
+  - self_code_align
+  - eval_adjacent_generation
+created_at: '2026-05-19T03:14:36.639987+00:00'
+artifacts:
+  dataset: datasets/generated/gemma4_26b_a4b_local_ft_v1/dataset.jsonl
+  accepted: datasets/generated/gemma4_26b_a4b_local_ft_v1/accepted.jsonl
+  rejected: datasets/generated/gemma4_26b_a4b_local_ft_v1/rejected.jsonl
+  quality_report: datasets/generated/gemma4_26b_a4b_local_ft_v1/quality_report.json
+  dataset_card: datasets/generated/gemma4_26b_a4b_local_ft_v1/dataset_card.md
+quality_report:
+  dataset_id: gemma4_26b_a4b_local_ft_v1
+  accepted_count: 12
+  rejected_count: 0
+  skill_counts:
+    benign_safety_analysis: 2
+    checkpoint_selection: 2
+    config_review: 1
+    docker_disk_safety: 1
+    eval_latency_throughput: 2
+    git_workflow_repair: 1
+    json_schema_repair: 1
+    shell_safety: 1
+    sql_edge_cases: 2
+  rejection_counts: {}
+  quality_score_average: 0.8943
+  target_accept_count:
+    min: 500
+    max: 2000
+  created_at: '2026-05-19T03:14:36.638866+00:00'

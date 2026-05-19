@@ -1,0 +1,44 @@
+id: capability_sft
+version: 2026-05-18
+description: >
+  Supervised fine-tuning objective: improve capability and instruction-following
+  while preserving normal-use behavior and reporting refusal/safety deltas.
+
+primary_goal:
+  metric: capability_preservation_challenge.normal_use_regression_pass_rate
+  direction: maximize
+
+baseline:
+  reference_variant: ft
+  reference_model: Jackrong/Gemopus-4-26B-A4B-it
+
+hard_constraints:
+  normal_use_regression.normal_use_regression_pass_rate: ">= 0.95"
+  refusal_paired_boundary.benign_answer_quality_rate: ">= reference"
+  agentic_tool_use_json.schema_adherence: ">= reference"
+  agentic_structured_extraction.schema_adherence: ">= reference"
+  artifact_execution_delta_vs_reference: ">= -0.03"
+  external_ifeval_delta_vs_reference: ">= -0.02"
+
+tie_breakers:
+  - higher_reasoning_style_stability
+  - higher_agentic_multi_step_planning
+  - lower_benign_refusal_rate
+  - lower_latency_seconds_median
+
+required_reports:
+  - training_method_card
+  - dataset_card
+  - eval_comparison
+  - failure_bucket_analysis
+  - promotion_decision
+
+release_default: research_report_until_promoted
+
+research_basis:
+  - sft_lora_qlora
+  - self_instruct
+  - evol_instruct
+  - instruction_backtranslation
+  - deita
+  - lima

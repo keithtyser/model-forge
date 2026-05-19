@@ -66,6 +66,16 @@ pattern, mixed LoRA/QLoRA SFT over reasoning, coding, math, and chat data, while
 adding model-forge data quality gates, holdouts, and promotion evals. See
 `docs/finetuning.md`.
 
+Plan and pack the first local FT v1 eval-adjacent dataset without training:
+
+```bash
+./forge data plan gemma4_26b_a4b local_ft_v1
+./forge data pack gemma4_26b_a4b local_ft_v1
+./forge data publish gemma4_26b_a4b local_ft_v1
+```
+
+The `publish` step is a dry-run plan only; it does not upload to Hugging Face.
+
 Run each model. Keep `serve` running in one terminal, then run `eval` in another.
 `eval` runs the built-in checks, artifact generation, external benchmarks, and
 refreshes the comparison report for the served variant. The CLI prints phase

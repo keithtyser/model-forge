@@ -324,6 +324,32 @@ Do not call a marginal one-point delta a decisive win unless repeated trials
 show it is stable; the saved Jackrong FT internal baseline has fewer trials than
 the local FT run.
 
+Dataset factory MVP:
+
+```text
+status: implemented and pushed
+objective: create a no-training path for local_ft_v1 data cleanup and handoff
+commands:
+  ./forge data plan gemma4_26b_a4b local_ft_v1 --overwrite
+  ./forge data pack gemma4_26b_a4b local_ft_v1 --overwrite
+  ./forge data publish gemma4_26b_a4b local_ft_v1 --overwrite
+objective profile: configs/objectives/capability_sft.yaml
+dataset config: configs/datasets/gemma4_26b_a4b_local_ft_v1.yaml
+seed rows: datasets/seeds/gemma4_26b_a4b_local_ft_v1.jsonl
+generated artifact dir: datasets/generated/gemma4_26b_a4b_local_ft_v1
+accepted rows: 12
+rejected rows: 0
+mean heuristic quality score: 0.8943
+publish behavior: dry-run HF dataset plan only, no upload
+```
+
+This is not enough data for a v1 training run. It is the first repo-cleanup
+slice of the dataset factory: plan, seed, candidate copy, heuristic judge,
+holdout-overlap filter, pack, dataset card, quality report, and dry-run publish
+plan. Next easy extensions are teacher-generation adapters, executable
+verification, and enough accepted examples to reach the configured `500-2000`
+row target.
+
 The invalid earlier full-run output was moved aside to:
 
 ```text

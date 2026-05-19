@@ -362,6 +362,39 @@ run, small deltas around one point may be eval noise. Do not claim victory from
 a marginal point-estimate edge alone; prefer a checkpoint that wins the primary
 challenge gate while preserving the larger paired-benign improvement.
 
+### Dataset Factory MVP
+
+The first no-training implementation slice is the local FT v1 dataset factory:
+
+```bash
+./forge data plan gemma4_26b_a4b local_ft_v1
+./forge data seed gemma4_26b_a4b local_ft_v1
+./forge data generate gemma4_26b_a4b local_ft_v1
+./forge data judge gemma4_26b_a4b local_ft_v1
+./forge data filter gemma4_26b_a4b local_ft_v1
+./forge data pack gemma4_26b_a4b local_ft_v1
+./forge data publish gemma4_26b_a4b local_ft_v1
+```
+
+Current MVP behavior is deterministic and local: it uses human seed rows,
+heuristic scoring, holdout-overlap checks, accepted/rejected row reports, and a
+dry-run Hugging Face publish plan. It does not call teacher models or upload
+anything.
+
+Primary files:
+
+```text
+configs/objectives/capability_sft.yaml
+configs/datasets/gemma4_26b_a4b_local_ft_v1.yaml
+datasets/seeds/gemma4_26b_a4b_local_ft_v1.jsonl
+datasets/generated/gemma4_26b_a4b_local_ft_v1/
+src/model_forge/data/factory.py
+```
+
+The generated seed pack currently contains 12 accepted examples across the v0
+failure skills. It is a scaffold and quality-control path, not the final
+`500-2000` row v1 training dataset.
+
 ## Adding A New Model Family
 
 For a new family:

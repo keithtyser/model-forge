@@ -50,6 +50,7 @@ model-forge-matrix = "model_forge.evals.run_matrix:main"
 model-forge-external = "model_forge.evals.external:main"
 model-forge-abliterate = "model_forge.pipelines.abliterate:main"
 model-forge-finetune = "model_forge.pipelines.finetune:main"
+model-forge-data = "model_forge.data.factory:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

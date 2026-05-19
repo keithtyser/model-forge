@@ -18,6 +18,7 @@ Usage:
   ./forge eval <family> [base|ft|local_ft|abli|local_abli|local_abli_sota|local_abli_huihui_like|local_abli_huihui_like_s4|local_abli_huihui_shaped] [--smoke|--internal|--artifact|--external] [tasks]
   ./forge external <family> [base|ft|local_ft|abli|local_abli|local_abli_sota|local_abli_huihui_like|local_abli_huihui_like_s4|local_abli_huihui_shaped] [tasks]
   ./forge finetune <family> [plan|prepare|run] [--execute]
+  ./forge data [plan|seed|generate|judge|filter|pack|publish] <family> <variant> [--overwrite]
   ./forge ablate <family> [plan|collect|analyze-reference|sweep-reference|export|sota-plan|sota-prepare|sota-run] [--execute]
   ./forge compare <family>
   ./forge golden-summary <family> [output-json]
@@ -30,6 +31,7 @@ Examples:
   ./forge serve gemma4_26b_a4b base
   ./forge eval gemma4_26b_a4b base
   ./forge finetune gemma4_26b_a4b plan
+  ./forge data plan gemma4_26b_a4b local_ft_v1
   ./forge ablate gemma4_26b_a4b plan
   ./forge compare gemma4_26b_a4b
 
@@ -106,6 +108,13 @@ case "$ACTION" in
       *) echo "unknown fine-tune family: $FAMILY" >&2; exit 2 ;;
     esac
     "$PYTHON" -m model_forge.pipelines.finetune --config "$CONFIG" "$STEP" "$@"
+    ;;
+  data)
+    STEP=${1:-plan}
+    FAMILY=${2:?family is required}
+    VARIANT=${3:?variant is required}
+    shift 3 || true
+    "$PYTHON" -m model_forge.data.factory "$STEP" "$FAMILY" "$VARIANT" "$@"
     ;;
   ablate)
     FAMILY=${1:?family is required}

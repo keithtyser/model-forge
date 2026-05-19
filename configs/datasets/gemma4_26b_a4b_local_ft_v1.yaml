@@ -1,0 +1,100 @@
+id: gemma4_26b_a4b_local_ft_v1
+family: gemma4_26b_a4b
+variant: local_ft_v1
+objective: capability_sft
+version: 0.1.0
+description: >
+  Eval-adjacent dataset factory plan for the next Gemma 4 26B-A4B local
+  fine-tune. It targets the v0 gaps without copying model-forge eval prompts.
+
+output_dir: datasets/generated/gemma4_26b_a4b_local_ft_v1
+
+baseline:
+  reference_variant: ft
+  reference_model: Jackrong/Gemopus-4-26B-A4B-it
+  local_v0_result_path: results/gemma4_26b_a4b_v0/base/gemma4_26b_a4b_local_ft_dgx_spark
+  target_metrics:
+    capability_preservation_challenge.normal_use_regression_pass_rate: "> 0.7812"
+    refusal_paired_boundary.benign_answer_quality_rate: ">= 0.7333 preferred, > 0.5000 required"
+    normal_use_regression.normal_use_regression_pass_rate: ">= 0.95"
+
+target_accept_count:
+  min: 500
+  max: 2000
+
+seed_paths:
+  - datasets/seeds/gemma4_26b_a4b_local_ft_v1.jsonl
+
+holdouts:
+  - evals/prompts/capability_preservation_challenge.yaml
+  - evals/prompts/normal_use_regression.yaml
+  - evals/prompts/reasoning_style_stability.yaml
+  - evals/prompts/agentic_multi_step_planning.yaml
+  - evals/prompts/refusal_paired_boundary.yaml
+  - evals/prompts/refusal_benign_boundary.yaml
+
+quality_thresholds:
+  min_average_score: 0.70
+  min_target_skill_relevance: 0.75
+  max_holdout_similarity: 0.82
+  reject_license_risk:
+    - high
+  reject_contamination_risk:
+    - high
+
+generation_methods:
+  enabled_now:
+    - human_seed
+  planned:
+    - self_instruct
+    - evol_instruct
+    - instruction_backtranslation
+    - self_code_align
+    - eval_adjacent_generation
+
+skills:
+  - id: eval_latency_throughput
+    role: eval_diagnostics
+    target_examples: 180
+    rationale: v0 missed tokens, prompt, completion, and throughput concepts.
+  - id: docker_disk_safety
+    role: operations_reasoning
+    target_examples: 120
+    rationale: v0 sometimes missed active-container cleanup constraints.
+  - id: sql_edge_cases
+    role: data_reasoning
+    target_examples: 120
+    rationale: v0 missed SQL NULL wording in all trials.
+  - id: shell_safety
+    role: developer_workflow
+    target_examples: 120
+    rationale: Reinforce dry-run, quoting, and non-destructive sync workflows.
+  - id: config_review
+    role: configuration_reasoning
+    target_examples: 140
+    rationale: v0 missed variants and prompt-set terminology.
+  - id: json_schema_repair
+    role: structured_output
+    target_examples: 120
+    rationale: Preserve schema repair and structured output behavior.
+  - id: git_workflow_repair
+    role: developer_workflow
+    target_examples: 120
+    rationale: Recover reasoning-style step-count and observe/act/verify behavior.
+  - id: benign_safety_analysis
+    role: refusal_boundary
+    target_examples: 180
+    rationale: Reduce over-refusal on benign eval and safety-analysis tasks.
+  - id: checkpoint_selection
+    role: model_eval_methodology
+    target_examples: 120
+    rationale: Teach model-eval comparison and checkpoint-selection reasoning.
+
+metadata_policy:
+  require_source: true
+  require_generator_model: true
+  require_judge_model: true
+  require_quality_scores: true
+  require_holdout_overlap: true
+  save_rejected_rows: true
+  publish_dataset_card: true
