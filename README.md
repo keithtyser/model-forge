@@ -20,7 +20,8 @@ and artifacts needed to reproduce the result.
 - runs refusal ablation recipes against source checkpoints
 - serves exactly one candidate at a time through hardware-aware vLLM settings
 - evaluates internal behavior, artifact quality, and external benchmark results
-- compares candidates against the source model and relevant references
+- compares candidates against the source model and relevant references, with
+  manifest provenance, comparability warnings, and research-basis links
 - writes promotion reports from saved comparisons
 - records hypotheses, recipes, validation, and publish state for handoff
 

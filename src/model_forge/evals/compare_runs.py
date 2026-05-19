@@ -14,6 +14,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from model_forge.research.registry import load_registry
+
 
 VARIANT_ARGS = [
     ("base", "--base"),
@@ -116,6 +118,41 @@ OBJECTIVE_PROFILES = {
 
 DEFAULT_OBJECTIVE = "general_assistant"
 
+BUCKET_RESEARCH_IDS = {
+    "refusal_paired_boundary": {
+        "arditi_2024_refusal_direction",
+        "more_than_single_refusal_direction_2026",
+        "som_multidirectional_refusal_2026",
+        "xstest",
+        "harmbench",
+        "strongreject",
+    },
+    "refusal_benign_boundary": {"xstest", "arditi_2024_refusal_direction"},
+    "refusal_calibration_benign": {"xstest"},
+    "refusal_calibration_unsafe": {"xstest", "harmbench", "strongreject"},
+    "unsafe_overcompliance": {"harmbench", "strongreject", "mlcommons_ailuminate"},
+    "normal_use_regression": {"ifeval", "simpleqa"},
+    "capability_preservation_challenge": {"ifeval", "livecodebench", "simpleqa"},
+    "agentic_tool_use_json": {"ifeval", "llm_as_judge_mt_bench"},
+    "agentic_structured_extraction": {"ifeval", "llm_as_judge_mt_bench"},
+    "agentic_multi_step_planning": {"llm_as_judge_mt_bench"},
+    "agentic_self_critique": {"llm_as_judge_mt_bench"},
+    "agentic_code_debug": {"livecodebench", "llm_as_judge_mt_bench"},
+    "reasoning_style_stability": {"llm_as_judge_mt_bench", "lima"},
+    "artifact_web_design": {"llm_as_judge_mt_bench"},
+    "artifact_canvas_webgl": {"llm_as_judge_mt_bench"},
+    "artifact_code_generation": {"livecodebench", "llm_as_judge_mt_bench"},
+}
+
+EXTERNAL_RESEARCH_IDS = {
+    "ifeval": {"ifeval"},
+    "livecodebench": {"livecodebench"},
+    "simpleqa": {"simpleqa"},
+    "harmbench": {"harmbench"},
+    "strongreject": {"strongreject"},
+    "ailuminate": {"mlcommons_ailuminate"},
+}
+
 def color(code: str, text: str) -> str:
     if os.getenv("NO_COLOR") or not sys.stdout.isatty():
         return text
@@ -162,6 +199,128 @@ def classify_delta(metric: str, delta: float, tolerance: float = 0.0001, objecti
 
 def load_manifest(run_dir: Path) -> dict[str, Any]:
     return json.loads((run_dir / "manifest.json").read_text())
+
+
+def canonical_block(manifest: dict[str, Any]) -> dict[str, Any]:
+    canonical = manifest.get("canonical")
+    return canonical if isinstance(canonical, dict) else {}
+
+
+def config_fingerprints(configs: list[dict[str, Any]]) -> list[str]:
+    return sorted(
+        f"{item.get('path')}={item.get('sha256') or '<missing>'}"
+        for item in configs
+        if isinstance(item, dict)
+    )
+
+
+def sampling_fingerprint(manifest: dict[str, Any]) -> dict[str, Any]:
+    backend = manifest.get("backend") or {}
+    extra_body = backend.get("extra_body") if isinstance(backend.get("extra_body"), dict) else {}
+    keys = ("temperature", "top_p", "min_p", "max_tokens", "timeout_seconds", "presence_penalty", "repetition_penalty")
+    fingerprint: dict[str, Any] = {}
+    for key in keys:
+        if key in backend:
+            fingerprint[key] = backend[key]
+        elif key in extra_body:
+            fingerprint[key] = extra_body[key]
+    for key, value in sorted(extra_body.items()):
+        fingerprint.setdefault(f"extra_body.{key}", value)
+    return fingerprint
+
+
+def run_provenance(name: str, run: dict[str, Any]) -> dict[str, Any]:
+    manifest = run["manifest"]
+    canonical = canonical_block(manifest)
+    identity = canonical.get("identity", {}) if canonical else {}
+    runtime = manifest.get("runtime", {})
+    backend = manifest.get("backend", {})
+    git = canonical.get("git", {}) if canonical else {}
+    configs = canonical.get("configs", []) if canonical else []
+    warnings = []
+    if not canonical:
+        warnings.append("legacy eval manifest has no canonical provenance block")
+    if git.get("dirty"):
+        dirty_paths = ", ".join((git.get("dirty_paths") or [])[:8])
+        warnings.append(f"run was created from a dirty worktree: {dirty_paths}")
+    return {
+        "name": name,
+        "path": run["path"],
+        "manifest_path": str(Path(run["path"]) / "manifest.json"),
+        "canonical_available": bool(canonical),
+        "schema_version": canonical.get("schema_version"),
+        "run_id": canonical.get("run_id"),
+        "status": canonical.get("status"),
+        "family": identity.get("family") or manifest.get("family"),
+        "variant": identity.get("variant") or runtime.get("variant") or manifest.get("variant"),
+        "model_id": manifest.get("model_id") or canonical.get("metadata", {}).get("model_id"),
+        "backend_model_alias": runtime.get("backend_model_alias") or backend.get("model_alias"),
+        "created_at": manifest.get("created_at") or canonical.get("created_at"),
+        "git": {
+            "commit": git.get("commit"),
+            "branch": git.get("branch"),
+            "dirty": git.get("dirty"),
+            "dirty_paths": git.get("dirty_paths") or [],
+        },
+        "configs": configs,
+        "config_fingerprints": config_fingerprints(configs),
+        "command": (canonical.get("command") or {}).get("display"),
+        "hardware": canonical.get("hardware") or {},
+        "prompt_counts": manifest.get("prompt_counts") or {},
+        "total_prompts": manifest.get("total_prompts"),
+        "trials": manifest.get("trials") or canonical.get("metadata", {}).get("trials"),
+        "total_cases": manifest.get("total_cases"),
+        "sampling": sampling_fingerprint(manifest),
+        "warnings": warnings,
+    }
+
+
+def comparability_warnings(provenance: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    base = provenance.get("base", {})
+    warnings: list[dict[str, Any]] = []
+    comparable_fields = (
+        ("config_fingerprints", "config hashes differ"),
+        ("prompt_counts", "prompt bucket counts differ"),
+        ("total_prompts", "prompt totals differ"),
+        ("trials", "trial counts differ"),
+        ("sampling", "sampling settings differ"),
+        ("backend_model_alias", "backend model aliases differ"),
+        ("git.commit", "git commits differ"),
+    )
+    for name, item in provenance.items():
+        if name == "base":
+            continue
+        if not item.get("canonical_available"):
+            warnings.append({
+                "variant": name,
+                "field": "canonical",
+                "severity": "warning",
+                "message": "candidate run has no canonical provenance block",
+            })
+        if not base.get("canonical_available"):
+            warnings.append({
+                "variant": name,
+                "field": "canonical",
+                "severity": "warning",
+                "message": "base run has no canonical provenance block",
+            })
+        for field, message in comparable_fields:
+            if field == "git.commit":
+                base_value = (base.get("git") or {}).get("commit")
+                value = (item.get("git") or {}).get("commit")
+            else:
+                base_value = base.get(field)
+                value = item.get(field)
+            if base_value != value:
+                warnings.append({
+                    "variant": name,
+                    "field": field,
+                    "severity": "warning",
+                    "base": base_value,
+                    "candidate": value,
+                    "message": message,
+                })
+    return warnings
 
 
 def load_scores(run_dir: Path) -> dict[tuple[str, str], dict[str, Any]]:
@@ -380,6 +539,67 @@ def load_external_results(external_dir: Path | None) -> dict[str, Any]:
     return runs
 
 
+def add_research_reason(reasons: dict[str, set[str]], research_id: str, reason: str) -> None:
+    reasons.setdefault(research_id, set()).add(reason)
+
+
+def select_research_basis(runs: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    reasons: dict[str, set[str]] = {}
+    for run in runs.values():
+        for bucket, _ in run.get("scores", {}):
+            for research_id in BUCKET_RESEARCH_IDS.get(bucket, set()):
+                add_research_reason(reasons, research_id, f"internal bucket `{bucket}`")
+        for task_name, task in run.get("external", {}).items():
+            haystack = " ".join([task_name, *task.get("results", {}).keys()]).lower()
+            for marker, ids in EXTERNAL_RESEARCH_IDS.items():
+                if marker in haystack:
+                    for research_id in ids:
+                        add_research_reason(reasons, research_id, f"external result `{task_name}`")
+    if not reasons:
+        add_research_reason(reasons, "llm_as_judge_mt_bench", "default comparison report rubric basis")
+
+    try:
+        registry = load_registry()
+    except Exception as exc:
+        return {
+            "registry_loaded": False,
+            "warnings": [f"failed to load research registry: {exc}"],
+            "entries": [],
+            "selection_reasons": {key: sorted(value) for key, value in sorted(reasons.items())},
+        }
+
+    entries_by_id = registry.get("entries", {})
+    warnings = []
+    entries = []
+    for research_id in sorted(reasons):
+        entry = entries_by_id.get(research_id)
+        if not entry:
+            warnings.append(f"research id {research_id!r} was selected but is missing from registry")
+            continue
+        entries.append({
+            "id": research_id,
+            "title": entry.get("title"),
+            "url": entry.get("url"),
+            "status": entry.get("status"),
+            "kind": entry.get("kind"),
+            "areas": entry.get("areas", []),
+            "claims": entry.get("claims", []),
+            "eval_hooks": entry.get("eval_hooks", []),
+            "limitations": entry.get("limitations", []),
+            "reasons": sorted(reasons[research_id]),
+        })
+    return {
+        "registry_loaded": True,
+        "registry_path": registry.get("path"),
+        "registry_version": str(registry.get("version", "")),
+        "snapshot_date": str(registry.get("snapshot_date", "")),
+        "last_verified": str(registry.get("last_verified", "")),
+        "warnings": warnings,
+        "entries": entries,
+        "selection_reasons": {key: sorted(value) for key, value in sorted(reasons.items())},
+    }
+
+
 def load_run(
     name: str,
     run_dir: Path,
@@ -466,6 +686,12 @@ def compare_runs(runs: dict[str, dict[str, Any]]) -> dict[str, Any]:
         for objective, assessments in objective_assessments.items()
     }
     case_deltas = compare_case_scores(runs)
+    provenance_runs = {name: run_provenance(name, run) for name, run in runs.items()}
+    provenance = {
+        "runs": provenance_runs,
+        "comparability_warnings": comparability_warnings(provenance_runs),
+    }
+    provenance["comparable_without_warnings"] = not provenance["comparability_warnings"]
     return {
         "runs": {
             name: {
@@ -480,6 +706,8 @@ def compare_runs(runs: dict[str, dict[str, Any]]) -> dict[str, Any]:
             }
             for name, run in runs.items()
         },
+        "provenance": provenance,
+        "research_basis": select_research_basis(runs),
         "score_rows": rows,
         "objective_profiles": serializable_objective_profiles(),
         "variant_assessments": objective_assessments[DEFAULT_OBJECTIVE],
@@ -615,6 +843,55 @@ def write_html(path: Path, comparison: dict[str, Any], variant_names: list[str])
             if name != "base":
                 cells.append(f"<td>{'' if row.get(f'{name}_delta') is None else row.get(f'{name}_delta')}</td>")
         score_rows.append("<tr>" + "".join(cells) + "</tr>")
+
+    provenance_rows = []
+    provenance = comparison.get("provenance", {})
+    for name in variant_names:
+        item = provenance.get("runs", {}).get(name, {})
+        git = item.get("git") or {}
+        config_text = "<br>".join(
+            html.escape(f"{cfg.get('path')} :: {(cfg.get('sha256') or '<missing>')[:12]}")
+            for cfg in item.get("configs", [])
+        ) or "<em>No config hashes recorded.</em>"
+        warnings = "; ".join(item.get("warnings") or [])
+        provenance_rows.append(
+            "<tr>"
+            f"<td>{html.escape(name)}</td>"
+            f"<td>{html.escape(str(item.get('run_id') or 'legacy'))}<br><small>{html.escape(str(item.get('schema_version') or 'no canonical schema'))}</small></td>"
+            f"<td>{html.escape(str(item.get('family') or ''))}<br><small>{html.escape(str(item.get('variant') or ''))}</small></td>"
+            f"<td>{html.escape(str(item.get('backend_model_alias') or ''))}</td>"
+            f"<td>{html.escape(str(git.get('commit') or ''))[:12]}<br><small>{html.escape(str(git.get('branch') or ''))}{' dirty' if git.get('dirty') else ''}</small></td>"
+            f"<td>{html.escape(str(item.get('total_cases') or ''))}<br><small>{html.escape(str(item.get('trials') or ''))} trial(s)</small></td>"
+            f"<td>{config_text}</td>"
+            f"<td>{html.escape(warnings)}</td>"
+            "</tr>"
+        )
+    comparability_items = []
+    for warning in provenance.get("comparability_warnings", []):
+        comparability_items.append(
+            f"<li><strong>{html.escape(warning.get('variant', ''))} / {html.escape(warning.get('field', ''))}</strong>: "
+            f"{html.escape(warning.get('message', ''))}</li>"
+        )
+
+    research = comparison.get("research_basis", {})
+    research_items = []
+    for entry in research.get("entries", []):
+        reason_text = "; ".join(entry.get("reasons", []))
+        claim_items = "".join(f"<li>{html.escape(claim)}</li>" for claim in (entry.get("claims") or [])[:2])
+        limitation_items = "".join(f"<li>{html.escape(item)}</li>" for item in (entry.get("limitations") or [])[:2])
+        title = html.escape(str(entry.get("title") or entry.get("id")))
+        url = html.escape(str(entry.get("url") or ""))
+        research_items.append(
+            "<section class=\"research-entry\">"
+            f"<h3><a href=\"{url}\">{title}</a></h3>"
+            f"<p><code>{html.escape(entry['id'])}</code> - {html.escape(str(entry.get('status') or ''))} - {html.escape(reason_text)}</p>"
+            f"<strong>Claims</strong><ul>{claim_items}</ul>"
+            f"<strong>Limitations</strong><ul>{limitation_items}</ul>"
+            "</section>"
+        )
+    research_warnings = "".join(
+        f"<li>{html.escape(warning)}</li>" for warning in research.get("warnings", [])
+    )
 
     failure_sections = []
     for name in variant_names:
@@ -785,7 +1062,18 @@ def write_html(path: Path, comparison: dict[str, Any], variant_names: list[str])
 <body>
   <h1>model-forge comparison report</h1>
   <p><a href="artifact_compare.html">Open side-by-side artifact comparison</a></p>
-  <h2>Runs</h2>
+  <h2>Run Provenance</h2>
+  <table>
+    <thead><tr><th>Variant</th><th>Run</th><th>Family</th><th>Backend alias</th><th>Git</th><th>Cases</th><th>Config hashes</th><th>Run warnings</th></tr></thead>
+    <tbody>{''.join(provenance_rows)}</tbody>
+  </table>
+  <h2>Comparability Warnings</h2>
+  <ul>{''.join(comparability_items) or '<li>No manifest comparability warnings.</li>'}</ul>
+  <h2>Research Basis</h2>
+  <p>Registry: <code>{html.escape(str(research.get('registry_path') or '<unavailable>'))}</code>; snapshot {html.escape(str(research.get('snapshot_date') or 'unknown'))}</p>
+  <ul>{research_warnings}</ul>
+  {''.join(research_items) or '<p>No research basis entries selected.</p>'}
+  <h2>Legacy Run Summary</h2>
   <pre>{html.escape(json.dumps(comparison["runs"], indent=2))}</pre>
   <h2>Score Deltas</h2>
   <table>
@@ -920,6 +1208,23 @@ def print_terminal_results(comparison: dict[str, Any], variant_names: list[str],
         title="[bold green]Comparison Refreshed[/bold green]",
         border_style="green",
     ))
+
+    provenance_warnings = comparison.get("provenance", {}).get("comparability_warnings", [])
+    research_entries = comparison.get("research_basis", {}).get("entries", [])
+    console.print(Panel(
+        "\n".join([
+            f"Canonical provenance warnings: {len(provenance_warnings)}",
+            f"Research basis entries: {len(research_entries)}",
+        ]),
+        title="Report V2 Metadata",
+        border_style="cyan" if not provenance_warnings else "yellow",
+    ))
+    if provenance_warnings:
+        warning_text = "\n".join(
+            f"{item.get('variant')}/{item.get('field')}: {item.get('message')}"
+            for item in provenance_warnings[:10]
+        )
+        console.print(Panel(warning_text, title="Manifest Comparability Warnings", border_style="yellow"))
 
     score_rows = comparison.get("score_rows", [])
     key_rows = [

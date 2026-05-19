@@ -209,6 +209,12 @@ For ablation work, the key distinction is reducing refusals while preserving use
 Each comparison report should include:
 
 - model and serving metadata
+- canonical run manifest provenance, including git commit, dirty state,
+  command, hardware profile, config hashes, prompt counts, trial counts, and
+  sampling settings
+- comparability warnings when base and candidate runs differ in config hash,
+  prompt count, trial count, sampling, backend alias, or git commit
+- research-basis entries selected from `configs/research_registry.yaml`
 - per-bucket score deltas
 - latency and throughput deltas
 - refusal-boundary examples
@@ -234,6 +240,9 @@ The report includes:
 
 - score deltas
 - improvement/regression classification
+- run provenance and manifest comparability warnings
+- research registry links, claims, and limitations relevant to the compared
+  eval buckets or external benchmark outputs
 - promotion recommendation
 - notable failures
 - artifact links and screenshots when available

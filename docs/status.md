@@ -33,6 +33,9 @@ This is the short handoff state for humans and agents. Use
 - Canonical run manifest writing is implemented through `./forge manifest
   write/show`; eval manifests now include the shared `canonical` provenance
   block while preserving the existing eval manifest layout.
+- Comparison reports now include report-v2 provenance and research basis:
+  canonical manifest summaries, config hashes, comparability warnings, and
+  selected `configs/research_registry.yaml` entries.
 
 ## Current Dataset State
 
@@ -72,9 +75,8 @@ length filtering:
 
 ## Recommended Next Work
 
-1. Make comparison reports include research basis and canonical manifest
-   provenance. Keep objective profile fields optional until the objective
-   profile layer is revisited.
+1. Add eval provenance cards or golden baseline hardening next. Keep objective
+   profile fields optional until the objective profile layer is revisited.
 2. Use `./forge promote gemma4_26b_a4b local_ft_vs_jackrong` whenever saved
    comparison results change.
 3. Publish completed durable datasets to Hugging Face with `publish --execute`
