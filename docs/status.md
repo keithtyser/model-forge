@@ -60,3 +60,5 @@ training run for that step.
 - Check `docs/artifact-retention.md` before deleting or uploading artifacts.
 - Push code, configs, docs, recipes, and lightweight manifests to GitHub before
   handing off.
+- Run `./forge doctor` before handoff to catch tracked ignored files, secret
+  literals, nonportable paths, and accidental generated dataset commits.

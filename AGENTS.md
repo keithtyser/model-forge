@@ -25,6 +25,7 @@ reusable pipeline code over one-off scripts.
 - `docs/evaluation-strategy.md`: eval design and interpretation
 - `docs/experiment-ledger.md`: handoff ledger for hypotheses, experiments,
   artifacts, validation, and publish status
+- `docs/roadmaps/`: long-form roadmap and archived planning documents
 - `docs/spark-optimizations.md`: DGX Spark hardware profile, AEON-7-derived
   serving/quantization lessons, and safe overrides
 - `configs/README.md`: config directory map and portability rules
@@ -145,6 +146,12 @@ Run tests:
 
 ```bash
 .venv/bin/python -m unittest discover -s tests
+```
+
+Run repo hygiene checks:
+
+```bash
+./forge doctor
 ```
 
 ## Abliteration Rules

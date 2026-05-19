@@ -71,6 +71,7 @@ Run evals from another terminal:
 ./forge eval gemma4_26b_a4b base --artifact
 ./forge eval gemma4_26b_a4b base --external
 ./forge compare gemma4_26b_a4b
+./forge doctor
 ```
 
 Only run one large model server or training job at a time.
@@ -143,6 +144,7 @@ Read [docs/dgx-spark.md](docs/dgx-spark.md),
 configs/        Model families, fine-tuning configs, ablation configs, objectives
 datasets/       Dataset manifests, seed rows, generated small packs and reports
 docs/           Workflow docs, status, roadmap, and experiment ledger
+docs/roadmaps/  Long-form planning documents and archived roadmap material
 evals/          Internal prompt buckets and rubrics
 models/         Directory conventions for local model artifacts
 pipelines/      Pipeline design notes

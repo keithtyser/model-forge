@@ -23,3 +23,7 @@ and publish plans.
 
 The current tracked `datasets/generated/gemma4_26b_a4b_local_ft_v1/` pack is a
 smoke-size quality-control artifact, not a final training dataset.
+
+`.gitignore` blocks new generated dataset directories by default. If a future
+smoke pack should be tracked, add an explicit allowlist entry and make sure
+`./forge doctor` passes.

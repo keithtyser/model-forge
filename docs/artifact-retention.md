@@ -61,6 +61,16 @@ Delete only after confirming the artifact is disposable or already published.
 Prefer removing old checkpoints through configured checkpoint rotation instead
 of manual deletion during active experiments.
 
+Before handoff, run:
+
+```bash
+./forge doctor
+```
+
+This catches tracked ignored files, literal Hugging Face tokens, nonportable
+machine paths outside archived roadmaps, oversized tracked files, and generated
+dataset outputs that have not been explicitly allowlisted.
+
 ## Recipes Versus Runs
 
 `runs/` is runtime scratch. It is where `./forge finetune ... prepare` writes
