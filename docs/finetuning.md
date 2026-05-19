@@ -370,18 +370,20 @@ The first no-training implementation slice is the local FT v1 dataset factory:
 ./forge data plan gemma4_26b_a4b local_ft_v1
 ./forge data gaps gemma4_26b_a4b local_ft_v1
 ./forge data seed gemma4_26b_a4b local_ft_v1
-./forge data generate gemma4_26b_a4b local_ft_v1
-./forge data judge gemma4_26b_a4b local_ft_v1
-./forge data verify gemma4_26b_a4b local_ft_v1
-./forge data filter gemma4_26b_a4b local_ft_v1
-./forge data pack gemma4_26b_a4b local_ft_v1
-./forge data publish gemma4_26b_a4b local_ft_v1
+./forge data generate gemma4_26b_a4b local_ft_v1 --smoke
+./forge data judge gemma4_26b_a4b local_ft_v1 --smoke
+./forge data verify gemma4_26b_a4b local_ft_v1 --smoke
+./forge data filter gemma4_26b_a4b local_ft_v1 --smoke
+./forge data pack gemma4_26b_a4b local_ft_v1 --smoke
+./forge data publish gemma4_26b_a4b local_ft_v1 --smoke
 ```
 
 Current MVP behavior is deterministic and local: it uses human seed rows,
-saved eval failure extraction, heuristic scoring, static skill verification,
-holdout-overlap checks, accepted/rejected row reports, coverage warnings, and a
-dry-run Hugging Face publish plan. It does not call teacher models or upload
+saved eval failure extraction, template-provider candidate generation,
+heuristic scoring, static skill verification, holdout-overlap checks,
+accepted/rejected row reports, coverage warnings, and a dry-run Hugging Face
+publish plan. It does not call a live teacher model unless an
+OpenAI-compatible provider is configured explicitly, and it does not upload
 anything.
 
 Primary files:
@@ -394,9 +396,23 @@ datasets/generated/gemma4_26b_a4b_local_ft_v1/
 src/model_forge/data/factory.py
 ```
 
-The generated seed pack currently contains 24 accepted examples across the v0
-failure skills. It is a scaffold and quality-control path, not the final
-`500-2000` row v1 training dataset.
+The generated smoke pack currently contains 36 accepted examples: 24 human seed
+rows plus 12 deterministic synthetic rows generated across `self_instruct`,
+`evol_instruct`, `instruction_backtranslation`, and
+`eval_adjacent_generation`. It is a scaffold and quality-control path, not the
+final `500-2000` row v1 training dataset.
+
+The generation step writes:
+
+```text
+datasets/generated/gemma4_26b_a4b_local_ft_v1/generation_report.json
+```
+
+The provider interface supports deterministic `template` generation for safe
+local smoke tests and `openai_compatible` / `vllm_openai` providers for future
+teacher generation. Generation has hard candidate limits plus memory and disk
+floors in the dataset config. Synthetic rows record provider type, generator
+model, source seed, strategy, variant index, and prompt template hash.
 
 The verification step writes:
 

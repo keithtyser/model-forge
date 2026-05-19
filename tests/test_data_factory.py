@@ -9,6 +9,7 @@ from model_forge.data.factory import (
     REPO_DIR,
     build_gap_report,
     build_plan,
+    command_generate,
     command_gaps,
     command_pack,
     command_publish,
@@ -28,8 +29,11 @@ class DatasetFactoryTests(unittest.TestCase):
         self.assertIn("eval_latency_throughput", plan["seed_skill_counts"])
         self.assertIn("benign_safety_analysis", plan["seed_skill_counts"])
         self.assertIn("self_instruct", plan["generation_methods"]["planned"])
+        self.assertIn("self_instruct", plan["generation_methods"]["enabled_now"])
+        self.assertEqual(plan["generation"]["provider"]["type"], "template")
         self.assertEqual(plan["quality_thresholds"]["max_holdout_similarity"], 0.82)
-        self.assertTrue(plan["seed_only"])
+        self.assertFalse(plan["seed_only"])
+        self.assertTrue(plan["smoke_only"])
 
     def test_pack_writes_dataset_card_and_rejection_report(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
@@ -49,7 +53,27 @@ class DatasetFactoryTests(unittest.TestCase):
             self.assertIn("Verification passed", card)
             manifest = load_yaml(Path(outputs["manifest"]))
             self.assertIn("verification", manifest["artifacts"])
+            self.assertIn("generation_report", manifest["artifacts"])
             self.assertEqual(manifest["quality_report"]["verification_counts"]["passed"], len(dataset_rows))
+            self.assertGreater(manifest["quality_report"]["source_kind_counts"]["synthetic"], 0)
+
+    def test_generate_expands_seeds_with_template_provider(self) -> None:
+        config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["output_dir"] = tmp
+            path = command_generate(config, overwrite=True, smoke=True)
+            rows = [
+                json.loads(line)
+                for line in Path(path).read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            synthetic = [row for row in rows if row.get("source", {}).get("kind") == "synthetic"]
+            self.assertEqual(len(synthetic), config["generation"]["smoke"]["max_generated_candidates"])
+            self.assertTrue(all(row["source"]["generation"]["prompt_template_hash"] for row in synthetic))
+            report = json.loads((Path(tmp) / "generation_report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["provider"]["type"], "template")
+            self.assertEqual(report["source_kind_counts"]["synthetic"], len(synthetic))
 
     def test_verify_command_writes_static_skill_checks(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
@@ -95,6 +119,7 @@ class DatasetFactoryTests(unittest.TestCase):
             self.assertIn('"dry_run": true', text)
             self.assertIn('"repo_type": "dataset"', text)
             self.assertIn("verification.jsonl", text)
+            self.assertIn("generation_report.json", text)
 
 
 if __name__ == "__main__":

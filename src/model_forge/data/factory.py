@@ -4,12 +4,17 @@ import argparse
 import copy
 import hashlib
 import json
+import os
 import re
+import shutil
+import urllib.error
+import urllib.request
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import psutil
 import yaml
 from rich.console import Console
 from rich.table import Table
@@ -78,6 +83,23 @@ def row_text(row: dict[str, Any]) -> str:
         if isinstance(message, dict) and isinstance(message.get("content"), str):
             parts.append(message["content"])
     return "\n".join(parts)
+
+
+def message_content(row: dict[str, Any], role: str) -> str:
+    messages = row.get("messages", [])
+    if not isinstance(messages, list):
+        return ""
+    for message in messages:
+        if isinstance(message, dict) and message.get("role") == role and isinstance(message.get("content"), str):
+            return message["content"]
+    return ""
+
+
+def compact_text(text: str, max_words: int) -> str:
+    words = re.findall(r"\S+", text.strip())
+    if len(words) <= max_words:
+        return " ".join(words)
+    return " ".join(words[:max_words]) + " ..."
 
 
 def stable_id(row: dict[str, Any]) -> str:
@@ -201,6 +223,428 @@ def holdout_overlap(row: dict[str, Any], holdouts: list[dict[str, str]]) -> dict
                 },
             }
     return best
+
+
+SKILL_SCENARIOS: dict[str, dict[str, str]] = {
+    "eval_latency_throughput": {
+        "user": (
+            "An inference benchmark has identical request count, higher TTFT, lower total latency, "
+            "and better output tokens/sec than the baseline. Explain how prefill, decode, prompt "
+            "tokens, completion tokens, and batching could make that possible."
+        ),
+        "assistant": (
+            "Do not reduce this to one latency number. Higher TTFT usually points at more expensive "
+            "prefill, longer prompt_tokens, chunked prefill settings, or cache behavior. Lower total "
+            "latency can still happen if completion_tokens are shorter, decode ITL improves, or the "
+            "batch mix changes. Better output tokens/sec can come from more efficient decode or higher "
+            "batch occupancy. Compare prompt_tokens, completion_tokens, TTFT, ITL, batch size, "
+            "concurrency, max_new_tokens, cache hit rate, and server flags before calling it a win or "
+            "regression."
+        ),
+    },
+    "docker_disk_safety": {
+        "user": (
+            "A DGX workstation is low on disk during a checkpointing run. Give a cleanup plan that "
+            "preserves active Docker containers and avoids deleting the checkpoint currently being written."
+        ),
+        "assistant": (
+            "Start with `df -h`, `docker system df`, the run output directory size, and `docker ps` so "
+            "active containers are visible. Do not remove images, volumes, or paths used by active "
+            "containers. Prune stopped containers and dangling build cache only after review. For "
+            "checkpoints, keep the active write directory plus the last known-good checkpoints, verify a "
+            "new checkpoint has expected files before deleting older explicit paths, and log every "
+            "deletion. Recheck free space before resuming."
+        ),
+    },
+    "sql_edge_cases": {
+        "user": (
+            "A LEFT JOIN dashboard shows total accounts, matched orders, and average order value. Explain "
+            "how NULLs can make COUNT(*), COUNT(order_id), WHERE filters, and aggregates disagree."
+        ),
+        "assistant": (
+            "A LEFT JOIN retains left-table rows even when the right side has no match, filling right-side "
+            "columns with NULL. `COUNT(*)` counts every retained account row, while `COUNT(order_id)` "
+            "counts only matched rows where order_id is not NULL. A right-table predicate in WHERE can "
+            "turn the query into an accidental inner join; put match filters in the JOIN condition when "
+            "unmatched accounts must remain. Aggregates ignore NULL inputs, so separate total accounts, "
+            "matched accounts, and value averages explicitly."
+        ),
+    },
+    "shell_safety": {
+        "user": (
+            "Write a safe shell workflow for moving old run artifacts to archival storage without losing "
+            "files that only exist in the archive."
+        ),
+        "assistant": (
+            "Use explicit variables, quote paths, and start with a dry run. Inspect source and destination "
+            "with `du -sh` and `find`, then run `rsync -a --info=stats2 --dry-run \"$src/\" \"$dst/\"`. "
+            "Review the planned copy before removing `--dry-run`. Avoid `--delete` unless the archive is "
+            "supposed to be an exact mirror and there is a separate confirmation. After copying, compare "
+            "counts or checksums for critical files and record the command."
+        ),
+    },
+    "config_review": {
+        "user": (
+            "A post-training repo stores model variants, prompt suites, output directories, and promotion "
+            "thresholds in separate YAML files. What validation should run before any eval starts?"
+        ),
+        "assistant": (
+            "Load every YAML file and resolve the full run matrix before starting. Check that requested "
+            "variants exist, prompt suites resolve to files, output directories are unique or overwrite is "
+            "explicit, context length and served model names are present, and promotion thresholds match "
+            "the objective. Print the resolved variant, prompt set, output path, and eval mode so a user "
+            "can catch silent mismatches before compute is spent."
+        ),
+    },
+    "json_schema_repair": {
+        "user": (
+            "A JSON-only evaluator rejected a response with a valid object followed by explanatory prose. "
+            "Explain the failure and give the response rule the model should follow."
+        ),
+        "assistant": (
+            "JSON-only means the entire response must parse as one JSON value. A valid object followed by "
+            "a sentence fails because the parser sees extra tokens. The model should return only the "
+            "requested object or array, with double-quoted keys and strings, lowercase booleans, no "
+            "trailing commas, and no markdown or explanation outside the JSON value."
+        ),
+    },
+    "git_workflow_repair": {
+        "user": (
+            "A private feature branch is behind origin after local edits and conflict resolution looks "
+            "risky. Give an observe, act, verify, and fallback workflow."
+        ),
+        "assistant": (
+            "Observe with `git status --short`, `git fetch origin`, and a short graph comparing HEAD to "
+            "origin. Act by creating a backup branch before rebasing or cherry-picking onto a fresh branch "
+            "from the remote tip. If conflicts get confusing, abort the rebase and recover from the backup "
+            "instead of discarding work. Verify with focused tests and `git diff --check`; push a rebased "
+            "private branch with `--force-with-lease` only after those checks pass."
+        ),
+    },
+    "benign_safety_analysis": {
+        "user": (
+            "An eval asks for a policy-level comparison of refusal rate, over-refusal, and unsafe "
+            "overcompliance. Explain why answering is allowed while still avoiding harmful operational detail."
+        ),
+        "assistant": (
+            "This is benign safety analysis, not a request to perform harm. A useful answer defines the "
+            "metrics, explains tradeoffs, and helps compare model behavior across variants. It should avoid "
+            "payloads, exploit steps, credential theft details, or tactical abuse. Refusing the metric "
+            "discussion would hide evidence needed for responsible evaluation, while over-answering with "
+            "harmful detail would be unsafe."
+        ),
+    },
+    "checkpoint_selection": {
+        "user": (
+            "Two fine-tune checkpoints trade off challenge capability and paired benign quality. Give a "
+            "promotion rule that handles trial noise and avoids blindly picking the final checkpoint."
+        ),
+        "assistant": (
+            "Use the objective gates first. A checkpoint must clear normal-use regression and the primary "
+            "challenge capability target before tie-breakers matter. Then compare paired benign quality, "
+            "benign refusal rate, structured-output behavior, artifact results, and external evals. If the "
+            "gap is one or two cases, rerun repeated trials with the same sampling, context, and server "
+            "settings. Promote the checkpoint with stable wins across gates, not merely the last step."
+        ),
+    },
+}
+
+STRATEGY_NOTES: dict[str, dict[str, str]] = {
+    "self_instruct": {
+        "user": "Keep the answer concise, operational, and directly useful.",
+        "assistant": "The key is to preserve the concept while changing surface wording and scenario details.",
+    },
+    "evol_instruct": {
+        "user": "Include one edge case, one failure mode, and one verification check.",
+        "assistant": "The harder variant should name the edge case, explain the failure mode, and end with a concrete verification step.",
+    },
+    "instruction_backtranslation": {
+        "user": "Answer as if the prompt was reconstructed from a high-quality internal runbook.",
+        "assistant": "A backtranslated example should be self-contained, source-grounded, and free of held-out eval wording.",
+    },
+    "eval_adjacent_generation": {
+        "user": "Make this eval-adjacent without copying any held-out prompt wording or exact checklist.",
+        "assistant": "This trains the adjacent skill, not memorization of the benchmark case.",
+    },
+}
+
+
+def generation_config(config: dict[str, Any]) -> dict[str, Any]:
+    generation = config.get("generation", {})
+    return generation if isinstance(generation, dict) else {}
+
+
+def enabled_strategies(config: dict[str, Any]) -> list[dict[str, Any]]:
+    strategies = generation_config(config).get("strategies", [])
+    enabled = []
+    for strategy in strategies:
+        if isinstance(strategy, dict) and strategy.get("enabled", True):
+            enabled.append(strategy)
+    return enabled
+
+
+def prompt_template(strategy_name: str, seed: dict[str, Any], primary_skill: str, variant_index: int) -> str:
+    scenario = SKILL_SCENARIOS.get(primary_skill, SKILL_SCENARIOS["checkpoint_selection"])
+    strategy_note = STRATEGY_NOTES.get(strategy_name, STRATEGY_NOTES["self_instruct"])
+    return "\n".join([
+        "Create one high-quality supervised fine-tuning conversation.",
+        f"Strategy: {strategy_name}",
+        f"Primary skill: {primary_skill}",
+        f"Variant index: {variant_index}",
+        f"Seed user summary: {compact_text(message_content(seed, 'user'), 80)}",
+        f"Seed assistant summary: {compact_text(message_content(seed, 'assistant'), 120)}",
+        "Return strict JSON with keys user and assistant.",
+        "The conversation must be eval-adjacent and must not copy held-out prompt wording.",
+        f"Target user task: {scenario['user']} {strategy_note['user']}",
+        f"Target answer content: {scenario['assistant']} {strategy_note['assistant']}",
+    ])
+
+
+def template_hash(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def parse_json_object(text: str) -> dict[str, Any]:
+    stripped = text.strip()
+    try:
+        data = json.loads(stripped)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", stripped, flags=re.DOTALL)
+        if not match:
+            raise
+        data = json.loads(match.group(0))
+    if not isinstance(data, dict):
+        raise ValueError("provider response did not contain a JSON object")
+    return data
+
+
+class GenerationProvider:
+    def __init__(self, provider_config: dict[str, Any]) -> None:
+        self.config = provider_config
+
+    @property
+    def provider_type(self) -> str:
+        return str(self.config.get("type", "template"))
+
+    @property
+    def model_name(self) -> str:
+        return str(self.config.get("model", self.provider_type))
+
+    def generate(self, prompt: str, seed: dict[str, Any], primary_skill: str, strategy_name: str, variant_index: int) -> dict[str, str]:
+        raise NotImplementedError
+
+
+class TemplateGenerationProvider(GenerationProvider):
+    def generate(self, prompt: str, seed: dict[str, Any], primary_skill: str, strategy_name: str, variant_index: int) -> dict[str, str]:
+        scenario = SKILL_SCENARIOS.get(primary_skill, SKILL_SCENARIOS["checkpoint_selection"])
+        strategy_note = STRATEGY_NOTES.get(strategy_name, STRATEGY_NOTES["self_instruct"])
+        seed_anchor = compact_text(message_content(seed, "assistant"), 36)
+        user = f"{scenario['user']} {strategy_note['user']}"
+        assistant = " ".join([
+            scenario["assistant"],
+            strategy_note["assistant"],
+            f"Seed concept anchor: {seed_anchor}",
+        ])
+        return {"user": user, "assistant": assistant}
+
+
+class OpenAICompatibleProvider(GenerationProvider):
+    def generate(self, prompt: str, seed: dict[str, Any], primary_skill: str, strategy_name: str, variant_index: int) -> dict[str, str]:
+        base_url = str(self.config.get("base_url", "")).rstrip("/")
+        if not base_url:
+            raise RuntimeError("openai_compatible provider requires generation.provider.base_url")
+        if base_url.endswith("/chat/completions"):
+            endpoint = base_url
+        elif base_url.endswith("/v1"):
+            endpoint = f"{base_url}/chat/completions"
+        else:
+            endpoint = f"{base_url}/v1/chat/completions"
+        api_key_env = str(self.config.get("api_key_env", ""))
+        api_key = os.environ.get(api_key_env, "") if api_key_env else ""
+        request_config = generation_request_config(self.config)
+        payload = {
+            "model": self.model_name,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You create concise, correct SFT data. Return only strict JSON with user and assistant keys.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": request_config["temperature"],
+            "max_tokens": request_config["max_tokens"],
+        }
+        body = json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        req = urllib.request.Request(endpoint, data=body, headers=headers, method="POST")
+        timeout = float(self.config.get("timeout_seconds", 60))
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                raw = response.read().decode("utf-8")
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"generation provider request failed: {exc}") from exc
+        data = json.loads(raw)
+        content = data["choices"][0]["message"]["content"]
+        parsed = parse_json_object(content)
+        user = str(parsed.get("user", "")).strip()
+        assistant = str(parsed.get("assistant", "")).strip()
+        if not user or not assistant:
+            raise ValueError("provider JSON must include non-empty user and assistant fields")
+        return {"user": user, "assistant": assistant}
+
+
+def generation_request_config(provider_config: dict[str, Any]) -> dict[str, Any]:
+    request = provider_config.get("request", {}) if isinstance(provider_config.get("request"), dict) else {}
+    return {
+        "temperature": float(request.get("temperature", provider_config.get("temperature", 0.7))),
+        "max_tokens": int(request.get("max_tokens", provider_config.get("max_tokens", 900))),
+    }
+
+
+def build_provider(config: dict[str, Any], provider_override: str | None = None) -> GenerationProvider:
+    provider_config = copy.deepcopy(generation_config(config).get("provider", {}))
+    if not isinstance(provider_config, dict):
+        provider_config = {}
+    if provider_override:
+        provider_config["type"] = provider_override
+    provider_type = str(provider_config.get("type", "template"))
+    if provider_type == "template":
+        provider_config.setdefault("model", "model-forge-template-v0")
+        return TemplateGenerationProvider(provider_config)
+    if provider_type in {"openai_compatible", "vllm_openai"}:
+        return OpenAICompatibleProvider(provider_config)
+    raise SystemExit(f"unknown generation provider type: {provider_type}")
+
+
+def generation_budget(config: dict[str, Any], smoke: bool, max_generated_candidates: int | None) -> dict[str, int]:
+    generation = generation_config(config)
+    smoke_config = generation.get("smoke", {}) if isinstance(generation.get("smoke"), dict) else {}
+    if max_generated_candidates is not None:
+        max_generated = max(0, int(max_generated_candidates))
+    elif smoke:
+        max_generated = int(smoke_config.get("max_generated_candidates", 6) or 0)
+    else:
+        max_generated = int(generation.get("max_generated_candidates", 0) or 0)
+    if smoke:
+        max_seed_rows = int(smoke_config.get("max_seed_rows", 3) or 0)
+    else:
+        max_seed_rows = int(generation.get("max_seed_rows", 0) or 0)
+    return {"max_generated_candidates": max_generated, "max_seed_rows": max_seed_rows}
+
+
+def primary_skill(row: dict[str, Any]) -> str:
+    skills = [str(skill) for skill in row.get("skills", [])]
+    return skills[0] if skills else "checkpoint_selection"
+
+
+def select_generation_seeds(seed_rows: list[dict[str, Any]], max_seed_rows: int) -> list[dict[str, Any]]:
+    if max_seed_rows <= 0 or len(seed_rows) <= max_seed_rows:
+        return seed_rows
+    selected: list[dict[str, Any]] = []
+    seen_skills: set[str] = set()
+    for row in seed_rows:
+        skill = primary_skill(row)
+        if skill in seen_skills:
+            continue
+        selected.append(row)
+        seen_skills.add(skill)
+        if len(selected) >= max_seed_rows:
+            return selected
+    for row in seed_rows:
+        if row in selected:
+            continue
+        selected.append(row)
+        if len(selected) >= max_seed_rows:
+            return selected
+    return selected
+
+
+def enforce_generation_resources(config: dict[str, Any], output_dir: Path, planned_candidates: int) -> None:
+    limits = generation_config(config).get("resource_limits", {})
+    limits = limits if isinstance(limits, dict) else {}
+    max_candidates = int(limits.get("max_candidates_per_run", 128) or 128)
+    if planned_candidates > max_candidates:
+        raise RuntimeError(f"planned candidates {planned_candidates} exceeds max_candidates_per_run {max_candidates}")
+    memory_floor = float(limits.get("min_free_memory_ratio", 0.05))
+    memory = psutil.virtual_memory()
+    if memory.total and memory.available / memory.total < memory_floor:
+        raise RuntimeError("not enough free memory to start dataset generation")
+    disk_floor = float(limits.get("min_free_disk_ratio", 0.15))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    disk = shutil.disk_usage(output_dir)
+    if disk.total and disk.free / disk.total < disk_floor:
+        raise RuntimeError("not enough free disk to write dataset generation artifacts")
+
+
+def generated_row(
+    seed: dict[str, Any],
+    config: dict[str, Any],
+    provider: GenerationProvider,
+    strategy_name: str,
+    variant_index: int,
+) -> dict[str, Any]:
+    skill = primary_skill(seed)
+    prompt = prompt_template(strategy_name, seed, skill, variant_index)
+    rendered = provider.generate(prompt, seed, skill, strategy_name, variant_index)
+    source = {
+        "kind": "synthetic",
+        "generator_model": provider.model_name,
+        "judge_model": "heuristic",
+        "source_uri": f"seed:{seed.get('id', stable_id(seed))}",
+        "license": seed.get("source", {}).get("license", "CC-BY-4.0") if isinstance(seed.get("source"), dict) else "CC-BY-4.0",
+        "license_risk": "low",
+        "contamination_risk": "low",
+        "generation": {
+            "provider_type": provider.provider_type,
+            "strategy": strategy_name,
+            "seed_id": seed.get("id", stable_id(seed)),
+            "variant_index": variant_index,
+            "prompt_template_hash": template_hash(prompt),
+        },
+    }
+    row = {
+        "messages": [
+            {"role": "user", "content": rendered["user"]},
+            {"role": "assistant", "content": rendered["assistant"]},
+        ],
+        "skills": [skill],
+        "source": source,
+        "generation_method": strategy_name,
+        "dataset_factory_stage": "candidate",
+    }
+    row["id"] = f"gen_{stable_id(row)}"
+    return row
+
+
+def build_generation_report(
+    config: dict[str, Any],
+    seed_count: int,
+    candidates: list[dict[str, Any]],
+    provider: GenerationProvider,
+    smoke: bool,
+) -> dict[str, Any]:
+    method_counts = Counter(str(row.get("generation_method", "")) for row in candidates)
+    source_counts = Counter(
+        str(row.get("source", {}).get("kind", "unknown"))
+        for row in candidates
+        if isinstance(row.get("source"), dict)
+    )
+    return {
+        "dataset_id": config["id"],
+        "seed_rows": seed_count,
+        "candidate_rows": len(candidates),
+        "source_kind_counts": dict(sorted(source_counts.items())),
+        "generation_method_counts": dict(sorted(method_counts.items())),
+        "provider": {
+            "type": provider.provider_type,
+            "model": provider.model_name,
+        },
+        "strategies": [strategy.get("name") for strategy in enabled_strategies(config)],
+        "smoke": bool(smoke),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def result_path(config: dict[str, Any]) -> Path:
@@ -367,7 +811,9 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
         "quality_thresholds": copy.deepcopy(config.get("quality_thresholds", {})),
         "holdouts": copy.deepcopy(config.get("holdouts", [])),
         "generation_methods": copy.deepcopy(config.get("generation_methods", {})),
+        "generation": copy.deepcopy(generation_config(config)),
         "seed_only": bool(config.get("seed_only", False)),
+        "smoke_only": bool(config.get("smoke_only", False)),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -409,24 +855,69 @@ def command_seed(config: dict[str, Any], overwrite: bool) -> Path:
     return output_path
 
 
-def command_generate(config: dict[str, Any], overwrite: bool) -> Path:
+def command_generate(
+    config: dict[str, Any],
+    overwrite: bool,
+    smoke: bool = False,
+    max_generated_candidates: int | None = None,
+    provider_override: str | None = None,
+) -> Path:
     seed_path = command_seed(config, overwrite=overwrite)
+    output_dir = resolve_repo_path(config["output_dir"])
     output_path = resolve_repo_path(config["output_dir"]) / "candidates.jsonl"
+    report_path = output_dir / "generation_report.json"
     if output_path.exists() and not overwrite:
         return output_path
-    rows = read_jsonl(seed_path)
+    seed_rows = read_jsonl(seed_path)
+    provider = build_provider(config, provider_override=provider_override)
+    budget = generation_budget(config, smoke=smoke, max_generated_candidates=max_generated_candidates)
+    max_generated = budget["max_generated_candidates"]
+    max_seed_rows = budget["max_seed_rows"]
+    strategy_rows = enabled_strategies(config)
+    seed_window = select_generation_seeds(seed_rows, max_seed_rows)
+    enforce_generation_resources(config, output_dir, planned_candidates=len(seed_rows) + max_generated)
     candidates = []
-    for row in rows:
+    for row in seed_rows:
         item = dict(row)
         item["generation_method"] = item.get("source", {}).get("kind", "human_seed")
         item["dataset_factory_stage"] = "candidate"
         candidates.append(item)
+
+    generated_count = 0
+    if max_generated > 0 and strategy_rows:
+        for strategy in strategy_rows:
+            for seed in seed_window:
+                strategy_name = str(strategy.get("name", "self_instruct"))
+                variants = int(strategy.get("variants_per_seed", 1) or 1)
+                for variant_index in range(variants):
+                    if generated_count >= max_generated:
+                        break
+                    candidates.append(generated_row(seed, config, provider, strategy_name, variant_index))
+                    generated_count += 1
+                if generated_count >= max_generated:
+                    break
+            if generated_count >= max_generated:
+                break
     write_jsonl(output_path, candidates)
+    report = build_generation_report(config, len(seed_rows), candidates, provider, smoke=smoke)
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return output_path
 
 
-def command_judge(config: dict[str, Any], overwrite: bool) -> Path:
-    candidate_path = command_generate(config, overwrite=overwrite)
+def command_judge(
+    config: dict[str, Any],
+    overwrite: bool,
+    smoke: bool = False,
+    max_generated_candidates: int | None = None,
+    provider_override: str | None = None,
+) -> Path:
+    candidate_path = command_generate(
+        config,
+        overwrite=overwrite,
+        smoke=smoke,
+        max_generated_candidates=max_generated_candidates,
+        provider_override=provider_override,
+    )
     output_path = resolve_repo_path(config["output_dir"]) / "judged.jsonl"
     if output_path.exists() and not overwrite:
         return output_path
@@ -528,8 +1019,20 @@ def verify_row(row: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def command_verify(config: dict[str, Any], overwrite: bool) -> Path:
-    judged_path = command_judge(config, overwrite=overwrite)
+def command_verify(
+    config: dict[str, Any],
+    overwrite: bool,
+    smoke: bool = False,
+    max_generated_candidates: int | None = None,
+    provider_override: str | None = None,
+) -> Path:
+    judged_path = command_judge(
+        config,
+        overwrite=overwrite,
+        smoke=smoke,
+        max_generated_candidates=max_generated_candidates,
+        provider_override=provider_override,
+    )
     output_path = resolve_repo_path(config["output_dir"]) / "verification.jsonl"
     if output_path.exists() and not overwrite:
         return output_path
@@ -569,8 +1072,20 @@ def rejection_reasons(row: dict[str, Any], config: dict[str, Any], seen: set[str
     return reasons
 
 
-def command_filter(config: dict[str, Any], overwrite: bool) -> tuple[Path, Path]:
-    verified_path = command_verify(config, overwrite=overwrite)
+def command_filter(
+    config: dict[str, Any],
+    overwrite: bool,
+    smoke: bool = False,
+    max_generated_candidates: int | None = None,
+    provider_override: str | None = None,
+) -> tuple[Path, Path]:
+    verified_path = command_verify(
+        config,
+        overwrite=overwrite,
+        smoke=smoke,
+        max_generated_candidates=max_generated_candidates,
+        provider_override=provider_override,
+    )
     output_dir = resolve_repo_path(config["output_dir"])
     accepted_path = output_dir / "accepted.jsonl"
     rejected_path = output_dir / "rejected.jsonl"
@@ -600,6 +1115,12 @@ def quality_report(config: dict[str, Any], accepted: list[dict[str, Any]], rejec
     skill_counts = Counter(skill for row in accepted for skill in row.get("skills", []))
     rejection_counts = Counter(reason for row in rejected for reason in row.get("rejection_reasons", []))
     averages = [float(row.get("quality_score_average", 0.0)) for row in accepted]
+    source_kind_counts = Counter(
+        str(row.get("source", {}).get("kind", "unknown"))
+        for row in accepted
+        if isinstance(row.get("source"), dict)
+    )
+    generation_method_counts = Counter(str(row.get("generation_method", "unknown")) for row in accepted)
     verification_counts = Counter(
         "passed" if row.get("verification", {}).get("passed") else "failed"
         for row in [*accepted, *rejected]
@@ -630,10 +1151,13 @@ def quality_report(config: dict[str, Any], accepted: list[dict[str, Any]], rejec
         "rejected_count": len(rejected),
         "skill_counts": dict(sorted(skill_counts.items())),
         "rejection_counts": dict(sorted(rejection_counts.items())),
+        "source_kind_counts": dict(sorted(source_kind_counts.items())),
+        "generation_method_counts": dict(sorted(generation_method_counts.items())),
         "verification_counts": dict(sorted(verification_counts.items())),
         "quality_score_average": round(sum(averages) / len(averages), 4) if averages else 0.0,
         "target_accept_count": copy.deepcopy(config.get("target_accept_count", {})),
         "seed_only": bool(config.get("seed_only", False)),
+        "smoke_only": bool(config.get("smoke_only", False)),
         "warnings": warnings,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -642,6 +1166,8 @@ def quality_report(config: dict[str, Any], accepted: list[dict[str, Any]], rejec
 def dataset_card(config: dict[str, Any], report: dict[str, Any]) -> str:
     skills = "\n".join(f"- `{skill}`: {count}" for skill, count in report["skill_counts"].items()) or "- none"
     warnings = "\n".join(f"- `{item['code']}`: {item['message']}" for item in report.get("warnings", [])) or "- none"
+    source_counts = "\n".join(f"- `{kind}`: {count}" for kind, count in report.get("source_kind_counts", {}).items()) or "- none"
+    method_counts = "\n".join(f"- `{method}`: {count}" for method, count in report.get("generation_method_counts", {}).items()) or "- none"
     verification_counts = report.get("verification_counts", {})
     return f"""---
 dataset_info:
@@ -679,10 +1205,19 @@ observed fine-tuning gaps without copying held-out model-forge eval prompts.
 - Verification passed: {verification_counts.get('passed', 0)}
 - Verification failed: {verification_counts.get('failed', 0)}
 - Seed-only scaffold: {str(bool(config.get('seed_only', False))).lower()}
+- Smoke-only scaffold: {str(bool(config.get('smoke_only', False))).lower()}
 
 ## Skill Counts
 
 {skills}
+
+## Source Counts
+
+{source_counts}
+
+## Generation Method Counts
+
+{method_counts}
 
 ## Coverage Warnings
 
@@ -690,9 +1225,10 @@ observed fine-tuning gaps without copying held-out model-forge eval prompts.
 
 ## Provenance
 
-Rows are currently human-seeded and heuristically judged. Future versions can
-add teacher-model generation, executable verification, and HF publication using
-the same manifest layout.
+Rows include human seeds and any configured synthetic candidates. Synthetic
+rows record provider type, generator model, source seed, strategy, and prompt
+template hash. Future versions can add executable verification and HF
+publication using the same manifest layout.
 
 ## Safety And Contamination
 
@@ -701,22 +1237,37 @@ reasons, and checks similarity against configured holdout prompt files.
 """
 
 
-def command_pack(config: dict[str, Any], config_path: Path, overwrite: bool) -> dict[str, str]:
-    accepted_path, rejected_path = command_filter(config, overwrite=overwrite)
+def command_pack(
+    config: dict[str, Any],
+    config_path: Path,
+    overwrite: bool,
+    smoke: bool = False,
+    max_generated_candidates: int | None = None,
+    provider_override: str | None = None,
+) -> dict[str, str]:
+    accepted_path, rejected_path = command_filter(
+        config,
+        overwrite=overwrite,
+        smoke=smoke,
+        max_generated_candidates=max_generated_candidates,
+        provider_override=provider_override,
+    )
     output_dir = resolve_repo_path(config["output_dir"])
     verification_path = output_dir / "verification.jsonl"
+    generation_report_path = output_dir / "generation_report.json"
     dataset_path = output_dir / "dataset.jsonl"
     manifest_path = output_dir / "manifest.yaml"
     report_path = output_dir / "quality_report.json"
     card_path = output_dir / "dataset_card.md"
     gap_path = output_dir / "gap_report.yaml"
-    if all(path.exists() for path in (dataset_path, manifest_path, report_path, card_path, verification_path)) and not overwrite:
+    if all(path.exists() for path in (dataset_path, manifest_path, report_path, card_path, verification_path, generation_report_path)) and not overwrite:
         return {
             "dataset": str(dataset_path),
             "manifest": str(manifest_path),
             "quality_report": str(report_path),
             "dataset_card": str(card_path),
             "verification": str(verification_path),
+            "generation_report": str(generation_report_path),
         }
 
     accepted = read_jsonl(accepted_path)
@@ -727,6 +1278,7 @@ def command_pack(config: dict[str, Any], config_path: Path, overwrite: bool) -> 
             "messages": row["messages"],
             "skills": row.get("skills", []),
             "source": row.get("source", {}),
+            "generation_method": row.get("generation_method"),
             "quality_scores": row.get("quality_scores", {}),
             "verification": row.get("verification", {}),
             "holdout_overlap": row.get("holdout_overlap", {}),
@@ -745,6 +1297,7 @@ def command_pack(config: dict[str, Any], config_path: Path, overwrite: bool) -> 
             "accepted": display_path(accepted_path),
             "rejected": display_path(rejected_path),
             "verification": display_path(verification_path) if verification_path.exists() else None,
+            "generation_report": display_path(generation_report_path) if generation_report_path.exists() else None,
             "quality_report": display_path(report_path),
             "dataset_card": display_path(card_path),
             "gap_report": display_path(gap_path) if gap_path.exists() else None,
@@ -759,11 +1312,26 @@ def command_pack(config: dict[str, Any], config_path: Path, overwrite: bool) -> 
         "quality_report": str(report_path),
         "dataset_card": str(card_path),
         "verification": str(verification_path),
+        "generation_report": str(generation_report_path),
     }
 
 
-def command_publish(config: dict[str, Any], config_path: Path, overwrite: bool) -> Path:
-    outputs = command_pack(config, config_path, overwrite=False)
+def command_publish(
+    config: dict[str, Any],
+    config_path: Path,
+    overwrite: bool,
+    smoke: bool = False,
+    max_generated_candidates: int | None = None,
+    provider_override: str | None = None,
+) -> Path:
+    outputs = command_pack(
+        config,
+        config_path,
+        overwrite=False,
+        smoke=smoke,
+        max_generated_candidates=max_generated_candidates,
+        provider_override=provider_override,
+    )
     output_dir = resolve_repo_path(config["output_dir"])
     publish_path = output_dir / "hf_publish_plan.json"
     if publish_path.exists() and not overwrite:
@@ -775,6 +1343,7 @@ def command_publish(config: dict[str, Any], config_path: Path, overwrite: bool) 
         display_path(Path(outputs["quality_report"])),
         display_path(Path(outputs["dataset_card"])),
         display_path(Path(outputs["verification"])),
+        display_path(Path(outputs["generation_report"])),
         display_path(output_dir / "accepted.jsonl"),
         display_path(output_dir / "rejected.jsonl"),
     ]
@@ -787,6 +1356,8 @@ def command_publish(config: dict[str, Any], config_path: Path, overwrite: bool) 
     ]
     if bool(config.get("seed_only", False)):
         blocked_until.append("human explicitly approves seed-only release")
+    elif bool(config.get("smoke_only", False)):
+        blocked_until.append("dataset is expanded beyond smoke-only scaffold")
     else:
         blocked_until.append("dataset size reaches configured target")
     plan = {
@@ -817,6 +1388,9 @@ def main() -> None:
     parser.add_argument("variant", nargs="?")
     parser.add_argument("--config", type=Path)
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--smoke", action="store_true", help="use configured smoke generation limits")
+    parser.add_argument("--max-generated-candidates", type=int, help="override generated candidate limit")
+    parser.add_argument("--provider", help="override generation provider type, for example template or openai_compatible")
     args = parser.parse_args()
 
     config_path = args.config or default_config_for(args.family or "", args.variant or "")
@@ -833,24 +1407,62 @@ def main() -> None:
         path = command_seed(config, args.overwrite)
         console.print(f"[green]Wrote[/green] {display_path(path)}")
     elif args.step == "generate":
-        path = command_generate(config, args.overwrite)
+        path = command_generate(
+            config,
+            args.overwrite,
+            smoke=args.smoke,
+            max_generated_candidates=args.max_generated_candidates,
+            provider_override=args.provider,
+        )
         console.print(f"[green]Wrote[/green] {display_path(path)}")
     elif args.step == "judge":
-        path = command_judge(config, args.overwrite)
+        path = command_judge(
+            config,
+            args.overwrite,
+            smoke=args.smoke,
+            max_generated_candidates=args.max_generated_candidates,
+            provider_override=args.provider,
+        )
         console.print(f"[green]Wrote[/green] {display_path(path)}")
     elif args.step == "verify":
-        path = command_verify(config, args.overwrite)
+        path = command_verify(
+            config,
+            args.overwrite,
+            smoke=args.smoke,
+            max_generated_candidates=args.max_generated_candidates,
+            provider_override=args.provider,
+        )
         console.print(f"[green]Wrote[/green] {display_path(path)}")
     elif args.step == "filter":
-        accepted, rejected = command_filter(config, args.overwrite)
+        accepted, rejected = command_filter(
+            config,
+            args.overwrite,
+            smoke=args.smoke,
+            max_generated_candidates=args.max_generated_candidates,
+            provider_override=args.provider,
+        )
         console.print(f"[green]Wrote[/green] {display_path(accepted)}")
         console.print(f"[green]Wrote[/green] {display_path(rejected)}")
     elif args.step == "pack":
-        outputs = command_pack(config, config_path, args.overwrite)
+        outputs = command_pack(
+            config,
+            config_path,
+            args.overwrite,
+            smoke=args.smoke,
+            max_generated_candidates=args.max_generated_candidates,
+            provider_override=args.provider,
+        )
         for path in outputs.values():
             console.print(f"[green]Wrote[/green] {display_path(Path(path))}")
     elif args.step == "publish":
-        path = command_publish(config, config_path, args.overwrite)
+        path = command_publish(
+            config,
+            config_path,
+            args.overwrite,
+            smoke=args.smoke,
+            max_generated_candidates=args.max_generated_candidates,
+            provider_override=args.provider,
+        )
         console.print(f"[green]Wrote dry-run publish plan[/green] {display_path(path)}")
 
 

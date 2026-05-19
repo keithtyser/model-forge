@@ -80,56 +80,92 @@ holdouts:
 generation_methods:
   enabled_now:
   - human_seed
+  - self_instruct
+  - evol_instruct
+  - instruction_backtranslation
+  - eval_adjacent_generation
   planned:
   - self_instruct
   - evol_instruct
   - instruction_backtranslation
   - self_code_align
   - eval_adjacent_generation
-seed_only: true
-created_at: '2026-05-19T03:46:48.817238+00:00'
+generation:
+  provider:
+    type: template
+    model: model-forge-template-v0
+    request:
+      temperature: 0.7
+      max_tokens: 900
+  max_generated_candidates: 12
+  max_seed_rows: 3
+  smoke:
+    max_generated_candidates: 12
+    max_seed_rows: 3
+  resource_limits:
+    max_candidates_per_run: 128
+    min_free_memory_ratio: 0.05
+    min_free_disk_ratio: 0.15
+  strategies:
+  - name: self_instruct
+    enabled: true
+    variants_per_seed: 1
+  - name: evol_instruct
+    enabled: true
+    variants_per_seed: 1
+  - name: instruction_backtranslation
+    enabled: true
+    variants_per_seed: 1
+  - name: eval_adjacent_generation
+    enabled: true
+    variants_per_seed: 1
+seed_only: false
+smoke_only: true
+created_at: '2026-05-19T03:59:04.510037+00:00'
 artifacts:
   dataset: datasets/generated/gemma4_26b_a4b_local_ft_v1/dataset.jsonl
   accepted: datasets/generated/gemma4_26b_a4b_local_ft_v1/accepted.jsonl
   rejected: datasets/generated/gemma4_26b_a4b_local_ft_v1/rejected.jsonl
   verification: datasets/generated/gemma4_26b_a4b_local_ft_v1/verification.jsonl
+  generation_report: datasets/generated/gemma4_26b_a4b_local_ft_v1/generation_report.json
   quality_report: datasets/generated/gemma4_26b_a4b_local_ft_v1/quality_report.json
   dataset_card: datasets/generated/gemma4_26b_a4b_local_ft_v1/dataset_card.md
   gap_report: datasets/generated/gemma4_26b_a4b_local_ft_v1/gap_report.yaml
 quality_report:
   dataset_id: gemma4_26b_a4b_local_ft_v1
-  accepted_count: 24
+  accepted_count: 36
   rejected_count: 0
   skill_counts:
     benign_safety_analysis: 6
     checkpoint_selection: 4
     config_review: 2
-    docker_disk_safety: 2
-    eval_latency_throughput: 3
+    docker_disk_safety: 6
+    eval_latency_throughput: 7
     git_workflow_repair: 2
     json_schema_repair: 2
     shell_safety: 2
-    sql_edge_cases: 3
+    sql_edge_cases: 7
   rejection_counts: {}
+  source_kind_counts:
+    human_seed: 24
+    synthetic: 12
+  generation_method_counts:
+    eval_adjacent_generation: 3
+    evol_instruct: 3
+    human_seed: 24
+    instruction_backtranslation: 3
+    self_instruct: 3
   verification_counts:
-    passed: 24
-  quality_score_average: 0.8897
+    passed: 36
+  quality_score_average: 0.8998
   target_accept_count:
     min: 500
     max: 2000
-  seed_only: true
+  seed_only: false
+  smoke_only: true
   warnings:
   - code: accepted_count_below_min_target
-    message: accepted rows 24 below configured minimum 500
-  - code: skill_below_min_seed_examples
-    skill: eval_latency_throughput
-    message: eval_latency_throughput has 3 accepted rows, below seed target 5
-  - code: skill_below_min_seed_examples
-    skill: docker_disk_safety
-    message: docker_disk_safety has 2 accepted rows, below seed target 5
-  - code: skill_below_min_seed_examples
-    skill: sql_edge_cases
-    message: sql_edge_cases has 3 accepted rows, below seed target 5
+    message: accepted rows 36 below configured minimum 500
   - code: skill_below_min_seed_examples
     skill: shell_safety
     message: shell_safety has 2 accepted rows, below seed target 5
@@ -145,4 +181,4 @@ quality_report:
   - code: skill_below_min_seed_examples
     skill: checkpoint_selection
     message: checkpoint_selection has 4 accepted rows, below seed target 5
-  created_at: '2026-05-19T03:46:48.816052+00:00'
+  created_at: '2026-05-19T03:59:04.508728+00:00'

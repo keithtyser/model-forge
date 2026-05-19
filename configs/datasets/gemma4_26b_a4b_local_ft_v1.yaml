@@ -3,7 +3,8 @@ family: gemma4_26b_a4b
 variant: local_ft_v1
 objective: capability_sft
 version: 0.1.0
-seed_only: true
+seed_only: false
+smoke_only: true
 description: >
   Eval-adjacent dataset factory plan for the next Gemma 4 26B-A4B local
   fine-tune. It targets the v0 gaps without copying model-forge eval prompts.
@@ -47,12 +48,46 @@ quality_thresholds:
 generation_methods:
   enabled_now:
     - human_seed
+    - self_instruct
+    - evol_instruct
+    - instruction_backtranslation
+    - eval_adjacent_generation
   planned:
     - self_instruct
     - evol_instruct
     - instruction_backtranslation
     - self_code_align
     - eval_adjacent_generation
+
+generation:
+  provider:
+    type: template
+    model: model-forge-template-v0
+    request:
+      temperature: 0.7
+      max_tokens: 900
+  max_generated_candidates: 12
+  max_seed_rows: 3
+  smoke:
+    max_generated_candidates: 12
+    max_seed_rows: 3
+  resource_limits:
+    max_candidates_per_run: 128
+    min_free_memory_ratio: 0.05
+    min_free_disk_ratio: 0.15
+  strategies:
+    - name: self_instruct
+      enabled: true
+      variants_per_seed: 1
+    - name: evol_instruct
+      enabled: true
+      variants_per_seed: 1
+    - name: instruction_backtranslation
+      enabled: true
+      variants_per_seed: 1
+    - name: eval_adjacent_generation
+      enabled: true
+      variants_per_seed: 1
 
 skills:
   - id: eval_latency_throughput
