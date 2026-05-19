@@ -36,6 +36,8 @@ class FinetunePlanTests(unittest.TestCase):
         self.assertEqual(plan["resource_policy"]["cpu_quota"], "80%")
         self.assertEqual(plan["resource_policy"]["memory_max"], "85%")
         self.assertEqual(plan["resource_policy"]["reserve_cores"], 1)
+        self.assertEqual(plan["resource_policy"]["min_memory_available_start"], 0.05)
+        self.assertEqual(plan["resource_policy"]["min_memory_available_runtime"], 0.05)
 
     def test_data_manifest_has_holdouts_and_nontrivial_blend(self) -> None:
         config_path = REPO_DIR / "configs" / "finetuning" / "gemma4_26b_a4b_local_ft_v0.yaml"

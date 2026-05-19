@@ -111,7 +111,7 @@ The generated Python runner also enforces:
 - one reserved CPU core by default
 - `OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `NUMEXPR_NUM_THREADS`, and
   `OPENBLAS_NUM_THREADS` capped to usable cores
-- start-time memory check requiring at least 15% free RAM
+- start-time memory check requiring at least 5% free RAM
 - runtime memory check requiring at least 5% free RAM
 - disk check requiring at least 15% free space under the run directory
 - dataloader worker caps of `num_workers <= usable_cores - 2`

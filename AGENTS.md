@@ -161,7 +161,7 @@ Run tests:
   `nice -n 10`. Do not raise them casually on shared or remote machines.
 - Always leave at least one CPU core free. The fine-tuning runner sets thread
   pools to `max(1, os.cpu_count() - reserve_cores)`.
-- Start only if at least 15% RAM and 15% run-directory disk are free.
+- Start only if at least 5% RAM and 15% run-directory disk are free.
 - Stop the job if runtime available RAM falls below 5%. Treat a resource guard
   trip as a real failure to investigate, not as a warning to ignore.
 - Cap dataloaders. `num_workers` must stay below `usable_cores - 2`; keep

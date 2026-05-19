@@ -43,7 +43,7 @@ resource_policy:
   io_weight: 100
   nice: 10
   reserve_cores: 1
-  min_memory_available_start: 0.15
+  min_memory_available_start: 0.05
   min_memory_available_runtime: 0.05
   min_disk_free: 0.15
   monitor_interval_seconds: 30

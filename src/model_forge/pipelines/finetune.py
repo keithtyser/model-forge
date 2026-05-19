@@ -138,8 +138,8 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "io_weight": int(resource_policy.get("io_weight", 100)),
             "nice": int(resource_policy.get("nice", 10)),
             "reserve_cores": int(resource_policy.get("reserve_cores", 1)),
-            "min_memory_available_start": float(resource_policy.get("min_memory_available_start", 0.15)),
-            "min_memory_available_runtime": float(resource_policy.get("min_memory_available_runtime", 0.10)),
+            "min_memory_available_start": float(resource_policy.get("min_memory_available_start", 0.05)),
+            "min_memory_available_runtime": float(resource_policy.get("min_memory_available_runtime", 0.05)),
             "min_disk_free": float(resource_policy.get("min_disk_free", 0.15)),
             "monitor_interval_seconds": int(resource_policy.get("monitor_interval_seconds", 30)),
             "dataloader_num_workers_max_offset": int(resource_policy.get("dataloader_num_workers_max_offset", 2)),
@@ -249,7 +249,7 @@ class ResourceGuard:
 
     def preflight(self) -> None:
         self.configure_threads()
-        min_mem = float(self.policy.get("min_memory_available_start", 0.15))
+        min_mem = float(self.policy.get("min_memory_available_start", 0.05))
         min_disk = float(self.policy.get("min_disk_free", 0.15))
         mem_ratio = self.memory_available_ratio()
         disk_ratio = self.disk_free_ratio()
@@ -259,7 +259,7 @@ class ResourceGuard:
             raise RuntimeError(f"Not enough free disk to start job: {disk_ratio:.1%} free < {min_disk:.1%}")
 
     def check_runtime(self) -> None:
-        min_mem = float(self.policy.get("min_memory_available_runtime", 0.10))
+        min_mem = float(self.policy.get("min_memory_available_runtime", 0.05))
         min_disk = float(self.policy.get("min_disk_free", 0.15))
         mem_ratio = self.memory_available_ratio()
         disk_ratio = self.disk_free_ratio()
