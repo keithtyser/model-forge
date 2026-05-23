@@ -3180,7 +3180,7 @@ At least one merged upstream PR and one profiler-backed perf report with end-to-
 [x] MF-0202 Add DGX Spark vLLM sweep config
 [x] MF-0203 Add serving workload definitions
 [x] MF-0204 Add Serving Card
-[ ] MF-0205 Add TTFT/ITL/memory/tok-sec capture
+[x] MF-0205 Add TTFT/ITL/memory/tok-sec capture
 [ ] MF-0206 Add quality/behavior sampled eval under serving configs
 ```
 

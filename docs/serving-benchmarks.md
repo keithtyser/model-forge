@@ -114,17 +114,21 @@ manifest.json
 
 Metrics include total latency, time to first token when streaming is enabled,
 inter-token latency when token counts are available, output tokens/sec, decode
-tokens/sec, and token counts returned by the backend.
+tokens/sec, token counts returned by the backend, and before/after memory
+snapshots for each request. Memory snapshots record host RAM and, when
+`nvidia-smi` exposes it, per-device GPU memory/utilization. On unified-memory
+systems that report GPU memory as `N/A`, the run still records device names and
+marks numeric GPU memory as unavailable instead of guessing.
 
 `serving_card.md` is the human-facing report card for a run. It includes:
 
 - model, family, variant, endpoint shape, and run manifest id
 - hardware profile and recorded GPU count
 - benchmark config and workload definition files
-- TTFT, first-chunk, ITL, latency, output-tok/sec, decode-tok/sec, and request-throughput summaries
+- TTFT, first-chunk, ITL, latency, output-tok/sec, decode-tok/sec, request-throughput, and memory summaries
 - per-workload metric rows
 - artifact links and promotion gates
-- explicit caveats for missing memory, cache-hit, truncation, quality, or behavior evidence
+- explicit caveats for missing cache-hit, truncation, quality, behavior, or profiler-grade peak-memory evidence
 
 ## Interpretation
 

@@ -12,8 +12,10 @@ from model_forge.benchmarks.serve import (
     build_metrics,
     build_plan,
     load_config,
+    optional_float,
     parse_streaming_chunks,
     run_benchmark,
+    summarize_memory,
     write_outputs,
 )
 
@@ -74,6 +76,64 @@ class ServeBenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["decode_tokens_per_second"], 6.25)
         self.assertEqual(metrics["inter_token_latency_seconds"], 0.16)
 
+    def test_memory_summary_handles_system_and_gpu_samples(self) -> None:
+        self.assertEqual(optional_float("1,024 MiB"), 1024.0)
+        self.assertIsNone(optional_float("[N/A]"))
+        summary = summarize_memory(
+            [
+                {
+                    "memory": {
+                        "before": {
+                            "system": {
+                                "available_fraction": 0.20,
+                                "available_bytes": 20,
+                                "used_bytes": 80,
+                                "used_percent": 80.0,
+                            },
+                            "gpu": {
+                                "devices": [
+                                    {
+                                        "name": "NVIDIA GB10",
+                                        "memory_total_mib": 100.0,
+                                        "memory_used_mib": 40.0,
+                                        "memory_free_mib": 60.0,
+                                        "memory_used_fraction": 0.4,
+                                        "utilization_gpu_percent": 8.0,
+                                    }
+                                ],
+                                "error": None,
+                            },
+                        },
+                        "after": {
+                            "system": {
+                                "available_fraction": 0.15,
+                                "available_bytes": 15,
+                                "used_bytes": 85,
+                                "used_percent": 85.0,
+                            },
+                            "gpu": {
+                                "devices": [
+                                    {
+                                        "name": "NVIDIA GB10",
+                                        "memory_total_mib": 100.0,
+                                        "memory_used_mib": 50.0,
+                                        "memory_free_mib": 50.0,
+                                        "memory_used_fraction": 0.5,
+                                        "utilization_gpu_percent": 10.0,
+                                    }
+                                ],
+                                "error": None,
+                            },
+                        },
+                    }
+                }
+            ]
+        )
+        self.assertEqual(summary["snapshot_count"], 2)
+        self.assertEqual(summary["system"]["available_fraction"]["min"], 0.15)
+        self.assertEqual(summary["gpu"]["device_count_max"], 1)
+        self.assertEqual(summary["gpu"]["memory_used_mib"]["max"], 50.0)
+
     def test_write_outputs_creates_summary_manifest_and_card(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             config = load_config(
@@ -97,6 +157,26 @@ class ServeBenchmarkTests(unittest.TestCase):
                         "output_tokens_per_second": 12.0,
                     },
                     "usage": {"prompt_tokens": 8, "completion_tokens": 12, "total_tokens": 20},
+                    "memory": {
+                        "before": {
+                            "system": {
+                                "available_fraction": 0.25,
+                                "available_bytes": 25,
+                                "used_bytes": 75,
+                                "used_percent": 75.0,
+                            },
+                            "gpu": {"devices": [], "error": "nvidia-smi not found"},
+                        },
+                        "after": {
+                            "system": {
+                                "available_fraction": 0.24,
+                                "available_bytes": 24,
+                                "used_bytes": 76,
+                                "used_percent": 76.0,
+                            },
+                            "gpu": {"devices": [], "error": "nvidia-smi not found"},
+                        },
+                    },
                 }
             ]
             output_dir, summary, manifest = write_outputs(
@@ -117,14 +197,18 @@ class ServeBenchmarkTests(unittest.TestCase):
             saved = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
             self.assertEqual(saved["metrics"]["total_latency_seconds"]["p50"], 1.0)
             self.assertEqual(saved["metrics"]["total_latency_seconds"]["p99"], 1.0)
+            self.assertEqual(saved["memory"]["snapshot_count"], 2)
+            self.assertEqual(manifest["outputs"]["metrics"]["memory"]["snapshot_count"], 2)
             card = (output_dir / "serving_card.md").read_text(encoding="utf-8")
             self.assertIn("# Serving Card: serve_bench_smoke", card)
             self.assertIn("## Hardware And Config", card)
+            self.assertIn("## Memory", card)
             self.assertIn("## Workload Metrics", card)
             self.assertIn("## Promotion Gates", card)
             self.assertIn("configs/serving/workloads/short_chat.yaml", card)
             self.assertIn("TTFT seconds", card)
             self.assertIn("Output tok/sec", card)
+            self.assertIn("System available fraction", card)
 
     def test_actual_streaming_http_benchmark_against_mock_server(self) -> None:
         class Handler(BaseHTTPRequestHandler):
@@ -163,6 +247,10 @@ class ServeBenchmarkTests(unittest.TestCase):
         self.assertEqual(results[0]["usage"]["completion_tokens"], 2)
         self.assertGreaterEqual(results[0]["metrics"]["time_to_first_token_seconds"], 0)
         self.assertEqual(results[0]["metrics"]["completion_token_source"], "usage.completion_tokens")
+        self.assertIn("memory", results[0])
+        self.assertIn("before", results[0]["memory"])
+        self.assertIn("after", results[0]["memory"])
+        self.assertGreater(results[0]["memory"]["after"]["system"]["available_fraction"], 0)
 
 
 if __name__ == "__main__":

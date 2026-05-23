@@ -4,7 +4,9 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import statistics
+import subprocess
 import sys
 import time
 import urllib.error
@@ -14,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+import psutil
 import yaml
 from rich.console import Console
 from rich.table import Table
@@ -66,6 +69,90 @@ class ServeBenchConfig:
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    text = str(value).strip().replace(",", "")
+    if text in {"", "N/A", "[N/A]", "None", "none"}:
+        return None
+    first = text.split()[0].strip("[]")
+    try:
+        return float(first)
+    except ValueError:
+        return None
+
+
+def system_memory_snapshot() -> dict[str, Any]:
+    memory = psutil.virtual_memory()
+    available_fraction = memory.available / memory.total if memory.total else None
+    used_fraction = memory.used / memory.total if memory.total else None
+    return {
+        "total_bytes": memory.total,
+        "available_bytes": memory.available,
+        "used_bytes": memory.used,
+        "used_percent": round(float(memory.percent), 6),
+        "available_fraction": round(available_fraction, 6) if available_fraction is not None else None,
+        "used_fraction": round(used_fraction, 6) if used_fraction is not None else None,
+    }
+
+
+def gpu_memory_snapshot() -> dict[str, Any]:
+    nvidia_smi = shutil.which("nvidia-smi")
+    if not nvidia_smi:
+        return {"available": False, "devices": [], "error": "nvidia-smi not found"}
+    try:
+        result = subprocess.run(
+            [
+                nvidia_smi,
+                "--query-gpu=name,memory.total,memory.used,memory.free,utilization.gpu",
+                "--format=csv,noheader,nounits",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"available": False, "devices": [], "error": str(exc)}
+    if result.returncode != 0:
+        return {"available": False, "devices": [], "error": result.stderr.strip() or "nvidia-smi failed"}
+
+    devices: list[dict[str, Any]] = []
+    for index, raw_line in enumerate(result.stdout.splitlines()):
+        parts = [part.strip() for part in raw_line.split(",")]
+        if len(parts) < 5:
+            continue
+        total_mib = optional_float(parts[1])
+        used_mib = optional_float(parts[2])
+        free_mib = optional_float(parts[3])
+        utilization = optional_float(parts[4])
+        devices.append(
+            {
+                "index": index,
+                "name": parts[0],
+                "memory_total_mib": total_mib,
+                "memory_used_mib": used_mib,
+                "memory_free_mib": free_mib,
+                "memory_used_fraction": round(used_mib / total_mib, 6) if used_mib is not None and total_mib else None,
+                "utilization_gpu_percent": utilization,
+            }
+        )
+    return {
+        "available": bool(devices),
+        "devices": devices,
+        "numeric_memory_available": any(device.get("memory_used_mib") is not None for device in devices),
+        "error": None if devices else "no GPU rows returned",
+    }
+
+
+def memory_snapshot() -> dict[str, Any]:
+    return {
+        "created_at": utc_now().isoformat(),
+        "system": system_memory_snapshot(),
+        "gpu": gpu_memory_snapshot(),
+    }
 
 
 def resolve_repo_path(value: str | Path) -> Path:
@@ -531,10 +618,12 @@ def run_benchmark(config: ServeBenchConfig) -> list[dict[str, Any]]:
             index += 1
             console.print(f"[{index}/{total}] {request.request_id} rep={repetition}", style="dim")
             started = utc_now().isoformat()
+            memory_before = memory_snapshot()
             try:
                 outcome = call_chat_completion(config, request)
             except Exception as exc:  # Keep the benchmark artifact useful even if one request fails.
                 outcome = {"ok": False, "http_status": None, "error": str(exc)}
+            memory_after = memory_snapshot()
             response_text = str(outcome.get("response_text") or "")
             results.append(
                 {
@@ -553,6 +642,10 @@ def run_benchmark(config: ServeBenchConfig) -> list[dict[str, Any]]:
                     "usage": outcome.get("usage") or {},
                     "stream": outcome.get("stream"),
                     "metrics": outcome.get("metrics") or {},
+                    "memory": {
+                        "before": memory_before,
+                        "after": memory_after,
+                    },
                 }
             )
     return results
@@ -591,6 +684,97 @@ def count_values(values: list[Any]) -> dict[str, int]:
         key = str(value if value not in {None, ""} else "unknown")
         counts[key] = counts.get(key, 0) + 1
     return dict(sorted(counts.items()))
+
+
+def request_memory_snapshots(results: list[dict[str, Any]]) -> list[Mapping[str, Any]]:
+    snapshots: list[Mapping[str, Any]] = []
+    for row in results:
+        memory = row.get("memory") or {}
+        if not isinstance(memory, Mapping):
+            continue
+        for phase in ("before", "after"):
+            snapshot = memory.get(phase)
+            if isinstance(snapshot, Mapping):
+                snapshots.append(snapshot)
+    return snapshots
+
+
+def summarized_snapshot_values(snapshots: list[Mapping[str, Any]], section: str, key: str) -> dict[str, Any]:
+    values = []
+    for snapshot in snapshots:
+        section_data = snapshot.get(section) or {}
+        if isinstance(section_data, Mapping) and isinstance(section_data.get(key), (int, float)):
+            values.append(float(section_data[key]))
+    return metric_summary(values)
+
+
+def snapshot_section(snapshot: Mapping[str, Any], section: str) -> Mapping[str, Any]:
+    raw = snapshot.get(section) or {}
+    return raw if isinstance(raw, Mapping) else {}
+
+
+def summarize_memory(results: list[dict[str, Any]]) -> dict[str, Any]:
+    snapshots = request_memory_snapshots(results)
+    if not snapshots:
+        return {"snapshot_count": 0}
+
+    gpu_devices = [
+        device
+        for snapshot in snapshots
+        for device in (snapshot_section(snapshot, "gpu").get("devices") or [])
+        if isinstance(device, Mapping)
+    ]
+    gpu_numeric_samples = [
+        device
+        for device in gpu_devices
+        if isinstance(device.get("memory_used_mib"), (int, float))
+    ]
+    gpu_errors = [
+        (snapshot.get("gpu") or {}).get("error")
+        for snapshot in snapshots
+        if isinstance(snapshot.get("gpu"), Mapping) and (snapshot.get("gpu") or {}).get("error")
+    ]
+    return {
+        "snapshot_count": len(snapshots),
+        "system": {
+            "available_fraction": summarized_snapshot_values(snapshots, "system", "available_fraction"),
+            "available_bytes": summarized_snapshot_values(snapshots, "system", "available_bytes"),
+            "used_bytes": summarized_snapshot_values(snapshots, "system", "used_bytes"),
+            "used_percent": summarized_snapshot_values(snapshots, "system", "used_percent"),
+        },
+        "gpu": {
+            "snapshot_count": sum(1 for snapshot in snapshots if isinstance(snapshot.get("gpu"), Mapping)),
+            "device_count_max": max((len(snapshot_section(snapshot, "gpu").get("devices") or []) for snapshot in snapshots), default=0),
+            "device_names": sorted({str(device.get("name")) for device in gpu_devices if device.get("name")}),
+            "numeric_memory_sample_count": len(gpu_numeric_samples),
+            "memory_total_mib": metric_summary([
+                float(device["memory_total_mib"])
+                for device in gpu_numeric_samples
+                if isinstance(device.get("memory_total_mib"), (int, float))
+            ]),
+            "memory_used_mib": metric_summary([
+                float(device["memory_used_mib"])
+                for device in gpu_numeric_samples
+                if isinstance(device.get("memory_used_mib"), (int, float))
+            ]),
+            "memory_free_mib": metric_summary([
+                float(device["memory_free_mib"])
+                for device in gpu_numeric_samples
+                if isinstance(device.get("memory_free_mib"), (int, float))
+            ]),
+            "memory_used_fraction": metric_summary([
+                float(device["memory_used_fraction"])
+                for device in gpu_numeric_samples
+                if isinstance(device.get("memory_used_fraction"), (int, float))
+            ]),
+            "utilization_gpu_percent": metric_summary([
+                float(device["utilization_gpu_percent"])
+                for device in gpu_devices
+                if isinstance(device.get("utilization_gpu_percent"), (int, float))
+            ]),
+            "errors": count_values(gpu_errors),
+        },
+    }
 
 
 def summarize_results(config: ServeBenchConfig, results: list[dict[str, Any]], output_dir: Path) -> dict[str, Any]:
@@ -651,6 +835,7 @@ def summarize_results(config: ServeBenchConfig, results: list[dict[str, Any]], o
         "finish_reasons": finish_reasons,
         "error_types": error_types,
         "metrics": metrics,
+        "memory": summarize_memory(results),
         "by_category": by_category,
         "output_dir": display_path(output_dir),
         "notes": [
@@ -685,6 +870,15 @@ def metric_triplet(metrics: Mapping[str, Any], metric: str) -> str:
     return f"p50={table_cell(values.get('p50'))}, p95={table_cell(values.get('p95'))}, p99={table_cell(values.get('p99'))}"
 
 
+def metric_span(metrics: Mapping[str, Any], metric: str) -> str:
+    values = metric_values(metrics, metric)
+    return (
+        f"count={table_cell(values.get('count'))}, min={table_cell(values.get('min'))}, "
+        f"p50={table_cell(values.get('p50'))}, p95={table_cell(values.get('p95'))}, "
+        f"max={table_cell(values.get('max'))}"
+    )
+
+
 def serving_card_status(summary: Mapping[str, Any]) -> str:
     if summary.get("failed_requests"):
         return "needs_investigation"
@@ -695,6 +889,9 @@ def serving_card_status(summary: Mapping[str, Any]) -> str:
 
 def write_serving_card(path: Path, summary: Mapping[str, Any], manifest: Mapping[str, Any]) -> None:
     metrics = summary.get("metrics", {})
+    memory = summary.get("memory") or {}
+    system_memory = memory.get("system") or {}
+    gpu_memory = memory.get("gpu") or {}
     by_category = summary.get("by_category") or {}
     identity = manifest.get("identity") or {}
     hardware = manifest.get("hardware") or {}
@@ -728,6 +925,10 @@ def write_serving_card(path: Path, summary: Mapping[str, Any], manifest: Mapping
         )
     if not category_rows:
         category_rows.append("| n/a | 0 | 0 | n/a | n/a | n/a | n/a |")
+
+    missing_evidence = ["cache-hit", "truncation", "quality", "behavior"]
+    if not memory.get("snapshot_count"):
+        missing_evidence.insert(0, "memory")
 
     lines = [
         f"# Serving Card: {summary.get('name')}",
@@ -769,6 +970,19 @@ def write_serving_card(path: Path, summary: Mapping[str, Any], manifest: Mapping
         f"- Finish reasons: `{json.dumps(summary.get('finish_reasons') or {}, sort_keys=True)}`",
         f"- Error types: `{json.dumps(summary.get('error_types') or {}, sort_keys=True)}`",
         "",
+        "## Memory",
+        "",
+        f"- Snapshot count: `{table_cell(memory.get('snapshot_count'))}`",
+        f"- System available fraction: `{metric_span(system_memory, 'available_fraction')}`",
+        f"- System used percent: `{metric_span(system_memory, 'used_percent')}`",
+        f"- GPU devices observed: `{table_cell(gpu_memory.get('device_count_max'))}`",
+        f"- GPU device names: `{', '.join(gpu_memory.get('device_names') or []) or 'n/a'}`",
+        f"- GPU numeric memory samples: `{table_cell(gpu_memory.get('numeric_memory_sample_count'))}`",
+        f"- GPU memory used MiB: `{metric_span(gpu_memory, 'memory_used_mib')}`",
+        f"- GPU memory free MiB: `{metric_span(gpu_memory, 'memory_free_mib')}`",
+        f"- GPU utilization percent: `{metric_span(gpu_memory, 'utilization_gpu_percent')}`",
+        f"- GPU telemetry errors: `{json.dumps(gpu_memory.get('errors') or {}, sort_keys=True)}`",
+        "",
         "## Workload Metrics",
         "",
         "| Workload | Success | Failed | TTFT | ITL | Output tok/sec | Total latency |",
@@ -787,7 +1001,8 @@ def write_serving_card(path: Path, summary: Mapping[str, Any], manifest: Mapping
         "- Serving metrics are operational evidence only.",
         "- Run sampled quality and behavior evals under the same serving config before promotion.",
         "- Compare against a baseline with the same model, workload files, sampling, endpoint shape, and hardware profile.",
-        "- Treat missing memory, cache-hit, truncation, quality, or behavior evidence as not yet measured.",
+        f"- Treat missing {', '.join(missing_evidence)} evidence as not yet measured.",
+        "- Memory snapshots are point-in-time host/GPU telemetry; engine-internal peak allocation still needs backend or profiler evidence.",
         "",
         "## Notes",
         "",
@@ -819,6 +1034,8 @@ def write_outputs(
     manifest_path = output_dir / "manifest.json"
 
     summary = summarize_results(config, results, output_dir)
+    manifest_metrics = dict(summary.get("metrics") or {})
+    manifest_metrics["memory"] = summary.get("memory", {})
     artifacts = {
         "requests_jsonl": "requests.jsonl",
         "summary_json": "summary.json",
@@ -834,7 +1051,7 @@ def write_outputs(
         config_paths=[config_path, *config.workload_sources],
         output_dir=output_dir,
         artifacts=artifacts,
-        metrics=summary.get("metrics", {}),
+        metrics=manifest_metrics,
         metadata={
             "schema_version": SCHEMA_VERSION,
             "name": config.name,
@@ -846,6 +1063,7 @@ def write_outputs(
             "workload_sources": [display_path(path) for path in config.workload_sources],
             "request_count": len(results),
             "successful_requests": summary.get("successful_requests"),
+            "memory_snapshot_count": (summary.get("memory") or {}).get("snapshot_count"),
         },
         notes=list(summary.get("notes") or []),
         run_id=actual_run_id,
