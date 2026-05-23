@@ -13,9 +13,9 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| not_started | 40 |
-| scaffolded | 25 |
-| tested | 28 |
+| not_started | 39 |
+| scaffolded | 23 |
+| tested | 31 |
 | wired_to_cli | 1 |
 
 ## Validation State
@@ -36,13 +36,13 @@ No status audit findings.
 |---|---|---|---|---|
 | MF-0000 | P0: Foundation | tested | planned | Convert legacy [x] backlog into implementation_status + validation_state |
 | MF-0001 | P0: Foundation | scaffolded | planned | Add required validation schema to manifests, cards, objectives, and variant nodes |
-| MF-0002 | P0: Foundation | scaffolded | planned | Add evidence ledger with command, node count, topology, logs, metrics, checksums, and promotion decision |
+| MF-0002 | P0: Foundation | tested | planned | Add evidence ledger with command, node count, topology, logs, metrics, checksums, and promotion decision |
 | MF-0003 | P0: Foundation | tested | planned | Add objective profile loader and objective audit |
 | MF-0004 | P0: Foundation | tested | planned | Add configs/objectives/zero_refusal_capability_retention.yaml |
 | MF-0005 | P0: Foundation | tested | planned | Add configs/objectives/quantized_quality_retention.yaml |
 | MF-0006 | P0: Foundation | tested | planned | Add configs/objectives/dgx_spark_latency_throughput.yaml |
-| MF-0007 | P0: Foundation | not_started | planned | Add variant graph and variant_node.json writer |
-| MF-0008 | P0: Foundation | scaffolded | planned | Add artifact checksum and retention policy fields |
+| MF-0007 | P0: Foundation | tested | planned | Add variant graph and variant_node.json writer |
+| MF-0008 | P0: Foundation | tested | planned | Add artifact checksum and retention policy fields |
 | MF-0009 | P0: Foundation | scaffolded | planned | Add eval provenance card |
 | MF-0010 | P0: Foundation | tested | smoke_validated | Add golden baseline create/check hardening |
 | MF-0011 | P0: Foundation | not_started | planned | Add CLI/doc drift check for roadmap command examples |

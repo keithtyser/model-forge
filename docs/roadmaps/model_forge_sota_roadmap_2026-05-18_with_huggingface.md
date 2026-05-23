@@ -3,7 +3,7 @@
 **Prepared for:** Keith Tyser  
 **Date snapshot:** May 18, 2026  
 **Target repo:** [`keithtyser/model-forge`](https://github.com/keithtyser/model-forge)  
-**Primary goal:** Turn Model Forge into a research-grounded, reproducible workbench for actually fine-tuning, behavior-editing, quantizing, serving, benchmarking, and validating open models on the local DGX Spark / Spark-cluster hardware, then generalizing those recipes across model families.
+**Primary goal:** Turn Model Forge into a research-grounded, reproducible post-training pipeline that can take any supported base open model, fine-tune it to improve capability, ablate it to remove refusals while preserving that capability, quantize it to Blackwell-optimized NVFP4, serve it with DGX Spark / Spark-cluster optimizations, and prove the result with evals, benchmarks, artifacts, and public model/dataset cards.
 
 ---
 
@@ -12,6 +12,29 @@
 Model Forge should become a system that answers one question better than almost any personal project can:
 
 > **Given a base open model, what post-training, behavior-editing, quantization, and serving configuration best satisfies a declared objective on a declared hardware target, with reproducible evidence and no hidden regressions?**
+
+The canonical end-to-end outcome is:
+
+```text
+base model
+→ capability fine-tune
+→ refusal ablation / behavior edit
+→ NVFP4 quantization for Blackwell
+→ DGX Spark optimized serving
+→ eval + benchmark + artifact proof
+→ reproducible release
+```
+
+In practical terms, the target artifact is the smartest, fastest, lowest-refusal
+variant that Model Forge can produce for a model family under a declared
+objective profile. Fine-tuning should raise task capability and format quality.
+Ablation should reduce invalid refusals or configured refusal behavior while
+preserving the source model's capability. Quantization should preserve quality
+while improving memory and/or throughput. Serving should use measured DGX Spark
+and Spark-cluster optimizations, including lessons from AEON-style Spark work
+and upstream serving stacks, but only promote settings that survive local
+benchmarks. Safety and deployment risks are reported separately from the
+refusal-removal objective so the repo can say exactly what changed.
 
 Your current repo is already unusually close to this. It is model-family driven, evaluation-first, uses DGX Spark as a hardware profile, tracks raw responses and artifacts, compares base/fine-tuned/ablated/combined variants, and records an experiment ledger. The missing step is to make the repo **SOTA-grounded and Spark-validated by construction**.
 
@@ -3297,11 +3320,11 @@ Acceptance criteria:
 Ship:
 
 ```text
-src/model_forge/variants/graph.py
-variant_node.json writer
-evidence ledger
-artifact checksum writer
-retention policy fields
+src/model_forge/variants/graph.py (implemented: `./forge variants graph`)
+variant_node.json writer (implemented: `./forge variants node --write`)
+evidence ledger (implemented inside variant node validation metadata)
+artifact checksum writer (implemented for supplied artifact files)
+retention policy fields (implemented in variant node schema)
 ```
 
 Acceptance criteria:
@@ -3669,13 +3692,13 @@ validation_state:
 ```text
 MF-0000 Convert legacy [x] backlog into implementation_status + validation_state. implementation_status=tested validation_state=planned
 MF-0001 Add required validation schema to manifests, cards, objectives, and variant nodes. implementation_status=scaffolded validation_state=planned
-MF-0002 Add evidence ledger with command, node count, topology, logs, metrics, checksums, and promotion decision. implementation_status=scaffolded validation_state=planned
+MF-0002 Add evidence ledger with command, node count, topology, logs, metrics, checksums, and promotion decision. implementation_status=tested validation_state=planned
 MF-0003 Add objective profile loader and objective audit. implementation_status=tested validation_state=planned
 MF-0004 Add configs/objectives/zero_refusal_capability_retention.yaml. implementation_status=tested validation_state=planned
 MF-0005 Add configs/objectives/quantized_quality_retention.yaml. implementation_status=tested validation_state=planned
 MF-0006 Add configs/objectives/dgx_spark_latency_throughput.yaml. implementation_status=tested validation_state=planned
-MF-0007 Add variant graph and variant_node.json writer. implementation_status=not_started validation_state=planned
-MF-0008 Add artifact checksum and retention policy fields. implementation_status=scaffolded validation_state=planned
+MF-0007 Add variant graph and variant_node.json writer. implementation_status=tested validation_state=planned
+MF-0008 Add artifact checksum and retention policy fields. implementation_status=tested validation_state=planned
 MF-0009 Add eval provenance card. implementation_status=scaffolded validation_state=planned
 MF-0010 Add golden baseline create/check hardening. implementation_status=tested validation_state=smoke_validated
 MF-0011 Add CLI/doc drift check for roadmap command examples. implementation_status=not_started validation_state=planned

@@ -90,6 +90,7 @@ Run evals from another terminal:
 ./forge roadmap audit --write-doc
 ./forge research audit
 ./forge manifest write --run-type eval --family gemma4_26b_a4b --variant base --command './forge eval gemma4_26b_a4b base --internal'
+./forge variants graph gemma4_26b_a4b
 ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
 ./forge bench sweep plan --family gemma4_26b_a4b --variant base
 ./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan
@@ -175,6 +176,17 @@ Run manifests:
 
 See [docs/run-manifests.md](docs/run-manifests.md) for the canonical schema and
 handoff rules.
+
+Variant graph:
+
+```bash
+./forge variants graph gemma4_26b_a4b
+./forge variants node gemma4_26b_a4b local_ft --write
+```
+
+See [docs/variant-graph.md](docs/variant-graph.md). Variant nodes connect source
+models, transforms, evidence, artifact checksums, validation state, promotion
+decisions, and retention decisions.
 
 Cluster planning:
 

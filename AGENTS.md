@@ -28,6 +28,8 @@ reusable pipeline code over one-off scripts.
 - `docs/experiment-ledger.md`: handoff ledger for hypotheses, experiments,
   artifacts, validation, and publish status
 - `docs/run-manifests.md`: canonical run manifest schema and handoff rules
+- `docs/variant-graph.md`: variant node schema, graph inspection, evidence,
+  checksums, promotion, and retention rules
 - `docs/cluster.md`: generic cluster inventory, doctor, and dry-run planning
   rules
 - `docs/serving-benchmarks.md`: serving benchmark command, outputs, and
@@ -214,6 +216,18 @@ Use manifests for planned, running, completed, and failed work. They preserve
 git state, config hashes, command lines, hardware, safe environment variables,
 outputs, artifacts, metrics, and notes. Never pass secrets through manifest
 metadata or notes.
+
+Inspect or write variant graph nodes:
+
+```bash
+./forge variants graph gemma4_26b_a4b
+./forge variants node gemma4_26b_a4b local_ft --write
+```
+
+Variant nodes record the source variant, transform, checkpoint reference,
+validation state, evidence path, artifact checksums, promotion decision, and
+retention decision. Keep generated nodes in `reports/generated/` unless a small
+example is intentionally promoted.
 
 Validate or plan cluster usage:
 

@@ -104,9 +104,17 @@ def git_metadata(repo_dir: Path = REPO_DIR) -> dict[str, Any]:
         "commit": run_git(["rev-parse", "HEAD"], repo_dir),
         "branch": run_git(["branch", "--show-current"], repo_dir),
         "dirty": bool(status.strip()),
-        "dirty_paths": sorted(line[3:] for line in status.splitlines() if len(line) > 3),
+        "dirty_paths": sorted(porcelain_path(line) for line in status.splitlines() if porcelain_path(line)),
         "remote_origin": remote,
     }
+
+
+def porcelain_path(line: str) -> str:
+    if len(line) >= 4 and line[2] == " ":
+        return line[3:]
+    if len(line) >= 3:
+        return line[2:].strip()
+    return ""
 
 
 def redact_env_value(key: str, value: str) -> str:

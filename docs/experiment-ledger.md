@@ -28,6 +28,42 @@ Publishing helper:
 
 For prepared datasets, pass `--repo-type dataset`.
 
+## Roadmap Foundation: Variant Graph And Evidence Nodes
+
+Status: implemented as metadata tooling only. No model server, training run,
+quantization run, or eval job was started.
+
+Hypothesis: every model transform needs a durable graph node so agents can see
+where a candidate came from, which recipe produced it, what evidence exists, and
+whether it should be promoted, retained, published, or deleted.
+
+Changes:
+
+- added `./forge variants graph <family>`
+- added `./forge variants node <family> <variant>`
+- added `./forge variants audit-node <path>`
+- added `src/model_forge/variants/graph.py`
+- added `src/model_forge/variants/manifest.py`
+- added `docs/variant-graph.md`
+- `./forge doctor` validates tracked `variant_node.json` files
+- fixed git dirty-path parsing in canonical manifest metadata while testing the
+  node writer
+
+Validation:
+
+```bash
+./forge variants graph gemma4_26b_a4b --json
+./forge variants node gemma4_26b_a4b local_ft --json
+.venv/bin/python -m unittest tests.test_variants tests.test_run_manifest
+```
+
+Result:
+
+- Gemma graph currently resolves 16 configured variants and 8 explicit
+  `base_variant` edges
+- variant node validation covers implementation status, validation state,
+  promotion decision, retention fields, and artifact checksum entries
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

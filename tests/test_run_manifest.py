@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 from model_forge.hardware import HardwareProfile
-from model_forge.runs.manifest import build_canonical_manifest, key_value_mapping, write_manifest
+from model_forge.runs.manifest import build_canonical_manifest, key_value_mapping, porcelain_path, write_manifest
 
 
 class RunManifestTests(unittest.TestCase):
@@ -73,6 +73,11 @@ class RunManifestTests(unittest.TestCase):
         self.assertEqual(mapping["pass_rate"], 0.75)
         self.assertEqual(mapping["name"], "local")
         self.assertTrue(mapping["ok"])
+
+    def test_porcelain_path_handles_staged_and_unstaged_formats(self) -> None:
+        self.assertEqual(porcelain_path(" M forge"), "forge")
+        self.assertEqual(porcelain_path("M  forge"), "forge")
+        self.assertEqual(porcelain_path("?? src/model_forge/variants/"), "src/model_forge/variants/")
 
 
 if __name__ == "__main__":
