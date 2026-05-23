@@ -27,6 +27,7 @@ VLLM_DTYPE=auto
 VLLM_ENABLE_CHUNKED_PREFILL=1
 VLLM_ENABLE_PREFIX_CACHING=1
 VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
+VLLM_NVFP4_GEMM_BACKEND=cutlass
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 TORCH_MATMUL_PRECISION=high
 NVIDIA_FORWARD_COMPAT=1
@@ -44,12 +45,18 @@ NVFP4 repos show an alternate source-built container path for Gemma 4 NVFP4.
 
 ## NVFP4 / ModelOpt Serving
 
-NVFP4 models need model-specific validation. For ModelOpt checkpoints, serve with:
+NVFP4 is the first-class Blackwell quantization path in Model Forge. It still
+needs model-specific validation: the repo should prove that the checkpoint
+loads, serves, benchmarks, and preserves useful behavior before claiming a
+quantization win.
+
+For ModelOpt or native NVFP4 checkpoints, serve with:
 
 ```bash
 VLLM_QUANTIZATION=modelopt
 VLLM_DTYPE=auto
 VLLM_KV_CACHE_DTYPE=fp8_e4m3
+VLLM_NVFP4_GEMM_BACKEND=cutlass
 ```
 
 Gemma 4 style models may also need:
@@ -67,6 +74,12 @@ For compressed-tensors or patched ModelOpt checkpoints, use the model card and
 upstream repo as the source of truth for loader patches. model-forge should record
 the selected flags and mounted patches in the run manifest, then validate quality
 through the eval suite.
+
+For an already-quantized Blackwell checkpoint, generate the runtime-import plan:
+
+```bash
+./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan
+```
 
 ## Speculative Decoding
 
@@ -106,6 +119,23 @@ MODEL_FORGE_MOE_FAST_CALIBRATION=1
 Those are recommendations for future quantization pipeline work, not a guarantee
 that every model should use exactly 512 samples. The recipe structure should
 transfer; constants should be recalibrated per model family.
+
+ModelOpt export is a heavy host-memory workload on Spark. Run it only through
+`./forge quantize export`, which applies the repo lock, `systemd-run --scope`,
+Docker limits, disk/memory preflight, and runtime memory watchdog. If a guard
+trips, stop and adjust the recipe; do not retry with raw Docker.
+
+For a two-Spark cluster, distribute independent variant exports with an
+environment-backed worker list:
+
+```bash
+export MODEL_FORGE_QUANT_WORKERS=local,<spark-worker-ssh-name>
+./forge quantize matrix-plan \
+  --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml
+```
+
+Keep worker names and IPs out of Git. The planner assigns one heavy export per
+worker; it does not make ModelOpt itself distributed for a single checkpoint.
 
 ## Training / Ablation Parallelism
 

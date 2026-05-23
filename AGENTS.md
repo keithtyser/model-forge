@@ -30,6 +30,8 @@ reusable pipeline code over one-off scripts.
   rules
 - `docs/serving-benchmarks.md`: serving benchmark command, outputs, and
   interpretation rules
+- `docs/quantization.md`: Blackwell NVFP4, runtime import, checkpoint creation,
+  and quantization-card evidence rules
 - `docs/roadmaps/`: long-form roadmap and archived planning documents
 - `docs/research/sota-2026-05-18.md`: dated SOTA snapshot behind current
   roadmap decisions
@@ -42,6 +44,7 @@ reusable pipeline code over one-off scripts.
   open-source-safe cluster inventory examples
 - `configs/serving/`: serving benchmark configs and reusable workload
   definitions
+- `configs/quantization/`: FP8/NVFP4 runtime and checkpoint-creation configs
 - `configs/sweeps/`: bounded serving/quantization/benchmark sweep matrices
 - `scripts/README.md`: script directory map and operational rules
 - `configs/model_families/`: model family registry
@@ -237,6 +240,41 @@ command starts a vLLM server. A good latency result is not a quality or behavior
 pass. Use the generated `manifest.json`, `summary.json`, `requests.jsonl`, and
 `serving_card.md` with eval results before making serving claims.
 
+Plan and report quantization without loading a model:
+
+```bash
+./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan
+./forge quantize card \
+  --config configs/quantization/nvfp4_blackwell_runtime.yaml \
+  --source-serving-summary <source>/summary.json \
+  --candidate-serving-summary <candidate>/summary.json \
+  --source-serving-eval <source_eval_dir> \
+  --candidate-serving-eval <candidate_eval_dir> \
+  --run-id source_vs_nvfp4 \
+  --write-card
+```
+
+NVFP4 is the priority Blackwell path. `nvfp4_runtime` means Model Forge is
+validating an already-quantized checkpoint; do not imply the repo created those
+weights. A real quantization claim needs a candidate endpoint, serving summary,
+sampled behavior scores, and quantization card.
+
+For self-quantization, use the ModelOpt export runner and the matrix config:
+
+```bash
+./forge quantize matrix-plan \
+  --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml
+```
+
+Set `MODEL_FORGE_QUANT_WORKERS=local,<ssh-host>` to distribute independent
+variant exports across a Spark cluster. Do not commit those worker names or IPs.
+Run at most one export per Spark node, and do not launch export commands outside
+`./forge quantize export`; the runner has a runtime memory watchdog and Docker
+cleanup path. The generated command also uses `systemd-run --scope`, `nice`,
+Docker CPU/memory limits, and a checkout-local export lock. If `systemd-run`
+fails or asks for interactive authorization, stop and fix the host execution
+path; do not rerun the same heavy command without equivalent limits.
+
 ## Abliteration Rules
 
 - The reusable recipe is the structure, not fixed constants.
@@ -267,9 +305,10 @@ pass. Use the generated `manifest.json`, `summary.json`, `requests.jsonl`, and
   `nice -n 10`. Do not raise them casually on shared or remote machines.
 - Always leave at least one CPU core free. The fine-tuning runner sets thread
   pools to `max(1, os.cpu_count() - reserve_cores)`.
-- Start only if at least 5% RAM and 15% run-directory disk are free.
-- Stop the job if runtime available RAM falls below 5%. Treat a resource guard
-  trip as a real failure to investigate, not as a warning to ignore.
+- Start only if the recipe-specific RAM floor and 15% run-directory disk are free.
+- Stop the job if runtime available RAM falls below the recipe-specific floor.
+  Treat a resource guard trip as a real failure to investigate, not as a
+  warning to ignore.
 - Cap dataloaders. `num_workers` must stay below `usable_cores - 2`; keep
   `persistent_workers` off unless memory headroom is known to be safe.
 - Keep checkpoint rotation enabled with a small `save_total_limit`.
@@ -284,6 +323,9 @@ pass. Use the generated `manifest.json`, `summary.json`, `requests.jsonl`, and
 - Treat AEON-7 NVFP4 settings as hardware guidance, not Gemma constants. Put
   parser names, quantization format, loader patches, and drafter paths in family
   config or environment overrides.
+- For Blackwell NVFP4 serving, start with conservative Spark settings and record
+  the actual backend, for example `VLLM_NVFP4_GEMM_BACKEND=cutlass` and
+  `--moe-backend cutlass`.
 - For MoE quantization, keep routers and multimodal projection/vision modules
   in BF16 unless a family-specific recipe and eval pass justify otherwise.
 - `MODEL_FORGE_PARALLELISM=192` is for preprocessing/input-pipeline work, not

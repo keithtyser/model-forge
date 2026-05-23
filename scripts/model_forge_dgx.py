@@ -182,6 +182,25 @@ def configure_serving_variant(family: dict[str, Any], variant: str, env: dict[st
 
     env["MODEL_FORGE_MODEL"] = str(path)
     env["MODEL_FORGE_SERVED_MODEL_NAME"] = served_model_name(family, variant)
+    quantization = str(cfg.get("quantization") or "").lower()
+    if quantization in {"fp8", "fp8_runtime"}:
+        env.setdefault("VLLM_QUANTIZATION", "fp8")
+        env.setdefault("VLLM_KV_CACHE_DTYPE", "fp8")
+        env.setdefault("GPU_MEMORY_UTILIZATION", "0.60")
+        env.setdefault("MAX_MODEL_LEN", "8192")
+        env.setdefault("MAX_NUM_BATCHED_TOKENS", "4096")
+        env.setdefault("VLLM_MAX_NUM_SEQS", "2")
+    if quantization in {"nvfp4", "nvfp4_runtime"}:
+        env.setdefault("VLLM_QUANTIZATION", "modelopt")
+        env.setdefault("VLLM_KV_CACHE_DTYPE", "fp8")
+        env.setdefault("VLLM_TRUST_REMOTE_CODE", "true")
+        env.setdefault("VLLM_TOOL_CALL_PARSER", "gemma4")
+        env.setdefault("VLLM_REASONING_PARSER", "gemma4")
+        env.setdefault("VLLM_ENABLE_AUTO_TOOL_CHOICE", "true")
+        env.setdefault("GPU_MEMORY_UTILIZATION", "0.60")
+        env.setdefault("MAX_MODEL_LEN", "8192")
+        env.setdefault("MAX_NUM_BATCHED_TOKENS", "4096")
+        env.setdefault("VLLM_MAX_NUM_SEQS", "2")
     return details
 
 
@@ -232,7 +251,13 @@ def action_eval(family: dict[str, Any], family_name: str, variant: str, kind: st
         env.setdefault("MODEL_FORGE_MAX_CASES", "4")
     env.setdefault("MODEL_FORGE_BASE_URL", "http://127.0.0.1:8000/v1")
     env.setdefault("MODEL_FORGE_HARDWARE_LABEL", "DGX Spark")
-    env.setdefault("MODEL_FORGE_QUANT", "bf16")
+    quantization = str((family.get("variants") or {}).get(variant, {}).get("quantization") or "").lower()
+    if quantization in {"fp8", "fp8_runtime"}:
+        env.setdefault("MODEL_FORGE_QUANT", "fp8")
+    elif quantization in {"nvfp4", "nvfp4_runtime"}:
+        env.setdefault("MODEL_FORGE_QUANT", "nvfp4")
+    else:
+        env.setdefault("MODEL_FORGE_QUANT", "bf16")
     env.setdefault("MODEL_FORGE_CONTEXT_LENGTH", os.environ.get("MAX_MODEL_LEN", "32768"))
     timeout = "480" if kind == "artifact" else "180"
     max_tokens = "4096" if kind == "artifact" else "1200"

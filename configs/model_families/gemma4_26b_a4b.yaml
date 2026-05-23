@@ -37,6 +37,54 @@ variants:
     local_dir: gemma-4-26B-A4B-it-local-abliterated-sota
     served_model_name: local/gemma-4-26B-A4B-it-abliterated-sota
     downloadable: false
+  base_fp8_runtime:
+    repo_id: google/gemma-4-26B-A4B-it
+    local_dir: gemma-4-26B-A4B-it
+    served_model_name: model-forge/gemma4-26b-a4b-base-fp8-runtime
+    base_variant: base
+    quantization: fp8_runtime
+    downloadable: false
+  base_nvfp4_blackwell_runtime:
+    repo_id: nvidia/Gemma-4-26B-A4B-NVFP4
+    local_dir: Gemma-4-26B-A4B-NVFP4
+    served_model_name: model-forge/gemma4-26b-a4b-base-nvfp4-blackwell
+    base_variant: base
+    quantization: nvfp4
+    downloadable: true
+  ft_local_abli_sota_internal_r7_selected_t34_transfer:
+    repo_id: Jackrong/Gemopus-4-26B-A4B-it
+    local_dir: Gemopus-4-26B-A4B-it-local-abliterated-sota-internal-r7-selected-t34-transfer
+    served_model_name: local/Gemopus-4-26B-A4B-it-abliterated-sota-internal-r7-selected-t34-transfer
+    base_variant: local_ft
+    downloadable: false
+  base_nvfp4_modelopt:
+    repo_id: google/gemma-4-26B-A4B-it
+    local_dir: model-forge-quantized/gemma4_26b_a4b/base_nvfp4_modelopt
+    served_model_name: model-forge/gemma4-26b-a4b-base-nvfp4-modelopt
+    base_variant: base
+    quantization: nvfp4
+    downloadable: false
+  local_ft_nvfp4_modelopt:
+    repo_id: google/gemma-4-26B-A4B-it
+    local_dir: model-forge-quantized/gemma4_26b_a4b/local_ft_nvfp4_modelopt
+    served_model_name: model-forge/gemma4-26b-a4b-local-ft-nvfp4-modelopt
+    base_variant: local_ft
+    quantization: nvfp4
+    downloadable: false
+  local_abli_sota_nvfp4_modelopt:
+    repo_id: google/gemma-4-26B-A4B-it
+    local_dir: model-forge-quantized/gemma4_26b_a4b/local_abli_sota_nvfp4_modelopt
+    served_model_name: model-forge/gemma4-26b-a4b-local-abli-sota-nvfp4-modelopt
+    base_variant: local_abli_sota
+    quantization: nvfp4
+    downloadable: false
+  ft_local_abli_sota_internal_r7_selected_t34_transfer_nvfp4_modelopt:
+    repo_id: Jackrong/Gemopus-4-26B-A4B-it
+    local_dir: model-forge-quantized/gemma4_26b_a4b/ft_local_abli_sota_internal_r7_selected_t34_transfer_nvfp4_modelopt
+    served_model_name: model-forge/gemopus-4-26b-a4b-local-ft-abli-r7-nvfp4-modelopt
+    base_variant: ft_local_abli_sota_internal_r7_selected_t34_transfer
+    quantization: nvfp4
+    downloadable: false
   local_abli_huihui_like:
     repo_id: google/gemma-4-26B-A4B-it
     local_dir: gemma-4-26B-A4B-it-local-abliterated-huihui-like

@@ -1,0 +1,148 @@
+schema_version: model_forge.quantization.v1
+name: gemma4_26b_a4b_nvfp4_modelopt
+description: >
+  Self-quantize Gemma 4 26B-A4B family variants to Blackwell NVFP4 with NVIDIA
+  TensorRT Model Optimizer, then compare each quantized checkpoint against the
+  same unquantized source variant.
+family: gemma4_26b_a4b
+source_variant: base
+target_variant: base_nvfp4_modelopt
+method: nvfp4
+backend: modelopt
+objective: quantized_quality_retention
+hardware_profile: dgx_spark
+
+calibration:
+  dataset: cnn_dailymail,wikipedia
+  samples: 64,64
+  seq_len: 2048
+  batch_size: 1
+  production_samples: 256,256
+  production_seq_len: 4096
+  optional_gated_dataset: cnn_dailymail,nemotron-post-training-dataset-v2
+  notes: >
+    The checked-in default is a bounded Spark smoke recipe. Promotion runs
+    should increase to production_samples/production_seq_len after the export,
+    load, and eval loop is proven stable for the model family. NVIDIA's
+    Nemotron post-training data is an optional production calibration source,
+    but it is gated, so the default recipe uses public datasets.
+
+exclusions:
+  modules:
+    - lm_head
+    - embed_vision
+    - vision
+    - visual
+    - multi_modal_projector
+    - router
+    - gate
+    - self_attn
+    - early_layers
+
+export:
+  image: model-forge-modelopt-nvfp4:0.43.0
+  dockerfile: docker/modelopt-nvfp4.Dockerfile
+  base_image: vllm-node-tf5:latest
+  modelopt_version: 0.43.0
+  output_root: ~/models/model-forge-quantized/gemma4_26b_a4b
+  output_subdir: "{source_variant}_nvfp4_modelopt"
+  start_if_memory_available_above_fraction: 0.20
+  stop_if_memory_available_below_fraction: 0.15
+  watchdog_poll_seconds: 2
+  require_disk_free_fraction: 0.15
+  systemd_scope:
+    enabled: true
+    CPUQuota: "80%"
+    MemoryMax: "85%"
+    IOWeight: 100
+  docker:
+    cpus: 8
+    omp_num_threads: 8
+    memory_gb: 100
+    memory_swap_gb: 110
+    shm_size_gb: 32
+    nice: 10
+  ptq:
+    qformat: nvfp4
+    dataset: cnn_dailymail,wikipedia
+    calib_size: 64,64
+    calib_seq: 2048
+    batch_size: 1
+    tensor_parallel: 1
+    pipeline_parallel: 1
+    gpu_max_mem_percentage: 0.70
+    kv_cache_qformat: fp8_cast
+    low_memory_mode: false
+    use_seq_device_map: true
+    trust_remote_code: true
+    skip_generate: true
+    moe_calib_experts_ratio: 0.25
+
+runtime:
+  served_model_name: model-forge/gemma4-26b-a4b-nvfp4-modelopt
+  container: vllm-node-tf5
+  host: 0.0.0.0
+  port: 8016
+  tensor_parallel: 1
+  gpu_memory_utilization: 0.60
+  max_model_len: 8192
+  max_num_seqs: 2
+  max_num_batched_tokens: 4096
+  launch:
+    spark_vllm_dir_env: MODEL_FORGE_SPARK_VLLM_DOCKER
+    nodes_env: MODEL_FORGE_SPARK_CLUSTER_NODES
+    container_name: model_forge_gemma4_self_nvfp4
+    no_ray: true
+    non_privileged: true
+    mem_limit_gb: 110
+    mem_swap_limit_gb: 120
+    shm_size_gb: 32
+  vllm_flags:
+    tool_call_parser: gemma4
+    reasoning_parser: gemma4
+    enable_auto_tool_choice: true
+    trust_remote_code: true
+    quantization: modelopt
+    kv_cache_dtype: fp8
+    load_format: fastsafetensors
+
+matrix:
+  workers_env: MODEL_FORGE_QUANT_WORKERS
+  workers: local
+  variants:
+    - source_variant: base
+      target_variant: base_nvfp4_modelopt
+      baseline_eval: results/gemma4_26b_a4b_v0/base/gemma4_26b_a4b_base_dgx_spark
+      baseline_artifact_eval: results/gemma4_26b_a4b_v0/base/gemma4_26b_a4b_base_artifacts_dgx_spark
+    - source_variant: local_ft
+      target_variant: local_ft_nvfp4_modelopt
+      baseline_eval: results/gemma4_26b_a4b_v0/base/gemma4_26b_a4b_local_ft_dgx_spark
+    - source_variant: local_abli_sota
+      target_variant: local_abli_sota_nvfp4_modelopt
+      baseline_eval: results/gemma4_26b_a4b_v0/base/gemma4_26b_a4b_local_abli_sota_dgx_spark
+    - source_variant: ft_local_abli_sota_internal_r7_selected_t34_transfer
+      target_variant: ft_local_abli_sota_internal_r7_selected_t34_transfer_nvfp4_modelopt
+      baseline_eval: results/gemma4_26b_a4b_v0/base/gemma4_26b_a4b_ft_local_abli_sota_internal_r7_selected_t34_transfer_targeted
+      supplemental_baseline_eval: results/gemma4_26b_a4b_v0/base/gemma4_26b_a4b_ft_local_abli_sota_internal_r7_selected_t34_transfer_normal_use
+
+outputs:
+  reports_dir: reports/generated/quantization
+  models_dir: ~/models/model-forge-quantized/gemma4_26b_a4b
+
+evals:
+  required:
+    - ./forge quantize export gemma4_26b_a4b <variant> --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --execute
+    - ./forge serve gemma4_26b_a4b <variant>_nvfp4_modelopt
+    - ./forge eval gemma4_26b_a4b <variant>_nvfp4_modelopt --internal
+    - ./forge bench serve --config configs/serving/serve_bench_core.yaml --model <served_quantized_model> --base-url <base_url>
+    - ./forge quantize card --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --source-serving-summary <source>/summary.json --candidate-serving-summary <candidate>/summary.json --source-serving-eval <source_eval> --candidate-serving-eval <candidate_eval> --run-id <run_id> --write-card
+  card_metrics:
+    - normal_use_regression.normal_use_regression_pass_rate
+    - capability_preservation_challenge.normal_use_regression_pass_rate
+    - agentic_tool_use_json.schema_adherence
+    - agentic_tool_use_json.workflow_success
+    - refusal_paired_boundary.benign_answer_quality_rate
+    - refusal_paired_boundary.benign_refusal_rate
+    - refusal_paired_boundary.unsafe_overcompliance_rate
+    - unsafe_overcompliance.unsafe_overcompliance_rate
+    - overall.latency_seconds_median

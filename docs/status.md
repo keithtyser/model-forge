@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-19.
+Last updated: 2026-05-23.
 
 This is the short handoff state for humans and agents. Use
 `docs/experiment-ledger.md` for detailed run history and raw observations.
@@ -55,6 +55,11 @@ This is the short handoff state for humans and agents. Use
 - Serving Card generation now writes a structured `serving_card.md` for each
   `bench serve` run with identity, hardware/config, overall metrics,
   per-workload metrics, artifacts, and promotion gates.
+- Quantization planning is now first-class for Blackwell NVFP4 runtime import
+  and ModelOpt self-quantization. The self-quantization export path has a
+  checkout-local lock, preflight memory/disk gates, `systemd-run --scope`,
+  Docker CPU/memory limits, and a runtime memory watchdog. No completed
+  self-quantized Gemma NVFP4 checkpoint has passed the evidence contract yet.
 
 ## Current Dataset State
 
@@ -94,15 +99,21 @@ length filtering:
 
 ## Recommended Next Work
 
-1. Add eval provenance cards or golden baseline hardening next. Keep objective
-   profile fields optional until the objective profile layer is revisited.
-2. Wire sampled quality/behavior evals under selected serving configs.
-3. Use `./forge promote gemma4_26b_a4b local_ft_vs_jackrong` whenever saved
-   comparison results change.
-4. Publish completed durable datasets to Hugging Face with `publish --execute`
-   only after `smoke_only=false` and human review is complete.
-5. Run a short FT candidate only after dataset quality is established and Spark
-   guardrails are active.
+1. Convert roadmap/backlog status from single checkboxes to separate
+   `implementation_status` and `validation_state` fields.
+2. Add required validation/evidence fields to manifests, report cards, variant
+   nodes, objective profiles, and promotion decisions.
+3. Add objective profiles for `zero_refusal_capability_retention`,
+   `quantized_quality_retention`, and `dgx_spark_latency_throughput`.
+4. Finish/evaluate Gemma local FT or write a Training Method failure card with
+   distributed Spark correctness evidence.
+5. Run one real Spark serving benchmark and attach endpoint evidence to the
+   Serving Card.
+6. Re-run one guarded ModelOpt NVFP4 export only after confirming the two-node
+   worker plan and host guardrails. Quantization remains incomplete until base,
+   FT, abli, and FT+abli checkpoints load and match their unquantized baselines.
+7. Scale the local FT v1 dataset through medium-pack review before treating it
+   as a training dataset.
 
 ## Operational Guardrails
 
@@ -115,3 +126,5 @@ length filtering:
   handing off.
 - Run `./forge doctor` before handoff to catch tracked ignored files, secret
   literals, nonportable paths, and accidental generated dataset commits.
+- Do not bypass quantization or fine-tuning launchers with raw `docker run` or
+  `python train.py` for large jobs.

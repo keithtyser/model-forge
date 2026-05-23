@@ -18,6 +18,7 @@ and artifacts needed to reproduce the result.
 - tracks dataset source registries with licenses, roles, quality tiers, and sampling caps
 - tracks a dated research registry so methods, evals, and limitations stay explicit
 - runs refusal ablation recipes against source checkpoints
+- plans and reports quantization paths, with Blackwell NVFP4 as the first-class Spark target
 - serves exactly one candidate at a time through hardware-aware vLLM settings
 - plans and validates generic cluster inventories without hard-coded private hosts
 - benchmarks already-running OpenAI-compatible serving endpoints
@@ -88,6 +89,7 @@ Run evals from another terminal:
 ./forge manifest write --run-type eval --family gemma4_26b_a4b --variant base --command './forge eval gemma4_26b_a4b base --internal'
 ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
 ./forge bench sweep plan --family gemma4_26b_a4b --variant base
+./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan
 ./forge doctor
 ```
 
@@ -197,6 +199,26 @@ expects a running OpenAI-compatible endpoint and writes `requests.jsonl`,
 `reports/generated/serve_bench/`. Reusable workload definitions live under
 `configs/serving/workloads/`. Sweep plans expand startup-time server env cases
 and the matching `bench serve` commands, but they do not launch vLLM.
+
+Quantization:
+
+```bash
+./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan
+./forge quantize matrix-plan --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml
+./forge quantize card \
+  --config configs/quantization/nvfp4_blackwell_runtime.yaml \
+  --source-serving-summary <source>/summary.json \
+  --candidate-serving-summary <candidate>/summary.json \
+  --source-serving-eval <source_eval_dir> \
+  --candidate-serving-eval <candidate_eval_dir> \
+  --run-id source_vs_nvfp4 \
+  --write-card
+```
+
+See [docs/quantization.md](docs/quantization.md). NVFP4 is the priority
+Blackwell path. Self-quantization must run through the guarded export runner,
+not raw Docker, and quantized candidates still need real serving and
+behavior-preservation evidence before promotion.
 
 Abliteration planning:
 

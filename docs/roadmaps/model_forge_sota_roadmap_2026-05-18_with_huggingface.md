@@ -3,7 +3,7 @@
 **Prepared for:** Keith Tyser  
 **Date snapshot:** May 18, 2026  
 **Target repo:** [`keithtyser/model-forge`](https://github.com/keithtyser/model-forge)  
-**Primary goal:** Turn Model Forge into a research-grounded, reproducible workbench for post-training, behavior editing, quantization, serving optimization, kernel/performance experiments, and agentic experiment automation.
+**Primary goal:** Turn Model Forge into a research-grounded, reproducible workbench for actually fine-tuning, behavior-editing, quantizing, serving, benchmarking, and validating open models on the local DGX Spark / Spark-cluster hardware, then generalizing those recipes across model families.
 
 ---
 
@@ -13,36 +13,78 @@ Model Forge should become a system that answers one question better than almost 
 
 > **Given a base open model, what post-training, behavior-editing, quantization, and serving configuration best satisfies a declared objective on a declared hardware target, with reproducible evidence and no hidden regressions?**
 
-Your current repo is already unusually close to this. It is model-family driven, evaluation-first, uses DGX Spark as a hardware profile, tracks raw responses and artifacts, compares base/fine-tuned/ablated/combined variants, and records an experiment ledger. The missing step is to make the repo **SOTA-grounded by construction**.
+Your current repo is already unusually close to this. It is model-family driven, evaluation-first, uses DGX Spark as a hardware profile, tracks raw responses and artifacts, compares base/fine-tuned/ablated/combined variants, and records an experiment ledger. The missing step is to make the repo **SOTA-grounded and Spark-validated by construction**.
+
+The point of Model Forge is not to collect planning commands. It is to produce
+recipes that have been executed locally and can be reproduced: fine-tuning that
+creates real adapters/checkpoints, ablation that writes real edited variants,
+quantization that produces or configures a real compressed serving path, serving
+benchmarks that hit real endpoints, and evals that decide whether the transform
+improved performance, removed refusals, made serving faster, or caused a hidden
+regression.
 
 That means every major feature should have:
 
 ```text
 research claim
 → implementation hook
+→ local Spark execution hook
 → evaluation hook
 → report section
 → limitation / failure mode
 → next experiment
 ```
 
+Definition of done:
+
+```text
+implementation_status:
+  not_started | scaffolded | implemented | wired_to_cli | tested
+
+validation_state:
+  planned:
+    command/config/report skeleton exists, but no model was transformed or served
+
+  smoke_validated:
+    the command ran on a tiny model, tiny dataset, synthetic endpoint, or dry-run
+    path and proved parsing, artifact writing, and manifest generation
+
+  spark_single_node_validated:
+    the command ran on one local Spark with a real model artifact and wrote
+    metrics, logs, manifests, and a pass/fail report
+
+  spark_cluster_validated:
+    the command ran across the Spark x2 cluster when the workload benefits from
+    distributed memory, distributed training, or multi-node serving
+
+generalizable:
+  the same recipe has run on at least one additional model family or model shape,
+  with documented family-specific knobs and no hard-coded Gemma assumptions
+```
+
+Only `spark_single_node_validated`, `spark_cluster_validated`, and
+`generalizable` count as completed roadmap outcomes. Dry-run plans and smoke
+tests are useful scaffolding, but they do not prove that Model Forge can improve,
+edit, quantize, or serve a model.
+
 The roadmap below turns that into concrete work:
 
 1. **Research registry**: a dated, machine-readable registry of papers, docs, benchmarks, and claims as of May 18, 2026.
 2. **Objective profiles**: explicit profiles such as `capability_sft`, `zero_refusal_capability_retention`, `quantized_quality_retention`, `dgx_spark_latency_throughput`, and `agentic_tool_use`.
 3. **Dataset factory**: a repeatable pipeline for generating, judging, filtering, packing, and publishing high-quality fine-tuning datasets from eval gaps and current source material.
-4. **Variant graph**: base → fine-tune → behavior edit → quantize → serve optimize → evaluate → publish, with every node and edge recorded.
-5. **Evaluation hardening**: run manifests, golden baselines, provenance cards, external benchmarks, artifact execution validation, judge calibration, and risk reports.
-6. **DGX Spark inference lab**: a public benchmark suite for vLLM/SGLang/TensorRT-LLM on a bandwidth-constrained 128 GB unified-memory machine.
-7. **Quantization lab**: FP8 KV cache, FP8 W8A8, NVFP4/ModelOpt, GPTQ/AWQ/INT paths, QAT/QAD recovery, and behavior-preservation tests.
-8. **Behavior-editing lab**: ablation as one objective profile, with zero-refusal targets measured separately from capability retention, behavior drift, and deployment risk.
-9. **Kernel/perf track**: profiler-first microbenchmarks tied to serving outcomes, not toy kernels detached from model performance.
-10. **Agentic experiment runner**: an agent that proposes, runs, evaluates, rejects/promotes, and writes reports under bounded budgets.
-11. **Public proof layer**: report site, X threads, Hugging Face model/dataset repos, release cards, gated/private publication flows, and upstream PRs.
+4. **Spark validation contract**: every transform family must run on the local Spark hardware and write reproducibility artifacts before it is marked complete.
+5. **Variant graph**: base → fine-tune → behavior edit → quantize → serve optimize → evaluate → publish, with every node and edge recorded.
+6. **Evaluation hardening**: run manifests, golden baselines, provenance cards, external benchmarks, artifact execution validation, judge calibration, and risk reports.
+7. **DGX Spark inference lab**: a public benchmark suite for vLLM/SGLang/TensorRT-LLM on a bandwidth-constrained 128 GB unified-memory machine.
+8. **Quantization lab**: FP8 KV cache, FP8 W8A8, Blackwell NVFP4/ModelOpt, GGUF/llama.cpp export, GPTQ/AWQ/INT paths, QAT/QAD recovery, and behavior-preservation tests.
+9. **Behavior-editing lab**: ablation as one objective profile, with invalid-refusal reduction measured separately from valid safety refusals, capability retention, behavior drift, overcompliance risk, and deployment risk.
+10. **Kernel/perf track**: profiler-first microbenchmarks tied to serving outcomes, not toy kernels detached from model performance.
+11. **Agentic experiment runner**: an agent that proposes, runs, evaluates, rejects/promotes, and writes reports under bounded budgets.
+12. **Public proof layer**: report site, X threads, Hugging Face model/dataset repos, release cards, gated/private publication flows, and upstream PRs.
 
 The strongest public identity is:
 
-> **“I build eval-first systems for improving and serving open models on constrained local AI hardware. Every claim comes with configs, raw outputs, latency numbers, quality/safety deltas, and reproducible reports.”**
+> **“I build eval-first systems for improving and serving open models on constrained local AI hardware. Every claim comes from real local Spark runs and includes configs, raw outputs, latency numbers, quality/safety deltas, and reproducible reports.”**
 
 This is aligned with the kinds of roles frontier labs currently signal demand for: inference systems, GPU performance, post-training, model evaluations, and automated research workflows. OpenAI and Anthropic job postings explicitly mention post-training, evals, inference, GPU kernel work, Triton/CUDA/CUTLASS/FlashAttention, memory-bandwidth optimization, quantization, and model-serving infrastructure.
 
@@ -73,12 +115,18 @@ These are not criticisms; they are the roadmap.
 | Research basis is prose, not product | Hard to keep SOTA current or prove a feature exists for a reason | Add `research_registry.yaml` and `./forge research audit` |
 | “Better” is overloaded | FT, ablation, quantization, and serving have different goals | Add objective profiles and profile-specific promotion gates |
 | Run provenance is not yet strong enough | Reports need exact reproducibility across model/version/engine/hardware | Add canonical `manifest.json` and report cards |
+| Validation state is not yet schema-enforced | Prose can drift from actual artifacts and backlog checkboxes | Add required `validation_state`, Spark evidence, and promotion-decision fields to manifests, cards, objectives, and variant nodes |
+| Backlog status is overloaded | `[x]` can mean scaffolded, smoke-tested, or genuinely validated | Track implementation status separately from Spark validation status |
+| CLI examples can drift from implementation | Operators should not chase roadmap commands that do not exist yet | Mark examples as target CLI until shipped and add command drift checks |
 | External evals are useful but not yet central | Need credibility beyond internal prompts | Add eval provenance cards, benchmark adapters, and version tracking |
 | High-quality training data is imported manually | Fine-tuning quality will be capped by ad hoc public datasets and stale mixtures | Add `forge data *`: seed, generate, judge, filter, pack, version, and publish datasets |
+| Too much work can look complete at the plan/dry-run layer | The repo's purpose is to actually transform and validate models, not only generate plans | Add a Spark validation contract and require local execution evidence before roadmap items are marked done |
 | Artifact execution validation is planned, not shipped | Generated HTML/code can look good but fail | Add Playwright/browser and Python execution validators |
-| Quantization is not first-class | It is central to DGX Spark and frontier inference work | Add `forge quantize`, quantization cards, and behavior-preservation reports |
+| Quantization is not first-class | It is central to DGX Spark, Blackwell, and portable local inference work | Add `forge quantize`, NVFP4, GGUF, quantization cards, and behavior-preservation reports |
 | Serving optimization is not benchmarked as a matrix | vLLM flags are present but not yet a benchmark product | Add `forge bench serve` and a DGX Spark leaderboard |
 | Behavior editing lacks objective profiles | Ablation objective and deployment decision should be separated | Add `zero_refusal_capability_retention` profile plus release classes |
+| Model-family generalization is too implicit | A recipe is not general if it only works on Gemma naming, modules, and chat templates | Add a family checklist for tokenizer, chat template, architecture targets, MoE/router behavior, context length, license, serving backend, and release constraints |
+| Storage and artifact retention are not first-class | Adapters, merged checkpoints, GGUFs, reports, and raw outputs will fill local disks quickly | Add retention budgets, checksums, cache policy, cleanup policy, and publish/delete decisions to manifests |
 | Agent-friendliness is mostly documentation | Huge opportunity to demonstrate automated research loops | Add `forge agent optimize-*` |
 | Hugging Face publishing is not first-class | Model/dataset artifacts need stable public homes with cards, provenance, visibility gates, and reproducible uploads | Add `forge hf *`, card generators, release classes, and Hub provenance |
 | Kernel work is not yet represented | Top labs value measurable GPU performance work | Add profiler-first microbench and upstream PR track |
@@ -144,11 +192,12 @@ Example: `zero_refusal_capability_retention.yaml`
 id: zero_refusal_capability_retention
 version: 2026-05-18
 description: >
-  Behavior-editing objective: drive refusal behavior to zero on the configured
-  refusal suite while preserving source-model capability and reporting risk.
+  Behavior-editing objective: reduce invalid refusals and target
+  noncompliance on the configured benign/refusal suite while preserving valid
+  safety boundaries, source-model capability, and explicit risk reporting.
 
 primary_goal:
-  metric: refusal_rate
+  metric: invalid_refusal_rate
   suite: refusal_primary
   target: 0.0
 
@@ -158,11 +207,15 @@ hard_constraints:
   code_debug_delta_vs_source: ">= -0.03"
   artifact_execution_delta_vs_source: ">= -0.05"
   external_benchmark_delta_vs_source: ">= -0.03"
+  valid_safety_refusal_retention: ">= 0.98"
+  harmful_overcompliance_rate: "<= source + 0.01"
 
 required_reports:
   - capability_retention
   - behavior_drift
+  - valid_refusal_retention
   - unsafe_overcompliance
+  - overcompliance_calibration
   - harmful_detail_risk
   - redacted_examples
   - serving_delta
@@ -174,6 +227,18 @@ tie_breakers:
   - higher_output_tokens_per_second
 
 release_default: research_report_only
+
+validation_gates:
+  minimum_validation_state_for_research_claim: spark_single_node_validated
+  minimum_validation_state_for_cluster_claim: spark_cluster_validated
+  required_evidence:
+    - manifest_json
+    - variant_node_json
+    - local_spark_command
+    - raw_outputs
+    - refusal_taxonomy_scores
+    - risk_report_redacted_public
+    - risk_report_private
 
 research_basis:
   - arditi_2024_refusal_direction
@@ -206,6 +271,8 @@ hard_constraints:
   artifact_execution_delta_vs_source: ">= -0.03"
   refusal_behavior_delta_reported: true
   unsafe_overcompliance_delta_reported: true
+  same_chat_template_or_documented_change: true
+  tokenizer_integrity_checked: true
 
 tie_breakers:
   - output_tokens_per_second
@@ -219,11 +286,29 @@ research_basis:
   - vllm_fp8_w8a8
   - nvidia_nvfp4
   - nvidia_modelopt
+  - llama_cpp_gguf
   - kvquant
   - kivi
   - turboquant
   - fp4_sensitivity_2026
   - nvfp4_qad_2026
+
+required_recipe_classes:
+  - runtime_kv_cache_quantization
+  - hf_checkpoint_weight_quantization
+  - blackwell_nvfp4_modelopt
+  - gguf_llama_cpp_export
+
+validation_gates:
+  minimum_validation_state_for_research_claim: spark_single_node_validated
+  required_evidence:
+    - source_manifest
+    - quantization_config
+    - calibration_manifest
+    - load_success_log
+    - serving_benchmark
+    - behavior_delta_report
+    - artifact_checksums
 ```
 
 ### 2.3 Add a variant graph
@@ -237,6 +322,7 @@ base
  │    ├── local_ft_v0_abli_r7
  │    │    ├── local_ft_v0_abli_r7_fp8kv
  │    │    ├── local_ft_v0_abli_r7_nvfp4
+ │    │    ├── local_ft_v0_abli_r7_gguf_q4km
  │    │    └── local_ft_v0_abli_r7_serving_best
  │    └── local_ft_v0_dpo_v0
  ├── local_abli_t34
@@ -251,6 +337,7 @@ fine_tune
 preference_optimize
 behavior_edit
 quantize
+export_convert
 serve_optimize
 evaluate
 publish
@@ -291,12 +378,176 @@ Node manifest example:
   "checkpoint": {
     "local_path": "<local-model-dir>/...",
     "source_revision": "...",
-    "merged_adapters": true
+    "merged_adapters": true,
+    "format": "hf_safetensors",
+    "checksums": {
+      "adapter": "sha256:...",
+      "merged_checkpoint": "sha256:..."
+    }
+  },
+  "validation": {
+    "implementation_status": "implemented",
+    "validation_state": "spark_cluster_validated",
+    "spark_evidence_path": "reports/generated/gemma4_26b_a4b/local_ft_v0_abli_r7_nvfp4/<run_id>/",
+    "node_count": 2,
+    "hardware_profile": "dgx_spark_x2",
+    "command": "./forge quantize ...",
+    "baseline_run_id": "gemma4_26b_a4b_local_ft_v0_abli_r7_bf16_...",
+    "promotion_decision": "rejected_or_promoted_with_reason"
   },
   "evaluation_status": "complete",
   "serving_status": "benchmarked",
-  "publication_class": "research_report_only"
+  "publication_class": "research_report_only",
+  "retention": {
+    "keep_until": "2026-08-18",
+    "disk_budget_gb": 500,
+    "publish_or_delete_decision": "keep_private"
+  }
 }
+```
+
+### 2.4 Local Spark validation contract
+
+Model Forge's canonical proof environment is the local DGX Spark / Spark x2
+cluster. Public configs should stay portable and environment-backed, but the
+repo must be able to prove that its recipes were exercised on the real local
+hardware before calling them complete.
+
+Every major transform should expose these validation states:
+
+```text
+planned:
+  config, command, and report/card skeleton exist
+
+smoke_validated:
+  command runs on a tiny model, tiny dataset, or synthetic endpoint and proves
+  argument parsing, artifact writing, and manifest generation
+
+spark_single_node_validated:
+  command ran on one Spark with a real model artifact and produced metrics
+
+spark_cluster_validated:
+  command ran across the two-Spark cluster when the workload benefits from
+  distributed memory, distributed training, or multi-node serving
+
+generalized:
+  recipe has been repeated on another family or architecture class with
+  documented family-specific choices and no hidden Gemma-only assumptions
+```
+
+Completion requirements by transform:
+
+```text
+fine_tune:
+  run an actual SFT/preference/RL training job, write adapters or checkpoints,
+  inspect tensors, serve the result, evaluate it, and compare against source
+  and reference variants
+
+behavior_edit:
+  run the ablation/editing backend, write edited weights or adapters, measure
+  refusal/noncompliance reduction, measure capability retention, and record
+  release class separately from research success
+
+quantize:
+  run or import a real quantization path, load the resulting variant or runtime
+  KV-cache configuration in a serving backend, benchmark it, evaluate behavior,
+  and compare against the source precision
+
+serve_optimize:
+  launch the actual serving endpoint on Spark hardware, run workload sweeps,
+  measure latency/throughput/memory/failure modes, and sample quality/behavior
+  under the winning and baseline configs
+
+dataset_factory:
+  generate, judge, verify, filter, and pack data, then prove value by running at
+  least a bounded Spark fine-tune or clearly documenting why the data failed
+  promotion
+
+agent_runner:
+  launch bounded real jobs, enforce budgets, reject/promote from objective
+  profiles, and write the same manifests/cards a human-run experiment would
+```
+
+The repo should make it hard to confuse `planned` with `validated`. Report cards,
+variant manifests, and promotion decisions should carry the validation state and
+the exact Spark evidence path: command, node count, hardware profile, model
+revision, output artifact, metrics, logs, and known failure mode.
+
+Every backlog item and public report should separate:
+
+```text
+implementation_status:
+  did the code/config/CLI exist and pass local tests?
+
+validation_state:
+  did it transform, serve, benchmark, or evaluate a real model on Spark?
+
+promotion_decision:
+  did the result improve the declared objective enough to recommend reuse?
+```
+
+Evidence schema required before a run can be called Spark-validated:
+
+```yaml
+validation:
+  implementation_status: implemented
+  validation_state: spark_single_node_validated | spark_cluster_validated
+  spark_evidence_path: reports/generated/.../<run_id>/
+  command: "./forge ..."
+  started_at_utc: "..."
+  completed_at_utc: "..."
+  node_count: 1
+  hardware_profile: dgx_spark | dgx_spark_x2
+  cluster_topology: configs/clusters/dgx_spark_x2.yaml
+  model_revision: "..."
+  dataset_or_calibration_manifest: "..."
+  output_artifacts:
+    - path: "..."
+      sha256: "..."
+      size_bytes: 0
+  metrics:
+    primary_metric: "..."
+    baseline_value: null
+    candidate_value: null
+  logs:
+    stdout: "..."
+    stderr: "..."
+    system: "..."
+  known_failure_modes:
+    - "..."
+  promotion_decision: promoted | rejected | inconclusive | research_report_only
+```
+
+### 2.5 Distributed training correctness contract
+
+Cluster training should not be considered faster or better until it is also
+correct. The Spark x2 training path needs a checklist that is emitted into the
+Training Method Card:
+
+```text
+distributed_backend:
+  launcher, world_size, ranks, rendezvous, NCCL settings, and network interface
+
+sample_sharding:
+  no duplicated samples across ranks unless intentional and recorded
+
+global_batch_semantics:
+  per-device batch, gradient accumulation, world size, and effective batch size
+
+moe_and_adapter_behavior:
+  LoRA targets, MoE/router exclusions, unused-parameter policy, and tensor
+  inspection for trainable adapter weights
+
+cold_start_accounting:
+  tokenizer load, checkpoint load, Triton/JIT compile, CUDA graph capture, and
+  warmup time separated from steady-state step time
+
+cache_policy:
+  persistent Triton/cache directories, model cache paths, and cleanup rules
+
+throughput_report:
+  tokens/sec, examples/sec, microstep time, optimizer step time, memory, and
+  failure/retry count per rank
 ```
 
 ---
@@ -480,6 +731,7 @@ local large-model capacity vs speed
 | FP8 W8A8 | Common low-precision inference path on supported hardware |
 | ModelOpt | NVIDIA PTQ/QAT/QAD/export stack for NVIDIA GPUs |
 | NVFP4 | Blackwell-specific 4-bit floating point path, highly relevant to Spark/GB10 |
+| GGUF / llama.cpp | Portable local-inference format and runtime path that should be compared against Spark-native serving |
 | LLM Compressor | vLLM-oriented FP8/INT/FP4 tooling |
 | GPTQ/AWQ | Widely used open-model weight quantization baselines |
 | KIVI / KVQuant | Research basis for low-bit KV cache |
@@ -500,9 +752,11 @@ Did quality regress?
 Did structured output regress?
 Did artifact execution regress?
 Did refusal behavior change?
+Did valid safety-refusal behavior change?
 Did unsafe overcompliance/risk change?
 Which layers/components were most sensitive?
 Which serving backend actually loaded the checkpoint correctly?
+Did tokenizer/chat-template metadata survive export, especially for GGUF?
 ```
 
 ### 3.6 Kernels and GPU performance
@@ -653,6 +907,8 @@ a report generated from a feature omits research basis
 a source is stale past its refresh policy
 a benchmark adapter lacks provenance metadata
 a claimed metric has no corresponding raw output
+a roadmap CLI example is not marked target/planned and does not exist in `./forge --help`
+a completed backlog item lacks validation evidence or has only smoke evidence
 ```
 
 ### 4.5 Report integration
@@ -714,6 +970,17 @@ Schema:
     "memory_gb": 128,
     "memory_bandwidth_gb_s": 273
   },
+  "validation": {
+    "implementation_status": "implemented",
+    "validation_state": "spark_single_node_validated",
+    "spark_evidence_path": "reports/generated/gemma4_26b_a4b/local_ft_v0/<run_id>/",
+    "node_count": 1,
+    "cluster_topology": null,
+    "command": "./forge eval gemma4_26b_a4b local_ft_v0 --suite internal_fast",
+    "baseline_run_id": "gemma4_26b_a4b_base_...",
+    "promotion_decision": "promoted|rejected|inconclusive|research_report_only",
+    "known_failure_modes": []
+  },
   "serving": {
     "engine": "vllm",
     "engine_version": "...",
@@ -742,7 +1009,18 @@ Schema:
   "artifacts": {
     "responses_jsonl": "responses.jsonl",
     "scores_csv": "scores.csv",
-    "report_html": "report.html"
+    "report_html": "report.html",
+    "checksums": {
+      "responses_jsonl": "sha256:...",
+      "scores_csv": "sha256:...",
+      "report_html": "sha256:..."
+    }
+  },
+  "statistics": {
+    "trials": 3,
+    "seed_policy": "fixed_or_recorded",
+    "confidence_interval": "bootstrap_or_exact",
+    "minimum_detectable_effect": "documented_per_suite"
   }
 }
 ```
@@ -769,22 +1047,25 @@ src/model_forge/reports/
 ```text
 1. Executive summary
 2. Objective profile
-3. Promotion / rejection decision
-4. Variant graph
-5. Research basis
-6. Capability deltas
-7. Instruction-following deltas
-8. Structured-output deltas
-9. Coding/debugging deltas
-10. Artifact generation and execution deltas
-11. Refusal / noncompliance deltas
-12. Risk metrics
-13. Serving metrics
-14. Quantization metrics, if applicable
-15. Raw examples
-16. Repro commands
-17. Known failures
-18. Next experiments
+3. Implementation status and validation state
+4. Promotion / rejection decision
+5. Variant graph
+6. Research basis
+7. Capability deltas
+8. Instruction-following deltas
+9. Structured-output deltas
+10. Coding/debugging deltas
+11. Artifact generation and execution deltas
+12. Refusal / noncompliance deltas
+13. Valid safety-refusal retention
+14. Risk and overcompliance metrics
+15. Serving metrics
+16. Quantization metrics, if applicable
+17. Statistical uncertainty and sample sizes
+18. Raw examples
+19. Repro commands
+20. Known failures
+21. Next experiments
 ```
 
 #### Training Method Card
@@ -803,6 +1084,8 @@ Resource contract:
 Checkpoint gates:
 Eval deltas:
 Failure buckets:
+Distributed training correctness:
+Spark evidence:
 Promotion decision:
 Repro command:
 ```
@@ -818,13 +1101,15 @@ Direction/control discovery summary:
 Layer/module scope summary:
 Candidate budget:
 Primary refusal suite:
-Refusal rate:
+Invalid refusal rate:
+Valid safety-refusal retention:
 Capability retention:
 Structured-output retention:
 Code/debug retention:
 Artifact execution retention:
 Behavior drift:
 Unsafe overcompliance / harmful-detail risk:
+Release gate rationale:
 Serving delta:
 Publication class:
 Repro command:
@@ -839,11 +1124,14 @@ Source variant:
 Quantized variant:
 Method:
 Backend:
+Artifact format: runtime_kv | hf_safetensors | gguf | engine_specific
 Calibration set:
 Calibration sample count:
 Calibration sequence length:
 Excluded modules:
 Hardware target:
+Blackwell/NVFP4 status:
+GGUF/llama.cpp status:
 Serving engine:
 Memory delta:
 TTFT delta:
@@ -853,9 +1141,11 @@ Quality delta:
 Instruction-following delta:
 Code/artifact delta:
 Refusal-behavior delta:
+Valid safety-refusal delta:
 Risk delta:
 Layer sensitivity summary:
 Known regressions:
+Load/serve evidence:
 Repro command:
 ```
 
@@ -881,6 +1171,7 @@ Prefix-cache hit rate:
 Truncation/stop stats:
 Quality delta:
 Behavior delta:
+Safety/risk delta:
 Best use case:
 Known bad fit:
 Repro command:
@@ -1010,6 +1301,35 @@ html_console_error_rate
 nonblank_render_rate
 manual_review_required_count
 ```
+
+Artifact execution validation should move into the P0 evaluation path for any
+objective that claims coding, HTML, tool-use, or artifact-generation gains. A
+model can improve judge scores and still fail promotion if the generated artifact
+does not compile, render, or run.
+
+### 5.6 Claim thresholds and statistical hygiene
+
+Every improvement claim should include enough context to distinguish a real
+effect from noise:
+
+```text
+baseline run id
+candidate run id
+suite version
+prompt count
+trial count
+seed policy
+judge model/version
+confidence interval or bootstrap summary
+minimum detectable effect
+promotion threshold
+failure examples
+```
+
+Report cards should avoid saying "better" unless the primary metric clears the
+objective threshold and the hard constraints stay inside tolerance. If a run is
+directionally useful but underpowered, mark it `inconclusive` and keep it as a
+research note rather than a reusable recipe.
 
 Public post idea:
 
@@ -1211,8 +1531,24 @@ Every accepted row should carry metadata:
 ```
 
 For the Gemma local FT v1, the first generated dataset should be small and
-targeted rather than massive. Start with roughly `500-2000` accepted examples
-covering the v0 gaps:
+targeted rather than massive. Do not jump from a smoke pack directly to a
+training claim. Use staged scale gates:
+
+```text
+smoke_pack:
+  25-100 accepted examples, proves schema, judging, filtering, cards, and dry-run
+  publish path
+
+medium_pack:
+  250-500 accepted examples, proves contamination checks, human spot review,
+  verifier coverage, and bounded training feasibility
+
+training_pack:
+  500-2000 accepted examples, used in an actual bounded Spark fine-tune with
+  eval deltas and a Training Method Card
+```
+
+The first training pack should cover the v0 gaps:
 
 ```text
 latency vs throughput vs prompt/completion token reasoning
@@ -1235,6 +1571,8 @@ Success criteria for the dataset factory:
 - every source and generator model is recorded
 - executable examples are verified where possible
 - dataset card renders locally and can publish to Hugging Face
+- at least one bounded Spark fine-tune uses the packed dataset and records
+  whether it improved the target eval buckets
 - fine-tuning with the dataset improves at least one target eval bucket without
   hidden normal-use or style regressions
 ```
@@ -1291,6 +1629,41 @@ hard_constraints:
   refusal_behavior_delta_reported: true
 ```
 
+### 6.6 Model-family generalization checklist
+
+A recipe is not generalizable just because the same CLI command runs against a
+different family name. Each new family should ship a checklist and a first
+baseline report:
+
+```text
+tokenizer:
+  tokenizer files, special tokens, BOS/EOS behavior, chat template, and
+  round-trip tests
+
+architecture:
+  dense vs MoE, attention implementation, sliding-window/context behavior,
+  vision/multimodal modules, router/gate names, and excluded modules
+
+post_training:
+  LoRA target discovery, trainable tensor inspection, adapter merge/export
+  behavior, and MoE unused-parameter policy
+
+quantization:
+  supported formats, NVFP4 feasibility, GGUF conversion feasibility, excluded
+  modules, calibration set, and tokenizer/template preservation
+
+serving:
+  vLLM/SGLang/TensorRT-LLM/llama.cpp compatibility, context length, dtype,
+  KV-cache support, stop strings, and sampling defaults
+
+license_and_release:
+  base model license, derivative license, dataset constraints, model-card
+  requirements, and public/private release class
+
+baseline_evidence:
+  base eval, base serving benchmark, manifest, raw outputs, and known blockers
+```
+
 ---
 
 ## 7. Behavior-editing / ablation roadmap
@@ -1299,7 +1672,9 @@ hard_constraints:
 
 Your clarified product framing is good:
 
-> Ablation is an option in the workbench. The whole point of the ablation option is to remove refusal behavior while preserving model performance.
+> Ablation is an option in the workbench. The point of the ablation option is to
+> remove invalid refusal behavior and target noncompliance while preserving
+> model performance and valid safety boundaries.
 
 Encode that as:
 
@@ -1329,7 +1704,10 @@ Each output should get:
   "noncompliance_type": "direct_refusal",
   "refusal_detected": true,
   "refusal_severity": 0.91,
+  "valid_safety_refusal": false,
+  "invalid_refusal": true,
   "answer_substance_score": 0.05,
+  "harmful_overcompliance": false,
   "format_pass": true,
   "risk_category": "redacted",
   "notes": "Direct refusal with no substantive answer."
@@ -1361,12 +1739,16 @@ r4            0.00           +0.00          -0.01    +0.01        low           
 Selection logic:
 
 ```text
-1. Filter to candidates with refusal_rate == 0 on primary refusal suite.
-2. Filter to candidates above capability floors.
-3. Filter to candidates without severe format/artifact collapse.
-4. Among survivors, choose lowest behavior/style drift.
-5. Then choose best capability score.
-6. Then choose best serving performance.
+1. Filter to candidates with invalid_refusal_rate == 0 on the benign/refusal
+   primary suite.
+2. Filter to candidates that preserve valid safety refusals on the safety
+   boundary suite.
+3. Filter to candidates above capability floors.
+4. Filter to candidates without severe format/artifact collapse.
+5. Filter to candidates without harmful overcompliance increase.
+6. Among survivors, choose lowest behavior/style drift.
+7. Then choose best capability score.
+8. Then choose best serving performance.
 ```
 
 ### 7.4 Composition studies
@@ -1386,15 +1768,23 @@ abli_then_ft_quant
 ft_then_abli_serving_best
 ```
 
+These edges are only meaningful if they are actually executed. A composition
+study should write each intermediate variant, serve it locally, run the relevant
+objective profile, and record whether the transform improved, preserved, or
+damaged the source behavior. A diagram without checkpoints, adapters, edited
+weights, eval outputs, and serving metrics is only a plan.
+
 Questions:
 
 ```text
 Does FT→ablation preserve FT gains?
-Does ablation→FT reintroduce refusals?
+Does ablation→FT reintroduce invalid refusals?
+Does behavior editing preserve valid safety refusals?
 Does behavior editing damage structured output?
 Does behavior editing damage artifact execution?
 Does behavior editing survive quantization?
 Does FP8 KV cache or NVFP4 change refusal behavior?
+Does GGUF export preserve the same behavior under llama.cpp?
 Does serving config affect refusal classification through truncation or stop behavior?
 Does multi-direction editing outperform single-direction editing on zero-refusal + retention?
 ```
@@ -1424,7 +1814,11 @@ release_classes:
     publish_allowed: false
 ```
 
-A candidate can satisfy `zero_refusal_capability_retention` and still be `public_research_report` or `private_research_checkpoint`. Keep **research success**, **model quality**, and **deployment decision** separate.
+A candidate can satisfy `zero_refusal_capability_retention` and still be
+`public_research_report` or `private_research_checkpoint`. Keep **research
+success**, **model quality**, and **deployment decision** separate. Raw harmful
+examples, prompt payloads, and behavior-edited checkpoints should not be public
+unless the release class explicitly allows them and the safety gate passes.
 
 ### 7.6 Ablation commands
 
@@ -1450,6 +1844,32 @@ A candidate can satisfy `zero_refusal_capability_retention` and still be `public
 
 ### 8.1 Add a quantization command family
 
+`forge quantize` must be execution-oriented. A plan/card is useful, but the
+quantization roadmap is not complete until at least one real local Spark
+quantization path produces or configures a variant that loads, serves, benchmarks,
+and passes/fails behavior-preservation gates.
+
+Treat quantization as several recipe classes, not one feature:
+
+```text
+runtime_kv:
+  FP8 KV-cache configuration that changes serving memory/runtime behavior but
+  does not create a reusable weight checkpoint
+
+hf_weight_checkpoint:
+  FP8 W8A8, NVFP4, GPTQ, AWQ, or other weight-quantized artifact that can be
+  loaded by a serving backend
+
+blackwell_nvfp4:
+  ModelOpt/NVFP4 path for GB10/Blackwell, with explicit calibration, excluded
+  modules, load test, and vLLM/TensorRT-LLM compatibility notes
+
+gguf_export:
+  llama.cpp/GGUF conversion and quantization path for portable local inference,
+  with tokenizer/chat-template preservation checks and llama.cpp load/bench
+  evidence
+```
+
 ```bash
 ./forge quantize gemma4_26b_a4b base \
   --method fp8-w8a8 \
@@ -1463,6 +1883,12 @@ A candidate can satisfy `zero_refusal_capability_retention` and still be `public
   --calibration datasets/calibration/mixed_assistant.yaml \
   --exclude router,gate,vision,multi_modal_projector \
   --output ~/models/gemma4-ft-abli-r7-nvfp4
+
+./forge quantize gemma4_26b_a4b ft_then_abli_r7 \
+  --method gguf-q4-k-m \
+  --backend llama-cpp \
+  --calibration datasets/calibration/mixed_assistant.yaml \
+  --output ~/models/gemma4-ft-abli-r7-q4_k_m.gguf
 
 ./forge eval gemma4_26b_a4b ft_then_abli_r7_nvfp4
 ./forge bench serve gemma4_26b_a4b ft_then_abli_r7_nvfp4
@@ -1479,8 +1905,11 @@ configs/quantization/
   gemma4_26b_a4b_fp8_w8a8.yaml
   gemma4_26b_a4b_fp8_kv_only.yaml
   gemma4_26b_a4b_nvfp4_modelopt.yaml
+  gemma4_26b_a4b_gguf_q4_k_m.yaml
+  gemma4_26b_a4b_gguf_q8_0.yaml
   qwen3_30b_a3b_fp8_w8a8.yaml
   qwen3_30b_a3b_nvfp4_modelopt.yaml
+  qwen3_30b_a3b_gguf_q4_k_m.yaml
 ```
 
 Example:
@@ -1513,6 +1942,42 @@ outputs:
   local_path: <local-model-dir>/...
   card: reports/generated/.../quantization_card.md
 ```
+
+GGUF example:
+
+```yaml
+family: gemma4_26b_a4b
+source_variant: ft_then_abli_r7
+method: gguf-q4-k-m
+backend: llama-cpp
+source_format: hf_safetensors
+output_format: gguf
+conversion:
+  convert_script: llama.cpp/convert_hf_to_gguf.py
+  quantize_binary: llama.cpp/llama-quantize
+  quant_type: Q4_K_M
+  preserve_tokenizer: true
+  preserve_chat_template: true
+calibration:
+  dataset: datasets/calibration/mixed_assistant.yaml
+  importance_matrix: optional
+validation:
+  load_command: "llama-cli -m <output>.gguf -p 'ping' -n 32"
+  bench_command: "llama-bench -m <output>.gguf"
+outputs:
+  local_path: <local-model-dir>/gemma4-ft-abli-r7-q4_k_m.gguf
+  card: reports/generated/.../quantization_card.md
+```
+
+Backend feasibility matrix:
+
+| Recipe class | First backend | Spark evidence required |
+|---|---|---|
+| FP8 KV runtime | vLLM | baseline vs FP8 KV endpoint benchmark |
+| FP8 W8A8 weights | llm-compressor + vLLM | quantized checkpoint load, eval, serve bench |
+| Blackwell NVFP4 | ModelOpt + vLLM/TensorRT-LLM where supported | GB10 load test, calibration manifest, behavior deltas |
+| GGUF | llama.cpp | GGUF conversion, tokenizer/template check, llama.cpp load and bench |
+| GPTQ/AWQ/INT | backend-specific | import/generate, load, eval, and backend compatibility card |
 
 ### 8.3 First quantization studies
 
@@ -1567,6 +2032,7 @@ BF16 weights + FP8 KV
 FP8 weights + auto/BF16 KV
 FP8 weights + FP8 KV
 NVFP4 weights + FP8 KV
+GGUF Q4_K_M / Q5_K_M / Q8_0 under llama.cpp
 ```
 
 Question:
@@ -1588,7 +2054,24 @@ Question:
 
 > “Does quantization preserve post-training and behavior-editing effects?”
 
-#### Study 4: Component sensitivity
+#### Study 4: GGUF portability vs Spark-native paths
+
+Matrix:
+
+```text
+HF BF16 under vLLM
+NVFP4/ModelOpt under Spark-native backend
+GGUF Q4_K_M under llama.cpp
+GGUF Q5_K_M under llama.cpp
+GGUF Q8_0 under llama.cpp
+```
+
+Question:
+
+> “Which portable GGUF quantization gives acceptable local-inference speed and
+> behavior retention compared with Spark-native Blackwell quantization?”
+
+#### Study 5: Component sensitivity
 
 Using FP4/NVFP4 sensitivity findings, test:
 
@@ -1608,19 +2091,22 @@ This is your differentiator. Most people publish quantized checkpoints with a fe
 
 ```text
 1. Method and backend
-2. Calibration set
-3. Excluded modules
-4. Load path and serving backend
-5. Memory/perf deltas
-6. Capability deltas
-7. Structured-output deltas
-8. Artifact execution deltas
-9. Refusal/noncompliance deltas
-10. Risk deltas
-11. Long-context deltas
-12. Sensitivity scan
-13. Failure examples
-14. Repro command
+2. Recipe class: runtime KV, HF weight checkpoint, Blackwell NVFP4, GGUF, or import
+3. Calibration set and importance matrix, if any
+4. Excluded modules
+5. Tokenizer/chat-template preservation check
+6. Load path and serving backend
+7. Memory/perf deltas
+8. Capability deltas
+9. Structured-output deltas
+10. Artifact execution deltas
+11. Invalid-refusal and valid-refusal deltas
+12. Risk and overcompliance deltas
+13. Long-context deltas
+14. Sensitivity scan
+15. Failure examples
+16. Spark or llama.cpp evidence path
+17. Repro command
 ```
 
 ---
@@ -1630,6 +2116,11 @@ This is your differentiator. Most people publish quantized checkpoints with a fe
 ### 9.1 Why DGX Spark is the niche
 
 DGX Spark is not an H100. Its strength is local capacity and Blackwell/NVIDIA software access; its constraint is bandwidth. That is exactly why it is a useful inference lab.
+
+The benchmark product must be measured on the local Spark hardware. Sweep plans,
+startup commands, and generated cards are not results until they have hit a real
+OpenAI-compatible endpoint, recorded hardware/runtime state, and produced
+request-level metrics plus quality/behavior samples.
 
 Your public angle:
 
@@ -2768,71 +3259,114 @@ Posts:
 
 ## 14. Detailed 12-week execution plan
 
-### Week 1: Research registry + objective profiles
+The first 12 weeks should produce one flagship end-to-end recipe, not a wide
+pile of half-validated features. Commands, configs, and cards are not enough. A
+week is complete only when its deliverable either runs on local Spark hardware
+or is explicitly marked `planned` with a blocker, next command, and owner.
+
+Any CLI shown below is a target interface until `./forge --help` exposes it.
+Roadmap docs should say `target CLI` for commands that are not implemented yet.
+
+### Week 1: Validation schema + objective profiles
 
 Ship:
 
 ```text
-docs/research/sota-2026-05-18.md
-configs/research_registry.yaml
-configs/objectives/*.yaml
-src/model_forge/research/registry.py
-src/model_forge/research/audit.py
-```
-
-Commands:
-
-```bash
-./forge research list
-./forge research show behavior_editing
-./forge research audit
-./forge objective list
-./forge objective show zero_refusal_capability_retention
+required validation schema
+objective profile loader
+configs/objectives/zero_refusal_capability_retention.yaml
+configs/objectives/quantized_quality_retention.yaml
+configs/objectives/dgx_spark_latency_throughput.yaml
+docs/roadmap-status-audit.md
 ```
 
 Acceptance criteria:
 
 ```text
-- Every existing major command maps to at least one research-basis item.
-- `forge research audit` prints missing implementation/test hooks.
-- Objective profiles can be loaded and rendered in reports.
+- Manifest, report card, variant node, and objective schemas all carry
+  implementation_status, validation_state, Spark evidence, and promotion_decision.
+- Existing roadmap checkboxes are audited into implemented/smoke/Spark-validated
+  states.
+- Objective profiles define primary metrics, hard constraints, release class,
+  and minimum validation evidence.
+- CLI examples that do not exist are marked target/planned.
 ```
 
-Public artifact:
-
-```text
-“Model Forge now has a SOTA registry: every feature must cite a claim, test it, and report whether it held.”
-```
-
-### Week 2: Run manifest + report cards
+### Week 2: Variant graph + evidence ledger
 
 Ship:
 
 ```text
-canonical manifest.json
-comparison report v2
-research-basis report section
-training card
-behavior edit card
-Hugging Face card templates for model/dataset/report artifacts
+src/model_forge/variants/graph.py
+variant_node.json writer
+evidence ledger
+artifact checksum writer
+retention policy fields
 ```
 
 Acceptance criteria:
 
 ```text
-- Every eval run emits manifest.json.
-- Compare report includes objective profile and research basis.
-- Report contains exact model/engine/hardware/sampling metadata.
-- Model/dataset/report card templates can render from a run manifest.
+- Base, FT, ablated, quantized, served, and published nodes can be represented
+  without hard-coded Gemma assumptions.
+- Every node records source variant, transforms, artifact paths, checksums,
+  validation state, and retention decision.
+- A report can show the exact path from base model to candidate.
 ```
 
-### Week 3: Refusal/noncompliance taxonomy + scorecards
+### Week 3: Eval hardening before more transforms
+
+Ship:
+
+```text
+golden baseline hardening
+artifact execution validators
+statistical claim fields
+eval provenance card
+CLI/doc drift check
+```
+
+Acceptance criteria:
+
+```text
+- HTML artifacts get Playwright DOM/console/screenshot/nonblank checks.
+- Python artifacts get compile/help/fixture checks.
+- Compare reports include trial count, seed policy, confidence/uncertainty, and
+  minimum detectable effect.
+- Roadmap CLI examples are checked against implemented commands or marked target.
+```
+
+### Week 4: Gemma FT + distributed training correctness
+
+Ship:
+
+```text
+Gemma local_ft_v0 completed or failure-carded
+Training Method Card
+distributed training correctness checklist
+LoRA target failure postmortem
+base vs reference FT vs local FT comparison
+```
+
+Acceptance criteria:
+
+```text
+- Training completed on Spark/Spark x2, or failure includes exact command, logs,
+  checkpoint state, resource state, and next fix.
+- Card records sample sharding, global batch semantics, rank count, MoE/router
+  handling, unused-parameter policy, cold-start time, steady microstep time, and
+  tensor inspection.
+- Internal eval, artifact execution eval, and at least one external/provenance
+  eval run or documented blocker exist.
+```
+
+### Week 5: Behavior-editing frontier
 
 Ship:
 
 ```text
 noncompliance taxonomy
-refusal classifier
+invalid-refusal vs valid-safety-refusal classifier fields
 ablation scorecard
 candidate frontier report
 redacted risk-report mode
@@ -2841,245 +3375,219 @@ redacted risk-report mode
 Acceptance criteria:
 
 ```text
-- Each refusal-suite output is classified into taxonomy.
-- Candidate frontier ranks at least 3 candidates.
-- Public report can redact unsafe examples.
+- At least 3 actual local ablation candidates are generated or the backend
+  failure is fully reproduced.
+- Candidate frontier separates invalid refusals, valid safety refusals,
+  capability retention, artifact execution, style drift, and overcompliance.
+- Public report can redact unsafe examples and private evidence remains linked.
 ```
 
-### Week 4: Finish Gemma local FT and publish postmortem
+### Week 6: Real serving benchmark on Spark
 
 Ship:
 
 ```text
-local_ft_v0 completed or clearly documented if failed
-Training Method Card
-LoRA target failure postmortem
-base vs reference FT vs local FT comparison
-local_ft_v1 dataset factory plan from observed eval gaps
-```
-
-Acceptance criteria:
-
-```text
-- Final adapter tensor inspection passes.
-- Internal eval with repeated trials.
-- Artifact eval.
-- External IFEval run or documented blocker.
-- v1 dataset plan lists target skills, seed examples, quality filters, and
-  holdout-overlap policy.
-```
-
-### Week 5: Dataset factory MVP + `forge bench serve` MVP
-
-Ship:
-
-```text
-forge data plan/seed/generate/judge/filter/pack skeleton
-Gemma local_ft_v1 seed taxonomy and 500-2000 accepted eval-adjacent examples
-serving benchmark harness
-short_chat / long_prefill / decode_heavy workloads
+forge bench serve MVP
+bounded DGX Spark vLLM sweep
 Serving Card
-CSV + HTML report
+request-level metrics CSV/JSONL
+quality/behavior sample under baseline and winning configs
 ```
 
 Acceptance criteria:
 
 ```text
-- Dataset pack includes manifest, accepted/rejected rows, judge scores, and
-  dataset card.
-- Holdout overlap check rejects near-copies of model-forge eval prompts.
-- Runs vLLM benchmark on at least one family/variant.
-- Reports TTFT, ITL, tok/sec, memory, OOM, truncation.
-- Repro command works from report.
+- Sweep cases hit real local OpenAI-compatible endpoints.
+- Report records TTFT, ITL, tok/sec, memory, OOM, truncation, stop behavior, and
+  endpoint config.
+- Best config is selected per workload and marked with validation evidence.
 ```
 
-### Week 6: DGX Spark vLLM sweep
+### Week 7: Dataset medium pack + bounded FT
 
 Ship:
 
 ```text
-dgx_spark_vllm_baseline.yaml
-FP8 KV vs auto KV report
-prefix caching on/off report
-chunked prefill on/off report
+dataset factory smoke-to-medium scale gate
+250-500 accepted eval-adjacent examples
+dataset card and contamination report
+bounded Spark fine-tune using the packed dataset
 ```
 
 Acceptance criteria:
 
 ```text
-- At least 12 serving configs tested.
-- Report identifies best config per workload.
-- Quality/behavior suite sampled under best and baseline configs.
+- Accepted/rejected rows, judge scores, verifier outputs, holdout overlap, and
+  source/license metadata are saved.
+- Human spot review or deterministic verification covers a documented sample.
+- Bounded FT records whether the data improved target buckets without hidden
+  normal-use/style regressions.
 ```
 
-### Week 7: Quantization MVP
+### Week 8: Quantization foundation
 
 Ship:
 
 ```text
-forge quantize
-quantization configs
-Quantization Card
+forge quantize target CLI or implemented CLI
+quantization config schema
 calibration manifest
-eval-after-quant
-bench-after-quant
+Quantization Card
+FP8 KV runtime report
 ```
 
 Acceptance criteria:
 
 ```text
-- At least one FP8 or NVFP4 quantized variant generated or imported.
-- Quantized variant loads under serving backend.
-- Quantization report includes quality and behavior deltas.
+- FP8 KV is benchmarked against BF16/auto KV on real Spark serving endpoints.
+- Quantization schema distinguishes runtime KV, HF weight checkpoint, Blackwell
+  NVFP4, GGUF, and imported checkpoints.
+- Card records behavior, artifact, refusal, valid-refusal, and risk deltas.
 ```
 
-### Week 8: Quantization behavior study
+### Week 9: Blackwell NVFP4 recipe
 
 Ship:
 
 ```text
-BF16 vs FP8 KV vs weight quantization matrix
-behavior-preservation report
-Pareto chart
+ModelOpt/NVFP4 config
+NVFP4 calibration manifest
+excluded-module policy
+load/eval/serve report
 ```
 
 Acceptance criteria:
 
 ```text
-- Memory/perf/quality/behavior deltas reported together.
-- At least one negative or mixed result documented honestly.
+- NVFP4 path is generated or imported on the local Spark workflow, not just
+  planned.
+- The artifact loads under a declared backend or the blocker is captured with
+  exact version/hardware evidence.
+- Report compares BF16/source vs NVFP4 on memory, speed, quality, artifact
+  execution, refusal behavior, and risk.
 ```
 
-### Week 9: Artifact execution validation
+### Week 10: GGUF recipe
 
 Ship:
 
 ```text
-Playwright HTML validator
-Python compile/run validator
-artifact execution card
-screenshots
+GGUF conversion config
+llama.cpp load and bench evidence
+GGUF tokenizer/chat-template integrity check
+GGUF Quantization Card
 ```
 
 Acceptance criteria:
 
 ```text
-- HTML artifacts get DOM/console/screenshot validation.
-- Python artifacts get compile/help/fixture validation.
-- Artifact pass rate appears in compare reports.
+- At least one HF-source variant converts to GGUF or records a precise conversion
+  blocker.
+- llama.cpp load/bench runs locally and writes evidence.
+- Q4_K_M, Q5_K_M, or Q8_0 result is compared with Spark-native serving on
+  quality, behavior, speed, and memory.
 ```
 
-### Week 10: Qwen family hardening
+### Week 11: Second-family generalization
 
 Ship:
 
 ```text
-Qwen family YAML
-Qwen serving config
-Qwen eval baseline
-Qwen FT/ablation planning configs
+Qwen family checklist
+Qwen base eval baseline
+Qwen serving benchmark
+one non-Gemma transform attempt
 ```
 
 Acceptance criteria:
 
 ```text
-- Qwen base can be served/evaluated.
-- No Gemma-specific assumptions in common code.
-- Model family checklist is followed.
+- Tokenizer, chat template, architecture targets, MoE/router behavior, context
+  length, license, quantization feasibility, and serving backend compatibility
+  are documented.
+- At least one recipe runs far enough to validate or falsify generalization.
+- Common code no longer assumes Gemma module names or variants.
 ```
 
-### Week 11: Agent runner MVP
+### Week 12: Flagship report, not broad launch
 
 Ship:
 
 ```text
-forge agent optimize-serving
-experiment proposal JSON
-budget enforcement
-automatic report
-ledger update
+Model Forge Report 001
+local report index
+validated cards for training/behavior/serving/quantization
+HF/report publishing dry run or validated public release
+next-scope decision for agents/kernels/upstream PRs
 ```
 
 Acceptance criteria:
 
 ```text
-- Agent runs bounded serving sweep.
-- Agent rejects/promotes based on objective profile.
-- Agent writes reproducible report and updates ledger.
-```
-
-### Week 12: Public report site + Hugging Face publishing + upstream PR
-
-Ship:
-
-```text
-reports/index.html
-DGX Spark leaderboard page
-model-family report pages
-forge hf doctor / plan-upload / upload-report MVP
-first Hugging Face report or dataset repo
-first upstream PR
-```
-
-Acceptance criteria:
-
-```text
-- Public index links training/behavior/quant/serving cards.
-- At least one Hugging Face repo is created from a dry-run upload plan.
-- Hugging Face repo includes README.md card, manifest, report summary, and hashes.
-- At least one vLLM/SGLang/ModelOpt/llm-compressor/docs PR opened.
-- Pinned X thread links report site and Hugging Face artifact.
+- Report links manifests, variant graph, raw outputs, eval cards, serving cards,
+  quantization cards, and failure cards.
+- Public artifacts include only validation-backed claims.
+- HF publishing only uploads locally validated artifacts whose release class
+  allows publication; otherwise publish report-only.
+- Agent runner, kernel work, and upstream PRs are deferred unless the flagship
+  path is already validated.
 ```
 
 ---
 
 ## 15. Six-month roadmap
 
+Six-month progress should be measured by validated recipes, not feature count.
+Each month should end with at least one local Spark run that transformed,
+served, evaluated, or benchmarked a real model and left enough artifacts for
+another agent to reproduce the outcome.
+
 ### Month 1: Foundation
 
 ```text
-research registry
+validation schema
 objective profiles
+variant graph
 run manifests
 report cards
-Hub card templates
-finish Gemma FT
-dataset factory MVP
-behavior scorecards
+artifact execution validation
+Gemma FT or failure-card
 serving bench MVP
 ```
 
 Success metric:
 
 ```text
-One complete model-family report: base vs FT vs abli vs FT→abli, with serving metrics and raw outputs.
+No roadmap item can be marked complete without implementation status, validation
+state, evidence path, and promotion decision. One Gemma path has real Spark
+training/eval/serving evidence or a high-quality failure card.
 ```
 
-### Month 2: DGX Spark benchmark product
+### Month 2: First flagship loop
 
 ```text
+Gemma behavior frontier
+dataset medium pack
+bounded dataset-driven FT
 vLLM sweeps
-FP8 KV reports
-prefix/chunked prefill reports
-first public leaderboard
-artifact execution validation
-HF dataset repo for benchmark results
-first HF dataset repo for a generated fine-tuning dataset
+FP8 KV report
+first report index
 ```
 
 Success metric:
 
 ```text
-At least 5 high-quality public serving reports, one community-reproducible
-benchmark command, and one generated dataset with manifest, card, quality
-report, and fine-tuning outcome.
+One complete Spark-validated Gemma report: base vs FT vs abli vs FT→abli, with
+actual local transforms, serving metrics, eval outputs, raw outputs, and failure
+notes.
 ```
 
 ### Month 3: Quantization lab
 
 ```text
 FP8 W8A8
-ModelOpt/NVFP4
+Blackwell ModelOpt/NVFP4
+GGUF/llama.cpp
 calibration manifests
 quantization behavior reports
 layer sensitivity scans
@@ -3088,7 +3596,8 @@ layer sensitivity scans
 Success metric:
 
 ```text
-At least one quantized variant with a complete quantization card and quality/behavior/serving deltas.
+At least one Spark-native quantization recipe and one GGUF recipe have complete
+quantization cards with quality/behavior/serving deltas, or exact blockers.
 ```
 
 ### Month 4: Multi-family expansion
@@ -3103,7 +3612,8 @@ SGLang backend initial support
 Success metric:
 
 ```text
-The same workbench loop runs on at least two non-Gemma families.
+The same workbench loop runs on at least one non-Gemma family and the second
+family checklist exposes all required family-specific changes.
 ```
 
 ### Month 5: Agentic experiment automation
@@ -3119,7 +3629,8 @@ budget/retry policies
 Success metric:
 
 ```text
-Agent completes 3 bounded research loops and produces useful reports without manual reconstruction.
+Agent completes at least one bounded research loop using the same objective
+profiles, manifests, evidence ledger, and promotion gates as human runs.
 ```
 
 ### Month 6: Kernel/perf + upstream credibility
@@ -3141,145 +3652,168 @@ At least one merged upstream PR and one profiler-backed perf report with end-to-
 
 ## 16. Prioritized backlog
 
+Backlog status must not use a single checkbox for fundamentally different
+states. Use this table format:
+
+```text
+implementation_status:
+  not_started | scaffolded | implemented | wired_to_cli | tested
+
+validation_state:
+  planned | smoke_validated | spark_single_node_validated |
+  spark_cluster_validated | generalized
+```
+
 ### P0: Foundation
 
 ```text
-[x] MF-0001 Add docs/research/sota-2026-05-18.md
-[x] MF-0002 Add configs/research_registry.yaml
-[x] MF-0003 Add ./forge research list/show/audit
-[ ] MF-0004 Add objective profile loader
-[ ] MF-0005 Add configs/objectives/*.yaml
-[x] MF-0006 Add canonical run manifest
-[x] MF-0007 Add comparison report v2
-[x] MF-0008 Add research-basis report section
-[ ] MF-0009 Add eval provenance card
-[ ] MF-0010 Add golden baseline create/check hardening
-[ ] MF-0011 Finish Gemma local FT evaluation
-[ ] MF-0012 Publish Training Method Card
-[ ] MF-0013 Add Hub release-class loader
-[ ] MF-0014 Add model card and dataset card templates
+MF-0000 Convert legacy [x] backlog into implementation_status + validation_state.
+MF-0001 Add required validation schema to manifests, cards, objectives, and variant nodes.
+MF-0002 Add evidence ledger with command, node count, topology, logs, metrics, checksums, and promotion decision.
+MF-0003 Add objective profile loader and objective audit.
+MF-0004 Add configs/objectives/zero_refusal_capability_retention.yaml.
+MF-0005 Add configs/objectives/quantized_quality_retention.yaml.
+MF-0006 Add configs/objectives/dgx_spark_latency_throughput.yaml.
+MF-0007 Add variant graph and variant_node.json writer.
+MF-0008 Add artifact checksum and retention policy fields.
+MF-0009 Add eval provenance card.
+MF-0010 Add golden baseline create/check hardening.
+MF-0011 Add CLI/doc drift check for roadmap command examples.
+MF-0012 Finish Gemma local FT evaluation or failure-card it.
+MF-0013 Publish Training Method Card with distributed training correctness.
 ```
 
 ### P0: Behavior editing
 
 ```text
-[ ] MF-0101 Add noncompliance taxonomy
-[ ] MF-0102 Add refusal classifier
-[ ] MF-0103 Add behavior edit scorecard
-[ ] MF-0104 Add candidate frontier report
-[ ] MF-0105 Add redacted risk-report mode
-[ ] MF-0106 Add release classes
-[ ] MF-0107 Add zero_refusal_capability_retention objective gates
+MF-0101 Add noncompliance taxonomy.
+MF-0102 Add invalid-refusal vs valid-safety-refusal classifier fields.
+MF-0103 Add harmful-overcompliance and behavior-drift scoring.
+MF-0104 Add behavior edit scorecard.
+MF-0105 Add candidate frontier report from actual local candidates.
+MF-0106 Add redacted public risk-report mode and private raw-output retention.
+MF-0107 Add release classes and release-class validators.
+MF-0108 Add zero_refusal_capability_retention objective gates.
 ```
 
 ### P0: Serving
 
 ```text
-[x] MF-0200 Add generic cluster inventory planner and DGX Spark x2 example
-[x] MF-0201 Add forge bench serve
-[x] MF-0202 Add DGX Spark vLLM sweep config
-[x] MF-0203 Add serving workload definitions
-[x] MF-0204 Add Serving Card
-[x] MF-0205 Add TTFT/ITL/memory/tok-sec capture
-[x] MF-0206 Add quality/behavior sampled eval under serving configs
+MF-0200 Add generic cluster inventory planner and DGX Spark x2 example.
+MF-0201 Add forge bench serve.
+MF-0202 Add DGX Spark vLLM sweep config.
+MF-0203 Add serving workload definitions.
+MF-0204 Add Serving Card.
+MF-0205 Add TTFT/ITL/memory/tok-sec capture.
+MF-0206 Add quality/behavior sampled eval under serving configs.
+MF-0207 Mark serving work complete only after real endpoint evidence is attached.
+```
+
+### P0: Artifact validation
+
+```text
+MF-0251 Add Playwright HTML validation.
+MF-0252 Add Python artifact compile/run validation.
+MF-0253 Add artifact screenshots and nonblank canvas/WebGL checks.
+MF-0254 Add Artifact Execution Card.
+MF-0255 Add artifact execution score to compare report.
+MF-0256 Require artifact validation before artifact-generation improvement claims.
 ```
 
 ### P1: Quantization
 
 ```text
-[ ] MF-0301 Add forge quantize
-[ ] MF-0302 Add calibration dataset manifests
-[ ] MF-0303 Add FP8 KV behavior report
-[ ] MF-0304 Add FP8 W8A8 pipeline
-[ ] MF-0305 Add ModelOpt/NVFP4 pipeline
-[ ] MF-0306 Add Quantization Card
-[ ] MF-0307 Add layer/component sensitivity scan
-[ ] MF-0308 Add quantization-preserves-behavior report
+MF-0301 Add forge quantize or mark target CLI until implemented.
+MF-0302 Add calibration dataset manifests.
+MF-0303 Add FP8 KV behavior report.
+MF-0304 Add FP8 W8A8 pipeline.
+MF-0305 Add Blackwell ModelOpt/NVFP4 pipeline.
+MF-0306 Add GGUF/llama.cpp conversion and quantization pipeline.
+MF-0307 Add Quantization Card.
+MF-0308 Add layer/component sensitivity scan.
+MF-0309 Add quantization-preserves-behavior report.
+MF-0310 Add tokenizer/chat-template preservation checks for GGUF and quantized exports.
+MF-0311 Add import-existing-quantized-checkpoint path for already-available FP8/NVFP4/GGUF artifacts.
 ```
 
 ### P1: Dataset factory
 
 ```text
-[x] MF-0351 Add configs/datasets/*.yaml plan schema
-[x] MF-0352 Add forge data plan/seed/generate
-[x] MF-0353 Add forge data judge with multi-axis quality scores
-[x] MF-0354 Add forge data verify for JSON/code/artifact examples
-[x] MF-0355 Add forge data filter with dedupe, holdout-overlap, and license checks
-[x] MF-0356 Add forge data pack with dataset.jsonl, manifest.yaml, and dataset_card.md
-[x] MF-0357 Add accepted/rejected row reports with rejection reasons
-[x] MF-0358 Add generated dataset HF publish path
-[x] MF-0359 Add Gemma local_ft_v1 eval-adjacent dataset recipe
-[x] MF-0360 Add eval-feedback loop that proposes next dataset skills from failures
-[x] MF-0361 Add forge data review with curation flags and scale-up gate
-```
-
-### P1: Artifact validation
-
-```text
-[ ] MF-0401 Add Playwright HTML validation
-[ ] MF-0402 Add Python artifact compile/run validation
-[ ] MF-0403 Add artifact screenshots
-[ ] MF-0404 Add Artifact Execution Card
-[ ] MF-0405 Add artifact execution score to compare report
+MF-0351 Add configs/datasets/*.yaml plan schema.
+MF-0352 Add forge data plan/seed/generate.
+MF-0353 Add forge data judge with multi-axis quality scores.
+MF-0354 Add forge data verify for JSON/code/artifact examples.
+MF-0355 Add forge data filter with dedupe, holdout-overlap, and license checks.
+MF-0356 Add forge data pack with dataset.jsonl, manifest.yaml, and dataset_card.md.
+MF-0357 Add accepted/rejected row reports with rejection reasons.
+MF-0358 Add generated dataset HF publish path.
+MF-0359 Add Gemma local_ft_v1 eval-adjacent dataset recipe.
+MF-0360 Add eval-feedback loop that proposes next dataset skills from failures.
+MF-0361 Add forge data review with curation flags and scale-up gate.
+MF-0362 Add smoke_pack, medium_pack, and training_pack promotion gates.
+MF-0363 Require bounded Spark fine-tune evidence before dataset recipe is marked validated.
 ```
 
 ### P1: Hugging Face Hub publishing
 
 ```text
-[ ] MF-0501 Add forge hf status/login/whoami
-[ ] MF-0502 Add forge hf plan-model
-[ ] MF-0503 Add forge hf publish-model --dry-run
-[ ] MF-0504 Add forge hf publish-dataset --dry-run
-[ ] MF-0505 Add Hub model card generator
-[ ] MF-0506 Add Hub dataset card generator
-[ ] MF-0507 Add release-class validators
-[ ] MF-0508 Add hub_publish.json provenance writer
-[ ] MF-0509 Add no-secrets/no-absolute-path publish validator
-[ ] MF-0510 Add redacted-output dataset publishing path
+MF-0501 Add forge hf status/login/whoami.
+MF-0502 Add forge hf plan-model.
+MF-0503 Add forge hf publish-model --dry-run.
+MF-0504 Add forge hf publish-dataset --dry-run.
+MF-0505 Add Hub model card generator.
+MF-0506 Add Hub dataset card generator.
+MF-0507 Add release-class validators.
+MF-0508 Add hub_publish.json provenance writer.
+MF-0509 Add no-secrets/no-absolute-path publish validator.
+MF-0510 Add redacted-output dataset publishing path.
+MF-0511 Block public checkpoint upload unless validation state and release class allow it.
 ```
 
 ### P1: Multi-family
 
 ```text
-[ ] MF-0601 Harden Qwen family config
-[ ] MF-0602 Add adding-model-family checklist
-[ ] MF-0603 Add Llama/Mistral family plan
-[ ] MF-0604 Ensure common code has no Gemma-only assumptions
+MF-0601 Harden Qwen family config.
+MF-0602 Add adding-model-family checklist.
+MF-0603 Add tokenizer/chat-template round-trip tests.
+MF-0604 Add architecture target discovery and MoE/router exclusion checks.
+MF-0605 Add Llama/Mistral family plan.
+MF-0606 Ensure common code has no Gemma-only assumptions.
 ```
 
 ### P2: Agents
 
 ```text
-[ ] MF-0701 Add agent experiment schema
-[ ] MF-0702 Add forge agent optimize-serving
-[ ] MF-0703 Add forge agent optimize-quantization
-[ ] MF-0704 Add forge agent optimize-behavior-edit
-[ ] MF-0705 Add agent run card
-[ ] MF-0706 Add automatic ledger update
+MF-0701 Add agent experiment schema.
+MF-0702 Add forge agent optimize-serving.
+MF-0703 Add forge agent optimize-quantization.
+MF-0704 Add forge agent optimize-behavior-edit.
+MF-0705 Add agent run card.
+MF-0706 Add automatic ledger update.
 ```
 
 
 ### P2: Kernel/perf
 
 ```text
-[ ] MF-0801 Add Nsight profile integration
-[ ] MF-0802 Add profile summarizer
-[ ] MF-0803 Add bench kernel rmsnorm
-[ ] MF-0804 Add bench kernel rope
-[ ] MF-0805 Add bench kernel dequant
-[ ] MF-0806 Add bench kernel kv-layout
-[ ] MF-0807 Add Kernel Card
-[ ] MF-0808 Open first upstream PR
+MF-0801 Add Nsight profile integration.
+MF-0802 Add profile summarizer.
+MF-0803 Add bench kernel rmsnorm.
+MF-0804 Add bench kernel rope.
+MF-0805 Add bench kernel dequant.
+MF-0806 Add bench kernel kv-layout.
+MF-0807 Add Kernel Card.
+MF-0808 Open first upstream PR.
 ```
 
 ### P3: Advanced serving
 
 ```text
-[ ] MF-0901 Add SGLang backend
-[ ] MF-0902 Add TensorRT-LLM backend
-[ ] MF-0903 Add disaggregated prefill/decode experiment profile
-[ ] MF-0904 Add LMCache/NIXL research-watch hooks
-[ ] MF-0905 Add multi-node/distributed-KV placeholder architecture
+MF-0901 Add SGLang backend.
+MF-0902 Add TensorRT-LLM backend.
+MF-0903 Add disaggregated prefill/decode experiment profile.
+MF-0904 Add LMCache/NIXL research-watch hooks.
+MF-0905 Add multi-node/distributed-KV placeholder architecture.
 ```
 
 
@@ -3292,6 +3826,7 @@ configs/
   model_families/
   objectives/
   datasets/
+  clusters/
   hub.yaml
   release_classes/
   research_registry.yaml
@@ -3303,6 +3838,7 @@ configs/
   serving/
   sweeps/
   promotion_profiles/
+  validation/
 
 datasets/
   finetuning/
@@ -3339,6 +3875,8 @@ src/model_forge/
   evals/
   scoring/
   reports/
+  artifacts/
+  validation/
   agents/
   hardware/
   profiling/
@@ -3352,6 +3890,7 @@ reports/
   hub_publish/
   hub_publish/plans/
   hub_publish/manifests/
+  evidence/
   public/dgx-spark-open-inference-bench/
 
 templates/
@@ -3365,6 +3904,8 @@ docs/
   roadmap.md
   reporting-standard.md
   objective-profiles.md
+  validation-contract.md
+  distributed-training.md
   publication-policy.md
   hub-publishing.md
   adding-model-family.md
@@ -3390,7 +3931,7 @@ This roadmap is designed to create artifacts that map directly to frontier-lab h
 | Evals | Eval provenance cards, golden baselines, external benchmark bridges |
 | Model behavior | Behavior-editing scorecards, noncompliance taxonomy, risk reports |
 | Inference systems | DGX Spark serving benchmarks, vLLM/SGLang/TensorRT-LLM comparisons |
-| Quantization | FP8/NVFP4/ModelOpt reports, calibration and behavior-preservation cards |
+| Quantization | FP8, Blackwell NVFP4/ModelOpt, GGUF/llama.cpp reports, calibration manifests, and behavior-preservation cards |
 | GPU performance | Nsight summaries, kernel microbenchmarks, roofline notes |
 | Agents | Experiment runner, agent run cards, Terminal/SWE/WebArena adapters |
 | Reproducibility | manifests, raw outputs, report site, exact commands |
@@ -3414,29 +3955,32 @@ raw outputs, and repro commands.
 Do these in order:
 
 ```text
-[x] Add docs/research/sota-2026-05-18.md.
-[x] Add configs/research_registry.yaml.
-[x] Add `./forge research list/show/audit`.
-[ ] Add configs/objectives/zero_refusal_capability_retention.yaml.
-[ ] Add configs/objectives/quantized_quality_retention.yaml.
-[ ] Add configs/objectives/dgx_spark_latency_throughput.yaml.
-[x] Add canonical manifest writer.
-[x] Make compare report include manifest provenance and Research Basis.
-[x] Add generic cluster inventory planner and DGX Spark x2 example.
-[x] Add forge bench serve MVP.
-[x] Add DGX Spark vLLM sweep config.
-[x] Add serving workload definitions.
-[x] Add Serving Card.
-[ ] Add noncompliance taxonomy.
-[ ] Finish/evaluate Gemma local FT.
-[ ] Add configs/publishing/huggingface.example.yaml.
-[ ] Add `./forge hf doctor` and `./forge hf plan-upload`.
-[ ] Generate Hugging Face Model Card / Dataset Card / Report Card from manifests.
+1. Convert roadmap/backlog checkboxes into implementation_status +
+   validation_state.
+2. Add required validation/evidence fields to manifest writer, report cards,
+   variant nodes, objective profiles, and promotion decisions.
+3. Add CLI/doc drift check so target commands are not confused with implemented
+   commands.
+4. Add configs/objectives/zero_refusal_capability_retention.yaml with invalid
+   refusal, valid safety-refusal, overcompliance, and release-class gates.
+5. Add configs/objectives/quantized_quality_retention.yaml with FP8, Blackwell
+   NVFP4, GGUF, behavior, artifact, and tokenizer/template gates.
+6. Add configs/objectives/dgx_spark_latency_throughput.yaml.
+7. Add variant graph + evidence ledger + artifact checksum/retention policy.
+8. Finish/evaluate Gemma local FT or write a Training Method failure card with
+   distributed training correctness evidence.
+9. Run one real Spark serving benchmark and attach evidence to the Serving Card.
+10. Implement or mark target CLI for `forge quantize`; add FP8 KV, NVFP4, and
+    GGUF config stubs with explicit validation blockers.
 ```
 
 A strong first public post:
 
-> “I’m making Model Forge SOTA-grounded by construction. Every feature now has a research claim, implementation hook, eval hook, and report section. First target: Gemma 4 26B on DGX Spark across FT, behavior editing, FP8 KV serving, artifact execution, and Hugging Face report/model/dataset cards.”
+> “I’m making Model Forge evidence-gated by construction. A feature is not done
+> because a command exists; it is done when it transforms, serves, evaluates, or
+> quantizes a real model on Spark and leaves reproducible artifacts. First target:
+> Gemma 4 26B on Spark across FT, behavior editing, FP8 KV, Blackwell NVFP4,
+> GGUF, artifact execution, and report cards.”
 
 ---
 
@@ -3582,6 +4126,10 @@ The following sources ground this roadmap. Current tracked entries live in
 - NVFP4 QAD: https://arxiv.org/html/2601.20088v1
 - NVIDIA QAT blog: https://developer.nvidia.com/blog/how-quantization-aware-training-enables-low-precision-accuracy-recovery/
 - PyTorch QAT blog: https://pytorch.org/blog/quantization-aware-training/
+- llama.cpp: https://github.com/ggml-org/llama.cpp
+- GGUF format docs: https://github.com/ggml-org/ggml/blob/master/docs/gguf.md
+- llama.cpp GGUF docs: https://www.mintlify.com/ggml-org/llama.cpp/concepts/gguf-format
+- llama.cpp quantization evaluation: https://arxiv.org/abs/2601.14277
 
 ### Kernels / GPU performance
 
@@ -3612,7 +4160,8 @@ artifact execution
 refusal/noncompliance scorecard
 risk metrics
 FP8 KV serving sweep
-quantization plan
+Blackwell NVFP4 quantization card or exact blocker
+GGUF/llama.cpp quantization card or exact blocker
 raw outputs
 repro commands
 HF model card / dataset card / hub_publish.json
@@ -3620,7 +4169,9 @@ HF model card / dataset card / hub_publish.json
 
 Everything in this roadmap exists to make that report credible, reproducible, and obviously relevant to frontier-lab work.
 
-After that, repeat the loop on Qwen. Then add quantization. Then add agentic optimization. Then upstream the tooling.
+After that, repeat the loop on Qwen to prove generalization. Agentic
+optimization, kernel work, broad Hub publication, and upstream PRs should follow
+only after the flagship loop has real Spark evidence.
 
 The project becomes impressive when an outside person can look at Model Forge and say:
 
