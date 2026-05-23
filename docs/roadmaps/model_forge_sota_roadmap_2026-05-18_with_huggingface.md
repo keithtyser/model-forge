@@ -3181,7 +3181,7 @@ At least one merged upstream PR and one profiler-backed perf report with end-to-
 [x] MF-0203 Add serving workload definitions
 [x] MF-0204 Add Serving Card
 [x] MF-0205 Add TTFT/ITL/memory/tok-sec capture
-[ ] MF-0206 Add quality/behavior sampled eval under serving configs
+[x] MF-0206 Add quality/behavior sampled eval under serving configs
 ```
 
 ### P1: Quantization

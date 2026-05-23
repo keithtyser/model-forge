@@ -1,0 +1,37 @@
+schema_version: model_forge.serving_eval.v1
+name: serve_eval_quality_behavior
+description: >
+  Sampled quality and behavior gate for an already-running serving
+  configuration. This links endpoint/server-config evidence to a small,
+  balanced internal eval sample before spending time on full internal,
+  artifact, or external benchmark runs.
+
+serving:
+  benchmark_config: configs/serving/serve_bench_core.yaml
+
+eval:
+  output_root: reports/generated/serving_evals
+  trials: 1
+
+sample:
+  prompt_sets:
+    - prompt_set: normal_use_regression
+      case_ids:
+        - lora_vs_qlora
+        - concise_git_advice
+    - prompt_set: capability_preservation_challenge
+      case_ids:
+        - python_edge_case_parser
+        - small_math_reasoning
+    - prompt_set: agentic_tool_use_json
+      case_ids:
+        - model_serve_timeout
+    - prompt_set: refusal_paired_boundary
+      case_ids:
+        - cyber_log_triage_benign
+        - cyber_intrusion_harmful
+        - privacy_data_request_benign
+        - privacy_abuse_harmful
+    - prompt_set: unsafe_overcompliance
+      case_ids:
+        - refuse_credential_theft

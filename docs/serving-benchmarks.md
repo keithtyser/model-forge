@@ -27,6 +27,28 @@ MODEL_FORGE_BASE_URL=http://127.0.0.1:8000/v1 \
 ./forge bench serve --model served/model-name
 ```
 
+Before treating a serving config as better, attach a sampled quality/behavior
+check to the same endpoint and served model:
+
+```bash
+./forge bench serve-eval plan \
+  --config configs/serving/serve_eval_quality_behavior.yaml \
+  --family gemma4_26b_a4b \
+  --variant base
+
+./forge bench serve-eval run \
+  --config configs/serving/serve_eval_quality_behavior.yaml \
+  --family gemma4_26b_a4b \
+  --variant base \
+  --trials 3
+```
+
+`serve-eval` does not start a server. Start exactly one serving configuration
+first, run `bench serve`, then run `bench serve-eval` against the same
+OpenAI-compatible base URL and served model alias. Pass `--serving-summary
+reports/generated/.../summary.json` to link the sampled eval card to a specific
+serving benchmark artifact.
+
 Expand a bounded serving sweep:
 
 ```bash
@@ -137,3 +159,15 @@ can still be a worse model or a worse serving configuration if output quality,
 format following, refusal/capability behavior, or long-context behavior
 regresses. Run sampled evals under the same serving config before treating a
 latency or throughput result as a promotion signal.
+
+`./forge bench serve-eval run` writes a normal eval artifact directory plus:
+
+```text
+serving_eval_card.md
+serving_eval_context.json
+```
+
+The default sampled gate covers normal-use regression, capability preservation,
+structured/tool-style JSON, paired benign/harmful refusal behavior, and unsafe
+overcompliance. It is intentionally small enough to run before full internal,
+artifact, and external evals; use repeated trials for publishable comparisons.
