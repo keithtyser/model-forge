@@ -76,6 +76,7 @@ def _profile_from_name(name: str, gpus: tuple[GpuInfo, ...]) -> HardwareProfile:
                 "VLLM_ALLOW_LONG_MAX_MODEL_LEN": "1",
                 "VLLM_TEST_FORCE_FP8_MARLIN": "1",
                 "VLLM_MARLIN_USE_ATOMIC_ADD": "1",
+                "VLLM_NVFP4_GEMM_BACKEND": "cutlass",
                 "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
                 "TORCH_MATMUL_PRECISION": "high",
                 "NVIDIA_FORWARD_COMPAT": "1",
@@ -93,6 +94,8 @@ def _profile_from_name(name: str, gpus: tuple[GpuInfo, ...]) -> HardwareProfile:
                 "MODEL_FORGE_QUANT_BATCH_SIZE": "auto",
                 "MODEL_FORGE_QUANT_KEEP_BF16_PATTERNS": "router,gate,vision,visual,embed_vision,multi_modal_projector",
                 "MODEL_FORGE_MOE_FAST_CALIBRATION": "1",
+                "MODEL_FORGE_NVFP4_WEIGHT_BACKEND": "modelopt_or_native_nvfp4",
+                "MODEL_FORGE_NVFP4_SERVING_BACKEND": "vllm_blackwell_cutlass",
             },
             notes=(
                 "Use a Spark/GB10-native vLLM build; stock wheels are usually not compiled for SM 12.1.",
@@ -116,6 +119,7 @@ def _profile_from_name(name: str, gpus: tuple[GpuInfo, ...]) -> HardwareProfile:
                 "VLLM_ENABLE_PREFIX_CACHING": "1",
                 "VLLM_KV_CACHE_DTYPE": "auto",
                 "VLLM_DTYPE": "auto",
+                "VLLM_NVFP4_GEMM_BACKEND": "cutlass",
                 "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
                 "TORCH_MATMUL_PRECISION": "high",
             },
@@ -131,6 +135,8 @@ def _profile_from_name(name: str, gpus: tuple[GpuInfo, ...]) -> HardwareProfile:
                 "MODEL_FORGE_QUANT_BATCH_SIZE": "auto",
                 "MODEL_FORGE_QUANT_KEEP_BF16_PATTERNS": "router,gate,vision,visual,embed_vision,multi_modal_projector",
                 "MODEL_FORGE_MOE_FAST_CALIBRATION": "1",
+                "MODEL_FORGE_NVFP4_WEIGHT_BACKEND": "modelopt_or_native_nvfp4",
+                "MODEL_FORGE_NVFP4_SERVING_BACKEND": "vllm_blackwell_cutlass",
             },
             notes=("Higher cap is for dedicated VRAM Blackwell cards; lower it if CUDA graph capture fails.",),
         )
@@ -278,6 +284,8 @@ def recommended_quantization_env(env: Mapping[str, str] | None = None) -> dict[s
         "MODEL_FORGE_QUANT_BATCH_SIZE",
         "MODEL_FORGE_QUANT_KEEP_BF16_PATTERNS",
         "MODEL_FORGE_MOE_FAST_CALIBRATION",
+        "MODEL_FORGE_NVFP4_WEIGHT_BACKEND",
+        "MODEL_FORGE_NVFP4_SERVING_BACKEND",
     ):
         if key in env:
             recommendations[key] = env[key]

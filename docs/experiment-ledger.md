@@ -28,6 +28,66 @@ Publishing helper:
 
 For prepared datasets, pass `--repo-type dataset`.
 
+## Quantization: ModelOpt NVFP4 Self-Export Guardrail Incident
+
+Status: stopped before a completed NVFP4 checkpoint. Code and docs now enforce
+stronger guardrails before another heavy export is attempted.
+
+Hypothesis: Model Forge should self-quantize each Gemma source variant to
+Blackwell NVFP4 with NVIDIA ModelOpt, then compare each quantized checkpoint
+against the same unquantized source baseline: base, local FT, local abli, and
+local FT+abli.
+
+Attempted recipe:
+
+```text
+configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml
+docker/modelopt-nvfp4.Dockerfile
+./forge quantize export gemma4_26b_a4b base --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --execute
+```
+
+Observed blockers:
+
+- The first ModelOpt image pulled a Transformers version that did not recognize
+  `model_type: gemma4`; the Dockerfile now installs ModelOpt while preserving
+  the Spark vLLM image's Gemma 4-capable Transformers stack.
+- `--low_memory_mode` was not viable for this Gemma 4 path because it produced
+  meta-tensor save failures; the checked-in recipe disables it.
+- NVIDIA Nemotron post-training v2 data was initially gated. Access was later
+  confirmed, but the checked-in default uses public calibration data so the repo
+  remains runnable without private entitlement.
+- A subsequent export attempt drove host available memory too low before the
+  quantization runner had a runtime watchdog. The job was stopped and no
+  completed checkpoint from that attempt should be treated as usable.
+
+Safety changes made after the incident:
+
+- `./forge quantize export` now takes a nonblocking lock under
+  `reports/generated/.locks/` so one checkout cannot start two exports at once.
+- The generated export command is wrapped in `systemd-run --scope` with
+  `CPUQuota=80%`, `MemoryMax=85%`, and `IOWeight=100`.
+- The export still applies `nice` and Docker `--cpus`, `--memory`,
+  `--memory-swap`, and `--shm-size` limits.
+- The runner refuses to start if configured memory or disk floors are not met.
+- During execution, the runner polls available host memory and stops the Docker
+  container if available memory falls below the recipe stop floor.
+- `./forge quantize matrix-plan` can assign variants across workers from
+  `MODEL_FORGE_QUANT_WORKERS` without committing private hostnames or IPs.
+
+Next safe retry:
+
+```bash
+export HF_HOME=~/cache/model-forge-hf-user
+export MODEL_FORGE_QUANT_WORKERS=local,<spark-worker-ssh-name>
+./forge quantize matrix-plan \
+  --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml
+```
+
+Run exactly one assigned export per Spark node through `./forge quantize
+export`. Do not bypass the runner with raw Docker. Promotion requires a completed
+checkpoint, vLLM load proof, serving benchmark, internal eval, and quantization
+card against the matching unquantized source variant.
+
 ## Roadmap Utility Layer: Sources, Publish, Promotion, Teacher Serve
 
 Status: implemented as config/code/docs only. No model server, training run, live

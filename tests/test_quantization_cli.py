@@ -1,0 +1,245 @@
+from __future__ import annotations
+
+import json
+import re
+import tempfile
+import unittest
+from pathlib import Path
+
+from model_forge.quantization.cli import (
+    build_card,
+    build_modelopt_export_command,
+    build_plan,
+    load_quantization_config,
+    matrix_entries,
+    matrix_workers,
+    resolve_source,
+)
+
+
+class QuantizationCliTests(unittest.TestCase):
+    def test_nvfp4_blackwell_plan_is_env_backed_and_runtime_only(self) -> None:
+        config_path = Path("configs/quantization/nvfp4_blackwell_runtime.yaml")
+        config = load_quantization_config(config_path)
+        plan = build_plan(
+            config,
+            config_path=config_path,
+            family=None,
+            variant=None,
+            output_dir=None,
+            run_id="unit_nvfp4_plan",
+            env={"MODEL_FORGE_HARDWARE_PROFILE": "dgx_spark"},
+        )
+
+        self.assertEqual(plan["quantization"]["method"], "nvfp4_runtime")
+        self.assertFalse(plan["target"]["checkpoint_written_by_this_plan"])
+        self.assertEqual(plan["source"]["model_id"], "nvidia/Llama-3.1-8B-Instruct-NVFP4")
+        launch = " ".join(plan["launch_command"])
+        self.assertIn("${MODEL_FORGE_SPARK_CLUSTER_NODES", launch)
+        self.assertIn("vllm-node-tf5", launch)
+        self.assertIn("--quantization modelopt", launch)
+        self.assertNotIn("169.254.", launch)
+
+    def test_quantization_card_compares_serving_and_sampled_eval_deltas(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_summary = root / "source_summary.json"
+            candidate_summary = root / "candidate_summary.json"
+            source_eval = root / "source_eval"
+            candidate_eval = root / "candidate_eval"
+            source_eval.mkdir()
+            candidate_eval.mkdir()
+
+            source_summary.write_text(
+                json.dumps(
+                    {
+                        "model": "source",
+                        "success_rate": 1.0,
+                        "request_throughput_per_second_serial_estimate": 0.2,
+                        "metrics": {
+                            "total_latency_seconds": {"p50": 5.0, "p95": 10.0},
+                            "time_to_first_chunk_seconds": {"p50": 0.5, "p95": 1.0},
+                        },
+                        "memory": {
+                            "system": {"available_fraction": {"min": 0.2}},
+                            "gpu": {"utilization_gpu_percent": {"p50": 80.0}},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            candidate_summary.write_text(
+                json.dumps(
+                    {
+                        "model": "candidate",
+                        "success_rate": 1.0,
+                        "request_throughput_per_second_serial_estimate": 0.3,
+                        "metrics": {
+                            "total_latency_seconds": {"p50": 4.0, "p95": 8.0},
+                            "time_to_first_chunk_seconds": {"p50": 0.4, "p95": 0.9},
+                        },
+                        "memory": {
+                            "system": {"available_fraction": {"min": 0.25}},
+                            "gpu": {"utilization_gpu_percent": {"p50": 85.0}},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            header = "bucket,metric,value,count,pass_count,fail_count,ci_low,ci_high,stddev\n"
+            source_rows = header + "normal_use_regression,normal_use_regression_pass_rate,1.0,2,2,0,0.3,1.0,0\n"
+            candidate_rows = header + "normal_use_regression,normal_use_regression_pass_rate,0.5,2,1,1,0.1,0.9,0.5\n"
+            (source_eval / "scores.csv").write_text(source_rows, encoding="utf-8")
+            (candidate_eval / "scores.csv").write_text(candidate_rows, encoding="utf-8")
+
+            config_path = Path("configs/quantization/nvfp4_blackwell_runtime.yaml")
+            config = load_quantization_config(config_path)
+            card = build_card(
+                config,
+                config_path=config_path,
+                source_serving_summary=source_summary,
+                candidate_serving_summary=candidate_summary,
+                source_serving_eval=source_eval,
+                candidate_serving_eval=candidate_eval,
+                output_dir=root / "card",
+                run_id="unit_card",
+            )
+
+        self.assertEqual(card["serving_deltas"]["throughput_req_per_s"]["delta"], 0.1)
+        self.assertEqual(card["serving_deltas"]["total_latency_p50"]["delta"], -1.0)
+        sampled = card["sampled_eval_deltas"]["normal_use_regression.normal_use_regression_pass_rate"]
+        self.assertEqual(sampled["delta"], -0.5)
+        self.assertEqual(sampled["candidate_count"], 2)
+
+    def test_quantization_card_supports_candidate_only_smoke(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate_summary = root / "candidate_summary.json"
+            candidate_eval = root / "candidate_eval"
+            candidate_eval.mkdir()
+            candidate_summary.write_text(
+                json.dumps(
+                    {
+                        "model": "candidate",
+                        "success_rate": 1.0,
+                        "request_throughput_per_second_serial_estimate": 0.3,
+                        "metrics": {
+                            "total_latency_seconds": {"p50": 4.0, "p95": 8.0},
+                            "time_to_first_chunk_seconds": {"p50": 0.4, "p95": 0.9},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (candidate_eval / "scores.csv").write_text(
+                "bucket,metric,value,count,pass_count,fail_count,ci_low,ci_high,stddev\n"
+                "normal_use_regression,normal_use_regression_pass_rate,1.0,2,2,0,0.3,1.0,0\n",
+                encoding="utf-8",
+            )
+
+            config_path = Path("configs/quantization/nvfp4_blackwell_runtime.yaml")
+            config = load_quantization_config(config_path)
+            card = build_card(
+                config,
+                config_path=config_path,
+                source_serving_summary=None,
+                candidate_serving_summary=candidate_summary,
+                source_serving_eval=None,
+                candidate_serving_eval=candidate_eval,
+                output_dir=root / "card",
+                run_id="unit_candidate_only",
+                candidate_only_smoke=True,
+            )
+
+        self.assertTrue(card["candidate_only_smoke"])
+        self.assertIsNone(card["source"]["serving_summary"])
+        self.assertEqual(card["serving_deltas"]["success_rate"]["candidate"], 1.0)
+        self.assertIsNone(card["serving_deltas"]["success_rate"]["delta"])
+        sampled = card["sampled_eval_deltas"]["normal_use_regression.normal_use_regression_pass_rate"]
+        self.assertEqual(sampled["candidate"], 1.0)
+        self.assertIsNone(sampled["delta"])
+
+    def test_modelopt_export_command_quantizes_local_gemma_variant(self) -> None:
+        config_path = Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml")
+        config = load_quantization_config(config_path)
+        source = resolve_source(
+            config,
+            "gemma4_26b_a4b",
+            "base",
+            {"MODEL_FORGE_MODELS_DIR": "/models-host"},
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp) / "quantized" / "gemma4_26b_a4b"
+            export = build_modelopt_export_command(
+                config,
+                source,
+                output_dir=output_root,
+                run_id="unit_base_nvfp4",
+                env={"MODEL_FORGE_MODELS_DIR": "/models-host", "HF_HOME": "/hf-cache"},
+            )
+
+        command = export["command"]
+        joined = " ".join(command)
+        self.assertEqual(export["method"], "nvfp4")
+        self.assertEqual(export["backend"], "modelopt")
+        self.assertEqual(command[:2], ["systemd-run", "--scope"])
+        self.assertIn("CPUQuota=80%", command)
+        self.assertIn("MemoryMax=85%", command)
+        self.assertIn("model-forge-modelopt-nvfp4:0.43.0", command)
+        self.assertIn("--qformat nvfp4", joined)
+        self.assertNotIn("--low_memory_mode", command)
+        self.assertIn("/models/gemma-4-26B-A4B-it", command)
+        self.assertIn(f"{output_root}:/workspace/output_models", command)
+        self.assertIsNone(re.search(r"hf_[A-Za-z0-9]{20,}", export["command_display"]))
+        self.assertEqual(export["resource_policy"]["stop_if_memory_available_below_fraction"], 0.15)
+        self.assertEqual(export["resource_policy"]["watchdog_poll_seconds"], 2.0)
+        self.assertEqual(export["resource_policy"]["systemd_scope"]["MemoryMax"], "85%")
+        self.assertIn("quantization_export.lock", export["resource_policy"]["lock_path"])
+
+    def test_gemma_nvfp4_matrix_has_variant_specific_baselines(self) -> None:
+        config = load_quantization_config(Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml"))
+        entries = matrix_entries(config)
+        variants = {entry["source_variant"]: entry for entry in entries}
+
+        self.assertIn("base", variants)
+        self.assertIn("local_ft", variants)
+        self.assertIn("local_abli_sota", variants)
+        self.assertIn("ft_local_abli_sota_internal_r7_selected_t34_transfer", variants)
+        for entry in entries:
+            self.assertIn("baseline_eval", entry)
+            self.assertIn(entry["source_variant"], entry["target_variant"])
+
+        self.assertEqual(matrix_workers(config, {"MODEL_FORGE_QUANT_WORKERS": "local,spark-b"}), ["local", "spark-b"])
+        self.assertEqual(matrix_workers(config, {"UNRELATED": "x"}), ["local"])
+
+    def test_modelopt_export_allows_calibration_dataset_override(self) -> None:
+        config = load_quantization_config(Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml"))
+        source = resolve_source(
+            config,
+            "gemma4_26b_a4b",
+            "base",
+            {"MODEL_FORGE_MODELS_DIR": "/models-host"},
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            export = build_modelopt_export_command(
+                config,
+                source,
+                output_dir=Path(tmp),
+                run_id="unit_override",
+                env={
+                    "MODEL_FORGE_MODELS_DIR": "/models-host",
+                    "HF_HOME": "/hf-cache",
+                    "MODEL_FORGE_QUANT_CALIB_DATASET": "cnn_dailymail,nemotron-post-training-dataset-v2",
+                    "MODEL_FORGE_QUANT_CALIB_SIZE": "256,256",
+                    "MODEL_FORGE_QUANT_CALIB_SEQ": "4096",
+                },
+            )
+
+        joined = " ".join(export["command"])
+        self.assertIn("--dataset cnn_dailymail,nemotron-post-training-dataset-v2", joined)
+        self.assertIn("--calib_size 256,256", joined)
+        self.assertIn("--calib_seq 4096", joined)
+
+
+if __name__ == "__main__":
+    unittest.main()

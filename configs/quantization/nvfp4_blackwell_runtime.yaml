@@ -1,0 +1,72 @@
+schema_version: model_forge.quantization.v1
+name: nvfp4_blackwell_runtime
+description: >
+  Generic Blackwell NVFP4 runtime-import profile. Use this for pre-quantized
+  NVFP4 checkpoints that already ship in a vLLM-compatible format, then compare
+  against a BF16/FP8/source endpoint with the quantization card.
+method: nvfp4_runtime
+backend: vllm_blackwell
+objective: quantized_quality_retention
+hardware_profile: dgx_spark_x2
+
+target_variant: nvfp4_blackwell_runtime
+
+runtime:
+  model_id: nvidia/Llama-3.1-8B-Instruct-NVFP4
+  revision: bdb54e24298451af785c0ac63c1b485e9b7400a2
+  served_model_name: model-forge/llama31-8b-instruct-nvfp4-blackwell
+  container: vllm-node-tf5
+  host: 0.0.0.0
+  port: 8014
+  tensor_parallel: 2
+  gpu_memory_utilization: 0.60
+  max_model_len: 8192
+  max_num_seqs: 2
+  max_num_batched_tokens: 4096
+  launch:
+    spark_vllm_dir_env: MODEL_FORGE_SPARK_VLLM_DOCKER
+    nodes_env: MODEL_FORGE_SPARK_CLUSTER_NODES
+    container_name: model_forge_nvfp4_blackwell
+    non_privileged: true
+    mem_limit_gb: 110
+    mem_swap_limit_gb: 120
+    shm_size_gb: 32
+  vllm_flags:
+    kv_cache_dtype: fp8
+    enable_prefix_caching: true
+    load_format: fastsafetensors
+    quantization: modelopt
+    distributed_executor_backend: ray
+
+calibration:
+  required: false
+  reason: >
+    Runtime import uses an already-quantized checkpoint. New checkpoint creation
+    must use a separate ModelOpt or LLM Compressor calibration recipe.
+
+exclusions:
+  modules:
+    - router
+    - gate
+    - vision
+    - visual
+    - embed_vision
+    - multi_modal_projector
+
+outputs:
+  reports_dir: reports/generated/quantization
+
+evals:
+  required:
+    - ./forge bench serve --config configs/serving/serve_bench_core.yaml --model model-forge/llama31-8b-instruct-nvfp4-blackwell --base-url http://127.0.0.1:8014/v1
+    - ./forge quantize card --config configs/quantization/nvfp4_blackwell_runtime.yaml --source-serving-summary <source>/summary.json --candidate-serving-summary <candidate>/summary.json --source-serving-eval <source_eval> --candidate-serving-eval <candidate_eval> --run-id <run_id> --write-card
+  card_metrics:
+    - normal_use_regression.normal_use_regression_pass_rate
+    - capability_preservation_challenge.normal_use_regression_pass_rate
+    - agentic_tool_use_json.schema_adherence
+    - agentic_tool_use_json.workflow_success
+    - refusal_paired_boundary.benign_answer_quality_rate
+    - refusal_paired_boundary.benign_refusal_rate
+    - refusal_paired_boundary.unsafe_overcompliance_rate
+    - unsafe_overcompliance.unsafe_overcompliance_rate
+    - overall.latency_seconds_median

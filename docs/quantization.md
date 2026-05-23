@@ -1,0 +1,184 @@
+# Quantization
+
+Model Forge treats quantization as a behavior-preserving model transform, not
+just a memory trick. A quantized candidate is useful only after it loads on the
+target hardware, serves real requests, improves or preserves serving economics,
+and keeps the source model's useful behavior.
+
+## First-Class Path: Blackwell NVFP4
+
+NVFP4 is the priority path for DGX Spark / GB10 and other Blackwell targets.
+Use it when a checkpoint is exported with native NVFP4/ModelOpt-compatible
+weights, or when a trusted upstream model ships an already-quantized NVFP4
+checkpoint.
+
+The default runtime-import profile is:
+
+```bash
+./forge quantize plan \
+  --config configs/quantization/nvfp4_blackwell_runtime.yaml \
+  --write-plan
+```
+
+That command does not start a server. It writes a reproducibility plan with an
+environment-backed Spark launch command. Set cluster values outside git:
+
+```bash
+export MODEL_FORGE_SPARK_VLLM_DOCKER=/path/to/spark-vllm-docker
+export MODEL_FORGE_SPARK_CLUSTER_NODES=spark0,spark1
+```
+
+Then start exactly one NVFP4 server, run serving benchmarks and sampled behavior
+checks, and stop the server before switching variants.
+
+The default profile uses NVIDIA's small official
+`nvidia/Llama-3.1-8B-Instruct-NVFP4` checkpoint so agents can validate the
+Blackwell NVFP4 path without first downloading a very large MoE. Gemma-specific
+NVFP4 import settings live in
+`configs/quantization/gemma4_26b_a4b_nvfp4_blackwell_runtime.yaml`.
+
+## Self-Quantizing A Source Model
+
+Runtime-import profiles are not enough for Model Forge promotion. The primary
+Gemma path must quantize our own source checkpoints, then compare each
+quantized checkpoint against the same unquantized variant:
+
+```bash
+docker build \
+  -f docker/modelopt-nvfp4.Dockerfile \
+  -t model-forge-modelopt-nvfp4:0.43.0 .
+
+./forge quantize matrix-plan \
+  --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml
+```
+
+The Gemma matrix covers:
+
+- `base -> base_nvfp4_modelopt`
+- `local_ft -> local_ft_nvfp4_modelopt`
+- `local_abli_sota -> local_abli_sota_nvfp4_modelopt`
+- `ft_local_abli_sota_internal_r7_selected_t34_transfer -> ft_local_abli_sota_internal_r7_selected_t34_transfer_nvfp4_modelopt`
+
+For a two-Spark cluster, assign independent variant exports across nodes with
+an environment variable instead of committing hosts:
+
+```bash
+export MODEL_FORGE_QUANT_WORKERS=local,spark-worker
+./forge quantize matrix-plan \
+  --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml
+```
+
+Run at most one export per Spark node. ModelOpt export currently runs as one
+heavy process per assigned worker; serving and eval should use the two-node vLLM
+path when the quantized checkpoint loads. The matrix command is a planner: it
+assigns variants to workers and prints the local or SSH command for each worker
+without starting a heavy process.
+
+Production calibration can use NVIDIA Nemotron post-training data when the HF
+account has access:
+
+```bash
+export HF_HOME=~/cache/model-forge-hf-user
+export MODEL_FORGE_QUANT_CALIB_DATASET=cnn_dailymail,nemotron-post-training-dataset-v2
+export MODEL_FORGE_QUANT_CALIB_SIZE=64,64
+export MODEL_FORGE_QUANT_CALIB_SEQ=2048
+./forge quantize export gemma4_26b_a4b base \
+  --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml \
+  --run-id gemma4_base_nvfp4_modelopt \
+  --write-plan --execute
+```
+
+The export runner now has hard host guardrails:
+
+- nonblocking lock under `reports/generated/.locks/` so the same checkout cannot
+  start two exports at once
+- `systemd-run --scope` wrapper with recipe-controlled CPU, memory, and IO
+  limits
+- `nice` plus Docker `--cpus`, `--memory`, `--memory-swap`, and `--shm-size`
+  limits
+- preflight memory and disk checks before Docker starts
+- runtime memory watchdog that stops the Docker container if available host RAM
+  drops below the configured stop floor
+
+Do not bypass this runner with an ad hoc `docker run` for large checkpoints.
+If the guard trips, treat it as a failed run to diagnose before retrying.
+
+## Evidence Contract
+
+Every quantization candidate needs these artifacts:
+
+- source serving benchmark summary
+- candidate serving benchmark summary
+- source sampled serving eval scores
+- candidate sampled serving eval scores
+- quantization card comparing latency, throughput, memory, quality, and behavior
+
+Write the card:
+
+```bash
+./forge quantize card \
+  --config configs/quantization/nvfp4_blackwell_runtime.yaml \
+  --source-serving-summary reports/generated/source/serve_bench/summary.json \
+  --candidate-serving-summary reports/generated/candidate/serve_bench/summary.json \
+  --source-serving-eval reports/generated/source/serve_eval \
+  --candidate-serving-eval reports/generated/candidate/serve_eval \
+  --run-id source_vs_candidate_nvfp4 \
+  --write-card
+```
+
+The card intentionally reports both safety/refusal behavior and utility metrics.
+For ablated models, lower harmful-prompt refusal can be the objective, but only
+if normal-use quality, instruction following, structured output, and artifact
+behavior remain comparable to the source.
+
+## Runtime Import vs Checkpoint Creation
+
+`nvfp4_runtime` means the checkpoint is already quantized. It validates a real
+compressed serving path without pretending Model Forge created the weights.
+
+`nvfp4` checkpoint creation is a separate backend path. When added for a model
+family, it must record:
+
+- backend and version, such as ModelOpt, TensorRT-LLM, or a vLLM-compatible
+  exporter
+- calibration dataset manifest, row count, sequence length, and license tier
+- modules kept in BF16 or otherwise excluded from low precision
+- exported checkpoint path and loader format
+- source-vs-quantized eval and serving deltas
+
+Do not mark a checkpoint-creation recipe complete from a dry run.
+
+## Spark Defaults
+
+DGX Spark defaults live in `src/model_forge/hardware.py` and
+`configs/hardware/dgx_spark.yaml`. NVFP4 serving starts conservative:
+
+```text
+VLLM_NVFP4_GEMM_BACKEND=cutlass
+VLLM_KV_CACHE_DTYPE=fp8_e4m3
+VLLM_ENABLE_PREFIX_CACHING=1
+VLLM_ENABLE_CHUNKED_PREFILL=1
+GPU_MEMORY_UTILIZATION=0.85
+VLLM_MAX_NUM_SEQS=4
+```
+
+Large NVFP4 MoE serving on Spark should generally start lower than that
+(`gpu_memory_utilization=0.60`, `max_model_len=8192`, `max_num_seqs=2`) and only
+increase one variable at a time after smoke benchmarks pass.
+
+## Generalization Rule
+
+The reusable recipe is the structure:
+
+```text
+choose source and quantized candidate
+pin model revision and backend
+serve under bounded Spark resources
+benchmark the running endpoint
+sample behavior through the same endpoint
+write a quantization card
+promote only with evidence
+```
+
+The constants are not universal. Recalibrate model length, sequence count,
+calibration samples, and excluded modules for each new family.

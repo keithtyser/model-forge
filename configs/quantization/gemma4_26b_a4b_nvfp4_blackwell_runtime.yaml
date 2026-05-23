@@ -1,0 +1,78 @@
+schema_version: model_forge.quantization.v1
+name: gemma4_26b_a4b_nvfp4_blackwell_runtime
+description: >
+  NVIDIA ModelOpt NVFP4 runtime-import profile for Gemma 4 26B A4B on
+  Blackwell. The upstream model card currently says vLLM works with TP=1 only,
+  so this profile is single-node by default until the vLLM/FlashInfer TP issue
+  is resolved.
+method: nvfp4_runtime
+backend: vllm_blackwell
+objective: quantized_quality_retention
+hardware_profile: dgx_spark
+
+family: gemma4_26b_a4b
+source_variant: base_nvfp4_blackwell_runtime
+target_variant: base_nvfp4_blackwell_runtime
+
+runtime:
+  model_id: nvidia/Gemma-4-26B-A4B-NVFP4
+  revision: a19cfe00be84568a6867111c9a68c9c44fdcffe6
+  served_model_name: model-forge/gemma4-26b-a4b-base-nvfp4-blackwell
+  container: vllm-node-tf5
+  host: 0.0.0.0
+  port: 8015
+  tensor_parallel: 1
+  gpu_memory_utilization: 0.60
+  max_model_len: 8192
+  max_num_seqs: 2
+  max_num_batched_tokens: 4096
+  launch:
+    spark_vllm_dir_env: MODEL_FORGE_SPARK_VLLM_DOCKER
+    nodes_env: MODEL_FORGE_SPARK_CLUSTER_NODES
+    container_name: model_forge_gemma4_nvfp4_blackwell
+    no_ray: true
+    non_privileged: true
+    mem_limit_gb: 110
+    mem_swap_limit_gb: 120
+    shm_size_gb: 32
+  vllm_flags:
+    tool_call_parser: gemma4
+    reasoning_parser: gemma4
+    enable_auto_tool_choice: true
+    trust_remote_code: true
+    quantization: modelopt
+    kv_cache_dtype: fp8
+
+calibration:
+  required: false
+  reason: >
+    Runtime import uses NVIDIA's already-quantized ModelOpt NVFP4 checkpoint.
+    The upstream card reports calibration on cnn_dailymail and
+    Nemotron-Post-Training-Dataset-v2.
+
+exclusions:
+  modules:
+    - lm_head
+    - embed_vision
+    - router
+    - self_attn
+    - early_layers
+
+outputs:
+  reports_dir: reports/generated/quantization
+
+evals:
+  required:
+    - ./forge bench serve --config configs/serving/serve_bench_core.yaml --model model-forge/gemma4-26b-a4b-base-nvfp4-blackwell --base-url http://127.0.0.1:8015/v1
+    - ./forge eval gemma4_26b_a4b base_nvfp4_blackwell_runtime --internal
+    - ./forge quantize card --config configs/quantization/gemma4_26b_a4b_nvfp4_blackwell_runtime.yaml --source-serving-summary <source>/summary.json --candidate-serving-summary <candidate>/summary.json --source-serving-eval <source_eval> --candidate-serving-eval <candidate_eval> --run-id <run_id> --write-card
+  card_metrics:
+    - normal_use_regression.normal_use_regression_pass_rate
+    - capability_preservation_challenge.normal_use_regression_pass_rate
+    - agentic_tool_use_json.schema_adherence
+    - agentic_tool_use_json.workflow_success
+    - refusal_paired_boundary.benign_answer_quality_rate
+    - refusal_paired_boundary.benign_refusal_rate
+    - refusal_paired_boundary.unsafe_overcompliance_rate
+    - unsafe_overcompliance.unsafe_overcompliance_rate
+    - overall.latency_seconds_median

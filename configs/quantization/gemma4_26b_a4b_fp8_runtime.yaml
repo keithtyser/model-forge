@@ -1,0 +1,51 @@
+schema_version: model_forge.quantization.v1
+name: gemma4_26b_a4b_fp8_runtime
+description: >
+  Runtime FP8 serving profile for Gemma 4 26B A4B. This is a serving-side
+  quantization comparison path, not a checkpoint export recipe.
+family: gemma4_26b_a4b
+source_variant: base
+target_variant: base_fp8_runtime
+method: fp8_runtime
+backend: vllm_blackwell
+objective: quantized_quality_retention
+hardware_profile: dgx_spark_x2
+
+runtime:
+  served_model_name: model-forge/gemma4-26b-a4b-base-fp8-runtime
+  container: vllm-node-tf5
+  host: 0.0.0.0
+  port: 8012
+  tensor_parallel: 2
+  gpu_memory_utilization: 0.60
+  max_model_len: 8192
+  max_num_seqs: 2
+  max_num_batched_tokens: 4096
+  launch:
+    spark_vllm_dir_env: MODEL_FORGE_SPARK_VLLM_DOCKER
+    nodes_env: MODEL_FORGE_SPARK_CLUSTER_NODES
+    container_name: model_forge_fp8_runtime
+    no_ray: true
+    non_privileged: true
+    mem_limit_gb: 110
+    mem_swap_limit_gb: 120
+    shm_size_gb: 32
+  vllm_flags:
+    load_format: safetensors
+    enable_prefix_caching: true
+    language_model_only: true
+    quantization: fp8
+    kv_cache_dtype: fp8
+
+calibration:
+  required: false
+  reason: Runtime online FP8 does not write a calibrated checkpoint.
+
+outputs:
+  reports_dir: reports/generated/quantization
+
+evals:
+  required:
+    - ./forge bench serve --config configs/serving/serve_bench_core.yaml --model model-forge/gemma4-26b-a4b-base-fp8-runtime --base-url http://127.0.0.1:8012/v1
+    - ./forge eval gemma4_26b_a4b base_fp8_runtime --internal
+    - ./forge quantize card --config configs/quantization/gemma4_26b_a4b_fp8_runtime.yaml --source-serving-summary <source>/summary.json --candidate-serving-summary <candidate>/summary.json --source-serving-eval <source_eval> --candidate-serving-eval <candidate_eval> --run-id <run_id> --write-card
