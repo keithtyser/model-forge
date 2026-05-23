@@ -861,6 +861,24 @@ Publish status: already uploaded to Hugging Face before the FT handoff. No
 additional upload needed for this completed ablated checkpoint unless the model
 card or files need revision.
 
+## Roadmap Hygiene: CLI/Doc Drift Check
+
+Status: implemented and smoke-validated.
+
+Purpose: prevent roadmap examples from looking executable when the matching
+`./forge` command surface has not shipped yet.
+
+Implemented command:
+
+```text
+./forge roadmap cli-drift
+```
+
+Behavior: extracts documented `./forge` examples from the roadmap, compares
+them against the current `./forge --help` command surface, and fails if a
+missing command is not explicitly marked as target/planned CLI. `./forge doctor`
+now runs the same check so future handoffs catch command drift automatically.
+
 ## Ablation: Gemopus FT Local Abli
 
 Status: completed before FT work.

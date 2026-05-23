@@ -4,7 +4,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from model_forge.roadmap import audit_roadmap_items, parse_roadmap_items, summarize, write_markdown_report
+from model_forge.roadmap import (
+    audit_roadmap_command_examples,
+    audit_roadmap_items,
+    parse_help_surface,
+    parse_roadmap_command_examples,
+    parse_roadmap_items,
+    summarize,
+    write_markdown_report,
+)
 
 
 class RoadmapAuditTests(unittest.TestCase):
@@ -54,6 +62,70 @@ class RoadmapAuditTests(unittest.TestCase):
         self.assertIn("# Roadmap Status Audit", text)
         self.assertIn("| MF-0000 |", text)
         self.assertIn("Implementation Status", text)
+
+    def test_current_roadmap_cli_examples_are_implemented_or_marked_target(self) -> None:
+        examples = parse_roadmap_command_examples()
+        findings = audit_roadmap_command_examples(examples)
+        self.assertEqual(findings, [])
+        self.assertGreaterEqual(len(examples), 50)
+
+    def test_cli_drift_reports_unmarked_missing_command(self) -> None:
+        help_surface = parse_help_surface(
+            "\n".join(
+                [
+                    "Usage:",
+                    "  ./forge roadmap [audit|cli-drift]",
+                    "  ./forge research [list|show|audit]",
+                    "",
+                    "Examples:",
+                    "  ./forge roadmap audit",
+                ]
+            )
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "roadmap.md"
+            path.write_text(
+                "\n".join(
+                    [
+                        "## Example",
+                        "",
+                        "```bash",
+                        "./forge research explain ablate",
+                        "```",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            examples = parse_roadmap_command_examples(path, surface=help_surface)
+            findings = audit_roadmap_command_examples(examples)
+
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].key, "research explain")
+
+    def test_cli_drift_allows_marked_target_command(self) -> None:
+        help_surface = parse_help_surface("Usage:\n  ./forge roadmap [audit|cli-drift]\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "roadmap.md"
+            path.write_text(
+                "\n".join(
+                    [
+                        "Target CLI:",
+                        "",
+                        "```bash",
+                        "./forge hf status",
+                        "```",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            examples = parse_roadmap_command_examples(path, surface=help_surface)
+            findings = audit_roadmap_command_examples(examples)
+
+        self.assertEqual(findings, [])
+        self.assertFalse(examples[0].implemented)
+        self.assertTrue(examples[0].target_marked)
 
 
 if __name__ == "__main__":

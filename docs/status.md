@@ -68,6 +68,9 @@ This is the short handoff state for humans and agents. Use
 - The prioritized roadmap backlog now has explicit `implementation_status` and
   `validation_state` on every MF item. `./forge roadmap audit --write-doc`
   validates those fields and refreshes `docs/roadmap-status-audit.md`.
+- Roadmap command examples are now checked by `./forge roadmap cli-drift`.
+  Implemented examples must exist in `./forge --help`; future examples must be
+  explicitly marked as target/planned CLI.
 - Variant graph metadata is now wired through `./forge variants graph|node`.
   Variant nodes can record source variant, transform, artifact checksums,
   validation state, Spark evidence, promotion decision, and retention decision.
@@ -110,13 +113,13 @@ length filtering:
 
 ## Recommended Next Work
 
-1. Convert roadmap/backlog status from single checkboxes to separate
-   `implementation_status` and `validation_state` fields.
-2. Add required validation/evidence fields to manifests, report cards, variant
-   nodes, and promotion decisions. Objective profiles now have those fields.
-3. Attach variant nodes to completed and planned Gemma base, FT, abli, and
+1. Attach variant nodes to completed and planned Gemma base, FT, abli, and
    quantization artifacts as generated evidence, then connect report cards to
    those nodes.
+2. Add the eval provenance card so eval reports record suite version, judge
+   config, prompt counts, trials, raw-output paths, and objective profile.
+3. Add artifact execution validators for HTML and Python artifacts before using
+   artifact quality as a promotion claim.
 4. Finish/evaluate Gemma local FT or write a Training Method failure card with
    distributed Spark correctness evidence.
 5. Run one real Spark serving benchmark and attach endpoint evidence to the

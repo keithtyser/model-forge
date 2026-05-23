@@ -72,7 +72,9 @@ reusable pipeline code over one-off scripts.
 8. Promote only when refusal suppression improves and source-model capability is
    preserved within expected eval variance.
 9. Save raw responses, scores, model cards, and exact recipe/config paths.
-10. Update `docs/status.md` and `docs/experiment-ledger.md` before handing off
+10. Run `./forge roadmap cli-drift` after editing roadmap CLI examples so
+    target commands cannot be confused with implemented commands.
+11. Update `docs/status.md` and `docs/experiment-ledger.md` before handing off
    or starting a long run.
 
 ## Useful Commands
@@ -101,6 +103,13 @@ Plan ablation without loading a model:
 
 ```bash
 ./forge ablate gemma4_26b_a4b plan
+```
+
+Audit roadmap status and command drift:
+
+```bash
+./forge roadmap audit --write-doc
+./forge roadmap cli-drift
 ```
 
 Plan fine-tuning without loading a model:

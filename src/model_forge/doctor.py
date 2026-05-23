@@ -10,7 +10,12 @@ from pathlib import Path
 from typing import Iterable
 
 from model_forge.objectives import audit_profiles
-from model_forge.roadmap import audit_roadmap_items, parse_roadmap_items
+from model_forge.roadmap import (
+    audit_roadmap_command_examples,
+    audit_roadmap_items,
+    parse_roadmap_command_examples,
+    parse_roadmap_items,
+)
 from model_forge.variants.manifest import validate_variant_node
 
 
@@ -205,6 +210,20 @@ def check_roadmap_status() -> list[Finding]:
     ]
 
 
+def check_roadmap_cli_drift() -> list[Finding]:
+    examples = parse_roadmap_command_examples()
+    errors = audit_roadmap_command_examples(examples)
+    return [
+        Finding(
+            "roadmap_cli_drift",
+            error.message,
+            "docs/roadmaps/model_forge_sota_roadmap_2026-05-18_with_huggingface.md",
+            error.line,
+        )
+        for error in errors
+    ]
+
+
 def check_tracked_variant_nodes(files: list[str], repo_dir: Path = REPO_DIR) -> list[Finding]:
     findings: list[Finding] = []
     for path in files:
@@ -231,6 +250,7 @@ def run_checks(repo_dir: Path = REPO_DIR) -> list[Finding]:
     findings.extend(check_large_tracked_files(files, repo_dir))
     findings.extend(check_objective_profiles())
     findings.extend(check_roadmap_status())
+    findings.extend(check_roadmap_cli_drift())
     findings.extend(check_tracked_variant_nodes(files, repo_dir))
     return findings
 

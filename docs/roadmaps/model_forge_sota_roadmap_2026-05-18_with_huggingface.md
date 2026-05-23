@@ -911,6 +911,9 @@ src/model_forge/research/
 
 ### 4.3 CLI
 
+Target CLI, partially implemented by the current `research list`, `research
+show`, and `research audit` commands:
+
 ```bash
 ./forge research list
 ./forge research show quantization_kv_cache
@@ -1259,7 +1262,8 @@ This matters because an ablation objective should not accidentally optimize away
 
 ### 5.4 Golden baselines
 
-You already have `golden-summary` / `golden-check`. Promote this to a first-class API:
+You already have `golden-summary` / `golden-check`. Promote this to a
+first-class target API:
 
 ```bash
 ./forge golden create gemma4_26b_a4b base --suite internal_fast
@@ -1282,7 +1286,7 @@ reports/baselines/
 
 This should become a signature Model Forge feature.
 
-Commands:
+Target CLI commands:
 
 ```bash
 ./forge eval gemma4_26b_a4b local_ft --artifact --execute-artifacts
@@ -1845,6 +1849,8 @@ unless the release class explicitly allows them and the safety gate passes.
 
 ### 7.6 Ablation commands
 
+Target CLI for the eventual execution-oriented ablation interface:
+
 ```bash
 ./forge ablate gemma4_26b_a4b local_ft_v0 \
   --objective zero_refusal_capability_retention \
@@ -1892,6 +1898,8 @@ gguf_export:
   with tokenizer/chat-template preservation checks and llama.cpp load/bench
   evidence
 ```
+
+Target CLI examples:
 
 ```bash
 ./forge quantize gemma4_26b_a4b base \
@@ -2300,6 +2308,8 @@ failure/limitation
 
 ### 10.2 Add profiling integration
 
+Target CLI:
+
 ```bash
 ./forge bench serve gemma4_26b_a4b base \
   --engine vllm \
@@ -2320,6 +2330,8 @@ profile/roofline.md
 ```
 
 ### 10.3 Add kernel microbench commands
+
+Target CLI:
 
 ```bash
 ./forge bench kernel rmsnorm
@@ -2413,7 +2425,7 @@ A small merged PR beats a large private benchmark that nobody can inspect.
 
 Build an agent that runs the workbench.
 
-Command:
+Target CLI command:
 
 ```bash
 ./forge agent optimize-serving gemma4_26b_a4b base \
@@ -2423,7 +2435,7 @@ Command:
   --output reports/generated/agent_runs/serving_opt_001
 ```
 
-Other commands:
+Other target CLI commands:
 
 ```bash
 ./forge agent optimize-quantization gemma4_26b_a4b ft_then_abli_r7 \
@@ -2653,7 +2665,7 @@ This keeps the workbench flexible while making the publication decision explicit
 
 ### 12.4 New CLI surface
 
-Add a dedicated `hf` command group.
+Add a dedicated target CLI `hf` command group.
 
 ```bash
 ./forge hf status
@@ -3346,7 +3358,7 @@ golden baseline hardening
 artifact execution validators
 statistical claim fields
 eval provenance card
-CLI/doc drift check
+CLI/doc drift check (implemented: `./forge roadmap cli-drift`)
 ```
 
 Acceptance criteria:
@@ -3701,7 +3713,7 @@ MF-0007 Add variant graph and variant_node.json writer. implementation_status=te
 MF-0008 Add artifact checksum and retention policy fields. implementation_status=tested validation_state=planned
 MF-0009 Add eval provenance card. implementation_status=scaffolded validation_state=planned
 MF-0010 Add golden baseline create/check hardening. implementation_status=tested validation_state=smoke_validated
-MF-0011 Add CLI/doc drift check for roadmap command examples. implementation_status=not_started validation_state=planned
+MF-0011 Add CLI/doc drift check for roadmap command examples. implementation_status=tested validation_state=smoke_validated
 MF-0012 Finish Gemma local FT evaluation or failure-card it. implementation_status=implemented validation_state=spark_single_node_validated
 MF-0013 Publish Training Method Card with distributed training correctness. implementation_status=not_started validation_state=planned
 ```

@@ -13,17 +13,17 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| not_started | 39 |
+| not_started | 38 |
 | scaffolded | 23 |
-| tested | 31 |
+| tested | 32 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 68 |
-| smoke_validated | 27 |
+| planned | 67 |
+| smoke_validated | 28 |
 | spark_single_node_validated | 1 |
 
 ## Findings
@@ -45,7 +45,7 @@ No status audit findings.
 | MF-0008 | P0: Foundation | tested | planned | Add artifact checksum and retention policy fields |
 | MF-0009 | P0: Foundation | scaffolded | planned | Add eval provenance card |
 | MF-0010 | P0: Foundation | tested | smoke_validated | Add golden baseline create/check hardening |
-| MF-0011 | P0: Foundation | not_started | planned | Add CLI/doc drift check for roadmap command examples |
+| MF-0011 | P0: Foundation | tested | smoke_validated | Add CLI/doc drift check for roadmap command examples |
 | MF-0012 | P0: Foundation | implemented | spark_single_node_validated | Finish Gemma local FT evaluation or failure-card it |
 | MF-0013 | P0: Foundation | not_started | planned | Publish Training Method Card with distributed training correctness |
 | MF-0101 | P0: Behavior editing | scaffolded | planned | Add noncompliance taxonomy |
