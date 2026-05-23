@@ -18,6 +18,8 @@ reusable pipeline code over one-off scripts.
 
 - `README.md`: project overview and model-agnostic workflow
 - `docs/status.md`: current short handoff state and recommended next work
+- `docs/roadmap-status-audit.md`: current MF backlog implementation status and
+  validation state
 - `docs/artifact-retention.md`: what belongs in Git, local scratch, or Hugging
   Face
 - `docs/finetuning.md`: SFT/QLoRA workflow and promotion gates
@@ -186,6 +188,7 @@ Inspect or validate the research basis:
 ```bash
 ./forge objectives list
 ./forge objectives audit
+./forge roadmap audit --write-doc
 ./forge research list
 ./forge research show arditi_2024_refusal_direction
 ./forge research audit

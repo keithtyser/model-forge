@@ -3277,7 +3277,7 @@ objective profile loader (implemented: `./forge objectives audit`)
 configs/objectives/zero_refusal_capability_retention.yaml (implemented)
 configs/objectives/quantized_quality_retention.yaml (implemented)
 configs/objectives/dgx_spark_latency_throughput.yaml (implemented)
-docs/roadmap-status-audit.md
+docs/roadmap-status-audit.md (implemented: `./forge roadmap audit --write-doc`)
 ```
 
 Acceptance criteria:
@@ -3667,153 +3667,153 @@ validation_state:
 ### P0: Foundation
 
 ```text
-MF-0000 Convert legacy [x] backlog into implementation_status + validation_state.
-MF-0001 Add required validation schema to manifests, cards, objectives, and variant nodes.
-MF-0002 Add evidence ledger with command, node count, topology, logs, metrics, checksums, and promotion decision.
-MF-0003 Add objective profile loader and objective audit. implementation_status=wired_to_cli validation_state=planned
-MF-0004 Add configs/objectives/zero_refusal_capability_retention.yaml. implementation_status=wired_to_cli validation_state=planned
-MF-0005 Add configs/objectives/quantized_quality_retention.yaml. implementation_status=wired_to_cli validation_state=planned
-MF-0006 Add configs/objectives/dgx_spark_latency_throughput.yaml. implementation_status=wired_to_cli validation_state=planned
-MF-0007 Add variant graph and variant_node.json writer.
-MF-0008 Add artifact checksum and retention policy fields.
-MF-0009 Add eval provenance card.
-MF-0010 Add golden baseline create/check hardening.
-MF-0011 Add CLI/doc drift check for roadmap command examples.
-MF-0012 Finish Gemma local FT evaluation or failure-card it.
-MF-0013 Publish Training Method Card with distributed training correctness.
+MF-0000 Convert legacy [x] backlog into implementation_status + validation_state. implementation_status=tested validation_state=planned
+MF-0001 Add required validation schema to manifests, cards, objectives, and variant nodes. implementation_status=scaffolded validation_state=planned
+MF-0002 Add evidence ledger with command, node count, topology, logs, metrics, checksums, and promotion decision. implementation_status=scaffolded validation_state=planned
+MF-0003 Add objective profile loader and objective audit. implementation_status=tested validation_state=planned
+MF-0004 Add configs/objectives/zero_refusal_capability_retention.yaml. implementation_status=tested validation_state=planned
+MF-0005 Add configs/objectives/quantized_quality_retention.yaml. implementation_status=tested validation_state=planned
+MF-0006 Add configs/objectives/dgx_spark_latency_throughput.yaml. implementation_status=tested validation_state=planned
+MF-0007 Add variant graph and variant_node.json writer. implementation_status=not_started validation_state=planned
+MF-0008 Add artifact checksum and retention policy fields. implementation_status=scaffolded validation_state=planned
+MF-0009 Add eval provenance card. implementation_status=scaffolded validation_state=planned
+MF-0010 Add golden baseline create/check hardening. implementation_status=tested validation_state=smoke_validated
+MF-0011 Add CLI/doc drift check for roadmap command examples. implementation_status=not_started validation_state=planned
+MF-0012 Finish Gemma local FT evaluation or failure-card it. implementation_status=implemented validation_state=spark_single_node_validated
+MF-0013 Publish Training Method Card with distributed training correctness. implementation_status=not_started validation_state=planned
 ```
 
 ### P0: Behavior editing
 
 ```text
-MF-0101 Add noncompliance taxonomy.
-MF-0102 Add invalid-refusal vs valid-safety-refusal classifier fields.
-MF-0103 Add harmful-overcompliance and behavior-drift scoring.
-MF-0104 Add behavior edit scorecard.
-MF-0105 Add candidate frontier report from actual local candidates.
-MF-0106 Add redacted public risk-report mode and private raw-output retention.
-MF-0107 Add release classes and release-class validators.
-MF-0108 Add zero_refusal_capability_retention objective gates.
+MF-0101 Add noncompliance taxonomy. implementation_status=scaffolded validation_state=planned
+MF-0102 Add invalid-refusal vs valid-safety-refusal classifier fields. implementation_status=scaffolded validation_state=planned
+MF-0103 Add harmful-overcompliance and behavior-drift scoring. implementation_status=implemented validation_state=smoke_validated
+MF-0104 Add behavior edit scorecard. implementation_status=not_started validation_state=planned
+MF-0105 Add candidate frontier report from actual local candidates. implementation_status=scaffolded validation_state=planned
+MF-0106 Add redacted public risk-report mode and private raw-output retention. implementation_status=scaffolded validation_state=planned
+MF-0107 Add release classes and release-class validators. implementation_status=not_started validation_state=planned
+MF-0108 Add zero_refusal_capability_retention objective gates. implementation_status=tested validation_state=planned
 ```
 
 ### P0: Serving
 
 ```text
-MF-0200 Add generic cluster inventory planner and DGX Spark x2 example.
-MF-0201 Add forge bench serve.
-MF-0202 Add DGX Spark vLLM sweep config.
-MF-0203 Add serving workload definitions.
-MF-0204 Add Serving Card.
-MF-0205 Add TTFT/ITL/memory/tok-sec capture.
-MF-0206 Add quality/behavior sampled eval under serving configs.
-MF-0207 Mark serving work complete only after real endpoint evidence is attached.
+MF-0200 Add generic cluster inventory planner and DGX Spark x2 example. implementation_status=tested validation_state=smoke_validated
+MF-0201 Add forge bench serve. implementation_status=tested validation_state=smoke_validated
+MF-0202 Add DGX Spark vLLM sweep config. implementation_status=tested validation_state=smoke_validated
+MF-0203 Add serving workload definitions. implementation_status=tested validation_state=smoke_validated
+MF-0204 Add Serving Card. implementation_status=tested validation_state=smoke_validated
+MF-0205 Add TTFT/ITL/memory/tok-sec capture. implementation_status=tested validation_state=smoke_validated
+MF-0206 Add quality/behavior sampled eval under serving configs. implementation_status=tested validation_state=smoke_validated
+MF-0207 Mark serving work complete only after real endpoint evidence is attached. implementation_status=scaffolded validation_state=planned
 ```
 
 ### P0: Artifact validation
 
 ```text
-MF-0251 Add Playwright HTML validation.
-MF-0252 Add Python artifact compile/run validation.
-MF-0253 Add artifact screenshots and nonblank canvas/WebGL checks.
-MF-0254 Add Artifact Execution Card.
-MF-0255 Add artifact execution score to compare report.
-MF-0256 Require artifact validation before artifact-generation improvement claims.
+MF-0251 Add Playwright HTML validation. implementation_status=not_started validation_state=planned
+MF-0252 Add Python artifact compile/run validation. implementation_status=not_started validation_state=planned
+MF-0253 Add artifact screenshots and nonblank canvas/WebGL checks. implementation_status=not_started validation_state=planned
+MF-0254 Add Artifact Execution Card. implementation_status=not_started validation_state=planned
+MF-0255 Add artifact execution score to compare report. implementation_status=not_started validation_state=planned
+MF-0256 Require artifact validation before artifact-generation improvement claims. implementation_status=not_started validation_state=planned
 ```
 
 ### P1: Quantization
 
 ```text
-MF-0301 Add forge quantize or mark target CLI until implemented.
-MF-0302 Add calibration dataset manifests.
-MF-0303 Add FP8 KV behavior report.
-MF-0304 Add FP8 W8A8 pipeline.
-MF-0305 Add Blackwell ModelOpt/NVFP4 pipeline.
-MF-0306 Add GGUF/llama.cpp conversion and quantization pipeline.
-MF-0307 Add Quantization Card.
-MF-0308 Add layer/component sensitivity scan.
-MF-0309 Add quantization-preserves-behavior report.
-MF-0310 Add tokenizer/chat-template preservation checks for GGUF and quantized exports.
-MF-0311 Add import-existing-quantized-checkpoint path for already-available FP8/NVFP4/GGUF artifacts.
+MF-0301 Add forge quantize or mark target CLI until implemented. implementation_status=tested validation_state=smoke_validated
+MF-0302 Add calibration dataset manifests. implementation_status=scaffolded validation_state=planned
+MF-0303 Add FP8 KV behavior report. implementation_status=scaffolded validation_state=planned
+MF-0304 Add FP8 W8A8 pipeline. implementation_status=scaffolded validation_state=planned
+MF-0305 Add Blackwell ModelOpt/NVFP4 pipeline. implementation_status=wired_to_cli validation_state=planned
+MF-0306 Add GGUF/llama.cpp conversion and quantization pipeline. implementation_status=not_started validation_state=planned
+MF-0307 Add Quantization Card. implementation_status=tested validation_state=smoke_validated
+MF-0308 Add layer/component sensitivity scan. implementation_status=not_started validation_state=planned
+MF-0309 Add quantization-preserves-behavior report. implementation_status=scaffolded validation_state=planned
+MF-0310 Add tokenizer/chat-template preservation checks for GGUF and quantized exports. implementation_status=not_started validation_state=planned
+MF-0311 Add import-existing-quantized-checkpoint path for already-available FP8/NVFP4/GGUF artifacts. implementation_status=tested validation_state=smoke_validated
 ```
 
 ### P1: Dataset factory
 
 ```text
-MF-0351 Add configs/datasets/*.yaml plan schema.
-MF-0352 Add forge data plan/seed/generate.
-MF-0353 Add forge data judge with multi-axis quality scores.
-MF-0354 Add forge data verify for JSON/code/artifact examples.
-MF-0355 Add forge data filter with dedupe, holdout-overlap, and license checks.
-MF-0356 Add forge data pack with dataset.jsonl, manifest.yaml, and dataset_card.md.
-MF-0357 Add accepted/rejected row reports with rejection reasons.
-MF-0358 Add generated dataset HF publish path.
-MF-0359 Add Gemma local_ft_v1 eval-adjacent dataset recipe.
-MF-0360 Add eval-feedback loop that proposes next dataset skills from failures.
-MF-0361 Add forge data review with curation flags and scale-up gate.
-MF-0362 Add smoke_pack, medium_pack, and training_pack promotion gates.
-MF-0363 Require bounded Spark fine-tune evidence before dataset recipe is marked validated.
+MF-0351 Add configs/datasets/*.yaml plan schema. implementation_status=tested validation_state=smoke_validated
+MF-0352 Add forge data plan/seed/generate. implementation_status=tested validation_state=smoke_validated
+MF-0353 Add forge data judge with multi-axis quality scores. implementation_status=tested validation_state=smoke_validated
+MF-0354 Add forge data verify for JSON/code/artifact examples. implementation_status=tested validation_state=smoke_validated
+MF-0355 Add forge data filter with dedupe, holdout-overlap, and license checks. implementation_status=tested validation_state=smoke_validated
+MF-0356 Add forge data pack with dataset.jsonl, manifest.yaml, and dataset_card.md. implementation_status=tested validation_state=smoke_validated
+MF-0357 Add accepted/rejected row reports with rejection reasons. implementation_status=tested validation_state=smoke_validated
+MF-0358 Add generated dataset HF publish path. implementation_status=tested validation_state=smoke_validated
+MF-0359 Add Gemma local_ft_v1 eval-adjacent dataset recipe. implementation_status=tested validation_state=smoke_validated
+MF-0360 Add eval-feedback loop that proposes next dataset skills from failures. implementation_status=not_started validation_state=planned
+MF-0361 Add forge data review with curation flags and scale-up gate. implementation_status=tested validation_state=smoke_validated
+MF-0362 Add smoke_pack, medium_pack, and training_pack promotion gates. implementation_status=scaffolded validation_state=smoke_validated
+MF-0363 Require bounded Spark fine-tune evidence before dataset recipe is marked validated. implementation_status=not_started validation_state=planned
 ```
 
 ### P1: Hugging Face Hub publishing
 
 ```text
-MF-0501 Add forge hf status/login/whoami.
-MF-0502 Add forge hf plan-model.
-MF-0503 Add forge hf publish-model --dry-run.
-MF-0504 Add forge hf publish-dataset --dry-run.
-MF-0505 Add Hub model card generator.
-MF-0506 Add Hub dataset card generator.
-MF-0507 Add release-class validators.
-MF-0508 Add hub_publish.json provenance writer.
-MF-0509 Add no-secrets/no-absolute-path publish validator.
-MF-0510 Add redacted-output dataset publishing path.
-MF-0511 Block public checkpoint upload unless validation state and release class allow it.
+MF-0501 Add forge hf status/login/whoami. implementation_status=not_started validation_state=planned
+MF-0502 Add forge hf plan-model. implementation_status=not_started validation_state=planned
+MF-0503 Add forge hf publish-model --dry-run. implementation_status=scaffolded validation_state=planned
+MF-0504 Add forge hf publish-dataset --dry-run. implementation_status=scaffolded validation_state=smoke_validated
+MF-0505 Add Hub model card generator. implementation_status=scaffolded validation_state=planned
+MF-0506 Add Hub dataset card generator. implementation_status=tested validation_state=smoke_validated
+MF-0507 Add release-class validators. implementation_status=not_started validation_state=planned
+MF-0508 Add hub_publish.json provenance writer. implementation_status=scaffolded validation_state=smoke_validated
+MF-0509 Add no-secrets/no-absolute-path publish validator. implementation_status=scaffolded validation_state=smoke_validated
+MF-0510 Add redacted-output dataset publishing path. implementation_status=not_started validation_state=planned
+MF-0511 Block public checkpoint upload unless validation state and release class allow it. implementation_status=not_started validation_state=planned
 ```
 
 ### P1: Multi-family
 
 ```text
-MF-0601 Harden Qwen family config.
-MF-0602 Add adding-model-family checklist.
-MF-0603 Add tokenizer/chat-template round-trip tests.
-MF-0604 Add architecture target discovery and MoE/router exclusion checks.
-MF-0605 Add Llama/Mistral family plan.
-MF-0606 Ensure common code has no Gemma-only assumptions.
+MF-0601 Harden Qwen family config. implementation_status=scaffolded validation_state=planned
+MF-0602 Add adding-model-family checklist. implementation_status=scaffolded validation_state=planned
+MF-0603 Add tokenizer/chat-template round-trip tests. implementation_status=not_started validation_state=planned
+MF-0604 Add architecture target discovery and MoE/router exclusion checks. implementation_status=scaffolded validation_state=planned
+MF-0605 Add Llama/Mistral family plan. implementation_status=not_started validation_state=planned
+MF-0606 Ensure common code has no Gemma-only assumptions. implementation_status=scaffolded validation_state=planned
 ```
 
 ### P2: Agents
 
 ```text
-MF-0701 Add agent experiment schema.
-MF-0702 Add forge agent optimize-serving.
-MF-0703 Add forge agent optimize-quantization.
-MF-0704 Add forge agent optimize-behavior-edit.
-MF-0705 Add agent run card.
-MF-0706 Add automatic ledger update.
+MF-0701 Add agent experiment schema. implementation_status=scaffolded validation_state=planned
+MF-0702 Add forge agent optimize-serving. implementation_status=not_started validation_state=planned
+MF-0703 Add forge agent optimize-quantization. implementation_status=not_started validation_state=planned
+MF-0704 Add forge agent optimize-behavior-edit. implementation_status=not_started validation_state=planned
+MF-0705 Add agent run card. implementation_status=not_started validation_state=planned
+MF-0706 Add automatic ledger update. implementation_status=not_started validation_state=planned
 ```
 
 
 ### P2: Kernel/perf
 
 ```text
-MF-0801 Add Nsight profile integration.
-MF-0802 Add profile summarizer.
-MF-0803 Add bench kernel rmsnorm.
-MF-0804 Add bench kernel rope.
-MF-0805 Add bench kernel dequant.
-MF-0806 Add bench kernel kv-layout.
-MF-0807 Add Kernel Card.
-MF-0808 Open first upstream PR.
+MF-0801 Add Nsight profile integration. implementation_status=not_started validation_state=planned
+MF-0802 Add profile summarizer. implementation_status=not_started validation_state=planned
+MF-0803 Add bench kernel rmsnorm. implementation_status=not_started validation_state=planned
+MF-0804 Add bench kernel rope. implementation_status=not_started validation_state=planned
+MF-0805 Add bench kernel dequant. implementation_status=not_started validation_state=planned
+MF-0806 Add bench kernel kv-layout. implementation_status=not_started validation_state=planned
+MF-0807 Add Kernel Card. implementation_status=not_started validation_state=planned
+MF-0808 Open first upstream PR. implementation_status=not_started validation_state=planned
 ```
 
 ### P3: Advanced serving
 
 ```text
-MF-0901 Add SGLang backend.
-MF-0902 Add TensorRT-LLM backend.
-MF-0903 Add disaggregated prefill/decode experiment profile.
-MF-0904 Add LMCache/NIXL research-watch hooks.
-MF-0905 Add multi-node/distributed-KV placeholder architecture.
+MF-0901 Add SGLang backend. implementation_status=not_started validation_state=planned
+MF-0902 Add TensorRT-LLM backend. implementation_status=not_started validation_state=planned
+MF-0903 Add disaggregated prefill/decode experiment profile. implementation_status=not_started validation_state=planned
+MF-0904 Add LMCache/NIXL research-watch hooks. implementation_status=not_started validation_state=planned
+MF-0905 Add multi-node/distributed-KV placeholder architecture. implementation_status=scaffolded validation_state=planned
 ```
 
 

@@ -40,7 +40,8 @@ next step is a medium live-teacher generation pass, not a long training run.
 
 Use [docs/status.md](docs/status.md) for the current handoff state and
 [docs/experiment-ledger.md](docs/experiment-ledger.md) for detailed experiment
-history.
+history. Use [docs/roadmap-status-audit.md](docs/roadmap-status-audit.md) for
+the current MF backlog implementation and validation state.
 
 ## Quick Start
 
@@ -86,6 +87,7 @@ Run evals from another terminal:
 ./forge compare gemma4_26b_a4b
 ./forge promote gemma4_26b_a4b local_ft_vs_jackrong
 ./forge objectives audit
+./forge roadmap audit --write-doc
 ./forge research audit
 ./forge manifest write --run-type eval --family gemma4_26b_a4b --variant base --command './forge eval gemma4_26b_a4b base --internal'
 ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run

@@ -65,6 +65,9 @@ This is the short handoff state for humans and agents. Use
   `zero_refusal_capability_retention`, `quantized_quality_retention`, and
   `dgx_spark_latency_throughput`. Compare reports load objective metric
   preferences from these configs.
+- The prioritized roadmap backlog now has explicit `implementation_status` and
+  `validation_state` on every MF item. `./forge roadmap audit --write-doc`
+  validates those fields and refreshes `docs/roadmap-status-audit.md`.
 
 ## Current Dataset State
 
@@ -108,8 +111,8 @@ length filtering:
    `implementation_status` and `validation_state` fields.
 2. Add required validation/evidence fields to manifests, report cards, variant
    nodes, and promotion decisions. Objective profiles now have those fields.
-3. Add a roadmap-status audit that reports which MF-* items are scaffolded,
-   implemented, tested, or Spark-validated.
+3. Add variant graph nodes and an evidence ledger so model transforms can carry
+   command, topology, logs, metrics, checksums, and promotion decisions.
 4. Finish/evaluate Gemma local FT or write a Training Method failure card with
    distributed Spark correctness evidence.
 5. Run one real Spark serving benchmark and attach endpoint evidence to the

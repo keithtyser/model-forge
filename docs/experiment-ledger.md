@@ -28,6 +28,40 @@ Publishing helper:
 
 For prepared datasets, pass `--repo-type dataset`.
 
+## Roadmap Foundation: MF Backlog Status Audit
+
+Status: implemented as code/docs only. No model server, training run,
+quantization run, or eval job was started.
+
+Hypothesis: the roadmap backlog should not rely on informal checkboxes or
+memory of prior work. Every MF item should carry an explicit implementation
+status and validation state, and CI/local doctor should fail when new items omit
+those fields.
+
+Changes:
+
+- annotated every MF backlog item in the roadmap with `implementation_status`
+  and `validation_state`
+- added `./forge roadmap audit`
+- added `docs/roadmap-status-audit.md` generated from the prioritized backlog
+- added roadmap status checks to `./forge doctor`
+- added tests for roadmap parsing, invalid status detection, and report writing
+
+Validation:
+
+```bash
+./forge roadmap audit --json
+.venv/bin/python -m unittest tests.test_roadmap
+./forge doctor
+```
+
+Result:
+
+- 96 MF backlog items parsed
+- 0 roadmap status findings
+- current counts: 28 tested, 25 scaffolded, 2 implemented, 1 wired_to_cli, 40
+  not_started; 27 smoke_validated, 1 spark_single_node_validated, 68 planned
+
 ## Roadmap Foundation: Objective Profiles And Audit
 
 Status: implemented as config/code/docs only. No model server, training run,

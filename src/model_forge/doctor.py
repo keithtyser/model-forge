@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Iterable
 
 from model_forge.objectives import audit_profiles
+from model_forge.roadmap import audit_roadmap_items, parse_roadmap_items
 
 
 REPO_DIR = Path(__file__).resolve().parents[2]
@@ -27,6 +28,7 @@ REQUIRED_FILES = (
     "docs/status.md",
     "docs/artifact-retention.md",
     "docs/experiment-ledger.md",
+    "docs/roadmap-status-audit.md",
     "docs/roadmaps/README.md",
     "configs/README.md",
     "scripts/README.md",
@@ -188,6 +190,20 @@ def check_objective_profiles() -> list[Finding]:
     ]
 
 
+def check_roadmap_status() -> list[Finding]:
+    items = parse_roadmap_items()
+    errors = audit_roadmap_items(items)
+    return [
+        Finding(
+            "roadmap_status",
+            f"{error.field}: {error.message}",
+            "docs/roadmaps/model_forge_sota_roadmap_2026-05-18_with_huggingface.md",
+            error.line,
+        )
+        for error in errors
+    ]
+
+
 def run_checks(repo_dir: Path = REPO_DIR) -> list[Finding]:
     files = tracked_files(repo_dir)
     findings: list[Finding] = []
@@ -198,6 +214,7 @@ def run_checks(repo_dir: Path = REPO_DIR) -> list[Finding]:
     findings.extend(check_generated_dataset_policy(files))
     findings.extend(check_large_tracked_files(files, repo_dir))
     findings.extend(check_objective_profiles())
+    findings.extend(check_roadmap_status())
     return findings
 
 
