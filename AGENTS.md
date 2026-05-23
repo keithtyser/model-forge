@@ -28,6 +28,8 @@ reusable pipeline code over one-off scripts.
 - `docs/run-manifests.md`: canonical run manifest schema and handoff rules
 - `docs/cluster.md`: generic cluster inventory, doctor, and dry-run planning
   rules
+- `docs/serving-benchmarks.md`: serving benchmark command, outputs, and
+  interpretation rules
 - `docs/roadmaps/`: long-form roadmap and archived planning documents
 - `docs/research/sota-2026-05-18.md`: dated SOTA snapshot behind current
   roadmap decisions
@@ -38,6 +40,7 @@ reusable pipeline code over one-off scripts.
   methods, evals, serving, and quantization work
 - `configs/hardware/` and `configs/clusters/`: hardware defaults and
   open-source-safe cluster inventory examples
+- `configs/serving/`: serving benchmark and future serving sweep configs
 - `scripts/README.md`: script directory map and operational rules
 - `configs/model_families/`: model family registry
 - `configs/abliteration/`: ablation recipes
@@ -216,6 +219,18 @@ usernames, tokens, or absolute machine-specific paths. Put those values in
 environment variables or untracked local copies. Real distributed execution
 requires `./forge cluster doctor --strict` and a workload-specific launcher with
 resource guardrails.
+
+Benchmark serving only after an endpoint is already running:
+
+```bash
+./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
+./forge bench serve --family gemma4_26b_a4b --variant base
+```
+
+`bench serve` is for OpenAI-compatible endpoint mechanics only. It does not
+start a server, and a good latency result is not a quality or behavior pass.
+Use the generated `manifest.json`, `summary.json`, `requests.jsonl`, and
+`serving_card.md` with eval results before making serving claims.
 
 ## Abliteration Rules
 

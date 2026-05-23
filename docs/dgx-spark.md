@@ -33,6 +33,18 @@ The cluster planner is dry-run only. It validates inventory shape, resource
 policy, env-backed host placeholders, and launch command structure before any
 distributed serving or training backend is allowed to execute.
 
+Once a server is running, capture serving mechanics before making performance
+claims:
+
+```bash
+./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
+./forge bench serve --family gemma4_26b_a4b --variant base
+```
+
+This writes `requests.jsonl`, `summary.json`, `serving_card.md`, and
+`manifest.json` under `reports/generated/serve_bench/`. It measures the running
+endpoint only; it does not prove quality or behavior preservation by itself.
+
 ## Recommended first target
 
 Start with:

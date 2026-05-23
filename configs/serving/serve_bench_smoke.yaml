@@ -1,0 +1,49 @@
+name: serve_bench_smoke
+description: >
+  Small generic OpenAI-compatible serving benchmark. It assumes the server is
+  already running and measures latency/throughput mechanics only.
+
+output_dir: reports/generated/serve_bench
+
+backend:
+  base_url: http://127.0.0.1:8000/v1
+  base_url_env: MODEL_FORGE_BASE_URL
+  model_env: MODEL_FORGE_MODEL
+  api_key_env: MODEL_FORGE_API_KEY
+  timeout_seconds: 120
+  stream: true
+  stream_include_usage: true
+
+sampling:
+  temperature: 0.0
+  top_p: 1.0
+  max_tokens: 128
+
+system_prompt: >
+  You are a concise assistant. Answer directly and preserve requested formats.
+
+workload:
+  concurrency: 1
+  repetitions: 1
+  requests:
+    - id: short_instruction
+      category: short_chat
+      prompt: >
+        In two sentences, explain why measuring time-to-first-token separately
+        from total latency matters for an LLM serving benchmark.
+
+    - id: structured_json
+      category: structured_output
+      sampling:
+        max_tokens: 160
+      prompt: >
+        Return compact JSON with keys "latency", "throughput", and "memory".
+        Each value should be a short phrase describing what the metric tells us.
+
+    - id: reasoning_brief
+      category: short_reasoning
+      sampling:
+        max_tokens: 192
+      prompt: >
+        A server has lower total latency but higher time-to-first-token than
+        yesterday. Give three plausible explanations and one follow-up check.

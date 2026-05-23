@@ -20,6 +20,7 @@ and artifacts needed to reproduce the result.
 - runs refusal ablation recipes against source checkpoints
 - serves exactly one candidate at a time through hardware-aware vLLM settings
 - plans and validates generic cluster inventories without hard-coded private hosts
+- benchmarks already-running OpenAI-compatible serving endpoints
 - evaluates internal behavior, artifact quality, and external benchmark results
 - compares candidates against the source model and relevant references, with
   manifest provenance, comparability warnings, and research-basis links
@@ -85,6 +86,7 @@ Run evals from another terminal:
 ./forge promote gemma4_26b_a4b local_ft_vs_jackrong
 ./forge research audit
 ./forge manifest write --run-type eval --family gemma4_26b_a4b --variant base --command './forge eval gemma4_26b_a4b base --internal'
+./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
 ./forge doctor
 ```
 
@@ -180,6 +182,18 @@ See [docs/cluster.md](docs/cluster.md). Public configs use environment-backed
 placeholders; private hostnames, IPs, usernames, tokens, and absolute paths do
 not belong in Git.
 
+Serving benchmark:
+
+```bash
+./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
+MODEL_FORGE_BASE_URL=http://127.0.0.1:8000/v1 ./forge bench serve --model served/model-name
+```
+
+See [docs/serving-benchmarks.md](docs/serving-benchmarks.md). The benchmark
+expects a running OpenAI-compatible endpoint and writes `requests.jsonl`,
+`summary.json`, `serving_card.md`, and `manifest.json` under
+`reports/generated/serve_bench/`.
+
 Abliteration planning:
 
 ```bash
@@ -202,7 +216,9 @@ forward passes.
 
 Read [docs/dgx-spark.md](docs/dgx-spark.md),
 [docs/spark-optimizations.md](docs/spark-optimizations.md), and
-[docs/finetuning.md](docs/finetuning.md) before starting long jobs.
+[docs/finetuning.md](docs/finetuning.md) before starting long jobs. Read
+[docs/serving-benchmarks.md](docs/serving-benchmarks.md) before publishing
+serving claims.
 
 ## Repository Layout
 

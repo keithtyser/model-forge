@@ -40,6 +40,11 @@ This is the short handoff state for humans and agents. Use
   `configs/hardware/dgx_spark.yaml`, `configs/clusters/*.example.yaml`, and
   `./forge cluster plan/doctor`. DGX Spark x2 is represented as an example
   config with env-backed hosts, not hard-coded private infrastructure.
+- Serving benchmark MVP is now present through `./forge bench serve`,
+  `configs/serving/serve_bench_smoke.yaml`, and
+  `src/model_forge/benchmarks/serve.py`. It benchmarks an already-running
+  OpenAI-compatible endpoint and writes request, summary, serving-card, and
+  canonical manifest artifacts under `reports/generated/serve_bench/`.
 
 ## Current Dataset State
 
@@ -81,11 +86,13 @@ length filtering:
 
 1. Add eval provenance cards or golden baseline hardening next. Keep objective
    profile fields optional until the objective profile layer is revisited.
-2. Use `./forge promote gemma4_26b_a4b local_ft_vs_jackrong` whenever saved
+2. Add DGX Spark serving sweep configs and workload definitions now that
+   `./forge bench serve` exists.
+3. Use `./forge promote gemma4_26b_a4b local_ft_vs_jackrong` whenever saved
    comparison results change.
-3. Publish completed durable datasets to Hugging Face with `publish --execute`
+4. Publish completed durable datasets to Hugging Face with `publish --execute`
    only after `smoke_only=false` and human review is complete.
-4. Run a short FT candidate only after dataset quality is established and Spark
+5. Run a short FT candidate only after dataset quality is established and Spark
    guardrails are active.
 
 ## Operational Guardrails

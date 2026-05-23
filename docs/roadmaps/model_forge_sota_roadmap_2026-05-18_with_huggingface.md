@@ -289,7 +289,7 @@ Node manifest example:
     }
   ],
   "checkpoint": {
-    "local_path": "/home/ktyser/models/...",
+    "local_path": "<local-model-dir>/...",
     "source_revision": "...",
     "merged_adapters": true
   },
@@ -705,7 +705,7 @@ Schema:
   "variant": "local_ft_v0",
   "source_model": "google/gemma-4-26B-A4B-it",
   "source_revision": "...",
-  "local_checkpoint": "/home/ktyser/models/...",
+  "local_checkpoint": "<local-model-dir>/...",
   "variant_graph_node": "...",
   "objective_profile": "capability_sft",
   "hardware": {
@@ -1510,7 +1510,7 @@ sensitivity_scan:
     - mlp.up_proj
     - mlp.gate_proj
 outputs:
-  local_path: /home/ktyser/models/...
+  local_path: <local-model-dir>/...
   card: reports/generated/.../quantization_card.md
 ```
 
@@ -3190,7 +3190,7 @@ At least one merged upstream PR and one profiler-backed perf report with end-to-
 
 ```text
 [x] MF-0200 Add generic cluster inventory planner and DGX Spark x2 example
-[ ] MF-0201 Add forge bench serve
+[x] MF-0201 Add forge bench serve
 [ ] MF-0202 Add DGX Spark vLLM sweep config
 [ ] MF-0203 Add serving workload definitions
 [ ] MF-0204 Add Serving Card
@@ -3437,9 +3437,9 @@ Do these in order:
 [x] Add canonical manifest writer.
 [x] Make compare report include manifest provenance and Research Basis.
 [x] Add generic cluster inventory planner and DGX Spark x2 example.
+[x] Add forge bench serve MVP.
 [ ] Add noncompliance taxonomy.
 [ ] Finish/evaluate Gemma local FT.
-[ ] Add forge bench serve MVP.
 [ ] Add configs/publishing/huggingface.example.yaml.
 [ ] Add `./forge hf doctor` and `./forge hf plan-upload`.
 [ ] Generate Hugging Face Model Card / Dataset Card / Report Card from manifests.

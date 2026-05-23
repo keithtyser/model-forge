@@ -26,6 +26,7 @@ Usage:
   ./forge promote <family> [profile]
   ./forge research [list|show|audit]
   ./forge manifest [write|show]
+  ./forge bench serve
   ./forge cluster [plan|doctor]
   ./forge golden-summary <family> [output-json]
   ./forge golden-check <family> [baseline-json]
@@ -46,6 +47,7 @@ Examples:
   ./forge promote gemma4_26b_a4b local_ft_vs_jackrong
   ./forge research audit
   ./forge manifest write --run-type eval --family gemma4_26b_a4b --variant base --command './forge eval gemma4_26b_a4b base --internal'
+  ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
   ./forge cluster plan --config configs/clusters/dgx_spark_x2.example.yaml --workload train
   ./forge doctor
 
@@ -178,6 +180,18 @@ case "$ACTION" in
     ;;
   manifest)
     "$PYTHON" -m model_forge.runs.manifest "$@"
+    ;;
+  bench)
+    BENCH=${1:-}
+    if [[ $# -gt 0 ]]; then
+      shift
+    fi
+    case "$BENCH" in
+      serve)
+        "$PYTHON" -m model_forge.benchmarks.serve "$@"
+        ;;
+      *) echo "unknown benchmark: ${BENCH:-}" >&2; usage >&2; exit 2 ;;
+    esac
     ;;
   cluster)
     "$PYTHON" -m model_forge.cluster.cli "$@"

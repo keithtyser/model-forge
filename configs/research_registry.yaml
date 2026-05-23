@@ -425,9 +425,10 @@ entries:
     implementation_hooks:
       - scripts/serve_vllm_dgx_spark.sh
       - scripts/dgx_spark_serve_*.sh
-      - future:src/model_forge/benchmarks/serve.py
+      - src/model_forge/benchmarks/serve.py
     eval_hooks:
-      - future:reports/generated/*/serving_card.md
+      - reports/generated/serve_bench/*/serving_card.md
+      - reports/generated/serve_bench/*/summary.json
       - evals/prompts/normal_use_regression.yaml
     limitations:
       - Engine flags are hardware and version dependent.
@@ -449,9 +450,9 @@ entries:
     implementation_hooks:
       - scripts/serve_vllm_dgx_spark.sh
       - docs/spark-optimizations.md
-      - future:configs/serving/*.yaml
+      - configs/serving/*.yaml
     eval_hooks:
-      - future:./forge bench serve
+      - ./forge bench serve
       - evals/prompts/normal_use_regression.yaml
     limitations:
       - FP8 KV behavior can be model and vLLM-version sensitive.

@@ -12,6 +12,8 @@ and experiment constants here instead of hard-coding them in scripts.
 - `clusters/`: open-source-safe cluster inventory examples. Private hostnames,
   usernames, IPs, and absolute paths should stay in untracked local copies or
   environment variables.
+- `serving/`: generic serving benchmark and future sweep configs. These should
+  describe endpoint/workload shape, not private infrastructure.
 - `data_sources/`: dataset source registries with ids, provenance, licenses,
   roles, quality tiers, and sampling caps.
 - `research_registry.yaml`: dated research claims with implementation hooks,
