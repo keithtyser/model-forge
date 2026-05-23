@@ -1,0 +1,49 @@
+id: local_single_node_example
+version: 2026-05-23
+description: >
+  Example local cluster inventory. Copy this file to a private config and edit
+  it for your machine. Do not commit private hostnames, usernames, tokens, or
+  absolute machine-specific paths.
+
+hardware_profile: configs/hardware/dgx_spark.yaml
+
+launchers:
+  default: local
+  supported:
+    - local
+    - docker
+    - torchrun
+
+paths:
+  work_dir: .
+  models_dir_env: MODEL_FORGE_MODELS_DIR
+  cache_dir_env: HF_HOME
+  artifact_dir: reports/generated/cluster
+  job_lock: runs/locks/model-forge-cluster.lock
+
+resource_policy:
+  max_concurrent_large_jobs: 1
+  require_job_lock: true
+  stop_if_memory_available_below_fraction: 0.05
+  start_if_memory_available_above_fraction: 0.05
+  require_disk_free_fraction: 0.15
+
+nodes:
+  - name: local
+    role: coordinator
+    launcher: local
+    host: localhost
+    work_dir: .
+    models_dir_env: MODEL_FORGE_MODELS_DIR
+    cache_dir_env: HF_HOME
+    gpu_count: 1
+    memory_total_gb: 128
+    cpu_quota: "80%"
+    memory_max_fraction: 0.85
+
+distributed:
+  backend: torchrun
+  nnodes: 1
+  nproc_per_node: 1
+  rdzv_backend: c10d
+  rdzv_endpoint: localhost:29500

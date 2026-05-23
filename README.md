@@ -19,6 +19,7 @@ and artifacts needed to reproduce the result.
 - tracks a dated research registry so methods, evals, and limitations stay explicit
 - runs refusal ablation recipes against source checkpoints
 - serves exactly one candidate at a time through hardware-aware vLLM settings
+- plans and validates generic cluster inventories without hard-coded private hosts
 - evaluates internal behavior, artifact quality, and external benchmark results
 - compares candidates against the source model and relevant references, with
   manifest provenance, comparability warnings, and research-basis links
@@ -165,6 +166,20 @@ Run manifests:
 See [docs/run-manifests.md](docs/run-manifests.md) for the canonical schema and
 handoff rules.
 
+Cluster planning:
+
+```bash
+./forge cluster doctor --config configs/clusters/dgx_spark_x2.example.yaml
+./forge cluster plan \
+  --config configs/clusters/dgx_spark_x2.example.yaml \
+  --workload train \
+  --launcher torchrun
+```
+
+See [docs/cluster.md](docs/cluster.md). Public configs use environment-backed
+placeholders; private hostnames, IPs, usernames, tokens, and absolute paths do
+not belong in Git.
+
 Abliteration planning:
 
 ```bash
@@ -192,7 +207,7 @@ Read [docs/dgx-spark.md](docs/dgx-spark.md),
 ## Repository Layout
 
 ```text
-configs/        Model families, source registries, training/editing configs
+configs/        Model families, hardware/cluster profiles, training/editing configs
 datasets/       Dataset manifests, seed rows, generated small packs and reports
 docs/           Workflow docs, research snapshots, status, roadmap, and ledger
 docs/roadmaps/  Long-form planning documents and archived roadmap material

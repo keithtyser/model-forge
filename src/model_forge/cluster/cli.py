@@ -1,0 +1,470 @@
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shlex
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Mapping
+
+import yaml
+from rich.console import Console
+from rich.table import Table
+
+
+REPO_DIR = Path(__file__).resolve().parents[3]
+DEFAULT_CONFIG = REPO_DIR / "configs" / "clusters" / "local.example.yaml"
+PRIVATE_PATH_PATTERN = re.compile(r"^/(home|Users)/[^/]+/")
+SECRET_PATTERN = re.compile(r"(hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,})")
+IP_ADDRESS_PATTERN = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$")
+ALLOWED_LAUNCHERS = {"local", "ssh", "docker", "torchrun", "ray", "vllm", "slurm"}
+WORKLOADS = {"serve", "train", "eval", "ablate", "data", "quantize", "publish", "generic"}
+
+console = Console()
+
+
+@dataclass(frozen=True)
+class Finding:
+    severity: str
+    check: str
+    message: str
+    path: str | None = None
+    node: str | None = None
+
+
+def utc_timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def resolve_repo_path(value: str | Path) -> Path:
+    path = Path(str(value)).expanduser()
+    if path.is_absolute():
+        return path
+    return REPO_DIR / path
+
+
+def display_path(path: str | Path) -> str:
+    path = Path(path)
+    try:
+        return str(path.resolve().relative_to(REPO_DIR.resolve()))
+    except (OSError, ValueError):
+        try:
+            return str(path.relative_to(REPO_DIR))
+        except ValueError:
+            return str(path)
+
+
+def load_yaml(path: Path) -> dict[str, Any]:
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"expected YAML mapping in {path}")
+    return data
+
+
+def load_cluster_config(path: str | Path) -> tuple[dict[str, Any], Path]:
+    config_path = resolve_repo_path(path)
+    config = load_yaml(config_path)
+    config["_path"] = display_path(config_path)
+    return config, config_path
+
+
+def load_hardware_profile(cluster: Mapping[str, Any]) -> dict[str, Any]:
+    hardware_path = cluster.get("hardware_profile")
+    if not hardware_path:
+        return {}
+    path = resolve_repo_path(str(hardware_path))
+    if not path.exists():
+        return {"_path": display_path(path), "_error": "hardware_profile path does not exist"}
+    profile = load_yaml(path)
+    profile["_path"] = display_path(path)
+    return profile
+
+
+def env_value(env: Mapping[str, str], key: str | None) -> str | None:
+    if not key:
+        return None
+    value = env.get(key)
+    return value if value not in {None, ""} else None
+
+
+def resolve_env_backed_value(raw: Mapping[str, Any], key: str, env: Mapping[str, str]) -> tuple[str | None, str | None]:
+    env_key = raw.get(f"{key}_env")
+    if env_key:
+        return env_value(env, str(env_key)), str(env_key)
+    value = raw.get(key)
+    return str(value) if value not in {None, ""} else None, None
+
+
+def node_host(node: Mapping[str, Any], env: Mapping[str, str]) -> tuple[str | None, str | None]:
+    return resolve_env_backed_value(node, "host", env)
+
+
+def node_user(node: Mapping[str, Any], env: Mapping[str, str]) -> tuple[str | None, str | None]:
+    return resolve_env_backed_value(node, "user", env)
+
+
+def node_work_dir(node: Mapping[str, Any], cluster: Mapping[str, Any], env: Mapping[str, str]) -> tuple[str | None, str | None]:
+    value, env_key = resolve_env_backed_value(node, "work_dir", env)
+    if value or env_key:
+        return value, env_key
+    return resolve_env_backed_value(cluster.get("paths", {}), "work_dir", env)
+
+
+def total_declared_memory_gb(cluster: Mapping[str, Any], hardware: Mapping[str, Any]) -> int | float:
+    hardware_default = (hardware.get("node_defaults") or {}).get("memory_total_gb", 0)
+    total: int | float = 0
+    for node in cluster.get("nodes", []):
+        if isinstance(node, dict):
+            total += node.get("memory_total_gb", hardware_default) or 0
+    return total
+
+
+def total_declared_gpus(cluster: Mapping[str, Any], hardware: Mapping[str, Any]) -> int:
+    hardware_default = int((hardware.get("node_defaults") or {}).get("gpu_count", 0) or 0)
+    total = 0
+    for node in cluster.get("nodes", []):
+        if isinstance(node, dict):
+            total += int(node.get("gpu_count", hardware_default) or 0)
+    return total
+
+
+def is_example_config(path: Path, cluster: Mapping[str, Any]) -> bool:
+    return path.name.endswith(".example.yaml") or str(cluster.get("id", "")).endswith("_example")
+
+
+def check_no_secret_literals(obj: Any, config_path: str, findings: list[Finding], node: str | None = None) -> None:
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            check_no_secret_literals(value, config_path, findings, node=node if key != "name" else str(value))
+    elif isinstance(obj, list):
+        for item in obj:
+            check_no_secret_literals(item, config_path, findings, node=node)
+    elif isinstance(obj, str) and SECRET_PATTERN.search(obj):
+        findings.append(Finding("error", "secret_literal", "secret-like literal found in cluster config", config_path, node))
+
+
+def audit_cluster(
+    cluster: Mapping[str, Any],
+    config_path: Path,
+    hardware: Mapping[str, Any] | None = None,
+    env: Mapping[str, str] | None = None,
+    strict: bool = False,
+) -> list[Finding]:
+    env = env or os.environ
+    hardware = hardware or load_hardware_profile(cluster)
+    findings: list[Finding] = []
+    config_display = display_path(config_path)
+    check_no_secret_literals(cluster, config_display, findings)
+
+    if not cluster.get("id"):
+        findings.append(Finding("error", "schema", "cluster id is required", config_display))
+    nodes = cluster.get("nodes")
+    if not isinstance(nodes, list) or not nodes:
+        findings.append(Finding("error", "schema", "nodes must be a non-empty list", config_display))
+        return findings
+
+    supported = set((cluster.get("launchers") or {}).get("supported") or [])
+    if not supported:
+        supported = {str((cluster.get("launchers") or {}).get("default") or "local")}
+    unknown_launchers = sorted(supported - ALLOWED_LAUNCHERS)
+    if unknown_launchers:
+        findings.append(Finding("error", "launcher", f"unsupported launchers: {', '.join(unknown_launchers)}", config_display))
+
+    coordinators = [node for node in nodes if isinstance(node, dict) and node.get("role") == "coordinator"]
+    if len(coordinators) != 1:
+        findings.append(Finding("error", "schema", "exactly one node must have role=coordinator", config_display))
+
+    names = []
+    for raw_node in nodes:
+        if not isinstance(raw_node, dict):
+            findings.append(Finding("error", "schema", "node entries must be mappings", config_display))
+            continue
+        name = str(raw_node.get("name", ""))
+        names.append(name)
+        if not name:
+            findings.append(Finding("error", "node", "node name is required", config_display))
+        role = raw_node.get("role")
+        if role not in {"coordinator", "worker"}:
+            findings.append(Finding("error", "node", "node role must be coordinator or worker", config_display, name))
+        launcher = raw_node.get("launcher") or (cluster.get("launchers") or {}).get("default") or "local"
+        if launcher not in ALLOWED_LAUNCHERS:
+            findings.append(Finding("error", "launcher", f"unsupported node launcher {launcher!r}", config_display, name))
+
+        host, host_env = node_host(raw_node, env)
+        if not raw_node.get("host") and not raw_node.get("host_env"):
+            findings.append(Finding("error", "node", "node must define host or host_env", config_display, name))
+        if raw_node.get("host") and raw_node.get("host_env"):
+            findings.append(Finding("error", "node", "node must not define both host and host_env", config_display, name))
+        if host_env and not host:
+            severity = "error" if strict else "warning"
+            findings.append(Finding(severity, "env", f"environment variable {host_env} is not set", config_display, name))
+        if raw_node.get("host") and IP_ADDRESS_PATTERN.match(str(raw_node["host"])) and is_example_config(config_path, cluster):
+            findings.append(Finding("error", "portability", "example configs must not commit literal IP addresses", config_display, name))
+
+        user, user_env = node_user(raw_node, env)
+        if user_env and not user and strict:
+            findings.append(Finding("error", "env", f"environment variable {user_env} is not set", config_display, name))
+
+        work_dir, work_env = node_work_dir(raw_node, cluster, env)
+        if work_env and not work_dir and strict:
+            findings.append(Finding("error", "env", f"environment variable {work_env} is not set", config_display, name))
+        raw_work_dir = raw_node.get("work_dir")
+        if raw_work_dir is None and not raw_node.get("work_dir_env"):
+            raw_work_dir = (cluster.get("paths") or {}).get("work_dir")
+        if raw_work_dir and PRIVATE_PATH_PATTERN.search(str(raw_work_dir)) and is_example_config(config_path, cluster):
+            findings.append(Finding("error", "portability", "example configs must not commit machine-specific absolute paths", config_display, name))
+
+        memory_fraction = raw_node.get("memory_max_fraction", (cluster.get("resource_policy", {}).get("per_node") or {}).get("memory_max_fraction"))
+        if memory_fraction is not None and float(memory_fraction) > 0.90:
+            findings.append(Finding("warning", "resource_policy", "memory_max_fraction above 0.90 can starve SSH/control plane", config_display, name))
+
+    if len(names) != len(set(names)):
+        findings.append(Finding("error", "schema", "node names must be unique", config_display))
+
+    policy = cluster.get("resource_policy") or {}
+    if policy.get("max_concurrent_large_jobs", 1) != 1:
+        findings.append(Finding("warning", "resource_policy", "large jobs should default to one cluster-wide job", config_display))
+    if not policy.get("require_job_lock", False):
+        findings.append(Finding("warning", "resource_policy", "cluster job lock is not required", config_display))
+
+    distributed = cluster.get("distributed") or {}
+    if int(distributed.get("nnodes", len(nodes)) or len(nodes)) != len(nodes):
+        findings.append(Finding("warning", "distributed", "distributed.nnodes does not match node count", config_display))
+    if strict and len(nodes) > 1 and distributed.get("rdzv_endpoint_env") and not env_value(env, str(distributed["rdzv_endpoint_env"])):
+        findings.append(
+            Finding(
+                "error",
+                "env",
+                f"environment variable {distributed['rdzv_endpoint_env']} is not set",
+                config_display,
+            )
+        )
+
+    if hardware.get("_error"):
+        findings.append(Finding("error", "hardware", str(hardware["_error"]), config_display))
+
+    return findings
+
+
+def render_findings(findings: list[Finding]) -> None:
+    if not findings:
+        console.print("cluster doctor: OK")
+        return
+    table = Table(title="Cluster Doctor")
+    table.add_column("Severity")
+    table.add_column("Check")
+    table.add_column("Node")
+    table.add_column("Message")
+    for finding in findings:
+        table.add_row(finding.severity.upper(), finding.check, finding.node or "", finding.message)
+    console.print(table)
+
+
+def node_plan(node: Mapping[str, Any], cluster: Mapping[str, Any], env: Mapping[str, str]) -> dict[str, Any]:
+    host, host_env = node_host(node, env)
+    user, user_env = node_user(node, env)
+    work_dir, work_dir_env = node_work_dir(node, cluster, env)
+    launcher = node.get("launcher") or (cluster.get("launchers") or {}).get("default") or "local"
+    display_host = host if host is not None else f"${host_env}" if host_env else None
+    display_user = user if user is not None else f"${user_env}" if user_env else None
+    display_work_dir = work_dir if work_dir is not None else f"${work_dir_env}" if work_dir_env else None
+    return {
+        "name": node.get("name"),
+        "role": node.get("role"),
+        "launcher": launcher,
+        "host": display_host,
+        "host_env": host_env,
+        "user": display_user,
+        "user_env": user_env,
+        "work_dir": display_work_dir,
+        "work_dir_env": work_dir_env,
+        "gpu_count": node.get("gpu_count"),
+        "memory_total_gb": node.get("memory_total_gb"),
+        "cpu_quota": node.get("cpu_quota") or (cluster.get("resource_policy", {}).get("per_node") or {}).get("cpu_quota"),
+        "memory_max_fraction": node.get("memory_max_fraction") or (cluster.get("resource_policy", {}).get("per_node") or {}).get("memory_max_fraction"),
+    }
+
+
+def shell_join(command: list[str]) -> str:
+    return shlex.join(command)
+
+
+def guarded_command(command: str, resource_policy: Mapping[str, Any], job_lock: str) -> str:
+    per_node = resource_policy.get("per_node", {}) if isinstance(resource_policy.get("per_node"), dict) else {}
+    cpu_quota = per_node.get("cpu_quota", resource_policy.get("cpu_quota", "80%"))
+    memory_fraction = float(per_node.get("memory_max_fraction", resource_policy.get("memory_max_fraction", 0.85)))
+    io_weight = per_node.get("io_weight", resource_policy.get("io_weight", 100))
+    nice = per_node.get("nice", resource_policy.get("nice", 10))
+    return (
+        f"flock {shlex.quote(str(job_lock))} "
+        f"systemd-run --scope -p CPUQuota={cpu_quota} "
+        f"-p MemoryMax={int(memory_fraction * 100)}% "
+        f"-p IOWeight={io_weight} "
+        f"nice -n {nice} {command}"
+    )
+
+
+def build_launcher_plan(
+    cluster: Mapping[str, Any],
+    hardware: Mapping[str, Any],
+    config_path: Path,
+    workload: str,
+    command: str | None,
+    launcher: str | None,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    env = env or os.environ
+    if workload not in WORKLOADS:
+        raise ValueError(f"unsupported workload {workload!r}")
+    selected_launcher = launcher or (cluster.get("launchers") or {}).get("default") or "local"
+    nodes = [node_plan(node, cluster, env) for node in cluster.get("nodes", []) if isinstance(node, dict)]
+    coordinator = next((node for node in nodes if node.get("role") == "coordinator"), nodes[0] if nodes else {})
+    distributed = cluster.get("distributed") or {}
+    resource_policy = cluster.get("resource_policy") or {}
+    paths = cluster.get("paths") or {}
+    user_command = command or "<workload command>"
+    job_lock = paths.get("job_lock", "runs/locks/model-forge-cluster.lock")
+
+    preflight = [
+        shell_join(["mkdir", "-p", str(Path(job_lock).parent)]),
+        shell_join(["./forge", "cluster", "doctor", "--config", display_path(config_path), "--strict"]),
+    ]
+
+    if selected_launcher == "torchrun":
+        nnodes = int(distributed.get("nnodes", len(nodes)) or len(nodes))
+        nproc = int(distributed.get("nproc_per_node", coordinator.get("gpu_count") or 1) or 1)
+        endpoint_env = distributed.get("rdzv_endpoint_env", "MODEL_FORGE_RDZV_ENDPOINT")
+        endpoint = distributed.get("rdzv_endpoint") or env_value(env, str(endpoint_env)) or f"${endpoint_env}"
+        torchrun_command = shell_join([
+            "torchrun",
+            f"--nnodes={nnodes}",
+            f"--nproc-per-node={nproc}",
+            f"--rdzv-backend={distributed.get('rdzv_backend', 'c10d')}",
+            f"--rdzv-endpoint={endpoint}",
+            *shlex.split(user_command),
+        ])
+        launch_command = guarded_command(torchrun_command, resource_policy, str(job_lock))
+    elif selected_launcher == "ssh":
+        host = coordinator.get("host") or "<coordinator-host>"
+        launch_command = f"ssh {shlex.quote(str(host))} {shlex.quote(guarded_command(user_command, resource_policy, str(job_lock)))}"
+    elif selected_launcher == "local":
+        launch_command = guarded_command(user_command, resource_policy, str(job_lock))
+    else:
+        launch_command = f"{selected_launcher} launcher is configured; backend-specific execution is intentionally dry-run only"
+
+    return {
+        "created_at": utc_timestamp(),
+        "cluster": {
+            "id": cluster.get("id"),
+            "config": display_path(config_path),
+            "hardware_profile": cluster.get("hardware_profile"),
+            "node_count": len(nodes),
+            "total_declared_gpus": total_declared_gpus(cluster, hardware),
+            "total_declared_memory_gb": total_declared_memory_gb(cluster, hardware),
+        },
+        "workload": workload,
+        "launcher": selected_launcher,
+        "nodes": nodes,
+        "resource_policy": resource_policy,
+        "environment_contract": {
+            "required_host_env": [node.get("host_env") for node in nodes if node.get("host_env")],
+            "required_user_env": [node.get("user_env") for node in nodes if node.get("user_env")],
+            "job_lock": job_lock,
+        },
+        "preflight": preflight,
+        "execution_plan": {
+            "dry_run_only": True,
+            "coordinator": coordinator.get("name"),
+            "command": user_command,
+            "launcher_command": launch_command,
+            "notes": [
+                "This plan does not execute cluster commands.",
+                "Run doctor with --strict and verify one large job is active cluster-wide before launching.",
+                "Use backend-specific distributed serving/training docs before enabling multi-node execution.",
+            ],
+        },
+    }
+
+
+def render_plan(plan: Mapping[str, Any]) -> None:
+    cluster = plan["cluster"]
+    console.print(f"Cluster plan: {cluster['id']} ({cluster['node_count']} node(s), {cluster['total_declared_memory_gb']} GB declared RAM)")
+    node_table = Table(title="Nodes")
+    node_table.add_column("Name")
+    node_table.add_column("Role")
+    node_table.add_column("Launcher")
+    node_table.add_column("Host")
+    node_table.add_column("GPU")
+    node_table.add_column("RAM GB")
+    for node in plan["nodes"]:
+        node_table.add_row(
+            str(node.get("name")),
+            str(node.get("role")),
+            str(node.get("launcher")),
+            str(node.get("host") or ""),
+            str(node.get("gpu_count") or ""),
+            str(node.get("memory_total_gb") or ""),
+        )
+    console.print(node_table)
+    console.print("Preflight:")
+    for command in plan["preflight"]:
+        console.print(f"  {command}")
+    console.print("Launcher command:")
+    console.print(f"  {plan['execution_plan']['launcher_command']}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Plan and validate generic model-forge cluster inventories")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+
+    doctor_parser = subparsers.add_parser("doctor", help="Validate a cluster inventory")
+    doctor_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    doctor_parser.add_argument("--strict", action="store_true", help="Treat missing env-backed node values as errors")
+    doctor_parser.add_argument("--json", action="store_true")
+
+    plan_parser = subparsers.add_parser("plan", help="Render a dry-run cluster launch plan")
+    plan_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    plan_parser.add_argument("--workload", default="generic", choices=sorted(WORKLOADS))
+    plan_parser.add_argument("--launcher", choices=sorted(ALLOWED_LAUNCHERS))
+    plan_parser.add_argument("--command", dest="workload_command", help="Workload command to place behind cluster guardrails")
+    plan_parser.add_argument("--json", action="store_true")
+
+    args = parser.parse_args()
+    cluster, config_path = load_cluster_config(args.config)
+    hardware = load_hardware_profile(cluster)
+
+    if args.action == "doctor":
+        findings = audit_cluster(cluster, config_path, hardware=hardware, strict=args.strict)
+        if args.json:
+            print(json.dumps([asdict(finding) for finding in findings], indent=2, sort_keys=True) + "\n")
+        else:
+            render_findings(findings)
+        raise SystemExit(1 if any(finding.severity == "error" for finding in findings) else 0)
+
+    if args.action == "plan":
+        findings = audit_cluster(cluster, config_path, hardware=hardware, strict=False)
+        plan = build_launcher_plan(
+            cluster,
+            hardware,
+            config_path,
+            workload=args.workload,
+            command=args.workload_command,
+            launcher=args.launcher,
+        )
+        plan["doctor_findings"] = [asdict(finding) for finding in findings]
+        if args.json:
+            print(json.dumps(plan, indent=2, sort_keys=True) + "\n")
+        else:
+            render_plan(plan)
+            non_error_findings = [finding for finding in findings if finding.severity != "error"]
+            if non_error_findings:
+                console.print()
+                render_findings(non_error_findings)
+        raise SystemExit(1 if any(finding.severity == "error" for finding in findings) else 0)
+
+
+if __name__ == "__main__":
+    main()

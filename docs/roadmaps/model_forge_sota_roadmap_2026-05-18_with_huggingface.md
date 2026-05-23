@@ -3189,6 +3189,7 @@ At least one merged upstream PR and one profiler-backed perf report with end-to-
 ### P0: Serving
 
 ```text
+[x] MF-0200 Add generic cluster inventory planner and DGX Spark x2 example
 [ ] MF-0201 Add forge bench serve
 [ ] MF-0202 Add DGX Spark vLLM sweep config
 [ ] MF-0203 Add serving workload definitions
@@ -3435,6 +3436,7 @@ Do these in order:
 [ ] Add configs/objectives/dgx_spark_latency_throughput.yaml.
 [x] Add canonical manifest writer.
 [x] Make compare report include manifest provenance and Research Basis.
+[x] Add generic cluster inventory planner and DGX Spark x2 example.
 [ ] Add noncompliance taxonomy.
 [ ] Finish/evaluate Gemma local FT.
 [ ] Add forge bench serve MVP.

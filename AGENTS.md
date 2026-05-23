@@ -26,6 +26,8 @@ reusable pipeline code over one-off scripts.
 - `docs/experiment-ledger.md`: handoff ledger for hypotheses, experiments,
   artifacts, validation, and publish status
 - `docs/run-manifests.md`: canonical run manifest schema and handoff rules
+- `docs/cluster.md`: generic cluster inventory, doctor, and dry-run planning
+  rules
 - `docs/roadmaps/`: long-form roadmap and archived planning documents
 - `docs/research/sota-2026-05-18.md`: dated SOTA snapshot behind current
   roadmap decisions
@@ -34,6 +36,8 @@ reusable pipeline code over one-off scripts.
 - `configs/README.md`: config directory map and portability rules
 - `configs/research_registry.yaml`: machine-readable research basis for
   methods, evals, serving, and quantization work
+- `configs/hardware/` and `configs/clusters/`: hardware defaults and
+  open-source-safe cluster inventory examples
 - `scripts/README.md`: script directory map and operational rules
 - `configs/model_families/`: model family registry
 - `configs/abliteration/`: ablation recipes
@@ -196,6 +200,22 @@ Use manifests for planned, running, completed, and failed work. They preserve
 git state, config hashes, command lines, hardware, safe environment variables,
 outputs, artifacts, metrics, and notes. Never pass secrets through manifest
 metadata or notes.
+
+Validate or plan cluster usage:
+
+```bash
+./forge cluster doctor --config configs/clusters/dgx_spark_x2.example.yaml
+./forge cluster plan \
+  --config configs/clusters/dgx_spark_x2.example.yaml \
+  --workload train \
+  --launcher torchrun
+```
+
+Cluster configs must remain generic. Do not commit private hostnames, IPs,
+usernames, tokens, or absolute machine-specific paths. Put those values in
+environment variables or untracked local copies. Real distributed execution
+requires `./forge cluster doctor --strict` and a workload-specific launcher with
+resource guardrails.
 
 ## Abliteration Rules
 

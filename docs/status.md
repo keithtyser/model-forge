@@ -36,6 +36,10 @@ This is the short handoff state for humans and agents. Use
 - Comparison reports now include report-v2 provenance and research basis:
   canonical manifest summaries, config hashes, comparability warnings, and
   selected `configs/research_registry.yaml` entries.
+- Generic cluster planning is now present for open-source-safe inventories:
+  `configs/hardware/dgx_spark.yaml`, `configs/clusters/*.example.yaml`, and
+  `./forge cluster plan/doctor`. DGX Spark x2 is represented as an example
+  config with env-backed hosts, not hard-coded private infrastructure.
 
 ## Current Dataset State
 

@@ -20,6 +20,19 @@ So the clean setup is:
 2. point model-forge at that endpoint
 3. run the eval
 
+For multi-node DGX Spark clusters, keep the repo generic. Use
+`configs/clusters/dgx_spark_x2.example.yaml` as an env-backed example and copy it
+to a private local config before setting real hosts:
+
+```bash
+./forge cluster doctor --config configs/clusters/dgx_spark_x2.example.yaml
+./forge cluster plan --config configs/clusters/dgx_spark_x2.example.yaml --workload serve --launcher vllm
+```
+
+The cluster planner is dry-run only. It validates inventory shape, resource
+policy, env-backed host placeholders, and launch command structure before any
+distributed serving or training backend is allowed to execute.
+
 ## Recommended first target
 
 Start with:

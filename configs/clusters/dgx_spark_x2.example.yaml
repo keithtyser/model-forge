@@ -1,0 +1,92 @@
+id: dgx_spark_x2_example
+version: 2026-05-23
+description: >
+  Open-source-safe two-node DGX Spark cluster example. Copy to a private file
+  such as configs/clusters/my_cluster.yaml and set host/user values through
+  environment variables. Do not commit private hostnames, IPs, usernames,
+  tokens, or absolute machine-specific paths.
+
+hardware_profile: configs/hardware/dgx_spark.yaml
+
+launchers:
+  default: ssh
+  supported:
+    - ssh
+    - docker
+    - torchrun
+    - ray
+    - vllm
+
+paths:
+  work_dir_env: MODEL_FORGE_CLUSTER_WORK_DIR
+  models_dir_env: MODEL_FORGE_MODELS_DIR
+  cache_dir_env: HF_HOME
+  artifact_dir: reports/generated/cluster
+  job_lock: runs/locks/model-forge-cluster.lock
+
+resource_policy:
+  max_concurrent_large_jobs: 1
+  require_job_lock: true
+  stop_if_memory_available_below_fraction: 0.05
+  start_if_memory_available_above_fraction: 0.05
+  require_disk_free_fraction: 0.15
+  per_node:
+    cpu_quota: "80%"
+    memory_max_fraction: 0.85
+    io_weight: 100
+    nice: 10
+
+nodes:
+  - name: spark0
+    role: coordinator
+    launcher: ssh
+    host_env: MODEL_FORGE_NODE0_HOST
+    user_env: MODEL_FORGE_NODE0_USER
+    ssh_port_env: MODEL_FORGE_NODE0_SSH_PORT
+    models_dir_env: MODEL_FORGE_NODE0_MODELS_DIR
+    cache_dir_env: MODEL_FORGE_NODE0_HF_HOME
+    network_interface_env: MODEL_FORGE_NODE0_NET_IFACE
+    gpu_count: 1
+    memory_total_gb: 128
+    cpu_quota: "80%"
+    memory_max_fraction: 0.85
+
+  - name: spark1
+    role: worker
+    launcher: ssh
+    host_env: MODEL_FORGE_NODE1_HOST
+    user_env: MODEL_FORGE_NODE1_USER
+    ssh_port_env: MODEL_FORGE_NODE1_SSH_PORT
+    models_dir_env: MODEL_FORGE_NODE1_MODELS_DIR
+    cache_dir_env: MODEL_FORGE_NODE1_HF_HOME
+    network_interface_env: MODEL_FORGE_NODE1_NET_IFACE
+    gpu_count: 1
+    memory_total_gb: 128
+    cpu_quota: "80%"
+    memory_max_fraction: 0.85
+
+distributed:
+  backend: torchrun
+  nnodes: 2
+  nproc_per_node: 1
+  rdzv_backend: c10d
+  rdzv_endpoint_env: MODEL_FORGE_RDZV_ENDPOINT
+  master_addr_env: MODEL_FORGE_MASTER_ADDR
+  master_port_env: MODEL_FORGE_MASTER_PORT
+
+serving:
+  backend: vllm
+  topology: multi_node
+  coordinator_port_env: MODEL_FORGE_VLLM_PORT
+  tensor_parallel_size: 2
+  pipeline_parallel_size: 1
+  notes:
+    - Prefer a Spark-native vLLM cluster recipe or container backend.
+    - Validate single-node serving before scaling to two nodes.
+
+training:
+  backend: torchrun
+  launcher_guard: docker_or_systemd_scope_per_node
+  notes:
+    - Use the same resource policy on every node.
+    - Start with short smoke runs before full training.

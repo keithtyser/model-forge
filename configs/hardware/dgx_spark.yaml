@@ -1,0 +1,51 @@
+id: dgx_spark
+version: 2026-05-23
+description: >
+  Generic single-node DGX Spark / GB10 hardware profile. This file contains
+  reusable hardware defaults only; model-family constants belong in
+  configs/model_families/ or workload configs.
+
+node_defaults:
+  accelerator: NVIDIA GB10
+  memory_total_gb: 128
+  gpu_count: 1
+  cpu_reserved_cores: 1
+  memory_max_fraction: 0.85
+  memory_start_floor_fraction: 0.05
+  disk_free_floor_fraction: 0.15
+  cpu_quota: "80%"
+  io_weight: 100
+  nice: 10
+
+serving_env:
+  GPU_MEMORY_UTILIZATION: "0.85"
+  MAX_MODEL_LEN: "32768"
+  MAX_NUM_BATCHED_TOKENS: "32768"
+  VLLM_MAX_NUM_SEQS: "4"
+  VLLM_ENABLE_CHUNKED_PREFILL: "1"
+  VLLM_ENABLE_PREFIX_CACHING: "1"
+  VLLM_KV_CACHE_DTYPE: fp8_e4m3
+  VLLM_DTYPE: auto
+  VLLM_ALLOW_LONG_MAX_MODEL_LEN: "1"
+  PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+  TORCH_MATMUL_PRECISION: high
+  NVIDIA_FORWARD_COMPAT: "1"
+  NVIDIA_DISABLE_REQUIRE: "1"
+
+training_env:
+  MODEL_FORGE_PARALLELISM: "32"
+  MODEL_FORGE_HIGH_PARALLELISM: "192"
+  TOKENIZERS_PARALLELISM: "true"
+  OMP_NUM_THREADS: "1"
+
+quantization_env:
+  MODEL_FORGE_QUANT_CALIBRATION_SAMPLES: "512"
+  MODEL_FORGE_QUANT_CALIBRATION_SEQ_LEN: "4096"
+  MODEL_FORGE_QUANT_BATCH_SIZE: auto
+  MODEL_FORGE_QUANT_KEEP_BF16_PATTERNS: router,gate,vision,visual,embed_vision,multi_modal_projector
+  MODEL_FORGE_MOE_FAST_CALIBRATION: "1"
+
+notes:
+  - Use a Spark/GB10-native vLLM build.
+  - Keep one large model server or training job per node unless a workload explicitly supports distributed execution.
+  - High parallelism is for input-pipeline and preprocessing work, not unbounded model forward passes.

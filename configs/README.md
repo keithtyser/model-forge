@@ -7,6 +7,11 @@ and experiment constants here instead of hard-coding them in scripts.
 
 - `model_families/`: source checkpoints, variants, served model names, report
   paths, and serving defaults.
+- `hardware/`: generic hardware profile defaults such as DGX Spark serving,
+  training, quantization, and resource-policy recommendations.
+- `clusters/`: open-source-safe cluster inventory examples. Private hostnames,
+  usernames, IPs, and absolute paths should stay in untracked local copies or
+  environment variables.
 - `data_sources/`: dataset source registries with ids, provenance, licenses,
   roles, quality tiers, and sampling caps.
 - `research_registry.yaml`: dated research claims with implementation hooks,
