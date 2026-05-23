@@ -116,6 +116,16 @@ Metrics include total latency, time to first token when streaming is enabled,
 inter-token latency when token counts are available, output tokens/sec, decode
 tokens/sec, and token counts returned by the backend.
 
+`serving_card.md` is the human-facing report card for a run. It includes:
+
+- model, family, variant, endpoint shape, and run manifest id
+- hardware profile and recorded GPU count
+- benchmark config and workload definition files
+- TTFT, first-chunk, ITL, latency, output-tok/sec, decode-tok/sec, and request-throughput summaries
+- per-workload metric rows
+- artifact links and promotion gates
+- explicit caveats for missing memory, cache-hit, truncation, quality, or behavior evidence
+
 ## Interpretation
 
 Serving benchmarks are operational evidence, not quality evidence. A faster run

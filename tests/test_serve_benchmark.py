@@ -93,6 +93,7 @@ class ServeBenchmarkTests(unittest.TestCase):
                     "metrics": {
                         "total_latency_seconds": 1.0,
                         "time_to_first_token_seconds": 0.25,
+                        "inter_token_latency_seconds": 0.05,
                         "output_tokens_per_second": 12.0,
                     },
                     "usage": {"prompt_tokens": 8, "completion_tokens": 12, "total_tokens": 20},
@@ -115,6 +116,15 @@ class ServeBenchmarkTests(unittest.TestCase):
             self.assertTrue((output_dir / "manifest.json").exists())
             saved = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
             self.assertEqual(saved["metrics"]["total_latency_seconds"]["p50"], 1.0)
+            self.assertEqual(saved["metrics"]["total_latency_seconds"]["p99"], 1.0)
+            card = (output_dir / "serving_card.md").read_text(encoding="utf-8")
+            self.assertIn("# Serving Card: serve_bench_smoke", card)
+            self.assertIn("## Hardware And Config", card)
+            self.assertIn("## Workload Metrics", card)
+            self.assertIn("## Promotion Gates", card)
+            self.assertIn("configs/serving/workloads/short_chat.yaml", card)
+            self.assertIn("TTFT seconds", card)
+            self.assertIn("Output tok/sec", card)
 
     def test_actual_streaming_http_benchmark_against_mock_server(self) -> None:
         class Handler(BaseHTTPRequestHandler):

@@ -580,8 +580,17 @@ def metric_summary(values: list[float]) -> dict[str, Any]:
         "mean": round(statistics.fmean(values), 6),
         "p50": round(percentile(values, 0.50) or 0.0, 6),
         "p95": round(percentile(values, 0.95) or 0.0, 6),
+        "p99": round(percentile(values, 0.99) or 0.0, 6),
         "max": round(max(values), 6),
     }
+
+
+def count_values(values: list[Any]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        key = str(value if value not in {None, ""} else "unknown")
+        counts[key] = counts.get(key, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def summarize_results(config: ServeBenchConfig, results: list[dict[str, Any]], output_dir: Path) -> dict[str, Any]:
@@ -594,8 +603,11 @@ def summarize_results(config: ServeBenchConfig, results: list[dict[str, Any]], o
     by_category: dict[str, dict[str, Any]] = {}
     for category in sorted({str(row.get("category", "generic")) for row in results}):
         category_rows = [row for row in results if row.get("category") == category and row.get("ok")]
+        all_category_rows = [row for row in results if row.get("category") == category]
         by_category[category] = {
+            "request_count": len(all_category_rows),
             "successful_requests": len(category_rows),
+            "failed_requests": len(all_category_rows) - len(category_rows),
             "metrics": {
                 metric: metric_summary([
                     float((row.get("metrics") or {}).get(metric))
@@ -605,6 +617,19 @@ def summarize_results(config: ServeBenchConfig, results: list[dict[str, Any]], o
                 for metric in metric_names
             },
         }
+    total_latency_values = [
+        float((row.get("metrics") or {}).get("total_latency_seconds"))
+        for row in successful
+        if isinstance((row.get("metrics") or {}).get("total_latency_seconds"), (int, float))
+    ]
+    total_latency_sum = sum(total_latency_values)
+    request_throughput = len(successful) / total_latency_sum if total_latency_sum > 0 else None
+    finish_reasons = count_values([
+        (row.get("stream") or {}).get("finish_reason")
+        for row in successful
+        if row.get("stream") is not None
+    ])
+    error_types = count_values([row.get("error") for row in results if not row.get("ok")])
     return {
         "schema_version": SCHEMA_VERSION,
         "created_at": utc_now().isoformat(),
@@ -622,6 +647,9 @@ def summarize_results(config: ServeBenchConfig, results: list[dict[str, Any]], o
         "successful_requests": len(successful),
         "failed_requests": len(results) - len(successful),
         "success_rate": round(len(successful) / len(results), 6) if results else 0.0,
+        "request_throughput_per_second_serial_estimate": round(request_throughput, 6) if request_throughput else None,
+        "finish_reasons": finish_reasons,
+        "error_types": error_types,
         "metrics": metrics,
         "by_category": by_category,
         "output_dir": display_path(output_dir),
@@ -639,35 +667,131 @@ def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
             handle.write(json.dumps(redact_value(row), sort_keys=True) + "\n")
 
 
+def table_cell(value: Any) -> str:
+    if value is None:
+        return "n/a"
+    if isinstance(value, float):
+        return f"{value:.6g}"
+    return str(value)
+
+
+def metric_values(metrics: Mapping[str, Any], metric: str) -> Mapping[str, Any]:
+    raw = metrics.get(metric) or {}
+    return raw if isinstance(raw, Mapping) else {}
+
+
+def metric_triplet(metrics: Mapping[str, Any], metric: str) -> str:
+    values = metric_values(metrics, metric)
+    return f"p50={table_cell(values.get('p50'))}, p95={table_cell(values.get('p95'))}, p99={table_cell(values.get('p99'))}"
+
+
+def serving_card_status(summary: Mapping[str, Any]) -> str:
+    if summary.get("failed_requests"):
+        return "needs_investigation"
+    if not summary.get("request_count"):
+        return "empty"
+    return "serving_metrics_recorded"
+
+
 def write_serving_card(path: Path, summary: Mapping[str, Any], manifest: Mapping[str, Any]) -> None:
     metrics = summary.get("metrics", {})
+    by_category = summary.get("by_category") or {}
+    identity = manifest.get("identity") or {}
+    hardware = manifest.get("hardware") or {}
+    outputs = manifest.get("outputs") or {}
+    artifacts = outputs.get("artifacts") or {}
+    command = (manifest.get("command") or {}).get("display") or "n/a"
+    workload_sources = summary.get("workload_sources") or []
+    config_paths = [
+        item.get("path")
+        for item in manifest.get("configs", [])
+        if isinstance(item, Mapping) and item.get("path")
+    ]
 
-    def p50(metric: str) -> str:
-        value = (metrics.get(metric) or {}).get("p50")
-        return "n/a" if value is None else str(value)
+    category_rows = []
+    for category, data in sorted(by_category.items()):
+        cat_metrics = data.get("metrics") or {}
+        category_rows.append(
+            "| "
+            + " | ".join(
+                [
+                    str(category),
+                    table_cell(data.get("successful_requests")),
+                    table_cell(data.get("failed_requests")),
+                    metric_triplet(cat_metrics, "time_to_first_token_seconds"),
+                    metric_triplet(cat_metrics, "inter_token_latency_seconds"),
+                    metric_triplet(cat_metrics, "output_tokens_per_second"),
+                    metric_triplet(cat_metrics, "total_latency_seconds"),
+                ]
+            )
+            + " |"
+        )
+    if not category_rows:
+        category_rows.append("| n/a | 0 | 0 | n/a | n/a | n/a | n/a |")
 
     lines = [
-        f"# Serving Benchmark: {summary.get('name')}",
+        f"# Serving Card: {summary.get('name')}",
         "",
+        "## Identity",
+        "",
+        f"- Status: `{serving_card_status(summary)}`",
         f"- Model: `{summary.get('model')}`",
-        f"- Family: `{summary.get('family') or ''}`",
-        f"- Variant: `{summary.get('variant') or ''}`",
+        f"- Family: `{summary.get('family') or identity.get('family') or ''}`",
+        f"- Variant: `{summary.get('variant') or identity.get('variant') or ''}`",
+        f"- Engine/API: `openai_compatible`",
         f"- Streaming: `{summary.get('streaming')}`",
+        f"- Concurrency: `{summary.get('concurrency')}`",
+        f"- Repetitions: `{summary.get('repetitions')}`",
         f"- Requests: `{summary.get('successful_requests')}/{summary.get('request_count')}` successful",
+        f"- Success rate: `{table_cell(summary.get('success_rate'))}`",
         f"- Run manifest: `{manifest.get('run_id')}`",
+        f"- Output directory: `{summary.get('output_dir')}`",
         "",
-        "## Median Metrics",
+        "## Hardware And Config",
         "",
-        f"- Total latency seconds: `{p50('total_latency_seconds')}`",
-        f"- Time to first chunk seconds: `{p50('time_to_first_chunk_seconds')}`",
-        f"- Time to first token seconds: `{p50('time_to_first_token_seconds')}`",
-        f"- Inter-token latency seconds: `{p50('inter_token_latency_seconds')}`",
-        f"- Output tokens/sec: `{p50('output_tokens_per_second')}`",
+        f"- Hardware profile: `{hardware.get('profile') or ''}`",
+        f"- Hardware label: `{hardware.get('label') or ''}`",
+        f"- GPU count recorded: `{len(hardware.get('gpus') or [])}`",
+        f"- Benchmark config: `{config_paths[0] if config_paths else ''}`",
+        f"- Workload sources: `{', '.join(str(item) for item in workload_sources)}`",
+        f"- Repro command: `{command}`",
+        "",
+        "## Overall Metrics",
+        "",
+        f"- TTFT seconds: `{metric_triplet(metrics, 'time_to_first_token_seconds')}`",
+        f"- First chunk seconds: `{metric_triplet(metrics, 'time_to_first_chunk_seconds')}`",
+        f"- ITL seconds: `{metric_triplet(metrics, 'inter_token_latency_seconds')}`",
+        f"- Total latency seconds: `{metric_triplet(metrics, 'total_latency_seconds')}`",
+        f"- Output tokens/sec: `{metric_triplet(metrics, 'output_tokens_per_second')}`",
+        f"- Decode tokens/sec: `{metric_triplet(metrics, 'decode_tokens_per_second')}`",
+        f"- Total tokens/sec: `{metric_triplet(metrics, 'total_tokens_per_second')}`",
+        f"- Serial request throughput/sec: `{table_cell(summary.get('request_throughput_per_second_serial_estimate'))}`",
+        f"- Finish reasons: `{json.dumps(summary.get('finish_reasons') or {}, sort_keys=True)}`",
+        f"- Error types: `{json.dumps(summary.get('error_types') or {}, sort_keys=True)}`",
+        "",
+        "## Workload Metrics",
+        "",
+        "| Workload | Success | Failed | TTFT | ITL | Output tok/sec | Total latency |",
+        "|---|---:|---:|---|---|---|---|",
+        *category_rows,
+        "",
+        "## Artifacts",
+        "",
+        f"- Requests JSONL: `{artifacts.get('requests_jsonl', 'requests.jsonl')}`",
+        f"- Summary JSON: `{artifacts.get('summary_json', 'summary.json')}`",
+        f"- Serving Card: `{artifacts.get('serving_card_md', 'serving_card.md')}`",
+        f"- Manifest JSON: `{artifacts.get('manifest_json', 'manifest.json')}`",
+        "",
+        "## Promotion Gates",
+        "",
+        "- Serving metrics are operational evidence only.",
+        "- Run sampled quality and behavior evals under the same serving config before promotion.",
+        "- Compare against a baseline with the same model, workload files, sampling, endpoint shape, and hardware profile.",
+        "- Treat missing memory, cache-hit, truncation, quality, or behavior evidence as not yet measured.",
         "",
         "## Notes",
         "",
-        "- This card summarizes serving mechanics only.",
-        "- Quality, behavior, and refusal/capability checks should run under the same serving configuration before claims are published.",
+        *[f"- {note}" for note in summary.get("notes", [])],
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
