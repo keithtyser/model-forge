@@ -45,6 +45,10 @@ This is the short handoff state for humans and agents. Use
   `src/model_forge/benchmarks/serve.py`. It benchmarks an already-running
   OpenAI-compatible endpoint and writes request, summary, serving-card, and
   canonical manifest artifacts under `reports/generated/serve_bench/`.
+- The baseline DGX Spark vLLM serving sweep is now present through
+  `configs/sweeps/dgx_spark_vllm_baseline.yaml` and `./forge bench sweep`.
+  It expands bounded startup-time vLLM env cases plus matching `bench serve`
+  commands and can attach the two-node env-backed Spark cluster inventory.
 
 ## Current Dataset State
 
@@ -86,8 +90,8 @@ length filtering:
 
 1. Add eval provenance cards or golden baseline hardening next. Keep objective
    profile fields optional until the objective profile layer is revisited.
-2. Add DGX Spark serving sweep configs and workload definitions now that
-   `./forge bench serve` exists.
+2. Add serving workload definitions and then wire sampled quality/behavior evals
+   under selected serving configs.
 3. Use `./forge promote gemma4_26b_a4b local_ft_vs_jackrong` whenever saved
    comparison results change.
 4. Publish completed durable datasets to Hugging Face with `publish --execute`

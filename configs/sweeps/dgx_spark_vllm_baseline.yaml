@@ -1,0 +1,108 @@
+schema_version: model_forge.serving_sweep.v1
+name: dgx_spark_vllm_baseline
+description: >
+  Conservative DGX Spark vLLM serving sweep. This is a planning config for
+  comparing endpoint settings after a server has been started with each case's
+  environment. It does not launch vLLM by itself.
+
+hardware_profile: configs/hardware/dgx_spark.yaml
+benchmark_config: configs/serving/serve_bench_smoke.yaml
+output_dir: reports/generated/serve_sweeps/dgx_spark_vllm_baseline
+
+backend:
+  kind: vllm_openai
+  base_url_env: MODEL_FORGE_BASE_URL
+  model_env: MODEL_FORGE_MODEL
+  default_base_url: http://127.0.0.1:8000/v1
+
+resource_policy:
+  max_concurrent_servers: 1
+  max_concurrent_benchmarks: 1
+  require_job_lock: true
+  job_lock: runs/locks/model-forge-serve-sweep.lock
+  start_if_memory_available_above_fraction: 0.05
+  require_disk_free_fraction: 0.15
+  stop_if_memory_available_below_fraction: 0.05
+
+workload:
+  benchmark_command:
+    - ./forge
+    - bench
+    - serve
+  repetitions: 1
+  limit: null
+  stream: true
+  notes:
+    - Run one vLLM server at a time.
+    - Restart the server between cases because most vLLM flags are startup-time settings.
+    - Run sampled quality and behavior evals under the selected serving config before publishing claims.
+
+fixed_env:
+  MODEL_FORGE_HARDWARE_PROFILE: dgx_spark
+  GPU_MEMORY_UTILIZATION: "0.85"
+  MAX_MODEL_LEN: "32768"
+  MAX_NUM_BATCHED_TOKENS: "32768"
+  VLLM_MAX_NUM_SEQS: "4"
+  VLLM_ENABLE_CHUNKED_PREFILL: "1"
+  VLLM_ENABLE_PREFIX_CACHING: "1"
+  VLLM_KV_CACHE_DTYPE: fp8_e4m3
+  VLLM_DTYPE: auto
+  VLLM_ALLOW_LONG_MAX_MODEL_LEN: "1"
+  PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+  TORCH_MATMUL_PRECISION: high
+  NVIDIA_FORWARD_COMPAT: "1"
+  NVIDIA_DISABLE_REQUIRE: "1"
+
+cases:
+  - id: spark_default_fp8_kv
+    description: Hardware-profile default serving config.
+    hypothesis: >
+      Conservative memory utilization with FP8 KV cache should provide a stable
+      default for large local models on DGX Spark.
+    env: {}
+
+  - id: spark_low_memory_fp8_kv
+    description: Lower-memory control for fragile or newly added model families.
+    hypothesis: >
+      Reducing memory utilization, sequence count, and batched tokens should
+      improve stability at the cost of throughput.
+    env:
+      GPU_MEMORY_UTILIZATION: "0.80"
+      MAX_MODEL_LEN: "16384"
+      MAX_NUM_BATCHED_TOKENS: "16384"
+      VLLM_MAX_NUM_SEQS: "2"
+
+  - id: spark_high_memory_fp8_kv
+    description: Higher-memory candidate after the default is stable.
+    hypothesis: >
+      Raising memory utilization and sequence count can improve throughput if
+      the model and workload still leave system headroom.
+    env:
+      GPU_MEMORY_UTILIZATION: "0.90"
+      MAX_MODEL_LEN: "32768"
+      MAX_NUM_BATCHED_TOKENS: "32768"
+      VLLM_MAX_NUM_SEQS: "8"
+
+  - id: spark_bf16_kv_control
+    description: KV-cache dtype control.
+    hypothesis: >
+      Disabling FP8 KV cache helps identify whether throughput gains come with
+      quality, stability, or memory tradeoffs for a given model family.
+    env:
+      VLLM_KV_CACHE_DTYPE: auto
+
+  - id: spark_prefix_cache_off
+    description: Prefix-cache control.
+    hypothesis: >
+      Disabling prefix caching gives a control point for workloads where prompt
+      reuse is low or cache behavior could hide latency regressions.
+    env:
+      VLLM_ENABLE_PREFIX_CACHING: "0"
+
+quality_gate:
+  required_after_sweep:
+    - ./forge eval <family> <variant> --smoke
+  promotion_rule: >
+    Treat serving metrics as operational evidence only. A candidate sweep case
+    cannot be promoted unless sampled quality/behavior evals under the same
+    serving config are comparable to the baseline.

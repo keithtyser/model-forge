@@ -87,6 +87,7 @@ Run evals from another terminal:
 ./forge research audit
 ./forge manifest write --run-type eval --family gemma4_26b_a4b --variant base --command './forge eval gemma4_26b_a4b base --internal'
 ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
+./forge bench sweep plan --family gemma4_26b_a4b --variant base
 ./forge doctor
 ```
 
@@ -187,12 +188,14 @@ Serving benchmark:
 ```bash
 ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
 MODEL_FORGE_BASE_URL=http://127.0.0.1:8000/v1 ./forge bench serve --model served/model-name
+./forge bench sweep plan --family gemma4_26b_a4b --variant base
 ```
 
 See [docs/serving-benchmarks.md](docs/serving-benchmarks.md). The benchmark
 expects a running OpenAI-compatible endpoint and writes `requests.jsonl`,
 `summary.json`, `serving_card.md`, and `manifest.json` under
-`reports/generated/serve_bench/`.
+`reports/generated/serve_bench/`. Sweep plans expand startup-time server env
+cases and the matching `bench serve` commands, but they do not launch vLLM.
 
 Abliteration planning:
 

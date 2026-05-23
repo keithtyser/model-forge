@@ -45,6 +45,23 @@ This writes `requests.jsonl`, `summary.json`, `serving_card.md`, and
 `manifest.json` under `reports/generated/serve_bench/`. It measures the running
 endpoint only; it does not prove quality or behavior preservation by itself.
 
+Plan the baseline DGX Spark vLLM sweep before running it:
+
+```bash
+./forge bench sweep doctor --config configs/sweeps/dgx_spark_vllm_baseline.yaml --strict
+./forge bench sweep plan \
+  --config configs/sweeps/dgx_spark_vllm_baseline.yaml \
+  --family gemma4_26b_a4b \
+  --variant base \
+  --cluster-config configs/clusters/dgx_spark_x2.example.yaml
+```
+
+The sweep planner expands server-env cases and benchmark commands. It does not
+launch vLLM. For the two-node Spark cluster, set the private
+`MODEL_FORGE_NODE*_HOST`, `MODEL_FORGE_NODE*_USER`,
+`MODEL_FORGE_CLUSTER_WORK_DIR`, and `MODEL_FORGE_RDZV_ENDPOINT` values in the
+environment or an untracked local shell file.
+
 ## Recommended first target
 
 Start with:

@@ -27,6 +27,27 @@ MODEL_FORGE_BASE_URL=http://127.0.0.1:8000/v1 \
 ./forge bench serve --model served/model-name
 ```
 
+Expand a bounded serving sweep:
+
+```bash
+./forge bench sweep doctor --config configs/sweeps/dgx_spark_vllm_baseline.yaml --strict
+./forge bench sweep plan \
+  --config configs/sweeps/dgx_spark_vllm_baseline.yaml \
+  --family gemma4_26b_a4b \
+  --variant base
+```
+
+For a two-node DGX Spark setup, pass the env-backed cluster inventory after
+setting private node values outside Git:
+
+```bash
+./forge bench sweep plan \
+  --config configs/sweeps/dgx_spark_vllm_baseline.yaml \
+  --family gemma4_26b_a4b \
+  --variant base \
+  --cluster-config configs/clusters/dgx_spark_x2.example.yaml
+```
+
 ## Config
 
 The default smoke config is:
@@ -45,6 +66,17 @@ The config defines:
 
 The MVP intentionally supports `concurrency: 1`. Concurrency sweeps belong in a
 serving sweep/workload layer so results remain comparable and resource-safe.
+
+The first serving sweep config is:
+
+```text
+configs/sweeps/dgx_spark_vllm_baseline.yaml
+```
+
+It defines DGX Spark vLLM startup env cases, hypotheses, resource policy,
+quality gates, and the matching `bench serve` command shape. It does not start a
+server because most vLLM settings are startup-time flags and should be tested
+one server configuration at a time.
 
 ## Outputs
 

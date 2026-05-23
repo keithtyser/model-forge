@@ -14,6 +14,9 @@ and experiment constants here instead of hard-coding them in scripts.
   environment variables.
 - `serving/`: generic serving benchmark and future sweep configs. These should
   describe endpoint/workload shape, not private infrastructure.
+- `sweeps/`: benchmark sweep matrices. Public sweep configs should describe
+  cases, hypotheses, env deltas, resource policy, and follow-up gates, but not
+  private hosts or absolute local paths.
 - `data_sources/`: dataset source registries with ids, provenance, licenses,
   roles, quality tiers, and sampling caps.
 - `research_registry.yaml`: dated research claims with implementation hooks,

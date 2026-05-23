@@ -1638,48 +1638,34 @@ Your public angle:
 ### 9.2 Add `forge bench serve`
 
 ```bash
-./forge bench serve gemma4_26b_a4b base \
-  --engine vllm \
-  --hardware dgx_spark \
-  --workload short_chat,long_prefill,decode_heavy,structured_json,artifact_generation \
-  --sweep configs/sweeps/dgx_spark_vllm_baseline.yaml \
-  --output reports/generated/gemma4_26b_a4b_base_serving_bench
+./forge bench sweep plan \
+  --config configs/sweeps/dgx_spark_vllm_baseline.yaml \
+  --family gemma4_26b_a4b \
+  --variant base \
+  --cluster-config configs/clusters/dgx_spark_x2.example.yaml
+
+./forge bench serve \
+  --family gemma4_26b_a4b \
+  --variant base \
+  --output-dir reports/generated/gemma4_26b_a4b_base_serving_bench
 ```
 
 ### 9.3 Default sweep
 
 ```yaml
-sweep:
-  engine:
-    - vllm
-  kv_cache_dtype:
-    - auto
-    - fp8_e4m3
-  max_model_len:
-    - 8192
-    - 16384
-    - 32768
-  max_num_seqs:
-    - 1
-    - 2
-    - 4
-  max_num_batched_tokens:
-    - 2048
-    - 4096
-    - 8192
-    - 16384
-    - 32768
-  enable_prefix_caching:
-    - true
-    - false
-  enable_chunked_prefill:
-    - true
-    - false
-  gpu_memory_utilization:
-    - 0.80
-    - 0.85
-    - 0.90
+config: configs/sweeps/dgx_spark_vllm_baseline.yaml
+cases:
+  - spark_default_fp8_kv
+  - spark_low_memory_fp8_kv
+  - spark_high_memory_fp8_kv
+  - spark_bf16_kv_control
+  - spark_prefix_cache_off
 ```
+
+Keep the first public sweep bounded. A full cartesian product across context
+length, sequence count, batched tokens, prefix caching, chunked prefill, KV dtype,
+and memory utilization is too expensive and too easy to misinterpret without a
+workload layer.
 
 ### 9.4 Metrics
 
@@ -3191,7 +3177,7 @@ At least one merged upstream PR and one profiler-backed perf report with end-to-
 ```text
 [x] MF-0200 Add generic cluster inventory planner and DGX Spark x2 example
 [x] MF-0201 Add forge bench serve
-[ ] MF-0202 Add DGX Spark vLLM sweep config
+[x] MF-0202 Add DGX Spark vLLM sweep config
 [ ] MF-0203 Add serving workload definitions
 [ ] MF-0204 Add Serving Card
 [ ] MF-0205 Add TTFT/ITL/memory/tok-sec capture
@@ -3438,6 +3424,7 @@ Do these in order:
 [x] Make compare report include manifest provenance and Research Basis.
 [x] Add generic cluster inventory planner and DGX Spark x2 example.
 [x] Add forge bench serve MVP.
+[x] Add DGX Spark vLLM sweep config.
 [ ] Add noncompliance taxonomy.
 [ ] Finish/evaluate Gemma local FT.
 [ ] Add configs/publishing/huggingface.example.yaml.

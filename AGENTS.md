@@ -41,6 +41,7 @@ reusable pipeline code over one-off scripts.
 - `configs/hardware/` and `configs/clusters/`: hardware defaults and
   open-source-safe cluster inventory examples
 - `configs/serving/`: serving benchmark and future serving sweep configs
+- `configs/sweeps/`: bounded serving/quantization/benchmark sweep matrices
 - `scripts/README.md`: script directory map and operational rules
 - `configs/model_families/`: model family registry
 - `configs/abliteration/`: ablation recipes
@@ -225,11 +226,14 @@ Benchmark serving only after an endpoint is already running:
 ```bash
 ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
 ./forge bench serve --family gemma4_26b_a4b --variant base
+./forge bench sweep doctor --config configs/sweeps/dgx_spark_vllm_baseline.yaml --strict
+./forge bench sweep plan --family gemma4_26b_a4b --variant base
 ```
 
-`bench serve` is for OpenAI-compatible endpoint mechanics only. It does not
-start a server, and a good latency result is not a quality or behavior pass.
-Use the generated `manifest.json`, `summary.json`, `requests.jsonl`, and
+`bench serve` is for OpenAI-compatible endpoint mechanics only. `bench sweep`
+expands startup-time server env cases plus matching benchmark commands. Neither
+command starts a vLLM server. A good latency result is not a quality or behavior
+pass. Use the generated `manifest.json`, `summary.json`, `requests.jsonl`, and
 `serving_card.md` with eval results before making serving claims.
 
 ## Abliteration Rules

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import tempfile
+import threading
 import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from model_forge.benchmarks.serve import (
@@ -11,6 +13,7 @@ from model_forge.benchmarks.serve import (
     build_plan,
     load_config,
     parse_streaming_chunks,
+    run_benchmark,
     write_outputs,
 )
 
@@ -94,6 +97,44 @@ class ServeBenchmarkTests(unittest.TestCase):
             self.assertTrue((output_dir / "manifest.json").exists())
             saved = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
             self.assertEqual(saved["metrics"]["total_latency_seconds"]["p50"], 1.0)
+
+    def test_actual_streaming_http_benchmark_against_mock_server(self) -> None:
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self) -> None:  # noqa: N802 - stdlib callback name
+                _ = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.end_headers()
+                chunks = [
+                    {"choices": [{"delta": {"content": "ok"}}]},
+                    {"choices": [{"delta": {"content": " done"}, "finish_reason": "stop"}]},
+                    {"choices": [], "usage": {"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5}},
+                ]
+                for chunk in chunks:
+                    self.wfile.write(f"data: {json.dumps(chunk)}\n\n".encode("utf-8"))
+                self.wfile.write(b"data: [DONE]\n\n")
+                self.wfile.flush()
+
+            def log_message(self, _format: str, *_args: object) -> None:
+                return
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base_url = f"http://127.0.0.1:{server.server_port}/v1"
+            config = load_config(DEFAULT_CONFIG, model="mock/model", base_url=base_url, limit=1, env={})
+            results = run_benchmark(config)
+        finally:
+            server.shutdown()
+            thread.join(timeout=2)
+            server.server_close()
+
+        self.assertEqual(len(results), 1)
+        self.assertTrue(results[0]["ok"])
+        self.assertEqual(results[0]["usage"]["completion_tokens"], 2)
+        self.assertGreaterEqual(results[0]["metrics"]["time_to_first_token_seconds"], 0)
+        self.assertEqual(results[0]["metrics"]["completion_token_source"], "usage.completion_tokens")
 
 
 if __name__ == "__main__":
