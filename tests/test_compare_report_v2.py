@@ -135,6 +135,8 @@ class CompareReportV2Tests(unittest.TestCase):
         self.assertIn("arditi_2024_refusal_direction", research_ids)
         self.assertIn("xstest", research_ids)
         self.assertIn("ifeval", research_ids)
+        self.assertIn("zero_refusal_capability_retention", comparison["objective_profiles"])
+        self.assertIn("quantized_quality_retention", comparison["objective_profiles"])
 
     def test_legacy_manifest_without_canonical_block_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

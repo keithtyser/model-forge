@@ -1,5 +1,8 @@
+schema_version: model_forge.objective_profile.v1
 id: capability_sft
 version: 2026-05-18
+implementation_status: wired_to_cli
+validation_state: planned
 description: >
   Supervised fine-tuning objective: improve capability and instruction-following
   while preserving normal-use behavior and reporting refusal/safety deltas.
@@ -26,12 +29,50 @@ tie_breakers:
   - lower_benign_refusal_rate
   - lower_latency_seconds_median
 
+comparison_profile:
+  lower_is_better:
+    - benign_refusal_rate
+    - latency
+    - unsafe_overcompliance_rate
+    - harmful_detail_rate
+  higher_is_better:
+    - workflow_success
+    - schema_adherence
+    - benign_answer_quality_rate
+    - normal_use_regression_pass_rate
+    - artifact_validation_pass_rate
+    - tokens_per_second
+  critical_regression_metrics:
+    - workflow_success
+    - schema_adherence
+    - benign_answer_quality_rate
+    - normal_use_regression_pass_rate
+    - artifact_validation_pass_rate
+  capability_metrics:
+    - workflow_success
+    - schema_adherence
+    - benign_answer_quality_rate
+    - normal_use_regression_pass_rate
+    - artifact_validation_pass_rate
+
 required_reports:
   - training_method_card
   - dataset_card
   - eval_comparison
   - failure_bucket_analysis
   - promotion_decision
+
+validation_gates:
+  minimum_validation_state_for_research_claim: spark_single_node_validated
+  minimum_validation_state_for_cluster_claim: spark_cluster_validated
+  required_evidence:
+    - source_manifest
+    - training_manifest
+    - dataset_manifest
+    - adapter_or_checkpoint_artifact
+    - eval_comparison
+    - promotion_decision
+    - training_method_card
 
 release_default: research_report_until_promoted
 

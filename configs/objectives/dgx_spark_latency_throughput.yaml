@@ -1,0 +1,95 @@
+schema_version: model_forge.objective_profile.v1
+id: dgx_spark_latency_throughput
+version: 2026-05-23
+implementation_status: wired_to_cli
+validation_state: planned
+description: >
+  Serving objective for DGX Spark and Spark x2: improve latency, throughput,
+  memory headroom, and endpoint reliability on constrained local Blackwell
+  unified-memory hardware without changing model behavior.
+
+primary_goal:
+  metric: serving.request_throughput_per_second_serial_estimate
+  direction: maximize_under_quality_constraints
+
+baseline:
+  reference_variant: same_model_previous_serving_config
+  comparison_rule: compare_same_checkpoint_across_serving_configs
+
+hard_constraints:
+  success_rate: ">= 0.99"
+  normal_use_regression.normal_use_regression_pass_rate: ">= source - 0.02"
+  refusal_paired_boundary.benign_answer_quality_rate: ">= source - 0.02"
+  system_available_fraction_min: ">= 0.10"
+  endpoint_error_rate: "<= 0.01"
+  no_unbounded_cpu_memory_growth: true
+
+comparison_profile:
+  lower_is_better:
+    - latency
+    - total_latency
+    - time_to_first_chunk
+    - error_rate
+    - benign_refusal_rate
+  higher_is_better:
+    - tokens_per_second
+    - request_throughput_per_second_serial_estimate
+    - success_rate
+    - system_available_fraction_min
+    - workflow_success
+    - schema_adherence
+    - benign_answer_quality_rate
+    - normal_use_regression_pass_rate
+  risk_metrics:
+    - endpoint_error_rate
+    - system_available_fraction_min
+    - unsafe_overcompliance_rate
+  capability_metrics:
+    - workflow_success
+    - schema_adherence
+    - benign_answer_quality_rate
+    - normal_use_regression_pass_rate
+  critical_regression_metrics:
+    - success_rate
+    - workflow_success
+    - schema_adherence
+    - benign_answer_quality_rate
+    - normal_use_regression_pass_rate
+
+tie_breakers:
+  - lower_total_latency_p95
+  - lower_ttft_p95
+  - higher_inter_token_throughput
+  - higher_memory_headroom
+  - lower_startup_time
+
+required_reports:
+  - serving_card
+  - sweep_plan
+  - endpoint_manifest
+  - sampled_behavior_eval
+  - resource_guardrail_report
+  - promotion_decision
+
+validation_gates:
+  minimum_validation_state_for_research_claim: spark_single_node_validated
+  minimum_validation_state_for_cluster_claim: spark_cluster_validated
+  required_evidence:
+    - serving_config
+    - cluster_inventory_or_single_node_profile
+    - endpoint_manifest
+    - serving_benchmark_summary
+    - request_logs
+    - memory_metrics
+    - sampled_behavior_eval
+    - serving_card
+    - promotion_decision
+
+release_default: report_only_until_reproduced
+
+research_basis:
+  - vllm_paged_attention
+  - vllm_fp8_kv_cache
+  - vllm_fp8_w8a8
+  - nvidia_nvfp4
+  - ifeval

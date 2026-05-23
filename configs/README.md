@@ -27,7 +27,9 @@ and experiment constants here instead of hard-coding them in scripts.
   promotion gates.
 - `datasets/`: dataset factory configs for seed, generation, verification,
   review, pack, and publish planning.
-- `objectives/`: reusable training objectives and quality criteria.
+- `objectives/`: reusable objective profiles with implementation status,
+  validation state, required evidence, comparison metric preferences, and
+  research basis. Validate with `./forge objectives audit`.
 - `promotion/`: saved comparison gates for deciding whether a candidate should
   be promoted, held, or investigated.
 - `abliteration/`: refusal-direction and behavior-edit recipes.

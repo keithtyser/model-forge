@@ -85,6 +85,7 @@ Run evals from another terminal:
 ./forge eval gemma4_26b_a4b base --external
 ./forge compare gemma4_26b_a4b
 ./forge promote gemma4_26b_a4b local_ft_vs_jackrong
+./forge objectives audit
 ./forge research audit
 ./forge manifest write --run-type eval --family gemma4_26b_a4b --variant base --command './forge eval gemma4_26b_a4b base --internal'
 ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
@@ -150,6 +151,8 @@ Promotion reports:
 Research registry:
 
 ```bash
+./forge objectives list
+./forge objectives audit
 ./forge research list
 ./forge research show arditi_2024_refusal_direction
 ./forge research audit

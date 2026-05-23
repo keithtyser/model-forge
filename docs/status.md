@@ -60,6 +60,11 @@ This is the short handoff state for humans and agents. Use
   checkout-local lock, preflight memory/disk gates, `systemd-run --scope`,
   Docker CPU/memory limits, and a runtime memory watchdog. No completed
   self-quantized Gemma NVFP4 checkpoint has passed the evidence contract yet.
+- Objective profiles are now config-backed and auditable through
+  `./forge objectives audit`: `capability_sft`,
+  `zero_refusal_capability_retention`, `quantized_quality_retention`, and
+  `dgx_spark_latency_throughput`. Compare reports load objective metric
+  preferences from these configs.
 
 ## Current Dataset State
 
@@ -102,9 +107,9 @@ length filtering:
 1. Convert roadmap/backlog status from single checkboxes to separate
    `implementation_status` and `validation_state` fields.
 2. Add required validation/evidence fields to manifests, report cards, variant
-   nodes, objective profiles, and promotion decisions.
-3. Add objective profiles for `zero_refusal_capability_retention`,
-   `quantized_quality_retention`, and `dgx_spark_latency_throughput`.
+   nodes, and promotion decisions. Objective profiles now have those fields.
+3. Add a roadmap-status audit that reports which MF-* items are scaffolded,
+   implemented, tested, or Spark-validated.
 4. Finish/evaluate Gemma local FT or write a Training Method failure card with
    distributed Spark correctness evidence.
 5. Run one real Spark serving benchmark and attach endpoint evidence to the

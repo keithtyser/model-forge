@@ -3273,10 +3273,10 @@ Ship:
 
 ```text
 required validation schema
-objective profile loader
-configs/objectives/zero_refusal_capability_retention.yaml
-configs/objectives/quantized_quality_retention.yaml
-configs/objectives/dgx_spark_latency_throughput.yaml
+objective profile loader (implemented: `./forge objectives audit`)
+configs/objectives/zero_refusal_capability_retention.yaml (implemented)
+configs/objectives/quantized_quality_retention.yaml (implemented)
+configs/objectives/dgx_spark_latency_throughput.yaml (implemented)
 docs/roadmap-status-audit.md
 ```
 
@@ -3661,7 +3661,7 @@ implementation_status:
 
 validation_state:
   planned | smoke_validated | spark_single_node_validated |
-  spark_cluster_validated | generalized
+  spark_cluster_validated | generalizable
 ```
 
 ### P0: Foundation
@@ -3670,10 +3670,10 @@ validation_state:
 MF-0000 Convert legacy [x] backlog into implementation_status + validation_state.
 MF-0001 Add required validation schema to manifests, cards, objectives, and variant nodes.
 MF-0002 Add evidence ledger with command, node count, topology, logs, metrics, checksums, and promotion decision.
-MF-0003 Add objective profile loader and objective audit.
-MF-0004 Add configs/objectives/zero_refusal_capability_retention.yaml.
-MF-0005 Add configs/objectives/quantized_quality_retention.yaml.
-MF-0006 Add configs/objectives/dgx_spark_latency_throughput.yaml.
+MF-0003 Add objective profile loader and objective audit. implementation_status=wired_to_cli validation_state=planned
+MF-0004 Add configs/objectives/zero_refusal_capability_retention.yaml. implementation_status=wired_to_cli validation_state=planned
+MF-0005 Add configs/objectives/quantized_quality_retention.yaml. implementation_status=wired_to_cli validation_state=planned
+MF-0006 Add configs/objectives/dgx_spark_latency_throughput.yaml. implementation_status=wired_to_cli validation_state=planned
 MF-0007 Add variant graph and variant_node.json writer.
 MF-0008 Add artifact checksum and retention policy fields.
 MF-0009 Add eval provenance card.
@@ -3962,10 +3962,13 @@ Do these in order:
 3. Add CLI/doc drift check so target commands are not confused with implemented
    commands.
 4. Add configs/objectives/zero_refusal_capability_retention.yaml with invalid
-   refusal, valid safety-refusal, overcompliance, and release-class gates.
+   refusal, valid safety-refusal, overcompliance, and release-class gates. Done
+   as a config/audit profile; Spark validation remains objective-specific.
 5. Add configs/objectives/quantized_quality_retention.yaml with FP8, Blackwell
-   NVFP4, GGUF, behavior, artifact, and tokenizer/template gates.
-6. Add configs/objectives/dgx_spark_latency_throughput.yaml.
+   NVFP4, GGUF, behavior, artifact, and tokenizer/template gates. Done as a
+   config/audit profile; completed quantization evidence remains open.
+6. Add configs/objectives/dgx_spark_latency_throughput.yaml. Done as a
+   config/audit profile; real endpoint evidence remains open.
 7. Add variant graph + evidence ledger + artifact checksum/retention policy.
 8. Finish/evaluate Gemma local FT or write a Training Method failure card with
    distributed training correctness evidence.

@@ -14,6 +14,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from model_forge.objectives import load_comparison_objective_profiles
 from model_forge.research.registry import load_registry
 
 
@@ -43,7 +44,7 @@ EXTERNAL_VARIANT_ARGS = [
 
 console = Console()
 
-OBJECTIVE_PROFILES = {
+BUILTIN_OBJECTIVE_PROFILES = {
     "general_assistant": {
         "description": "Deployment safety and ordinary assistant quality. Harmful compliance is a regression.",
         "lower_is_better": {
@@ -115,6 +116,15 @@ OBJECTIVE_PROFILES = {
         "critical_regression_metrics": {"workflow_success", "benign_answer_quality_rate", "artifact_validation_pass_rate"},
     },
 }
+
+
+def load_objective_profiles_for_compare() -> dict[str, dict[str, Any]]:
+    profiles = dict(BUILTIN_OBJECTIVE_PROFILES)
+    profiles.update(load_comparison_objective_profiles())
+    return profiles
+
+
+OBJECTIVE_PROFILES = load_objective_profiles_for_compare()
 
 DEFAULT_OBJECTIVE = "general_assistant"
 

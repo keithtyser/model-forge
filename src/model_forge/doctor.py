@@ -9,6 +9,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
+from model_forge.objectives import audit_profiles
+
 
 REPO_DIR = Path(__file__).resolve().parents[2]
 
@@ -174,6 +176,18 @@ def check_large_tracked_files(files: list[str], repo_dir: Path = REPO_DIR) -> li
     return findings
 
 
+def check_objective_profiles() -> list[Finding]:
+    _, errors = audit_profiles()
+    return [
+        Finding(
+            "objective_profiles",
+            f"{error['field']}: {error['message']}",
+            f"configs/objectives/{error['profile']}.yaml",
+        )
+        for error in errors
+    ]
+
+
 def run_checks(repo_dir: Path = REPO_DIR) -> list[Finding]:
     files = tracked_files(repo_dir)
     findings: list[Finding] = []
@@ -183,6 +197,7 @@ def run_checks(repo_dir: Path = REPO_DIR) -> list[Finding]:
     findings.extend(check_machine_paths(files, repo_dir))
     findings.extend(check_generated_dataset_policy(files))
     findings.extend(check_large_tracked_files(files, repo_dir))
+    findings.extend(check_objective_profiles())
     return findings
 
 

@@ -184,13 +184,16 @@ Run repo hygiene checks:
 Inspect or validate the research basis:
 
 ```bash
+./forge objectives list
+./forge objectives audit
 ./forge research list
 ./forge research show arditi_2024_refusal_direction
 ./forge research audit
 ```
 
 When adding a new method, benchmark adapter, objective profile, or public report,
-connect it to `configs/research_registry.yaml` and keep the limitations explicit.
+connect it to `configs/research_registry.yaml`, include implementation and
+validation state, and keep the limitations explicit.
 
 Write or inspect a run manifest:
 

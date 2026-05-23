@@ -28,6 +28,44 @@ Publishing helper:
 
 For prepared datasets, pass `--repo-type dataset`.
 
+## Roadmap Foundation: Objective Profiles And Audit
+
+Status: implemented as config/code/docs only. No model server, training run,
+quantization run, or eval job was started.
+
+Hypothesis: the roadmap's objective profiles should be executable repo
+contracts instead of prose. Each objective needs implementation status,
+validation state, required evidence, release defaults, research basis, and
+metric preferences that comparison reports can use.
+
+Changes:
+
+- added `./forge objectives list|show|audit`
+- added `src/model_forge/objectives.py`
+- updated `configs/objectives/capability_sft.yaml` to the objective profile
+  schema
+- added `configs/objectives/zero_refusal_capability_retention.yaml`
+- added `configs/objectives/quantized_quality_retention.yaml`
+- added `configs/objectives/dgx_spark_latency_throughput.yaml`
+- compare reports now load configured objective comparison preferences in
+  addition to built-in report profiles
+- updated README, AGENTS, status, config docs, and roadmap status text
+
+Validation:
+
+```bash
+./forge objectives audit --json
+.venv/bin/python -m unittest tests.test_objectives tests.test_compare_report_v2
+```
+
+Result:
+
+- objective audit passed with 4 profiles and 0 errors
+- comparison tests passed
+- all objective profiles are `implementation_status=wired_to_cli` and
+  `validation_state=planned`; Spark evidence remains objective-specific future
+  work
+
 ## Quantization: ModelOpt NVFP4 Self-Export Guardrail Incident
 
 Status: stopped before a completed NVFP4 checkpoint. Code and docs now enforce
