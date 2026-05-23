@@ -24,11 +24,27 @@ class ServeBenchmarkTests(unittest.TestCase):
         self.assertEqual(config.model, "google/gemma-4-26B-A4B-it")
         self.assertEqual(config.base_url, "http://127.0.0.1:8000/v1")
         self.assertEqual(config.concurrency, 1)
-        self.assertGreaterEqual(len(config.requests), 1)
+        self.assertEqual(len(config.requests), 3)
+        self.assertEqual(len(config.workload_sources), 3)
+        self.assertEqual(config.requests[0].request_id, "short_chat:ttft_brief")
 
         plan = build_plan(config, DEFAULT_CONFIG)
         self.assertTrue(plan["dry_run_only"])
         self.assertEqual(plan["request_count"], len(config.requests))
+        self.assertIn("configs/serving/workloads/short_chat.yaml", plan["workload_sources"])
+
+    def test_core_workload_config_loads_all_serving_workloads(self) -> None:
+        config = load_config(
+            Path("configs/serving/serve_bench_core.yaml"),
+            family="gemma4_26b_a4b",
+            variant="base",
+            env={},
+        )
+        categories = {request.category for request in config.requests}
+        self.assertEqual(len(config.workload_sources), 8)
+        self.assertIn("long_prefill", categories)
+        self.assertIn("artifact_generation", categories)
+        self.assertIn("long_context_retrieval", categories)
 
     def test_streaming_parser_records_first_token_and_usage(self) -> None:
         ticks = iter([100.01, 100.02])
@@ -91,6 +107,8 @@ class ServeBenchmarkTests(unittest.TestCase):
             )
             self.assertEqual(summary["successful_requests"], 1)
             self.assertEqual(manifest["run_type"], "serving")
+            manifest_config_paths = [entry["path"] for entry in manifest["configs"]]
+            self.assertIn("configs/serving/workloads/short_chat.yaml", manifest_config_paths)
             self.assertTrue((output_dir / "requests.jsonl").exists())
             self.assertTrue((output_dir / "summary.json").exists())
             self.assertTrue((output_dir / "serving_card.md").exists())

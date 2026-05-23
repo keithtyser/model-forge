@@ -1,7 +1,7 @@
-name: serve_bench_smoke
+name: serve_bench_core
 description: >
-  Small generic OpenAI-compatible serving benchmark. It assumes the server is
-  already running and measures latency/throughput mechanics only.
+  Generic OpenAI-compatible serving benchmark that covers the reusable workload
+  definitions used by serving sweeps and report cards.
 
 output_dir: reports/generated/serve_bench
 
@@ -10,14 +10,14 @@ backend:
   base_url_env: MODEL_FORGE_BASE_URL
   model_env: MODEL_FORGE_MODEL
   api_key_env: MODEL_FORGE_API_KEY
-  timeout_seconds: 120
+  timeout_seconds: 180
   stream: true
   stream_include_usage: true
 
 sampling:
   temperature: 0.0
   top_p: 1.0
-  max_tokens: 128
+  max_tokens: 192
 
 system_prompt: >
   You are a concise assistant. Answer directly and preserve requested formats.
@@ -27,5 +27,10 @@ workload:
   repetitions: 1
   files:
     - configs/serving/workloads/short_chat.yaml
-    - configs/serving/workloads/structured_json.yaml
+    - configs/serving/workloads/long_prefill.yaml
     - configs/serving/workloads/decode_heavy.yaml
+    - configs/serving/workloads/structured_json.yaml
+    - configs/serving/workloads/artifact_generation.yaml
+    - configs/serving/workloads/reused_prefix.yaml
+    - configs/serving/workloads/refusal_primary.yaml
+    - configs/serving/workloads/long_context_retrieval.yaml

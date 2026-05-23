@@ -40,7 +40,8 @@ reusable pipeline code over one-off scripts.
   methods, evals, serving, and quantization work
 - `configs/hardware/` and `configs/clusters/`: hardware defaults and
   open-source-safe cluster inventory examples
-- `configs/serving/`: serving benchmark and future serving sweep configs
+- `configs/serving/`: serving benchmark configs and reusable workload
+  definitions
 - `configs/sweeps/`: bounded serving/quantization/benchmark sweep matrices
 - `scripts/README.md`: script directory map and operational rules
 - `configs/model_families/`: model family registry

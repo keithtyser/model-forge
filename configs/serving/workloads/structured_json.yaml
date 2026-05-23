@@ -1,0 +1,15 @@
+schema_version: model_forge.serving_workload.v1
+id: structured_json
+category: structured_json
+description: Schema-constrained output to stress formatting and parser stability.
+metric_focus:
+  - total_latency_seconds
+  - output_tokens_per_second
+  - structured_output_validity
+default_sampling:
+  max_tokens: 160
+requests:
+  - id: metric_schema
+    prompt: >
+      Return compact JSON with keys "latency", "throughput", and "memory".
+      Each value should be a short phrase describing what the metric tells us.

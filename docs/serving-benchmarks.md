@@ -56,16 +56,39 @@ The default smoke config is:
 configs/serving/serve_bench_smoke.yaml
 ```
 
+The broader reusable workload config is:
+
+```text
+configs/serving/serve_bench_core.yaml
+```
+
 The config defines:
 
 - OpenAI-compatible endpoint defaults and env overrides
 - streaming mode for time-to-first-token measurement
 - deterministic sampling defaults
-- a small serial request mix
+- a serial request mix loaded from `configs/serving/workloads/*.yaml`
 - output root under `reports/generated/serve_bench/`
 
 The MVP intentionally supports `concurrency: 1`. Concurrency sweeps belong in a
 serving sweep/workload layer so results remain comparable and resource-safe.
+
+Current workload definitions:
+
+```text
+short_chat
+long_prefill
+decode_heavy
+structured_json
+artifact_generation
+reused_prefix
+refusal_primary
+long_context_retrieval
+```
+
+Each workload file declares its purpose, metric focus, default sampling, and one
+or more requests. Benchmark manifests record both the benchmark config and the
+workload definition files.
 
 The first serving sweep config is:
 

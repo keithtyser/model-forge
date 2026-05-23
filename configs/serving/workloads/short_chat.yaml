@@ -1,0 +1,15 @@
+schema_version: model_forge.serving_workload.v1
+id: short_chat
+category: short_chat
+description: Short prompts and short outputs for user-interactive latency.
+metric_focus:
+  - time_to_first_token_seconds
+  - total_latency_seconds
+  - output_tokens_per_second
+default_sampling:
+  max_tokens: 128
+requests:
+  - id: ttft_brief
+    prompt: >
+      In two sentences, explain why measuring time-to-first-token separately
+      from total latency matters for an LLM serving benchmark.

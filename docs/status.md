@@ -49,6 +49,9 @@ This is the short handoff state for humans and agents. Use
   `configs/sweeps/dgx_spark_vllm_baseline.yaml` and `./forge bench sweep`.
   It expands bounded startup-time vLLM env cases plus matching `bench serve`
   commands and can attach the two-node env-backed Spark cluster inventory.
+- Serving workload definitions are now present under
+  `configs/serving/workloads/`, with smoke and core benchmark configs loading
+  reusable workload files instead of hard-coding all requests inline.
 
 ## Current Dataset State
 
@@ -90,8 +93,7 @@ length filtering:
 
 1. Add eval provenance cards or golden baseline hardening next. Keep objective
    profile fields optional until the objective profile layer is revisited.
-2. Add serving workload definitions and then wire sampled quality/behavior evals
-   under selected serving configs.
+2. Wire sampled quality/behavior evals under selected serving configs.
 3. Use `./forge promote gemma4_26b_a4b local_ft_vs_jackrong` whenever saved
    comparison results change.
 4. Publish completed durable datasets to Hugging Face with `publish --execute`

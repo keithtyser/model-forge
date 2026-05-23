@@ -1,0 +1,16 @@
+schema_version: model_forge.serving_workload.v1
+id: artifact_generation
+category: artifact_generation
+description: Longer code/artifact generation workload for output length and artifact quality checks.
+metric_focus:
+  - total_latency_seconds
+  - output_tokens_per_second
+  - artifact_execution_quality
+default_sampling:
+  max_tokens: 512
+requests:
+  - id: html_status_panel
+    prompt: >
+      Produce a single self-contained HTML file for a compact model-serving
+      status panel. Include semantic markup, accessible labels, and a small
+      inline script that updates a visible timestamp. Return only the HTML.

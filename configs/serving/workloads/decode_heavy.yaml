@@ -1,0 +1,16 @@
+schema_version: model_forge.serving_workload.v1
+id: decode_heavy
+category: decode_heavy
+description: Short or medium prompts with longer output to stress decode throughput.
+metric_focus:
+  - inter_token_latency_seconds
+  - decode_tokens_per_second
+  - output_tokens_per_second
+default_sampling:
+  max_tokens: 384
+requests:
+  - id: operational_runbook
+    prompt: >
+      Write a concise operational runbook for comparing two LLM serving
+      configurations. Include observe, plan, run, verify, rollback, and report
+      sections. Keep it practical and specific to endpoint benchmarking.

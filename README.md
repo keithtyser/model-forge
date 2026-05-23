@@ -194,8 +194,9 @@ MODEL_FORGE_BASE_URL=http://127.0.0.1:8000/v1 ./forge bench serve --model served
 See [docs/serving-benchmarks.md](docs/serving-benchmarks.md). The benchmark
 expects a running OpenAI-compatible endpoint and writes `requests.jsonl`,
 `summary.json`, `serving_card.md`, and `manifest.json` under
-`reports/generated/serve_bench/`. Sweep plans expand startup-time server env
-cases and the matching `bench serve` commands, but they do not launch vLLM.
+`reports/generated/serve_bench/`. Reusable workload definitions live under
+`configs/serving/workloads/`. Sweep plans expand startup-time server env cases
+and the matching `bench serve` commands, but they do not launch vLLM.
 
 Abliteration planning:
 

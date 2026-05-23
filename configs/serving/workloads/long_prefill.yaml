@@ -1,0 +1,20 @@
+schema_version: model_forge.serving_workload.v1
+id: long_prefill
+category: long_prefill
+description: Long prompt with short answer to stress prefill and TTFT.
+metric_focus:
+  - prompt_tokens
+  - time_to_first_token_seconds
+  - total_latency_seconds
+default_sampling:
+  max_tokens: 96
+requests:
+  - id: summarize_constraints
+    prompt: >
+      You are reviewing a serving benchmark plan. The plan requires one server
+      at a time, a dry-run sweep before execution, env-backed private cluster
+      values, repeated quality checks under the selected serving config, no
+      promotion from latency alone, resource headroom for SSH and system tasks,
+      and clear separation between startup-time vLLM flags and request-time
+      sampling parameters. Summarize the plan in four bullets and name the
+      single most important follow-up check before publishing results.

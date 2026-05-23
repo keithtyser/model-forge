@@ -1,0 +1,19 @@
+schema_version: model_forge.serving_workload.v1
+id: long_context_retrieval
+category: long_context_retrieval
+description: Needle-style retrieval prompt for long-context quality under serving configs.
+metric_focus:
+  - prompt_tokens
+  - time_to_first_token_seconds
+  - retrieval_quality
+default_sampling:
+  max_tokens: 96
+requests:
+  - id: needle_value
+    prompt: >
+      Context: The deployment checklist says to record endpoint URL, model
+      alias, vLLM flags, hardware profile, workload file names, request count,
+      token counts, TTFT, ITL, output tokens per second, and quality-eval links.
+      The hidden audit code is MF-SERVE-2719. Ignore unrelated details and
+      answer with only the hidden audit code and the two most important serving
+      metrics for interactive latency.

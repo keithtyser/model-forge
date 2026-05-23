@@ -3178,7 +3178,7 @@ At least one merged upstream PR and one profiler-backed perf report with end-to-
 [x] MF-0200 Add generic cluster inventory planner and DGX Spark x2 example
 [x] MF-0201 Add forge bench serve
 [x] MF-0202 Add DGX Spark vLLM sweep config
-[ ] MF-0203 Add serving workload definitions
+[x] MF-0203 Add serving workload definitions
 [ ] MF-0204 Add Serving Card
 [ ] MF-0205 Add TTFT/ITL/memory/tok-sec capture
 [ ] MF-0206 Add quality/behavior sampled eval under serving configs
@@ -3425,6 +3425,7 @@ Do these in order:
 [x] Add generic cluster inventory planner and DGX Spark x2 example.
 [x] Add forge bench serve MVP.
 [x] Add DGX Spark vLLM sweep config.
+[x] Add serving workload definitions.
 [ ] Add noncompliance taxonomy.
 [ ] Finish/evaluate Gemma local FT.
 [ ] Add configs/publishing/huggingface.example.yaml.

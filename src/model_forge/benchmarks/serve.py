@@ -60,6 +60,7 @@ class ServeBenchConfig:
     concurrency: int
     output_root: Path
     requests: list[ServeRequest]
+    workload_sources: list[Path]
     raw_config: dict[str, Any]
 
 
@@ -131,7 +132,47 @@ def request_messages(raw: Mapping[str, Any], default_system_prompt: str | None) 
     return messages
 
 
-def parse_requests(raw_config: Mapping[str, Any], sampling: Mapping[str, Any]) -> tuple[int, int, list[ServeRequest]]:
+def parse_workload_request(
+    raw: Mapping[str, Any],
+    *,
+    request_id: str,
+    category: str,
+    sampling: Mapping[str, Any],
+    default_system_prompt: str | None,
+) -> ServeRequest:
+    merged_sampling = dict(sampling)
+    merged_sampling.update(raw.get("sampling") or {})
+    return ServeRequest(
+        request_id=request_id,
+        category=category,
+        messages=request_messages(raw, default_system_prompt),
+        sampling=merged_sampling,
+        extra_body=dict(raw.get("extra_body") or {}),
+    )
+
+
+def workload_file_paths(raw_config: Mapping[str, Any]) -> list[Path]:
+    workload = raw_config.get("workload") or {}
+    raw_paths = workload.get("files") or raw_config.get("workload_files") or []
+    if isinstance(raw_paths, (str, Path)):
+        raw_paths = [raw_paths]
+    if not isinstance(raw_paths, list):
+        raise ValueError("workload.files must be a list of paths")
+    return [resolve_repo_path(path) for path in raw_paths]
+
+
+def load_workload_file(path: Path) -> dict[str, Any]:
+    data = load_yaml(path)
+    if data.get("schema_version") != "model_forge.serving_workload.v1":
+        raise ValueError(f"{display_path(path)} must use schema_version model_forge.serving_workload.v1")
+    if not data.get("id"):
+        raise ValueError(f"{display_path(path)} must define id")
+    if not isinstance(data.get("requests"), list) or not data["requests"]:
+        raise ValueError(f"{display_path(path)} must define a non-empty requests list")
+    return data
+
+
+def parse_requests(raw_config: Mapping[str, Any], sampling: Mapping[str, Any]) -> tuple[int, int, list[ServeRequest], list[Path]]:
     workload = raw_config.get("workload") or {}
     repetitions = int(workload.get("repetitions", 1))
     concurrency = int(workload.get("concurrency", 1))
@@ -140,13 +181,40 @@ def parse_requests(raw_config: Mapping[str, Any], sampling: Mapping[str, Any]) -
     if concurrency < 1:
         raise ValueError("workload.concurrency must be >= 1")
 
-    raw_requests = workload.get("requests")
-    if not isinstance(raw_requests, list) or not raw_requests:
-        raise ValueError("workload.requests must be a non-empty list")
-
     default_system_prompt = raw_config.get("system_prompt")
     requests: list[ServeRequest] = []
+    workload_sources: list[Path] = []
     seen_ids: set[str] = set()
+
+    for path in workload_file_paths(raw_config):
+        workload_data = load_workload_file(path)
+        workload_sources.append(path)
+        workload_id = str(workload_data["id"])
+        workload_category = str(workload_data.get("category") or workload_id)
+        workload_system_prompt = workload_data.get("system_prompt", default_system_prompt)
+        workload_sampling = dict(sampling)
+        workload_sampling.update(workload_data.get("default_sampling") or workload_data.get("sampling") or {})
+        for index, raw in enumerate(workload_data["requests"], start=1):
+            if not isinstance(raw, dict):
+                raise ValueError(f"workload requests in {display_path(path)} must be mappings")
+            raw_request_id = str(raw.get("id") or f"request_{index}")
+            request_id = f"{workload_id}:{raw_request_id}"
+            if request_id in seen_ids:
+                raise ValueError(f"duplicate request id {request_id!r}")
+            seen_ids.add(request_id)
+            requests.append(
+                parse_workload_request(
+                    raw,
+                    request_id=request_id,
+                    category=str(raw.get("category", workload_category)),
+                    sampling=workload_sampling,
+                    default_system_prompt=str(raw.get("system_prompt", workload_system_prompt) or ""),
+                )
+            )
+
+    raw_requests = workload.get("requests") or []
+    if raw_requests and not isinstance(raw_requests, list):
+        raise ValueError("workload.requests must be a list")
     for index, raw in enumerate(raw_requests, start=1):
         if not isinstance(raw, dict):
             raise ValueError("workload request entries must be mappings")
@@ -154,18 +222,18 @@ def parse_requests(raw_config: Mapping[str, Any], sampling: Mapping[str, Any]) -
         if request_id in seen_ids:
             raise ValueError(f"duplicate request id {request_id!r}")
         seen_ids.add(request_id)
-        merged_sampling = dict(sampling)
-        merged_sampling.update(raw.get("sampling") or {})
         requests.append(
-            ServeRequest(
+            parse_workload_request(
+                raw,
                 request_id=request_id,
                 category=str(raw.get("category", "generic")),
-                messages=request_messages(raw, default_system_prompt),
-                sampling=merged_sampling,
-                extra_body=dict(raw.get("extra_body") or {}),
+                sampling=sampling,
+                default_system_prompt=str(raw.get("system_prompt", default_system_prompt) or ""),
             )
         )
-    return repetitions, concurrency, requests
+    if not requests:
+        raise ValueError("workload must define requests or workload.files")
+    return repetitions, concurrency, requests, workload_sources
 
 
 def load_config(
@@ -215,7 +283,7 @@ def load_config(
     if env_value(env, "MODEL_FORGE_TOP_P"):
         sampling["top_p"] = float(str(env["MODEL_FORGE_TOP_P"]))
 
-    parsed_repetitions, concurrency, requests = parse_requests(raw, sampling)
+    parsed_repetitions, concurrency, requests, workload_sources = parse_requests(raw, sampling)
     if repetitions is not None:
         parsed_repetitions = repetitions
     if limit is not None:
@@ -242,6 +310,7 @@ def load_config(
         concurrency=concurrency,
         output_root=output_root,
         requests=requests,
+        workload_sources=workload_sources,
         raw_config=raw,
     )
 
@@ -548,6 +617,7 @@ def summarize_results(config: ServeBenchConfig, results: list[dict[str, Any]], o
         "streaming": config.stream,
         "repetitions": config.repetitions,
         "concurrency": config.concurrency,
+        "workload_sources": [display_path(path) for path in config.workload_sources],
         "request_count": len(results),
         "successful_requests": len(successful),
         "failed_requests": len(results) - len(successful),
@@ -637,7 +707,7 @@ def write_outputs(
         family=config.family,
         variant=config.variant,
         command=command or sys.argv,
-        config_paths=[config_path],
+        config_paths=[config_path, *config.workload_sources],
         output_dir=output_dir,
         artifacts=artifacts,
         metrics=summary.get("metrics", {}),
@@ -649,6 +719,7 @@ def write_outputs(
             "streaming": config.stream,
             "repetitions": config.repetitions,
             "concurrency": config.concurrency,
+            "workload_sources": [display_path(path) for path in config.workload_sources],
             "request_count": len(results),
             "successful_requests": summary.get("successful_requests"),
         },
@@ -677,6 +748,7 @@ def build_plan(config: ServeBenchConfig, config_path: Path) -> dict[str, Any]:
         "repetitions": config.repetitions,
         "concurrency": config.concurrency,
         "request_count": len(config.requests) * config.repetitions,
+        "workload_sources": [display_path(path) for path in config.workload_sources],
         "output_root": display_path(config.output_root),
         "dry_run_only": True,
         "notes": [
@@ -690,7 +762,7 @@ def render_plan(plan: Mapping[str, Any]) -> None:
     table = Table(title="Serve Benchmark Plan")
     table.add_column("Field")
     table.add_column("Value")
-    for key in ("name", "family", "variant", "model", "base_url", "streaming", "request_count", "output_root"):
+    for key in ("name", "family", "variant", "model", "base_url", "streaming", "request_count", "workload_sources", "output_root"):
         table.add_row(key, str(plan.get(key)))
     console.print(table)
     for note in plan.get("notes", []):

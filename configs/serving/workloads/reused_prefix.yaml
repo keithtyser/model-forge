@@ -1,0 +1,22 @@
+schema_version: model_forge.serving_workload.v1
+id: reused_prefix
+category: reused_prefix
+description: Repeated scaffold prompts for prefix-cache behavior checks.
+metric_focus:
+  - time_to_first_token_seconds
+  - total_latency_seconds
+  - cache_sensitive_latency
+system_prompt: >
+  You are benchmarking prefix-cache behavior. Preserve the requested format and
+  answer with exactly three bullets.
+default_sampling:
+  max_tokens: 128
+requests:
+  - id: prefix_case_a
+    prompt: >
+      Explain three signs that a serving benchmark is measuring the wrong
+      bottleneck.
+  - id: prefix_case_b
+    prompt: >
+      Explain three signs that a serving benchmark is hiding a quality
+      regression.

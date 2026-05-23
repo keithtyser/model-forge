@@ -427,6 +427,7 @@ entries:
       - scripts/dgx_spark_serve_*.sh
       - src/model_forge/benchmarks/serve.py
       - src/model_forge/benchmarks/sweep.py
+      - configs/serving/workloads/*.yaml
       - configs/sweeps/dgx_spark_vllm_baseline.yaml
     eval_hooks:
       - reports/generated/serve_bench/*/serving_card.md
@@ -454,6 +455,7 @@ entries:
       - scripts/serve_vllm_dgx_spark.sh
       - docs/spark-optimizations.md
       - configs/serving/*.yaml
+      - configs/serving/workloads/*.yaml
       - configs/sweeps/dgx_spark_vllm_baseline.yaml
     eval_hooks:
       - ./forge bench serve
