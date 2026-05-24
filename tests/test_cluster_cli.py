@@ -8,6 +8,7 @@ from model_forge.cluster.cli import (
     audit_cluster,
     build_sync_plan,
     build_launcher_plan,
+    docker_gpu_runtime_command,
     load_cluster_config,
     load_hardware_profile,
 )
@@ -82,6 +83,15 @@ class ClusterCliTests(unittest.TestCase):
         self.assertIn("runner@spark-b:" + "/" + "home/private/model-forge/", plan["actions"][1]["rsync_command"])
         self.assertIn("--exclude /.venv/", plan["actions"][1]["rsync_command"])
         self.assertIn("--exclude /runs/", plan["actions"][1]["rsync_command"])
+
+    def test_runtime_command_is_bounded_docker_gpu_probe(self) -> None:
+        command = docker_gpu_runtime_command("nemotron-runner:latest")
+        self.assertIn("docker run", command)
+        self.assertIn("--gpus all", command)
+        self.assertIn("--cpus=1", command)
+        self.assertIn("--memory=8g", command)
+        self.assertIn("nemotron-runner:latest", command)
+        self.assertIn("cuda_available", command)
 
     def test_example_configs_do_not_contain_private_literals(self) -> None:
         private_home = "/" + "home/ktyser"

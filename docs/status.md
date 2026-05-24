@@ -50,9 +50,11 @@ This is the short handoff state for humans and agents. Use
   It expands bounded startup-time vLLM env cases plus matching `bench serve`
   commands and can attach the two-node env-backed Spark cluster inventory.
 - Two-node Spark readiness is now executable through `./forge cluster sync`
-  and `./forge cluster health`. On 2026-05-24, the repo was synced to the
-  private worker Spark and both GB10 nodes passed health with ~256 GB declared
-  cluster memory, visible GPUs, repo checkout, RAM headroom, and disk headroom.
+  `./forge cluster health`, and `./forge cluster runtime`. On 2026-05-24, the
+  repo was synced to the private worker Spark and both GB10 nodes passed health
+  with ~256 GB declared cluster memory, visible GPUs, repo checkout, RAM
+  headroom, and disk headroom. Both nodes also passed a bounded
+  `nemotron-runner:latest` GPU container probe with CUDA Torch visible.
 - Serving workload definitions are now present under
   `configs/serving/workloads/`, with smoke and core benchmark configs loading
   reusable workload files instead of hard-coding all requests inline.

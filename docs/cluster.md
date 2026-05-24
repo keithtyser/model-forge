@@ -69,6 +69,10 @@ run, sync the repo to worker nodes and probe every node:
 
 ./forge cluster health \
   --config configs/clusters/my_cluster.yaml
+
+./forge cluster runtime \
+  --config configs/clusters/my_cluster.yaml \
+  --image nemotron-runner:latest
 ```
 
 `cluster sync` uses `rsync` over SSH and skips only local caches and the root
@@ -80,6 +84,13 @@ inventory still resolves them from env vars or an untracked private config.
 Git branch/head/status are visible, `nvidia-smi` responds, and RAM/disk
 headroom is available. Treat a failed health probe as a hard stop for heavy
 jobs.
+
+`cluster runtime` runs a bounded Docker GPU/Python probe on every node. It uses
+`--gpus all`, `--cpus=1`, an 8 GB memory cap, and a low PID limit, then verifies
+that the selected image can import the expected post-training libraries and see
+CUDA devices. Treat a failed runtime probe as a hard stop for distributed
+training, vLLM serving, ModelOpt quantization, or ablation jobs that rely on
+that container image.
 
 ## Plan
 

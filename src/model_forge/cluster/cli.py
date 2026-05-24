@@ -473,6 +473,104 @@ def collect_cluster_health(
     }
 
 
+def docker_gpu_runtime_command(image: str) -> str:
+    script = r"""
+import importlib.util
+import json
+import sys
+
+mods = ["torch", "transformers", "accelerate", "trl", "peft", "bitsandbytes", "vllm", "modelopt"]
+data = {
+    "python": sys.executable,
+    "python_version": sys.version.split()[0],
+    "modules": {name: bool(importlib.util.find_spec(name)) for name in mods},
+}
+try:
+    import torch
+    data["torch"] = {
+        "version": torch.__version__,
+        "cuda_available": torch.cuda.is_available(),
+        "device_count": torch.cuda.device_count(),
+        "devices": [torch.cuda.get_device_name(index) for index in range(torch.cuda.device_count())],
+    }
+except Exception as exc:
+    data["torch_error"] = repr(exc)
+print(json.dumps(data, sort_keys=True))
+"""
+    command = [
+        "docker",
+        "run",
+        "--rm",
+        "--gpus",
+        "all",
+        "--cpus=1",
+        "--memory=8g",
+        "--memory-swap=8g",
+        "--pids-limit=512",
+        "--entrypoint",
+        "python3",
+        image,
+        "-c",
+        script,
+    ]
+    return shell_join(command)
+
+
+def collect_cluster_runtime(
+    cluster: Mapping[str, Any],
+    hardware: Mapping[str, Any],
+    config_path: Path,
+    image: str,
+    env: Mapping[str, str] | None = None,
+    timeout: int = 120,
+) -> dict[str, Any]:
+    env = env or os.environ
+    nodes = [node_plan(node, cluster, env) for node in cluster.get("nodes", []) if isinstance(node, dict)]
+    command = docker_gpu_runtime_command(image)
+
+    def probe(node: Mapping[str, Any]) -> dict[str, Any]:
+        result = run_node_shell(node, command, timeout=timeout)
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            payload = {}
+        torch_info = payload.get("torch") if isinstance(payload, dict) else {}
+        ok = (
+            result.returncode == 0
+            and isinstance(torch_info, dict)
+            and bool(torch_info.get("cuda_available"))
+            and int(torch_info.get("device_count") or 0) >= 1
+        )
+        return {
+            "name": node.get("name"),
+            "role": node.get("role"),
+            "host": node.get("host"),
+            "returncode": result.returncode,
+            "ok": ok,
+            "payload": payload,
+            "stderr": result.stderr.strip(),
+        }
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(nodes))) as executor:
+        results = list(executor.map(probe, nodes))
+
+    return {
+        "created_at": utc_timestamp(),
+        "cluster": {
+            "id": cluster.get("id"),
+            "config": display_path(config_path),
+            "hardware_profile": cluster.get("hardware_profile"),
+            "node_count": len(nodes),
+            "total_declared_gpus": total_declared_gpus(cluster, hardware),
+            "total_declared_memory_gb": total_declared_memory_gb(cluster, hardware),
+        },
+        "image": image,
+        "mode": "docker_gpu_python",
+        "nodes": results,
+        "ok": all(node["ok"] for node in results),
+    }
+
+
 def build_sync_plan(
     cluster: Mapping[str, Any],
     hardware: Mapping[str, Any],
@@ -695,6 +793,13 @@ def main() -> None:
     health_parser.add_argument("--output", type=Path, help="Write JSON health evidence")
     health_parser.add_argument("--json", action="store_true")
 
+    runtime_parser = subparsers.add_parser("runtime", help="Probe bounded GPU container runtime on every cluster node")
+    runtime_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    runtime_parser.add_argument("--image", default="nemotron-runner:latest")
+    runtime_parser.add_argument("--timeout", type=int, default=120)
+    runtime_parser.add_argument("--output", type=Path, help="Write JSON runtime evidence")
+    runtime_parser.add_argument("--json", action="store_true")
+
     sync_parser = subparsers.add_parser("sync", help="Plan or execute env-backed repo sync to worker nodes")
     sync_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     sync_parser.add_argument("--execute", action="store_true", help="Run mkdir/rsync commands")
@@ -742,6 +847,35 @@ def main() -> None:
             console.print(f"cluster health: {'OK' if health['ok'] else 'FAILED'}")
             console.print(f"evidence: {display_path(output_path)}")
         raise SystemExit(0 if health["ok"] else 1)
+
+    if args.action == "runtime":
+        findings = audit_cluster(cluster, config_path, hardware=hardware, strict=True)
+        if findings:
+            data = {
+                "created_at": utc_timestamp(),
+                "cluster": {"id": cluster.get("id"), "config": display_path(config_path)},
+                "ok": False,
+                "doctor_findings": [asdict(finding) for finding in findings],
+            }
+            if args.output:
+                write_json(args.output if args.output.is_absolute() else REPO_DIR / args.output, data)
+            if args.json:
+                print(json.dumps(data, indent=2, sort_keys=True) + "\n")
+            else:
+                render_findings(findings)
+            raise SystemExit(1)
+        runtime = collect_cluster_runtime(cluster, hardware, config_path, image=args.image, timeout=args.timeout)
+        output = args.output if args.output else default_cluster_output("runtime")
+        output_path = output if output.is_absolute() else REPO_DIR / output
+        write_json(output_path, runtime)
+        runtime["output"] = display_path(output_path)
+        if args.json:
+            print(json.dumps(runtime, indent=2, sort_keys=True) + "\n")
+        else:
+            console.print(f"cluster runtime: {'OK' if runtime['ok'] else 'FAILED'}")
+            console.print(f"image: {args.image}")
+            console.print(f"evidence: {display_path(output_path)}")
+        raise SystemExit(0 if runtime["ok"] else 1)
 
     if args.action == "sync":
         findings = audit_cluster(cluster, config_path, hardware=hardware, strict=True)

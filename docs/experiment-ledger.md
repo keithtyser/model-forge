@@ -892,6 +892,7 @@ Commands run on 2026-05-24:
 ```text
 ./forge cluster sync --config configs/clusters/dgx_spark_x2.example.yaml --execute
 ./forge cluster health --config configs/clusters/dgx_spark_x2.example.yaml
+./forge cluster runtime --config configs/clusters/dgx_spark_x2.example.yaml --image nemotron-runner:latest
 ```
 
 Observed local cluster:
@@ -901,10 +902,12 @@ coordinator: private local Spark / NVIDIA GB10 / ~128 GB RAM
 worker: private worker Spark / NVIDIA GB10 / ~128 GB RAM
 declared cluster memory: 256 GB
 health result: both nodes OK
+runtime result: both nodes OK with CUDA Torch visible inside nemotron-runner
 ```
 
 Evidence was written under `reports/generated/cluster/`. Those generated JSON
-files stay out of Git, but the reusable sync/health commands are now tracked.
+files stay out of Git, but the reusable sync, health, and runtime commands are
+now tracked.
 
 ## Ablation: Gemopus FT Local Abli
 
