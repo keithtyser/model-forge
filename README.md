@@ -196,6 +196,7 @@ Cluster planning:
 ./forge cluster sync --config configs/clusters/dgx_spark_x2.example.yaml
 ./forge cluster health --config configs/clusters/dgx_spark_x2.example.yaml
 ./forge cluster runtime --config configs/clusters/dgx_spark_x2.example.yaml --image nemotron-runner:latest
+./forge cluster torchrun-smoke --config configs/clusters/dgx_spark_x2.example.yaml --image nemotron-runner:latest --nccl-socket-ifname <distributed-network-interface>
 ./forge cluster plan \
   --config configs/clusters/dgx_spark_x2.example.yaml \
   --workload train \
@@ -204,7 +205,8 @@ Cluster planning:
 
 See [docs/cluster.md](docs/cluster.md). Public configs use environment-backed
 placeholders; private hostnames, IPs, usernames, tokens, and absolute paths do
-not belong in Git.
+not belong in Git. Use `cluster torchrun-smoke` as the gate before claiming a
+training, quantization, or benchmark workload used both Spark nodes.
 
 Serving benchmark:
 

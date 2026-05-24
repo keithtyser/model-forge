@@ -909,6 +909,36 @@ Evidence was written under `reports/generated/cluster/`. Those generated JSON
 files stay out of Git, but the reusable sync, health, and runtime commands are
 now tracked.
 
+## Cluster: DGX Spark x2 Torchrun/NCCL Smoke
+
+Status: implemented and Spark-cluster validated.
+
+Purpose: prove that the two-Spark cluster can run one bounded distributed
+PyTorch job before using it for heavy fine-tuning, quantization, or serving
+benchmarks.
+
+Command run on 2026-05-24:
+
+```text
+./forge cluster torchrun-smoke --config configs/clusters/dgx_spark_x2.example.yaml --image nemotron-runner:latest --nccl-socket-ifname <distributed-network-interface>
+```
+
+Observed result:
+
+```text
+node count: 2
+rank count: 2
+GPU per node: NVIDIA GB10
+torchrun mode: static master address/port from environment-backed rendezvous endpoint
+collective: CUDA/NCCL all-reduce
+all-reduce result: expected sum matched on both ranks
+result: OK
+```
+
+Evidence was written under `reports/generated/cluster/`. Generated evidence is
+ignored by Git because it can include private local topology details; cite the
+generated path in run manifests instead of committing raw probe JSON.
+
 ## Ablation: Gemopus FT Local Abli
 
 Status: completed before FT work.

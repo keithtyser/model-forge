@@ -315,9 +315,11 @@ def guarded_command(command: str, resource_policy: Mapping[str, Any], job_lock: 
     memory_fraction = float(per_node.get("memory_max_fraction", resource_policy.get("memory_max_fraction", 0.85)))
     io_weight = per_node.get("io_weight", resource_policy.get("io_weight", 100))
     nice = per_node.get("nice", resource_policy.get("nice", 10))
+    user_scope = bool(resource_policy.get("systemd_user_scope", True))
+    systemd_scope = "systemd-run --user --scope" if user_scope else "systemd-run --scope"
     return (
         f"flock {shlex.quote(str(job_lock))} "
-        f"systemd-run --scope -p CPUQuota={cpu_quota} "
+        f"{systemd_scope} -p CPUQuota={cpu_quota} "
         f"-p MemoryMax={int(memory_fraction * 100)}% "
         f"-p IOWeight={io_weight} "
         f"nice -n {nice} {command}"
@@ -516,6 +518,99 @@ print(json.dumps(data, sort_keys=True))
     return shell_join(command)
 
 
+def torchrun_smoke_script() -> str:
+    return r"""
+import json
+import os
+import socket
+from datetime import timedelta
+
+import torch
+import torch.distributed as dist
+
+local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+torch.cuda.set_device(local_rank)
+dist.init_process_group(backend="nccl", timeout=timedelta(seconds=60))
+rank = dist.get_rank()
+world_size = dist.get_world_size()
+tensor = torch.tensor([float(rank + 1)], device="cuda")
+dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
+expected = world_size * (world_size + 1) / 2
+ok = abs(float(tensor.item()) - expected) < 1e-5
+dist.barrier()
+print(json.dumps({
+    "hostname": socket.gethostname(),
+    "rank": rank,
+    "local_rank": local_rank,
+    "world_size": world_size,
+    "cuda_device": torch.cuda.get_device_name(local_rank),
+    "all_reduce_sum": float(tensor.item()),
+    "expected_sum": expected,
+    "ok": ok,
+}, sort_keys=True), flush=True)
+dist.destroy_process_group()
+if not ok:
+    raise SystemExit(2)
+"""
+
+
+def docker_torchrun_smoke_command(
+    image: str,
+    *,
+    node_rank: int,
+    nnodes: int,
+    nproc_per_node: int,
+    rdzv_endpoint: str,
+    nccl_socket_ifname: str | None = None,
+) -> str:
+    master_addr, _, master_port = rdzv_endpoint.rpartition(":")
+    if not master_addr or not master_port:
+        raise ValueError(f"rdzv_endpoint must be host:port, got {rdzv_endpoint!r}")
+    bash = "\n".join(
+        [
+            "set -euo pipefail",
+            f"cat > /tmp/model_forge_torchrun_smoke.py <<'PY'\n{torchrun_smoke_script()}\nPY",
+            shell_join(
+                [
+                    "python3",
+                    "-m",
+                    "torch.distributed.run",
+                    f"--nnodes={nnodes}",
+                    f"--nproc-per-node={nproc_per_node}",
+                    f"--node-rank={node_rank}",
+                    f"--master-addr={master_addr}",
+                    f"--master-port={master_port}",
+                    "--max-restarts=0",
+                    "/tmp/model_forge_torchrun_smoke.py",
+                ]
+            ),
+        ]
+    )
+    command = [
+        "docker",
+        "run",
+        "--rm",
+        "--gpus",
+        "all",
+        "--network",
+        "host",
+        "--ipc",
+        "host",
+        "--cpus=2",
+        "--memory=16g",
+        "--memory-swap=16g",
+        "--pids-limit=1024",
+        "-e",
+        "NCCL_DEBUG=WARN",
+        "-e",
+        "TORCH_NCCL_ASYNC_ERROR_HANDLING=1",
+    ]
+    if nccl_socket_ifname:
+        command.extend(["-e", f"NCCL_SOCKET_IFNAME={nccl_socket_ifname}"])
+    command.extend(["--entrypoint", "bash", image, "-lc", bash])
+    return shell_join(command)
+
+
 def collect_cluster_runtime(
     cluster: Mapping[str, Any],
     hardware: Mapping[str, Any],
@@ -568,6 +663,105 @@ def collect_cluster_runtime(
         "mode": "docker_gpu_python",
         "nodes": results,
         "ok": all(node["ok"] for node in results),
+    }
+
+
+def json_lines(text: str) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            records.append(value)
+    return records
+
+
+def collect_torchrun_smoke(
+    cluster: Mapping[str, Any],
+    hardware: Mapping[str, Any],
+    config_path: Path,
+    image: str,
+    env: Mapping[str, str] | None = None,
+    timeout: int = 180,
+    nccl_socket_ifname: str | None = None,
+) -> dict[str, Any]:
+    env = env or os.environ
+    nodes = [node_plan(node, cluster, env) for node in cluster.get("nodes", []) if isinstance(node, dict)]
+    distributed = cluster.get("distributed") or {}
+    nnodes = int(distributed.get("nnodes", len(nodes)) or len(nodes))
+    nproc_per_node = int(distributed.get("nproc_per_node", 1) or 1)
+    endpoint_env = str(distributed.get("rdzv_endpoint_env") or "MODEL_FORGE_RDZV_ENDPOINT")
+    rdzv_endpoint = str(distributed.get("rdzv_endpoint") or env_value(env, endpoint_env) or "")
+    resource_policy = cluster.get("resource_policy") or {}
+    job_lock = str((cluster.get("paths") or {}).get("job_lock") or "runs/locks/model-forge-cluster.lock")
+    if not rdzv_endpoint:
+        return {
+            "created_at": utc_timestamp(),
+            "cluster": {"id": cluster.get("id"), "config": display_path(config_path)},
+            "image": image,
+            "ok": False,
+            "error": f"rendezvous endpoint is missing; set {endpoint_env}",
+        }
+
+    def probe(index_and_node: tuple[int, Mapping[str, Any]]) -> dict[str, Any]:
+        node_rank, node = index_and_node
+        work_dir = str(node.get("work_dir") or ".")
+        lock_path = job_lock if Path(job_lock).is_absolute() else str(Path(work_dir) / job_lock)
+        docker_command = docker_torchrun_smoke_command(
+            image,
+            node_rank=node_rank,
+            nnodes=nnodes,
+            nproc_per_node=nproc_per_node,
+            rdzv_endpoint=rdzv_endpoint,
+            nccl_socket_ifname=nccl_socket_ifname,
+        )
+        command = shell_join(["mkdir", "-p", str(Path(lock_path).parent)])
+        command += " && "
+        command += guarded_command(docker_command, resource_policy, lock_path)
+        result = run_node_shell(node, command, timeout=timeout)
+        records = json_lines(result.stdout)
+        ok = result.returncode == 0 and len(records) == nproc_per_node and all(bool(record.get("ok")) for record in records)
+        return {
+            "name": node.get("name"),
+            "role": node.get("role"),
+            "host": node.get("host"),
+            "node_rank": node_rank,
+            "returncode": result.returncode,
+            "ok": ok,
+            "records": records,
+            "stdout": result.stdout.strip(),
+            "stderr": result.stderr.strip(),
+        }
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(nodes))) as executor:
+        results = list(executor.map(probe, enumerate(nodes)))
+    observed_world = sum(len(node["records"]) for node in results)
+    expected_world = nnodes * nproc_per_node
+
+    return {
+        "created_at": utc_timestamp(),
+        "cluster": {
+            "id": cluster.get("id"),
+            "config": display_path(config_path),
+            "hardware_profile": cluster.get("hardware_profile"),
+            "node_count": len(nodes),
+            "total_declared_gpus": total_declared_gpus(cluster, hardware),
+            "total_declared_memory_gb": total_declared_memory_gb(cluster, hardware),
+        },
+        "image": image,
+        "mode": "docker_torchrun_nccl_all_reduce",
+        "nnodes": nnodes,
+        "nproc_per_node": nproc_per_node,
+        "expected_world_size": expected_world,
+        "observed_world_size": observed_world,
+        "nccl_socket_ifname": nccl_socket_ifname,
+        "nodes": results,
+        "ok": observed_world == expected_world and all(node["ok"] for node in results),
     }
 
 
@@ -800,6 +994,14 @@ def main() -> None:
     runtime_parser.add_argument("--output", type=Path, help="Write JSON runtime evidence")
     runtime_parser.add_argument("--json", action="store_true")
 
+    smoke_parser = subparsers.add_parser("torchrun-smoke", help="Run bounded two-node Docker torchrun/NCCL all-reduce smoke")
+    smoke_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    smoke_parser.add_argument("--image", default="nemotron-runner:latest")
+    smoke_parser.add_argument("--timeout", type=int, default=180)
+    smoke_parser.add_argument("--nccl-socket-ifname", help="Optional NCCL_SOCKET_IFNAME override, e.g. a direct-link interface")
+    smoke_parser.add_argument("--output", type=Path, help="Write JSON smoke evidence")
+    smoke_parser.add_argument("--json", action="store_true")
+
     sync_parser = subparsers.add_parser("sync", help="Plan or execute env-backed repo sync to worker nodes")
     sync_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     sync_parser.add_argument("--execute", action="store_true", help="Run mkdir/rsync commands")
@@ -876,6 +1078,42 @@ def main() -> None:
             console.print(f"image: {args.image}")
             console.print(f"evidence: {display_path(output_path)}")
         raise SystemExit(0 if runtime["ok"] else 1)
+
+    if args.action == "torchrun-smoke":
+        findings = audit_cluster(cluster, config_path, hardware=hardware, strict=True)
+        if findings:
+            data = {
+                "created_at": utc_timestamp(),
+                "cluster": {"id": cluster.get("id"), "config": display_path(config_path)},
+                "ok": False,
+                "doctor_findings": [asdict(finding) for finding in findings],
+            }
+            if args.output:
+                write_json(args.output if args.output.is_absolute() else REPO_DIR / args.output, data)
+            if args.json:
+                print(json.dumps(data, indent=2, sort_keys=True) + "\n")
+            else:
+                render_findings(findings)
+            raise SystemExit(1)
+        smoke = collect_torchrun_smoke(
+            cluster,
+            hardware,
+            config_path,
+            image=args.image,
+            timeout=args.timeout,
+            nccl_socket_ifname=args.nccl_socket_ifname,
+        )
+        output = args.output if args.output else default_cluster_output("torchrun_smoke")
+        output_path = output if output.is_absolute() else REPO_DIR / output
+        write_json(output_path, smoke)
+        smoke["output"] = display_path(output_path)
+        if args.json:
+            print(json.dumps(smoke, indent=2, sort_keys=True) + "\n")
+        else:
+            console.print(f"cluster torchrun smoke: {'OK' if smoke['ok'] else 'FAILED'}")
+            console.print(f"image: {args.image}")
+            console.print(f"evidence: {display_path(output_path)}")
+        raise SystemExit(0 if smoke["ok"] else 1)
 
     if args.action == "sync":
         findings = audit_cluster(cluster, config_path, hardware=hardware, strict=True)

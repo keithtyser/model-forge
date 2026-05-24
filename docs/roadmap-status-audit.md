@@ -5,7 +5,7 @@ This file is generated from the prioritized backlog in
 
 ## Summary
 
-- Items: 96
+- Items: 97
 - Findings: 0
 
 ## Implementation Status
@@ -15,7 +15,7 @@ This file is generated from the prioritized backlog in
 | implemented | 2 |
 | not_started | 38 |
 | scaffolded | 23 |
-| tested | 32 |
+| tested | 33 |
 | wired_to_cli | 1 |
 
 ## Validation State
@@ -24,7 +24,7 @@ This file is generated from the prioritized backlog in
 |---|---:|
 | planned | 67 |
 | smoke_validated | 27 |
-| spark_cluster_validated | 1 |
+| spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
 ## Findings
@@ -65,6 +65,7 @@ No status audit findings.
 | MF-0205 | P0: Serving | tested | smoke_validated | Add TTFT/ITL/memory/tok-sec capture |
 | MF-0206 | P0: Serving | tested | smoke_validated | Add quality/behavior sampled eval under serving configs |
 | MF-0207 | P0: Serving | scaffolded | planned | Mark serving work complete only after real endpoint evidence is attached |
+| MF-0208 | P0: Serving | tested | spark_cluster_validated | Add two-node torchrun/NCCL Spark preflight |
 | MF-0251 | P0: Artifact validation | not_started | planned | Add Playwright HTML validation |
 | MF-0252 | P0: Artifact validation | not_started | planned | Add Python artifact compile/run validation |
 | MF-0253 | P0: Artifact validation | not_started | planned | Add artifact screenshots and nonblank canvas/WebGL checks |

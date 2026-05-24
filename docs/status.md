@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-23.
+Last updated: 2026-05-24.
 
 This is the short handoff state for humans and agents. Use
 `docs/experiment-ledger.md` for detailed run history and raw observations.
@@ -50,11 +50,14 @@ This is the short handoff state for humans and agents. Use
   It expands bounded startup-time vLLM env cases plus matching `bench serve`
   commands and can attach the two-node env-backed Spark cluster inventory.
 - Two-node Spark readiness is now executable through `./forge cluster sync`
-  `./forge cluster health`, and `./forge cluster runtime`. On 2026-05-24, the
+  `./forge cluster health`, `./forge cluster runtime`, and
+  `./forge cluster torchrun-smoke`. On 2026-05-24, the
   repo was synced to the private worker Spark and both GB10 nodes passed health
   with ~256 GB declared cluster memory, visible GPUs, repo checkout, RAM
   headroom, and disk headroom. Both nodes also passed a bounded
-  `nemotron-runner:latest` GPU container probe with CUDA Torch visible.
+  `nemotron-runner:latest` GPU container probe with CUDA Torch visible. The
+  two-node torchrun smoke then joined both GB10s into one `world_size=2`
+  CUDA/NCCL all-reduce job through the guarded container launcher.
 - Serving workload definitions are now present under
   `configs/serving/workloads/`, with smoke and core benchmark configs loading
   reusable workload files instead of hard-coding all requests inline.
@@ -130,9 +133,10 @@ length filtering:
    distributed Spark correctness evidence.
 5. Run one real Spark serving benchmark and attach endpoint evidence to the
    Serving Card.
-6. Re-run one guarded ModelOpt NVFP4 export only after confirming the two-node
-   worker plan and host guardrails. Quantization remains incomplete until base,
-   FT, abli, and FT+abli checkpoints load and match their unquantized baselines.
+6. Run one guarded ModelOpt NVFP4 export through the Spark cluster path now that
+   sync, health, runtime, and torchrun/NCCL preflights pass. Quantization
+   remains incomplete until base, FT, abli, and FT+abli checkpoints load and
+   match their unquantized baselines.
 7. Scale the local FT v1 dataset through medium-pack review before treating it
    as a training dataset.
 

@@ -3379,6 +3379,7 @@ Ship:
 Gemma local_ft_v0 completed or failure-carded
 Training Method Card
 distributed training correctness checklist
+two-node torchrun/NCCL preflight evidence
 LoRA target failure postmortem
 base vs reference FT vs local FT comparison
 ```
@@ -3388,6 +3389,8 @@ Acceptance criteria:
 ```text
 - Training completed on Spark/Spark x2, or failure includes exact command, logs,
   checkpoint state, resource state, and next fix.
+- Multi-node training claims require `./forge cluster torchrun-smoke` evidence
+  showing both Spark nodes joined one CUDA/NCCL job.
 - Card records sample sharding, global batch semantics, rank count, MoE/router
   handling, unused-parameter policy, cold-start time, steady microstep time, and
   tensor inspection.
@@ -3742,6 +3745,7 @@ MF-0204 Add Serving Card. implementation_status=tested validation_state=smoke_va
 MF-0205 Add TTFT/ITL/memory/tok-sec capture. implementation_status=tested validation_state=smoke_validated
 MF-0206 Add quality/behavior sampled eval under serving configs. implementation_status=tested validation_state=smoke_validated
 MF-0207 Mark serving work complete only after real endpoint evidence is attached. implementation_status=scaffolded validation_state=planned
+MF-0208 Add two-node torchrun/NCCL Spark preflight. implementation_status=tested validation_state=spark_cluster_validated
 ```
 
 ### P0: Artifact validation

@@ -73,6 +73,11 @@ run, sync the repo to worker nodes and probe every node:
 ./forge cluster runtime \
   --config configs/clusters/my_cluster.yaml \
   --image nemotron-runner:latest
+
+./forge cluster torchrun-smoke \
+  --config configs/clusters/my_cluster.yaml \
+  --image nemotron-runner:latest \
+  --nccl-socket-ifname <distributed-network-interface>
 ```
 
 `cluster sync` uses `rsync` over SSH and skips only local caches and the root
@@ -91,6 +96,15 @@ that the selected image can import the expected post-training libraries and see
 CUDA devices. Treat a failed runtime probe as a hard stop for distributed
 training, vLLM serving, ModelOpt quantization, or ablation jobs that rely on
 that container image.
+
+`cluster torchrun-smoke` launches a bounded Docker `torchrun` job on every
+configured node and performs a CUDA/NCCL all-reduce. It uses static
+`--master-addr`/`--master-port` launch arguments derived from
+`MODEL_FORGE_RDZV_ENDPOINT`, host networking, `--gpus all`, a 2 CPU cap, a
+16 GB memory cap, and the same systemd resource policy used by other guarded
+cluster probes. Treat this as the preflight gate before distributed fine-tuning,
+distributed quantization, or any benchmark claim that says a workload used both
+Spark nodes.
 
 ## Plan
 
@@ -122,8 +136,28 @@ Cluster jobs should remain tenants on every node:
 - stop/checkpoint if runtime memory headroom falls below the configured floor
 - use high parallelism only where the workload is designed for it
 
+The public configs default to `systemd-run --user --scope` because unprivileged
+remote system scopes can require interactive authentication. Set
+`resource_policy.systemd_user_scope: false` only on machines where system scopes
+are explicitly available for non-interactive workload launchers.
+
 For DGX Spark x2, the public example declares two 128 GB nodes for roughly 256 GB
 total RAM. It does not assume hostnames or network layout.
+
+## Spark x2 Evidence
+
+On 2026-05-24, the local private Spark x2 cluster passed:
+
+```text
+./forge cluster sync --config configs/clusters/dgx_spark_x2.example.yaml --execute
+./forge cluster health --config configs/clusters/dgx_spark_x2.example.yaml
+./forge cluster runtime --config configs/clusters/dgx_spark_x2.example.yaml --image nemotron-runner:latest
+./forge cluster torchrun-smoke --config configs/clusters/dgx_spark_x2.example.yaml --image nemotron-runner:latest --nccl-socket-ifname <distributed-network-interface>
+```
+
+The torchrun smoke observed `world_size=2`, one `NVIDIA GB10` per node, and a
+matching NCCL all-reduce sum across both ranks. Generated JSON evidence lives
+under `reports/generated/cluster/` and stays out of Git.
 
 ## Next Integrations
 
@@ -133,5 +167,6 @@ backends only after:
 
 - single-node smoke serving passes
 - `./forge cluster doctor --strict` passes
+- `./forge cluster torchrun-smoke` passes for multi-node torch workloads
 - run manifests include the cluster config and launcher plan
 - the workload has checkpointing, cleanup, and failure handling

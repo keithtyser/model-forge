@@ -245,6 +245,7 @@ Validate or plan cluster usage:
 ./forge cluster sync --config configs/clusters/dgx_spark_x2.example.yaml
 ./forge cluster health --config configs/clusters/dgx_spark_x2.example.yaml
 ./forge cluster runtime --config configs/clusters/dgx_spark_x2.example.yaml --image nemotron-runner:latest
+./forge cluster torchrun-smoke --config configs/clusters/dgx_spark_x2.example.yaml --image nemotron-runner:latest --nccl-socket-ifname <distributed-network-interface>
 ./forge cluster plan \
   --config configs/clusters/dgx_spark_x2.example.yaml \
   --workload train \
@@ -255,7 +256,9 @@ Cluster configs must remain generic. Do not commit private hostnames, IPs,
 usernames, tokens, or absolute machine-specific paths. Put those values in
 environment variables or untracked local copies. Real distributed execution
 requires `./forge cluster doctor --strict` and a workload-specific launcher with
-resource guardrails.
+resource guardrails. Before claiming that a training, quantization, or benchmark
+job used both Spark nodes, run `./forge cluster torchrun-smoke` and cite the
+generated evidence path.
 
 Benchmark serving only after an endpoint is already running:
 

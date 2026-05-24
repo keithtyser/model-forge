@@ -9,6 +9,9 @@ from model_forge.cluster.cli import (
     build_sync_plan,
     build_launcher_plan,
     docker_gpu_runtime_command,
+    docker_torchrun_smoke_command,
+    guarded_command,
+    json_lines,
     load_cluster_config,
     load_hardware_profile,
 )
@@ -92,6 +95,39 @@ class ClusterCliTests(unittest.TestCase):
         self.assertIn("--memory=8g", command)
         self.assertIn("nemotron-runner:latest", command)
         self.assertIn("cuda_available", command)
+
+    def test_guarded_command_defaults_to_user_systemd_scope(self) -> None:
+        command = guarded_command("python train.py", {"cpu_quota": "75%", "memory_max_fraction": 0.5}, "runs/lock")
+        self.assertIn("flock runs/lock systemd-run --user --scope", command)
+        self.assertIn("-p CPUQuota=75%", command)
+        self.assertIn("-p MemoryMax=50%", command)
+
+    def test_guarded_command_can_use_system_scope(self) -> None:
+        command = guarded_command("python train.py", {"systemd_user_scope": False}, "runs/lock")
+        self.assertIn("flock runs/lock systemd-run --scope", command)
+        self.assertNotIn("--user --scope", command)
+
+    def test_torchrun_smoke_command_uses_bounded_docker_and_static_master(self) -> None:
+        command = docker_torchrun_smoke_command(
+            "nemotron-runner:latest",
+            node_rank=1,
+            nnodes=2,
+            nproc_per_node=1,
+            rdzv_endpoint="spark-a:29500",
+            nccl_socket_ifname="eth0",
+        )
+        self.assertIn("docker run", command)
+        self.assertIn("--network host", command)
+        self.assertIn("--cpus=2", command)
+        self.assertIn("--memory=16g", command)
+        self.assertIn("--node-rank=1", command)
+        self.assertIn("--master-addr=spark-a", command)
+        self.assertIn("--master-port=29500", command)
+        self.assertIn("NCCL_SOCKET_IFNAME=eth0", command)
+
+    def test_json_lines_extracts_smoke_records(self) -> None:
+        records = json_lines('warning\n{"ok": true, "rank": 0}\nnot-json\n{"ok": true, "rank": 1}\n')
+        self.assertEqual([record["rank"] for record in records], [0, 1])
 
     def test_example_configs_do_not_contain_private_literals(self) -> None:
         private_home = "/" + "home/ktyser"

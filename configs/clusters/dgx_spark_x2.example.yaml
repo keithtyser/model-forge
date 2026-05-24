@@ -27,6 +27,7 @@ paths:
 resource_policy:
   max_concurrent_large_jobs: 1
   require_job_lock: true
+  systemd_user_scope: true
   stop_if_memory_available_below_fraction: 0.05
   start_if_memory_available_above_fraction: 0.05
   require_disk_free_fraction: 0.15
