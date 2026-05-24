@@ -31,7 +31,7 @@ Usage:
   ./forge manifest [write|show]
   ./forge bench [serve|serve-eval|sweep]
   ./forge quantize [plan|export|matrix-plan|card]
-  ./forge cluster [plan|doctor]
+  ./forge cluster [plan|doctor|sync|health]
   ./forge golden-summary <family> [output-json]
   ./forge golden-check <family> [baseline-json]
   ./forge doctor [--json]
@@ -61,6 +61,8 @@ Examples:
   ./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan
   ./forge quantize matrix-plan --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml
   ./forge cluster plan --config configs/clusters/dgx_spark_x2.example.yaml --workload train
+  ./forge cluster sync --config configs/clusters/dgx_spark_x2.example.yaml
+  ./forge cluster health --config configs/clusters/dgx_spark_x2.example.yaml
   ./forge doctor
 
 By default, eval runs internal checks, artifact evals, external benchmarks,

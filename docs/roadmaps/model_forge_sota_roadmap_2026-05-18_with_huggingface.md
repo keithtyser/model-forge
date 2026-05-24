@@ -3734,7 +3734,7 @@ MF-0108 Add zero_refusal_capability_retention objective gates. implementation_st
 ### P0: Serving
 
 ```text
-MF-0200 Add generic cluster inventory planner and DGX Spark x2 example. implementation_status=tested validation_state=smoke_validated
+MF-0200 Add generic cluster inventory planner and DGX Spark x2 example. implementation_status=tested validation_state=spark_cluster_validated
 MF-0201 Add forge bench serve. implementation_status=tested validation_state=smoke_validated
 MF-0202 Add DGX Spark vLLM sweep config. implementation_status=tested validation_state=smoke_validated
 MF-0203 Add serving workload definitions. implementation_status=tested validation_state=smoke_validated

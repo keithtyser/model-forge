@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import os
 import re
 import shlex
+import socket
+import subprocess
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +25,13 @@ SECRET_PATTERN = re.compile(r"(hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,})")
 IP_ADDRESS_PATTERN = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$")
 ALLOWED_LAUNCHERS = {"local", "ssh", "docker", "torchrun", "ray", "vllm", "slurm"}
 WORKLOADS = {"serve", "train", "eval", "ablate", "data", "quantize", "publish", "generic"}
+SYNC_EXCLUDES = (
+    "/.venv/",
+    "__pycache__/",
+    "/.pytest_cache/",
+    "/.mypy_cache/",
+    "/runs/",
+)
 
 console = Console()
 
@@ -96,6 +106,10 @@ def resolve_env_backed_value(raw: Mapping[str, Any], key: str, env: Mapping[str,
         return env_value(env, str(env_key)), str(env_key)
     value = raw.get(key)
     return str(value) if value not in {None, ""} else None, None
+
+
+def node_ssh_port(node: Mapping[str, Any], env: Mapping[str, str]) -> tuple[str | None, str | None]:
+    return resolve_env_backed_value(node, "ssh_port", env)
 
 
 def node_host(node: Mapping[str, Any], env: Mapping[str, str]) -> tuple[str | None, str | None]:
@@ -266,6 +280,7 @@ def render_findings(findings: list[Finding]) -> None:
 def node_plan(node: Mapping[str, Any], cluster: Mapping[str, Any], env: Mapping[str, str]) -> dict[str, Any]:
     host, host_env = node_host(node, env)
     user, user_env = node_user(node, env)
+    ssh_port, ssh_port_env = node_ssh_port(node, env)
     work_dir, work_dir_env = node_work_dir(node, cluster, env)
     launcher = node.get("launcher") or (cluster.get("launchers") or {}).get("default") or "local"
     display_host = host if host is not None else f"${host_env}" if host_env else None
@@ -279,6 +294,8 @@ def node_plan(node: Mapping[str, Any], cluster: Mapping[str, Any], env: Mapping[
         "host_env": host_env,
         "user": display_user,
         "user_env": user_env,
+        "ssh_port": ssh_port if ssh_port is not None else f"${ssh_port_env}" if ssh_port_env else None,
+        "ssh_port_env": ssh_port_env,
         "work_dir": display_work_dir,
         "work_dir_env": work_dir_env,
         "gpu_count": node.get("gpu_count"),
@@ -305,6 +322,246 @@ def guarded_command(command: str, resource_policy: Mapping[str, Any], job_lock: 
         f"-p IOWeight={io_weight} "
         f"nice -n {nice} {command}"
     )
+
+
+def is_local_host(host: str | None) -> bool:
+    if host in {None, "", "localhost", "127.0.0.1", "::1"}:
+        return True
+    try:
+        return host in {socket.gethostname(), socket.getfqdn()}
+    except OSError:
+        return False
+
+
+def ssh_target(node: Mapping[str, Any]) -> str:
+    host = str(node.get("host") or "")
+    user = str(node.get("user") or "")
+    if not host:
+        raise ValueError(f"node {node.get('name')} has no resolved host")
+    return f"{user}@{host}" if user and not is_local_host(host) else host
+
+
+def ssh_prefix(node: Mapping[str, Any]) -> list[str]:
+    prefix = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
+    port = node.get("ssh_port")
+    if port and not str(port).startswith("$"):
+        prefix.extend(["-p", str(port)])
+    prefix.append(ssh_target(node))
+    return prefix
+
+
+def run_node_shell(node: Mapping[str, Any], command: str, timeout: int) -> subprocess.CompletedProcess[str]:
+    host = str(node.get("host") or "")
+    if is_local_host(host):
+        return subprocess.run(
+            command,
+            cwd=REPO_DIR,
+            shell=True,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False,
+        )
+    return subprocess.run(
+        [*ssh_prefix(node), command],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+        check=False,
+    )
+
+
+def health_command(work_dir: str) -> str:
+    script = r"""
+import json
+import os
+import shutil
+import subprocess
+from pathlib import Path
+
+def run(args, cwd=None):
+    try:
+        result = subprocess.run(args, cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=8, check=False)
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+    return {"ok": result.returncode == 0, "stdout": result.stdout.strip(), "stderr": result.stderr.strip(), "returncode": result.returncode}
+
+work_dir = Path(os.environ["MODEL_FORGE_HEALTH_WORK_DIR"]).expanduser()
+disk_root = work_dir if work_dir.exists() else work_dir.parent
+disk = shutil.disk_usage(str(disk_root))
+memory = {}
+try:
+    meminfo = Path("/proc/meminfo").read_text(encoding="utf-8")
+    for line in meminfo.splitlines():
+        key, raw = line.split(":", 1)
+        if key in {"MemTotal", "MemAvailable"}:
+            memory[key] = int(raw.strip().split()[0]) * 1024
+except OSError:
+    pass
+
+data = {
+    "hostname": run(["hostname"])["stdout"],
+    "work_dir": str(work_dir),
+    "work_dir_exists": work_dir.exists(),
+    "forge_exists": (work_dir / "forge").exists(),
+    "git_branch": run(["git", "branch", "--show-current"], cwd=work_dir) if work_dir.exists() else None,
+    "git_head": run(["git", "rev-parse", "--short", "HEAD"], cwd=work_dir) if work_dir.exists() else None,
+    "git_status": run(["git", "status", "-sb"], cwd=work_dir) if work_dir.exists() else None,
+    "gpu": run(["nvidia-smi", "--query-gpu=name,memory.total,memory.used,utilization.gpu", "--format=csv,noheader,nounits"]),
+    "memory": memory,
+    "disk": {"total": disk.total, "used": disk.used, "free": disk.free},
+}
+print(json.dumps(data, sort_keys=True))
+"""
+    return f"MODEL_FORGE_HEALTH_WORK_DIR={shlex.quote(work_dir)} python3 -c {shlex.quote(script)}"
+
+
+def default_cluster_output(prefix: str) -> Path:
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return REPO_DIR / "reports" / "generated" / "cluster" / f"{prefix}_{stamp}.json"
+
+
+def write_json(path: Path, data: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def collect_cluster_health(
+    cluster: Mapping[str, Any],
+    hardware: Mapping[str, Any],
+    config_path: Path,
+    env: Mapping[str, str] | None = None,
+    timeout: int = 30,
+) -> dict[str, Any]:
+    env = env or os.environ
+    nodes = [node_plan(node, cluster, env) for node in cluster.get("nodes", []) if isinstance(node, dict)]
+
+    def probe(node: Mapping[str, Any]) -> dict[str, Any]:
+        work_dir = str(node.get("work_dir") or "")
+        result = run_node_shell(node, health_command(work_dir), timeout=timeout)
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            payload = {}
+        return {
+            "name": node.get("name"),
+            "role": node.get("role"),
+            "host": node.get("host"),
+            "returncode": result.returncode,
+            "ok": result.returncode == 0 and bool(payload.get("work_dir_exists")) and bool(payload.get("forge_exists")),
+            "payload": payload,
+            "stderr": result.stderr.strip(),
+        }
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(nodes))) as executor:
+        results = list(executor.map(probe, nodes))
+
+    return {
+        "created_at": utc_timestamp(),
+        "cluster": {
+            "id": cluster.get("id"),
+            "config": display_path(config_path),
+            "hardware_profile": cluster.get("hardware_profile"),
+            "node_count": len(nodes),
+            "total_declared_gpus": total_declared_gpus(cluster, hardware),
+            "total_declared_memory_gb": total_declared_memory_gb(cluster, hardware),
+        },
+        "nodes": results,
+        "ok": all(node["ok"] for node in results),
+    }
+
+
+def build_sync_plan(
+    cluster: Mapping[str, Any],
+    hardware: Mapping[str, Any],
+    config_path: Path,
+    env: Mapping[str, str] | None = None,
+    delete: bool = False,
+) -> dict[str, Any]:
+    env = env or os.environ
+    nodes = [node_plan(node, cluster, env) for node in cluster.get("nodes", []) if isinstance(node, dict)]
+    actions: list[dict[str, Any]] = []
+    for node in nodes:
+        host = str(node.get("host") or "")
+        work_dir = str(node.get("work_dir") or "")
+        if not work_dir:
+            actions.append({"node": node.get("name"), "skip": False, "error": "work_dir is not resolved"})
+            continue
+        if is_local_host(host):
+            actions.append({"node": node.get("name"), "skip": True, "reason": "local coordinator"})
+            continue
+        target = f"{ssh_target(node)}:{work_dir.rstrip('/')}/"
+        mkdir_command = [*ssh_prefix(node), shell_join(["mkdir", "-p", work_dir])]
+        rsync_command = ["rsync", "-az"]
+        if delete:
+            rsync_command.append("--delete")
+        for pattern in SYNC_EXCLUDES:
+            rsync_command.extend(["--exclude", pattern])
+        rsync_command.extend(["./", target])
+        actions.append(
+            {
+                "node": node.get("name"),
+                "host": host,
+                "work_dir": work_dir,
+                "skip": False,
+                "mkdir_command": shell_join(mkdir_command),
+                "rsync_command": shell_join(rsync_command),
+            }
+        )
+    return {
+        "created_at": utc_timestamp(),
+        "cluster": {
+            "id": cluster.get("id"),
+            "config": display_path(config_path),
+            "hardware_profile": cluster.get("hardware_profile"),
+            "node_count": len(nodes),
+            "total_declared_gpus": total_declared_gpus(cluster, hardware),
+            "total_declared_memory_gb": total_declared_memory_gb(cluster, hardware),
+        },
+        "delete": delete,
+        "excludes": list(SYNC_EXCLUDES),
+        "actions": actions,
+    }
+
+
+def execute_sync_plan(plan: dict[str, Any], timeout: int) -> dict[str, Any]:
+    results: list[dict[str, Any]] = []
+    for action in plan["actions"]:
+        if action.get("skip") or action.get("error"):
+            results.append({**action, "ok": not action.get("error")})
+            continue
+        mkdir = subprocess.run(
+            shlex.split(action["mkdir_command"]),
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False,
+        )
+        if mkdir.returncode != 0:
+            results.append({**action, "ok": False, "step": "mkdir", "stderr": mkdir.stderr.strip()})
+            continue
+        rsync = subprocess.run(
+            shlex.split(action["rsync_command"]),
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False,
+        )
+        results.append(
+            {
+                **action,
+                "ok": rsync.returncode == 0,
+                "step": "rsync",
+                "stdout": rsync.stdout.strip(),
+                "stderr": rsync.stderr.strip(),
+                "returncode": rsync.returncode,
+            }
+        )
+    return {**plan, "executed": True, "actions": results, "ok": all(action.get("ok") for action in results)}
 
 
 def build_launcher_plan(
@@ -432,6 +689,20 @@ def main() -> None:
     plan_parser.add_argument("--command", dest="workload_command", help="Workload command to place behind cluster guardrails")
     plan_parser.add_argument("--json", action="store_true")
 
+    health_parser = subparsers.add_parser("health", help="Probe every cluster node for repo, GPU, RAM, and disk readiness")
+    health_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    health_parser.add_argument("--timeout", type=int, default=30)
+    health_parser.add_argument("--output", type=Path, help="Write JSON health evidence")
+    health_parser.add_argument("--json", action="store_true")
+
+    sync_parser = subparsers.add_parser("sync", help="Plan or execute env-backed repo sync to worker nodes")
+    sync_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    sync_parser.add_argument("--execute", action="store_true", help="Run mkdir/rsync commands")
+    sync_parser.add_argument("--delete", action="store_true", help="Pass --delete to rsync")
+    sync_parser.add_argument("--timeout", type=int, default=120)
+    sync_parser.add_argument("--output", type=Path, help="Write JSON sync evidence")
+    sync_parser.add_argument("--json", action="store_true")
+
     args = parser.parse_args()
     cluster, config_path = load_cluster_config(args.config)
     hardware = load_hardware_profile(cluster)
@@ -443,6 +714,74 @@ def main() -> None:
         else:
             render_findings(findings)
         raise SystemExit(1 if any(finding.severity == "error" for finding in findings) else 0)
+
+    if args.action == "health":
+        findings = audit_cluster(cluster, config_path, hardware=hardware, strict=True)
+        if findings:
+            data = {
+                "created_at": utc_timestamp(),
+                "cluster": {"id": cluster.get("id"), "config": display_path(config_path)},
+                "ok": False,
+                "doctor_findings": [asdict(finding) for finding in findings],
+            }
+            if args.output:
+                write_json(args.output if args.output.is_absolute() else REPO_DIR / args.output, data)
+            if args.json:
+                print(json.dumps(data, indent=2, sort_keys=True) + "\n")
+            else:
+                render_findings(findings)
+            raise SystemExit(1)
+        health = collect_cluster_health(cluster, hardware, config_path, timeout=args.timeout)
+        output = args.output if args.output else default_cluster_output("health")
+        output_path = output if output.is_absolute() else REPO_DIR / output
+        write_json(output_path, health)
+        health["output"] = display_path(output_path)
+        if args.json:
+            print(json.dumps(health, indent=2, sort_keys=True) + "\n")
+        else:
+            console.print(f"cluster health: {'OK' if health['ok'] else 'FAILED'}")
+            console.print(f"evidence: {display_path(output_path)}")
+        raise SystemExit(0 if health["ok"] else 1)
+
+    if args.action == "sync":
+        findings = audit_cluster(cluster, config_path, hardware=hardware, strict=True)
+        if findings:
+            data = {
+                "created_at": utc_timestamp(),
+                "cluster": {"id": cluster.get("id"), "config": display_path(config_path)},
+                "ok": False,
+                "doctor_findings": [asdict(finding) for finding in findings],
+            }
+            if args.output:
+                write_json(args.output if args.output.is_absolute() else REPO_DIR / args.output, data)
+            if args.json:
+                print(json.dumps(data, indent=2, sort_keys=True) + "\n")
+            else:
+                render_findings(findings)
+            raise SystemExit(1)
+        sync = build_sync_plan(cluster, hardware, config_path, delete=args.delete)
+        if args.execute:
+            sync = execute_sync_plan(sync, timeout=args.timeout)
+        else:
+            sync["executed"] = False
+            sync["ok"] = all(not action.get("error") for action in sync["actions"])
+        output = args.output if args.output else default_cluster_output("sync")
+        output_path = output if output.is_absolute() else REPO_DIR / output
+        write_json(output_path, sync)
+        sync["output"] = display_path(output_path)
+        if args.json:
+            print(json.dumps(sync, indent=2, sort_keys=True) + "\n")
+        else:
+            console.print(f"cluster sync: {'OK' if sync['ok'] else 'FAILED'} ({'executed' if args.execute else 'plan only'})")
+            console.print(f"evidence: {display_path(output_path)}")
+            for action in sync["actions"]:
+                if action.get("skip"):
+                    console.print(f"  {action['node']}: skipped ({action.get('reason')})")
+                elif action.get("error"):
+                    console.print(f"  {action['node']}: ERROR {action['error']}")
+                else:
+                    console.print(f"  {action['node']}: {action.get('rsync_command')}")
+        raise SystemExit(0 if sync["ok"] else 1)
 
     if args.action == "plan":
         findings = audit_cluster(cluster, config_path, hardware=hardware, strict=False)

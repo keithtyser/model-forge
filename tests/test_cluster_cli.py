@@ -6,6 +6,7 @@ from pathlib import Path
 from model_forge.cluster.cli import (
     REPO_DIR,
     audit_cluster,
+    build_sync_plan,
     build_launcher_plan,
     load_cluster_config,
     load_hardware_profile,
@@ -61,6 +62,26 @@ class ClusterCliTests(unittest.TestCase):
         self.assertIn("--nproc-per-node=1", plan["execution_plan"]["launcher_command"])
         self.assertIn("--rdzv-endpoint=spark-a:29500", plan["execution_plan"]["launcher_command"])
         self.assertTrue(plan["execution_plan"]["dry_run_only"])
+
+    def test_sync_plan_skips_local_and_targets_worker(self) -> None:
+        config, path = load_cluster_config(REPO_DIR / "configs" / "clusters" / "dgx_spark_x2.example.yaml")
+        hardware = load_hardware_profile(config)
+        env = {
+            "MODEL_FORGE_NODE0_HOST": "localhost",
+            "MODEL_FORGE_NODE1_HOST": "spark-b",
+            "MODEL_FORGE_NODE0_USER": "runner",
+            "MODEL_FORGE_NODE1_USER": "runner",
+            "MODEL_FORGE_CLUSTER_WORK_DIR": "/" + "home/private/model-forge",
+            "MODEL_FORGE_RDZV_ENDPOINT": "localhost:29500",
+        }
+        plan = build_sync_plan(config, hardware, path, env=env)
+
+        self.assertEqual(plan["cluster"]["node_count"], 2)
+        self.assertTrue(plan["actions"][0]["skip"])
+        self.assertFalse(plan["actions"][1]["skip"])
+        self.assertIn("runner@spark-b:" + "/" + "home/private/model-forge/", plan["actions"][1]["rsync_command"])
+        self.assertIn("--exclude /.venv/", plan["actions"][1]["rsync_command"])
+        self.assertIn("--exclude /runs/", plan["actions"][1]["rsync_command"])
 
     def test_example_configs_do_not_contain_private_literals(self) -> None:
         private_home = "/" + "home/ktyser"

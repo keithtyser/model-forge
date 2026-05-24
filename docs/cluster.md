@@ -34,6 +34,7 @@ export MODEL_FORGE_NODE0_HOST=<coordinator-host>
 export MODEL_FORGE_NODE1_HOST=<worker-host>
 export MODEL_FORGE_NODE0_USER=<ssh-user>
 export MODEL_FORGE_NODE1_USER=<ssh-user>
+export MODEL_FORGE_CLUSTER_WORK_DIR=<repo-path-on-each-node>
 export MODEL_FORGE_RDZV_ENDPOINT=<coordinator-host>:29500
 ```
 
@@ -55,6 +56,30 @@ Strict mode is the preflight gate before a real run:
 
 Strict mode fails when required env-backed host, user, or work-dir values are
 missing.
+
+## Sync And Health
+
+Before any real multi-node training, serving, quantization, ablation, or eval
+run, sync the repo to worker nodes and probe every node:
+
+```bash
+./forge cluster sync \
+  --config configs/clusters/my_cluster.yaml \
+  --execute
+
+./forge cluster health \
+  --config configs/clusters/my_cluster.yaml
+```
+
+`cluster sync` uses `rsync` over SSH and skips only local caches and the root
+`runs/` directory by default. It does not commit private hostnames or paths; the
+inventory still resolves them from env vars or an untracked private config.
+
+`cluster health` probes all nodes in parallel and writes JSON evidence under
+`reports/generated/cluster/`. It checks that the repo exists, `forge` exists,
+Git branch/head/status are visible, `nvidia-smi` responds, and RAM/disk
+headroom is available. Treat a failed health probe as a hard stop for heavy
+jobs.
 
 ## Plan
 

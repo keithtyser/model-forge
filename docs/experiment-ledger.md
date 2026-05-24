@@ -879,6 +879,33 @@ them against the current `./forge --help` command surface, and fails if a
 missing command is not explicitly marked as target/planned CLI. `./forge doctor`
 now runs the same check so future handoffs catch command drift automatically.
 
+## Cluster: DGX Spark x2 Sync And Health
+
+Status: implemented and Spark-cluster validated.
+
+Purpose: make two-node Spark execution a real preflight gate instead of a
+paper config. Heavy model jobs should sync code to worker nodes, probe both
+GB10 systems, and only then launch through guarded workload-specific paths.
+
+Commands run on 2026-05-24:
+
+```text
+./forge cluster sync --config configs/clusters/dgx_spark_x2.example.yaml --execute
+./forge cluster health --config configs/clusters/dgx_spark_x2.example.yaml
+```
+
+Observed local cluster:
+
+```text
+coordinator: private local Spark / NVIDIA GB10 / ~128 GB RAM
+worker: private worker Spark / NVIDIA GB10 / ~128 GB RAM
+declared cluster memory: 256 GB
+health result: both nodes OK
+```
+
+Evidence was written under `reports/generated/cluster/`. Those generated JSON
+files stay out of Git, but the reusable sync/health commands are now tracked.
+
 ## Ablation: Gemopus FT Local Abli
 
 Status: completed before FT work.

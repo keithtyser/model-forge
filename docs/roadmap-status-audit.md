@@ -23,7 +23,8 @@ This file is generated from the prioritized backlog in
 | State | Count |
 |---|---:|
 | planned | 67 |
-| smoke_validated | 28 |
+| smoke_validated | 27 |
+| spark_cluster_validated | 1 |
 | spark_single_node_validated | 1 |
 
 ## Findings
@@ -56,7 +57,7 @@ No status audit findings.
 | MF-0106 | P0: Behavior editing | scaffolded | planned | Add redacted public risk-report mode and private raw-output retention |
 | MF-0107 | P0: Behavior editing | not_started | planned | Add release classes and release-class validators |
 | MF-0108 | P0: Behavior editing | tested | planned | Add zero_refusal_capability_retention objective gates |
-| MF-0200 | P0: Serving | tested | smoke_validated | Add generic cluster inventory planner and DGX Spark x2 example |
+| MF-0200 | P0: Serving | tested | spark_cluster_validated | Add generic cluster inventory planner and DGX Spark x2 example |
 | MF-0201 | P0: Serving | tested | smoke_validated | Add forge bench serve |
 | MF-0202 | P0: Serving | tested | smoke_validated | Add DGX Spark vLLM sweep config |
 | MF-0203 | P0: Serving | tested | smoke_validated | Add serving workload definitions |

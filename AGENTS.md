@@ -242,6 +242,8 @@ Validate or plan cluster usage:
 
 ```bash
 ./forge cluster doctor --config configs/clusters/dgx_spark_x2.example.yaml
+./forge cluster sync --config configs/clusters/dgx_spark_x2.example.yaml
+./forge cluster health --config configs/clusters/dgx_spark_x2.example.yaml
 ./forge cluster plan \
   --config configs/clusters/dgx_spark_x2.example.yaml \
   --workload train \
