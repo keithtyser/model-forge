@@ -73,6 +73,15 @@ class VariantGraphTests(unittest.TestCase):
         self.assertEqual(qwen36["node_count"], 4)
         self.assertEqual(ancestry(qwen36, "local_abli"), ["base", "local_abli"])
 
+    def test_llama_family_config_is_graph_ready(self) -> None:
+        graph = variant_graph("llama31_8b")
+        self.assertEqual(graph["node_count"], 5)
+        self.assertEqual(ancestry(graph, "local_ft_abli"), ["base", "local_ft", "local_ft_abli"])
+        targets = {edge["target"]: edge for edge in graph["edges"]}
+        self.assertEqual(targets["local_abli"]["transform"]["type"], "behavior_edit")
+        self.assertEqual(targets["base_nvfp4_blackwell_runtime"]["transform"]["type"], "quantize")
+        self.assertEqual(validate_family_config(load_family("llama31_8b")), [])
+
     def test_family_config_validation_requires_source_edges_for_derived_variants(self) -> None:
         family = load_family("qwen35_9b")
         self.assertEqual(validate_family_config(family), [])

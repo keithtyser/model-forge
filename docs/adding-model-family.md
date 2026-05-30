@@ -16,7 +16,8 @@ Create or update:
 - `configs/quantization/<family>_nvfp4_modelopt.yaml` before self-quantization
 - `configs/promotion/<family>.yaml` before promotion claims
 
-Use `qwen35_9b.yaml` and `qwen36_27b.yaml` as the current non-Gemma examples.
+Use `qwen35_9b.yaml`, `qwen36_27b.yaml`, and `llama31_8b.yaml` as the current
+non-Gemma examples.
 
 ## Family Config Checklist
 

@@ -23,6 +23,12 @@ class ModelForgeDgxServeTests(unittest.TestCase):
             family = {
                 "models_dir_env": "MODEL_FORGE_TEST_MODELS_DIR",
                 "default_models_dir": str(root),
+                "architecture": {
+                    "chat_template": {
+                        "tool_call_parser": "llama3_json",
+                        "default_chat_template_kwargs": {"enable_thinking": False},
+                    }
+                },
                 "variants": {
                     "base": {
                         "repo_id": "org/base",
@@ -60,6 +66,12 @@ class ModelForgeDgxServeTests(unittest.TestCase):
             family = {
                 "models_dir_env": "MODEL_FORGE_TEST_MODELS_DIR",
                 "default_models_dir": str(root),
+                "architecture": {
+                    "chat_template": {
+                        "tool_call_parser": "llama3_json",
+                        "default_chat_template_kwargs": {"enable_thinking": False},
+                    }
+                },
                 "variants": {
                     "base": {
                         "repo_id": "org/base",
@@ -92,6 +104,12 @@ class ModelForgeDgxServeTests(unittest.TestCase):
             family = {
                 "models_dir_env": "MODEL_FORGE_TEST_MODELS_DIR",
                 "default_models_dir": str(root),
+                "architecture": {
+                    "chat_template": {
+                        "tool_call_parser": "llama3_json",
+                        "default_chat_template_kwargs": {"enable_thinking": False},
+                    }
+                },
                 "variants": {
                     "base": {
                         "repo_id": "org/base",
@@ -105,6 +123,9 @@ class ModelForgeDgxServeTests(unittest.TestCase):
 
             self.assertEqual(env["MODEL_FORGE_MODEL"], str(root / "base-model"))
             self.assertEqual(env["MODEL_FORGE_SERVED_MODEL_NAME"], "org/base")
+            self.assertEqual(env["VLLM_TOOL_CALL_PARSER"], "llama3_json")
+            self.assertEqual(env["VLLM_ENABLE_AUTO_TOOL_CHOICE"], "true")
+            self.assertEqual(env["VLLM_DEFAULT_CHAT_TEMPLATE_KWARGS"], '{"enable_thinking": false}')
             self.assertNotIn("MODEL_FORGE_LORA_MODULES", env)
             self.assertEqual(details["adapter"], "")
 
@@ -115,6 +136,13 @@ class ModelForgeDgxServeTests(unittest.TestCase):
         self.assertIn("--mem-swap-limit-gb", script)
         self.assertIn("--max-num-seqs", script)
         self.assertIn("local/qwen35-9b-teacher", script)
+
+    def test_generic_vllm_launcher_uses_model_family_env(self) -> None:
+        script = (REPO_DIR / "scripts" / "serve_vllm_dgx_spark.sh").read_text(encoding="utf-8")
+        self.assertIn("MODEL=${1:-${MODEL_FORGE_MODEL:-Qwen/Qwen3.5-9B}}", script)
+        self.assertIn("SERVED_MODEL_NAME=${MODEL_FORGE_SERVED_MODEL_NAME:-}", script)
+        self.assertIn("--served-model-name", script)
+        self.assertIn("--default-chat-template-kwargs", script)
 
 
 if __name__ == "__main__":

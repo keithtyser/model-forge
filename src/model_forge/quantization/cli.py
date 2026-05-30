@@ -639,6 +639,20 @@ def build_runtime_command(config: QuantizationConfig, source: QuantizationSource
     return ["cd", spark_dir, "&&", *env_prefix, *launcher, *serve]
 
 
+def runtime_source(config: QuantizationConfig, source: QuantizationSource) -> QuantizationSource:
+    runtime = dict(config.runtime)
+    model_id = str(runtime.get("model_id") or source.model_id)
+    served_model_name = str(runtime.get("served_model_name") or source.served_model_name)
+    local_path = Path(str(runtime["local_path"])).expanduser() if runtime.get("local_path") else None
+    return QuantizationSource(
+        family=source.family,
+        variant=config.target_variant or source.variant,
+        model_id=model_id,
+        served_model_name=served_model_name,
+        local_path=local_path,
+    )
+
+
 def build_plan(
     config: QuantizationConfig,
     *,
@@ -651,6 +665,7 @@ def build_plan(
 ) -> dict[str, Any]:
     env = env or os.environ
     source = resolve_source(config, family, variant, env)
+    candidate = runtime_source(config, source) if config.runtime else source
     actual_run_id = run_id or plan_run_id(config, source)
     output_root = resolve_repo_path(output_dir or config.outputs.get("reports_dir") or "reports/generated/quantization")
     plan_output_dir = output_root / actual_run_id
@@ -724,7 +739,7 @@ def build_plan(
             "plan_json": "quantization_plan.json",
             "plan_md": "quantization_plan.md",
         },
-        "launch_command": build_runtime_command(config, source) if config.runtime else [],
+        "launch_command": build_runtime_command(config, candidate) if config.runtime else [],
         "validation_gates": list(config.evals.get("required") or []),
         "execution_contract": {
             "starts_heavy_job": False,

@@ -9,7 +9,9 @@ backend: vllm_blackwell
 objective: quantized_quality_retention
 hardware_profile: dgx_spark_x2
 
-target_variant: nvfp4_blackwell_runtime
+family: llama31_8b
+source_variant: base
+target_variant: base_nvfp4_blackwell_runtime
 
 runtime:
   model_id: nvidia/Llama-3.1-8B-Instruct-NVFP4

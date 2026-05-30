@@ -1,0 +1,82 @@
+name: llama31_8b
+display_name: Llama 3.1 8B Instruct
+
+models_dir_env: MODEL_FORGE_MODELS_DIR
+default_models_dir: ~/models
+
+architecture:
+  family: llama
+  parameter_scale: 8b
+  tokenizer_family: llama3
+  chat_template:
+    tool_call_parser: llama3_json
+  context_length: 131072
+  target_discovery:
+    inspect_before_training_or_ablation: true
+    common_attention_patterns:
+      - q_proj
+      - k_proj
+      - v_proj
+      - o_proj
+    common_mlp_patterns:
+      - gate_proj
+      - up_proj
+      - down_proj
+    edit_exclusion_patterns:
+      - embed_tokens
+      - lm_head
+    router_or_expert_policy: not_applicable_dense
+
+variants:
+  base:
+    repo_id: meta-llama/Llama-3.1-8B-Instruct
+    local_dir: Llama-3.1-8B-Instruct
+    served_model_name: meta-llama/Llama-3.1-8B-Instruct
+  local_ft:
+    repo_id: meta-llama/Llama-3.1-8B-Instruct
+    local_dir: Llama-3.1-8B-Instruct-local-ft-v0
+    served_model_name: local/llama31-8b-local-ft-v0
+    adapter: true
+    base_variant: base
+    downloadable: false
+  local_abli:
+    repo_id: meta-llama/Llama-3.1-8B-Instruct
+    local_dir: Llama-3.1-8B-Instruct-local-abliterated-v0
+    served_model_name: local/llama31-8b-local-abliterated-v0
+    base_variant: base
+    downloadable: false
+  local_ft_abli:
+    repo_id: meta-llama/Llama-3.1-8B-Instruct
+    local_dir: Llama-3.1-8B-Instruct-local-ft-abliterated-v0
+    served_model_name: local/llama31-8b-local-ft-abliterated-v0
+    base_variant: local_ft
+    downloadable: false
+  base_nvfp4_blackwell_runtime:
+    repo_id: nvidia/Llama-3.1-8B-Instruct-NVFP4
+    local_dir: Llama-3.1-8B-Instruct-NVFP4
+    served_model_name: model-forge/llama31-8b-instruct-nvfp4-blackwell
+    base_variant: base
+    quantization: nvfp4
+    downloadable: true
+
+serve:
+  script: scripts/serve_vllm_dgx_spark.sh
+  default_gpu_memory_utilization: "0.80"
+  default_max_model_len: "8192"
+
+eval:
+  config: configs/experiments/llama31_8b_v0.yaml
+  artifact_config: configs/experiments/llama31_8b_artifacts_v0.yaml
+  output_root: results/llama31_8b_v0/base
+  run_prefix: llama31_8b
+  smoke_suffix: "{family}_{variant}_smoke"
+  full_suffix: "{family}_{variant}_dgx_spark"
+  artifact_suffix: "{family}_{variant}_artifacts_dgx_spark"
+
+comparison:
+  output_dir: reports/generated/llama31_8b_comparison
+
+external:
+  default_tool: lm-eval
+  default_tasks: ifeval
+  output_root: reports/generated/llama31_8b_external

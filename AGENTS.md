@@ -13,8 +13,9 @@ future open releases should fit the same family-driven workflow.
 
 When adding support for a new model, prefer model-family configuration and
 reusable pipeline code over one-off scripts.
-Current non-Gemma family configs are `qwen35_9b` and `qwen36_27b`; use them to
-check that new work remains generic rather than Gemma-specific.
+Current non-Gemma family configs are `qwen35_9b`, `qwen36_27b`, and
+`llama31_8b`; use them to check that new work remains generic rather than
+Gemma-specific.
 
 ## First Things To Inspect
 

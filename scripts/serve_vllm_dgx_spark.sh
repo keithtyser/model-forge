@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODEL=${1:-Qwen/Qwen3.5-9B}
+MODEL=${1:-${MODEL_FORGE_MODEL:-Qwen/Qwen3.5-9B}}
+SERVED_MODEL_NAME=${MODEL_FORGE_SERVED_MODEL_NAME:-}
 HOST=${HOST:-0.0.0.0}
 PORT=${PORT:-8000}
 MAX_MODEL_LEN=${MAX_MODEL_LEN:-32768}
@@ -42,8 +43,14 @@ fi
 if [[ -n "${VLLM_REASONING_PARSER:-}" ]]; then
   EXTRA_ARGS+=(--reasoning-parser "$VLLM_REASONING_PARSER")
 fi
+if [[ -n "${VLLM_DEFAULT_CHAT_TEMPLATE_KWARGS:-}" ]]; then
+  EXTRA_ARGS+=(--default-chat-template-kwargs "$VLLM_DEFAULT_CHAT_TEMPLATE_KWARGS")
+fi
 if [[ -n "${VLLM_SPECULATIVE_CONFIG:-}" ]]; then
   EXTRA_ARGS+=(--speculative-config "$VLLM_SPECULATIVE_CONFIG")
+fi
+if [[ -n "$SERVED_MODEL_NAME" ]]; then
+  EXTRA_ARGS+=(--served-model-name "$SERVED_MODEL_NAME")
 fi
 
 exec vllm serve "$MODEL" \

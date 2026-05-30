@@ -6,10 +6,10 @@ combined post-training workflow improve the model without breaking capability,
 format following, or operational behavior?
 
 The repo is model-family driven. Gemma 4 is the first fully exercised family on
-DGX Spark, and Qwen family configs are now wired as the first non-Gemma
-generalization target. The intended shape is general: add a model family, tune
-or edit it with calibrated configs, evaluate every candidate, then publish the
-recipe and artifacts needed to reproduce the result.
+DGX Spark, while Qwen and Llama configs now serve as non-Gemma generalization
+targets. The intended shape is general: add a model family, tune or edit it with
+calibrated configs, evaluate every candidate, then publish the recipe and
+artifacts needed to reproduce the result.
 
 ## What It Does
 
@@ -61,6 +61,7 @@ List configured families:
 ./forge families
 ./forge variants graph qwen35_9b
 ./forge variants architecture-audit qwen35_9b
+./forge variants graph llama31_8b
 ```
 
 Download a configured family:
@@ -68,6 +69,7 @@ Download a configured family:
 ```bash
 ./forge download gemma4_26b_a4b all
 ./forge download qwen35_9b base
+./forge download llama31_8b base
 ```
 
 Serve one model in one terminal:
@@ -87,6 +89,7 @@ Run evals from another terminal:
 ```bash
 ./forge eval gemma4_26b_a4b base --internal
 ./forge eval qwen35_9b base --smoke
+./forge eval llama31_8b base --smoke
 ./forge eval gemma4_26b_a4b base --artifact
 ./forge eval gemma4_26b_a4b base --external
 ./forge compare gemma4_26b_a4b

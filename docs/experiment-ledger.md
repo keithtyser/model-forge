@@ -255,6 +255,52 @@ Result:
 - local base config metadata is read when present, with no model-weight load
 - target discovery is no longer only prose in the roadmap
 
+## Multi-Family: Llama Family Plan
+
+Status: implemented and pushed as config/schema work. No model server, training
+run, quantization run, or eval job was started.
+
+Hypothesis: the family workflow should not stop at Gemma and Qwen. A Llama
+family plan should use the same source graph, architecture audit, tokenizer
+audit, serving hook, eval configs, and NVFP4 runtime-import contract so future
+agents can port post-training recipes without adding Llama-only scripts.
+
+Changes:
+
+- added `configs/model_families/llama31_8b.yaml`
+- added `configs/experiments/llama31_8b_v0.yaml`
+- added `configs/experiments/llama31_8b_artifacts_v0.yaml`
+- added base, local FT, local abli, local FT+abli, and
+  `base_nvfp4_blackwell_runtime` variant nodes
+- wired Llama chat-template serving defaults through `./forge serve`
+- updated the generic vLLM Spark launcher to accept served-model-name and
+  default chat-template kwargs from family config
+- updated `configs/quantization/nvfp4_blackwell_runtime.yaml` to use Llama 3.1
+  8B as the source-vs-NVFP4 runtime example
+- fixed quantization planning so runtime-import plans compare against the
+  unquantized source variant while launching the quantized runtime checkpoint
+- updated README, AGENTS, status, adding-model-family, and roadmap docs
+
+Validation:
+
+```bash
+.venv/bin/python -m unittest tests.test_variants tests.test_model_forge_dgx tests.test_quantization_cli tests.test_doctor -v
+./forge variants graph llama31_8b --variant base_nvfp4_blackwell_runtime --json
+./forge variants architecture-audit llama31_8b --json
+./forge variants tokenizer-audit llama31_8b --variant base --json
+./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --run-id llama31_unit --json
+```
+
+Result:
+
+- `llama31_8b` graph exposes 5 variants and 4 source edges
+- architecture and tokenizer audits pass in metadata mode, with expected
+  missing-local-dir warnings because the Llama checkpoint is not present here
+- the NVFP4 runtime plan now records source model
+  `meta-llama/Llama-3.1-8B-Instruct` and launches
+  `nvidia/Llama-3.1-8B-Instruct-NVFP4`
+- MF-0605 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

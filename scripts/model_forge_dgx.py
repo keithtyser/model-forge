@@ -129,6 +129,15 @@ def configure_serving_variant(family: dict[str, Any], variant: str, env: dict[st
     path = variant_local_path(family, variant)
     if not path.is_dir():
         raise SystemExit(f"model path does not exist: {path}")
+    chat_template = (family.get("architecture") or {}).get("chat_template") or {}
+    if isinstance(chat_template, dict):
+        if chat_template.get("tool_call_parser"):
+            env.setdefault("VLLM_TOOL_CALL_PARSER", str(chat_template["tool_call_parser"]))
+            env.setdefault("VLLM_ENABLE_AUTO_TOOL_CHOICE", "true")
+        if chat_template.get("reasoning_parser"):
+            env.setdefault("VLLM_REASONING_PARSER", str(chat_template["reasoning_parser"]))
+        if chat_template.get("default_chat_template_kwargs") is not None:
+            env.setdefault("VLLM_DEFAULT_CHAT_TEMPLATE_KWARGS", json.dumps(chat_template["default_chat_template_kwargs"]))
 
     details = {
         "model": str(path),

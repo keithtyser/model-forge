@@ -34,8 +34,11 @@ class QuantizationCliTests(unittest.TestCase):
 
         self.assertEqual(plan["quantization"]["method"], "nvfp4_runtime")
         self.assertFalse(plan["target"]["checkpoint_written_by_this_plan"])
-        self.assertEqual(plan["source"]["model_id"], "nvidia/Llama-3.1-8B-Instruct-NVFP4")
+        self.assertEqual(plan["source"]["model_id"], "meta-llama/Llama-3.1-8B-Instruct")
+        self.assertEqual(plan["target"]["variant"], "base_nvfp4_blackwell_runtime")
+        self.assertEqual(plan["runtime"]["model_id"], "nvidia/Llama-3.1-8B-Instruct-NVFP4")
         launch = " ".join(plan["launch_command"])
+        self.assertIn("vllm serve nvidia/Llama-3.1-8B-Instruct-NVFP4", launch)
         self.assertIn("${MODEL_FORGE_SPARK_CLUSTER_NODES", launch)
         self.assertIn("vllm-node-tf5", launch)
         self.assertIn("--quantization modelopt", launch)

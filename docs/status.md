@@ -11,6 +11,10 @@ This is the short handoff state for humans and agents. Use
 - Qwen 3.5 9B and Qwen 3.6 27B now have model-family configs with base,
   local-FT, local-abli, and local-FT-abli variant nodes, Qwen chat-template
   defaults, serving/eval hooks, and doctor-audited source edges.
+- Llama 3.1 8B Instruct now has the same first-class family plan shape,
+  including base, local-FT, local-abli, local-FT-abli, and Blackwell NVFP4
+  runtime-import variants. Its NVFP4 plan compares against the unquantized base
+  source while launching the quantized runtime checkpoint.
 - `docs/adding-model-family.md` now defines the portable checklist for adding
   non-Gemma families and is required by `./forge doctor`.
 - Architecture target-discovery checks are now wired through
