@@ -231,7 +231,15 @@ def container_model_path(source: QuantizationSource, env: Mapping[str, str]) -> 
 def modelopt_export_path(config: QuantizationConfig, source: QuantizationSource, output_dir: Path) -> Path:
     explicit = config.export.get("output_subdir")
     target = config.target_variant or f"{source.variant or 'runtime'}_{config.method}_{config.backend}"
-    subdir = render_template(str(explicit or target), {"source_variant": source.variant or "runtime", "method": config.method, "backend": config.backend})
+    subdir = render_template(
+        str(explicit or target),
+        {
+            "source_variant": source.variant or "runtime",
+            "target_variant": target,
+            "method": config.method,
+            "backend": config.backend,
+        },
+    )
     return output_dir / sanitize_run_id(subdir)
 
 
@@ -355,9 +363,11 @@ def build_modelopt_export_command(
     shell_command = ["nice", "-n", str(docker.get("nice", 10)), *docker_run]
     systemd_scope = dict(export.get("systemd_scope") or {})
     if truthy(systemd_scope.get("enabled"), True):
+        scope_command = ["systemd-run", "--scope"]
+        if truthy(systemd_scope.get("user"), False):
+            scope_command = ["systemd-run", "--user", "--scope"]
         shell_command = [
-            "systemd-run",
-            "--scope",
+            *scope_command,
             "-p",
             f"CPUQuota={systemd_scope.get('CPUQuota', '80%')}",
             "-p",
@@ -402,6 +412,7 @@ def build_modelopt_export_command(
             "lock_path": display_path(REPO_DIR / "reports" / "generated" / ".locks" / "quantization_export.lock"),
             "systemd_scope": {
                 "enabled": truthy(systemd_scope.get("enabled"), True),
+                "user": truthy(systemd_scope.get("user"), False),
                 "CPUQuota": str(systemd_scope.get("CPUQuota", "80%")),
                 "MemoryMax": str(systemd_scope.get("MemoryMax", "85%")),
                 "IOWeight": int(systemd_scope.get("IOWeight", 100)),
@@ -962,6 +973,7 @@ def add_export_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("family", nargs="?", help="Model family; defaults to config family")
     parser.add_argument("variant", nargs="?", help="Source variant; defaults to config source_variant")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument("--target-variant", help="Target variant label for export metadata")
     parser.add_argument("--output-dir", type=Path, help="Quantized checkpoint output root")
     parser.add_argument("--run-id", help="Stable export run id")
     parser.add_argument("--write-plan", action="store_true", help="Write quantization_export_plan.json")
@@ -974,6 +986,17 @@ def matrix_entries(config: QuantizationConfig) -> list[dict[str, Any]]:
     if not isinstance(entries, list):
         raise ValueError("matrix.variants must be a list")
     return [dict(item) for item in entries if isinstance(item, Mapping)]
+
+
+def filter_matrix_entries(entries: list[dict[str, Any]], variants: str | None) -> list[dict[str, Any]]:
+    wanted = set(comma_list(variants))
+    if not wanted:
+        return entries
+    filtered = [entry for entry in entries if str(entry.get("source_variant") or "") in wanted]
+    missing = sorted(wanted - {str(entry.get("source_variant") or "") for entry in filtered})
+    if missing:
+        raise ValueError(f"matrix variants not found: {', '.join(missing)}")
+    return filtered
 
 
 def matrix_workers(config: QuantizationConfig, env: Mapping[str, str] | None = None) -> list[str]:
@@ -1025,6 +1048,7 @@ def main() -> None:
 
     matrix_parser = subparsers.add_parser("matrix-plan", help="Print export plans for all variants in config matrix")
     matrix_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    matrix_parser.add_argument("--variants", help="Comma-separated source variants to include from the matrix")
     matrix_parser.add_argument("--output-dir", type=Path, help="Quantized checkpoint output root")
     matrix_parser.add_argument("--write-plan", action="store_true", help="Write matrix export plans under the output root")
     matrix_parser.add_argument("--json", action="store_true", help="Print JSON matrix")
@@ -1068,10 +1092,31 @@ def main() -> None:
 
     if args.command == "export":
         source = resolve_source(config, args.family, args.variant, os.environ)
-        actual_run_id = sanitize_run_id(args.run_id or f"{config.name}_{source.variant or 'runtime'}")
+        actual_run_id = sanitize_run_id(args.run_id or f"{config.name}_{args.target_variant or source.variant or 'runtime'}")
         output_root = resolve_repo_path(args.output_dir or config.export.get("output_root") or config.outputs.get("models_dir") or "~/models/model-forge-quantized")
+        export_config = config
+        if args.target_variant:
+            export_config = QuantizationConfig(
+                name=config.name,
+                description=config.description,
+                method=config.method,
+                backend=config.backend,
+                objective=config.objective,
+                family=config.family,
+                source_variant=config.source_variant,
+                target_variant=sanitize_run_id(args.target_variant),
+                hardware_profile=config.hardware_profile,
+                calibration=config.calibration,
+                exclusions=config.exclusions,
+                runtime=config.runtime,
+                export=config.export,
+                matrix=config.matrix,
+                outputs=config.outputs,
+                evals=config.evals,
+                raw_config=config.raw_config,
+            )
         export_plan = build_modelopt_export_command(
-            config,
+            export_config,
             source,
             output_dir=output_root,
             run_id=actual_run_id,
@@ -1090,7 +1135,7 @@ def main() -> None:
         output_root = resolve_repo_path(args.output_dir or config.export.get("output_root") or config.outputs.get("models_dir") or "~/models/model-forge-quantized")
         plans = []
         workers = matrix_workers(config)
-        for entry in matrix_entries(config):
+        for entry in filter_matrix_entries(matrix_entries(config), args.variants):
             index = len(plans)
             family = str(entry.get("family") or config.family or "")
             variant = str(entry.get("source_variant") or "")

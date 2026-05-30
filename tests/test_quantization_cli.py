@@ -10,6 +10,7 @@ from model_forge.quantization.cli import (
     build_card,
     build_modelopt_export_command,
     build_plan,
+    filter_matrix_entries,
     load_quantization_config,
     matrix_entries,
     matrix_workers,
@@ -182,7 +183,7 @@ class QuantizationCliTests(unittest.TestCase):
         joined = " ".join(command)
         self.assertEqual(export["method"], "nvfp4")
         self.assertEqual(export["backend"], "modelopt")
-        self.assertEqual(command[:2], ["systemd-run", "--scope"])
+        self.assertEqual(command[:3], ["systemd-run", "--user", "--scope"])
         self.assertIn("CPUQuota=80%", command)
         self.assertIn("MemoryMax=85%", command)
         self.assertIn("model-forge-modelopt-nvfp4:0.43.0", command)
@@ -194,6 +195,7 @@ class QuantizationCliTests(unittest.TestCase):
         self.assertEqual(export["resource_policy"]["stop_if_memory_available_below_fraction"], 0.15)
         self.assertEqual(export["resource_policy"]["watchdog_poll_seconds"], 2.0)
         self.assertEqual(export["resource_policy"]["systemd_scope"]["MemoryMax"], "85%")
+        self.assertTrue(export["resource_policy"]["systemd_scope"]["user"])
         self.assertIn("quantization_export.lock", export["resource_policy"]["lock_path"])
 
     def test_gemma_nvfp4_matrix_has_variant_specific_baselines(self) -> None:
@@ -211,6 +213,13 @@ class QuantizationCliTests(unittest.TestCase):
 
         self.assertEqual(matrix_workers(config, {"MODEL_FORGE_QUANT_WORKERS": "local,spark-b"}), ["local", "spark-b"])
         self.assertEqual(matrix_workers(config, {"UNRELATED": "x"}), ["local"])
+
+    def test_matrix_entries_can_filter_source_variants(self) -> None:
+        config = load_quantization_config(Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml"))
+        entries = filter_matrix_entries(matrix_entries(config), "base,local_ft")
+        self.assertEqual([entry["source_variant"] for entry in entries], ["base", "local_ft"])
+        with self.assertRaises(ValueError):
+            filter_matrix_entries(matrix_entries(config), "missing_variant")
 
     def test_modelopt_export_allows_calibration_dataset_override(self) -> None:
         config = load_quantization_config(Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml"))
@@ -239,6 +248,34 @@ class QuantizationCliTests(unittest.TestCase):
         self.assertIn("--dataset cnn_dailymail,nemotron-post-training-dataset-v2", joined)
         self.assertIn("--calib_size 256,256", joined)
         self.assertIn("--calib_seq 4096", joined)
+
+    def test_modelopt_export_output_can_follow_target_variant(self) -> None:
+        config = load_quantization_config(Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml"))
+        config = config.__class__(
+            **{
+                **config.__dict__,
+                "target_variant": "local_ft_nvfp4_modelopt",
+            }
+        )
+        source = resolve_source(
+            config,
+            "gemma4_26b_a4b",
+            "local_ft",
+            {"MODEL_FORGE_MODELS_DIR": "/models-host"},
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp) / "quantized" / "gemma4_26b_a4b"
+            export = build_modelopt_export_command(
+                config,
+                source,
+                output_dir=output_root,
+                run_id="unit_local_ft_nvfp4",
+                env={"MODEL_FORGE_MODELS_DIR": "/models-host", "HF_HOME": "/hf-cache"},
+            )
+
+        self.assertEqual(export["target"]["variant"], "local_ft_nvfp4_modelopt")
+        self.assertEqual(export["target"]["host_output_path"], str(output_root / "local_ft_nvfp4_modelopt"))
+        self.assertIn("/workspace/output_models/local_ft_nvfp4_modelopt", export["command"])
 
 
 if __name__ == "__main__":

@@ -298,17 +298,20 @@ For self-quantization, use the ModelOpt export runner and the matrix config:
 
 ```bash
 ./forge quantize matrix-plan \
-  --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml
+  --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml \
+  --variants base,local_ft
 ```
 
 Set `MODEL_FORGE_QUANT_WORKERS=local,<ssh-host>` to distribute independent
 variant exports across a Spark cluster. Do not commit those worker names or IPs.
 Run at most one export per Spark node, and do not launch export commands outside
 `./forge quantize export`; the runner has a runtime memory watchdog and Docker
-cleanup path. The generated command also uses `systemd-run --scope`, `nice`,
-Docker CPU/memory limits, and a checkout-local export lock. If `systemd-run`
-fails or asks for interactive authorization, stop and fix the host execution
-path; do not rerun the same heavy command without equivalent limits.
+cleanup path. The generated command defaults to `systemd-run --user --scope`,
+`nice`, Docker CPU/memory limits, and a checkout-local export lock. If the
+configured systemd mode fails or asks for interactive authorization, stop and
+fix the host execution path; do not rerun the same heavy command without
+equivalent limits. Use `--target-variant` on single exports so metadata matches
+the actual matrix candidate.
 
 ## Abliteration Rules
 

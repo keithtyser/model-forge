@@ -227,7 +227,7 @@ Quantization:
 
 ```bash
 ./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan
-./forge quantize matrix-plan --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml
+./forge quantize matrix-plan --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --variants base,local_ft
 ./forge quantize card \
   --config configs/quantization/nvfp4_blackwell_runtime.yaml \
   --source-serving-summary <source>/summary.json \

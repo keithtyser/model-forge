@@ -65,7 +65,8 @@ an environment variable instead of committing hosts:
 ```bash
 export MODEL_FORGE_QUANT_WORKERS=local,spark-worker
 ./forge quantize matrix-plan \
-  --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml
+  --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml \
+  --variants base,local_ft
 ```
 
 Run at most one export per Spark node. ModelOpt export currently runs as one
@@ -73,6 +74,17 @@ heavy process per assigned worker; serving and eval should use the two-node vLLM
 path when the quantized checkpoint loads. The matrix command is a planner: it
 assigns variants to workers and prints the local or SSH command for each worker
 without starting a heavy process.
+
+Use `--variants` when only a subset of source checkpoints is present on the
+assigned workers. The target variant for single exports can be set explicitly:
+
+```bash
+./forge quantize export gemma4_26b_a4b local_ft \
+  --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml \
+  --target-variant local_ft_nvfp4_modelopt \
+  --run-id gemma4_local_ft_nvfp4_modelopt \
+  --write-plan --execute
+```
 
 Production calibration can use NVIDIA Nemotron post-training data when the HF
 account has access:
@@ -92,8 +104,9 @@ The export runner now has hard host guardrails:
 
 - nonblocking lock under `reports/generated/.locks/` so the same checkout cannot
   start two exports at once
-- `systemd-run --scope` wrapper with recipe-controlled CPU, memory, and IO
-  limits
+- `systemd-run --user --scope` wrapper with recipe-controlled CPU, memory, and
+  IO limits by default; set `export.systemd_scope.user: false` only on hosts
+  where noninteractive system scopes are available
 - `nice` plus Docker `--cpus`, `--memory`, `--memory-swap`, and `--shm-size`
   limits
 - preflight memory and disk checks before Docker starts

@@ -45,13 +45,14 @@ export:
   base_image: vllm-node-tf5:latest
   modelopt_version: 0.43.0
   output_root: ~/models/model-forge-quantized/gemma4_26b_a4b
-  output_subdir: "{source_variant}_nvfp4_modelopt"
+  output_subdir: "{target_variant}"
   start_if_memory_available_above_fraction: 0.20
   stop_if_memory_available_below_fraction: 0.15
   watchdog_poll_seconds: 2
   require_disk_free_fraction: 0.15
   systemd_scope:
     enabled: true
+    user: true
     CPUQuota: "80%"
     MemoryMax: "85%"
     IOWeight: 100
