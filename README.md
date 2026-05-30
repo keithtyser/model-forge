@@ -323,6 +323,8 @@ forge           User-facing CLI wrapper
 
 See [configs/README.md](configs/README.md) and
 [scripts/README.md](scripts/README.md) for directory-specific guidance.
+See [docs/adding-model-family.md](docs/adding-model-family.md) before adding a
+new architecture or checkpoint family.
 See [docs/huggingface-publishing.md](docs/huggingface-publishing.md) for Hub
 release planning, model-card generation, and public/private release gates.
 

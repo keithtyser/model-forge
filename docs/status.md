@@ -11,6 +11,8 @@ This is the short handoff state for humans and agents. Use
 - Qwen 3.5 9B and Qwen 3.6 27B now have model-family configs with base,
   local-FT, local-abli, and local-FT-abli variant nodes, Qwen chat-template
   defaults, serving/eval hooks, and doctor-audited source edges.
+- `docs/adding-model-family.md` now defines the portable checklist for adding
+  non-Gemma families and is required by `./forge doctor`.
 - Gemma 4 A4B is the first worked family for base, downloaded FT, downloaded
   abli, local base abli, local FT, and local FT abli comparisons.
 - Internal evals now cover refusal suppression, benign paired quality,

@@ -35,6 +35,7 @@ REQUIRED_FILES = (
     "AGENTS.md",
     "docs/status.md",
     "docs/artifact-retention.md",
+    "docs/adding-model-family.md",
     "docs/experiment-ledger.md",
     "docs/roadmap-status-audit.md",
     "docs/roadmaps/README.md",

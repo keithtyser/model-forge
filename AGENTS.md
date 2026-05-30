@@ -24,6 +24,8 @@ check that new work remains generic rather than Gemma-specific.
   validation state
 - `docs/artifact-retention.md`: what belongs in Git, local scratch, or Hugging
   Face
+- `docs/adding-model-family.md`: checklist for adding a portable non-Gemma
+  family
 - `docs/finetuning.md`: SFT/QLoRA workflow and promotion gates
 - `docs/abliteration.md`: refusal-ablation methodology and promotion criteria
 - `docs/evaluation-strategy.md`: eval design and interpretation

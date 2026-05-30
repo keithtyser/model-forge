@@ -7,3 +7,6 @@ experiment-specific history in `docs/experiment-ledger.md`.
 Roadmaps may preserve historical notes, placeholder local paths, or older plans
 for context. Do not treat them as the current operational source of truth unless
 `docs/status.md` or the experiment ledger points at a specific item.
+
+The current operational checklist for adding new model families lives in
+`docs/adding-model-family.md`.

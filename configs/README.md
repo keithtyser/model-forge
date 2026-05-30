@@ -43,6 +43,7 @@ and experiment constants here instead of hard-coding them in scripts.
 ## Rules
 
 - Prefer model-family config over one-off script edits.
+- Follow `docs/adding-model-family.md` when adding a new architecture family.
 - Use `~/models/...`, repo-relative paths, or explicit environment overrides
   instead of user-specific absolute paths.
 - Put architecture-specific constants in the family or recipe config: target

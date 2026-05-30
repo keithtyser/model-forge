@@ -184,6 +184,39 @@ Result:
   local abli output is not present yet, so non-strict tokenizer audit passes
   with a missing-local-dir warning
 
+## Multi-Family: Adding Model Family Checklist
+
+Status: implemented and pushed as docs plus doctor enforcement. No model server,
+training run, quantization run, or eval job was started.
+
+Hypothesis: family generalization needs an explicit handoff checklist that
+agents can follow when a new open model appears. The checklist should point to
+the same configs, audits, tokenizer checks, serving checks, and promotion
+evidence that the Gemma and Qwen paths use.
+
+Changes:
+
+- added `docs/adding-model-family.md`
+- added the checklist to `./forge doctor` required files
+- linked the checklist from README, AGENTS, config docs, status, and roadmap docs
+- marked `MF-0602` tested / smoke-validated in the roadmap
+
+Validation:
+
+```bash
+./forge doctor --json
+./forge roadmap audit --write-doc
+./forge roadmap cli-drift
+```
+
+Result:
+
+- the checklist is now a required handoff file
+- it covers required family files, family config fields, architecture facts,
+  smoke commands, and promotion evidence
+- future agents have a concrete non-Gemma onboarding path instead of relying on
+  roadmap prose
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,
