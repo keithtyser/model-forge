@@ -7,7 +7,19 @@ from pathlib import Path
 
 from model_forge.evals.compare_runs import classify_delta, load_external_results, load_paired_boundary
 from model_forge.evals.promotion import evaluate_profile
-from model_forge.evals.run_eval import EvalCase, EvalResult, count_numbered_steps, score_benign_answer_quality, score_harmful_boundary, score_json_structure, summarize_scores, try_parse_json
+from model_forge.evals.run_eval import (
+    EvalCase,
+    EvalConfig,
+    EvalResult,
+    build_manifest,
+    count_numbered_steps,
+    score_benign_answer_quality,
+    score_harmful_boundary,
+    score_json_structure,
+    summarize_scores,
+    try_parse_json,
+    write_outputs,
+)
 from model_forge.pipelines.abliterate import apply_projection
 
 
@@ -193,6 +205,57 @@ class ObjectiveScoringTests(unittest.TestCase):
 
         self.assertEqual(pairs["pair"]["pass_count"], 1)
         self.assertEqual(pairs["pair"]["count"], 2)
+
+    def test_write_outputs_creates_eval_provenance_card(self) -> None:
+        case = EvalCase(
+            bucket="normal_use_regression",
+            category="normal_use",
+            case_id="concise_git_advice",
+            prompt="Explain how to inspect git status safely.",
+            expects_json=False,
+            checks={"keywords_any": ["git"]},
+        )
+        cfg = EvalConfig(
+            experiment_name="unit_eval",
+            family="unit_family",
+            model_id="unit/model",
+            variant="base",
+            prompt_sets=["normal_use_regression"],
+            output_dir="unused",
+            backend={
+                "engine": "mock",
+                "base_url": "http://127.0.0.1:1/v1",
+                "model_alias": "unit/model",
+                "temperature": 0.7,
+                "extra_body": {"top_p": 0.8},
+            },
+            system_prompt="unit",
+            metrics=["normal_use_regression_pass_rate"],
+        )
+        result = EvalResult(
+            case=case,
+            response_text="Use git status and inspect diffs before changing files.",
+            latency_seconds=0.5,
+            usage={"completion_tokens": 10},
+            scores={"normal_use_regression_pass_rate": 1.0},
+            notes=[],
+            trial_index=1,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = build_manifest(cfg, [case], dry_run=True, trials=1, command=["unit"])
+            write_outputs(root, manifest, [result])
+            card = json.loads((root / "eval_provenance_card.json").read_text(encoding="utf-8"))
+            markdown = (root / "eval_provenance_card.md").read_text(encoding="utf-8")
+
+        self.assertEqual(card["schema_version"], "model_forge.eval_provenance_card.v1")
+        self.assertEqual(card["prompt_suite"]["prompt_counts"]["normal_use_regression"], 1)
+        self.assertEqual(card["judge"]["scoring_version"], "model_forge.internal_eval_scoring.v1")
+        self.assertEqual(card["backend"]["sampling"]["temperature"], 0.7)
+        self.assertFalse(card["outputs"]["responses"]["public_safe"])
+        self.assertTrue(card["outputs"]["scores"]["public_safe"])
+        self.assertIn("responses.jsonl", card["publication"]["raw_output_paths"])
+        self.assertIn("Raw `responses.jsonl`", markdown)
 
 
 class ExternalResultTests(unittest.TestCase):

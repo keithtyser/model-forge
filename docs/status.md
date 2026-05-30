@@ -102,6 +102,10 @@ This is the short handoff state for humans and agents. Use
 - Dataset Hub dry runs now create a public redacted bundle for `public_dataset`
   release plans. The bundle keeps provenance, hashes, verification, quality, and
   review evidence while excluding raw accepted/rejected rows and message text.
+- Internal eval runs now write `eval_provenance_card.json` and `.md` next to
+  `manifest.json`, `scores.csv`, and `responses.jsonl`. The card records prompt
+  counts, case hashes, scoring version, sampling settings, trials, output
+  hashes, objective profile, and raw-output publication status.
 
 ## Current Dataset State
 
@@ -144,8 +148,8 @@ length filtering:
 1. Attach variant nodes to completed and planned Gemma base, FT, abli, and
    quantization artifacts as generated evidence, then connect report cards to
    those nodes.
-2. Add the eval provenance card so eval reports record suite version, judge
-   config, prompt counts, trials, raw-output paths, and objective profile.
+2. Attach variant nodes to generated eval provenance cards and publish redacted
+   eval-output bundles for report releases.
 3. Add guarded non-dry-run model Hub upload and CI dry-run workflows after
    release plans have human-reviewed evidence.
 4. Finish/evaluate Gemma local FT or write a Training Method failure card with

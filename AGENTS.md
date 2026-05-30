@@ -454,6 +454,8 @@ When publishing a model:
   and inspect `hf_publish_bundle/`; public dataset plans must not include raw
   accepted/rejected rows or unredacted message text unless the release class
   explicitly allows it
+- for eval evidence, inspect `eval_provenance_card.json` before making claims;
+  raw `responses.jsonl` and `examples.md` need redaction before public release
 - include a model card linking back to this repo
 - include source model, recipe config, eval scores, and intended-use caveats
 - upload completed models, prepared datasets, and needed eval artifacts to

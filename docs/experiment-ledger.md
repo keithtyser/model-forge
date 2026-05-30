@@ -1039,6 +1039,33 @@ passes dataset-card, redaction, license/provenance, and no-secret/no-private-pat
 gates, and remains blocked as a dry run because the local FT v1 pack is still a
 smoke scaffold.
 
+## Eval Provenance Card
+
+Status: implemented and smoke validated.
+
+Purpose: make each internal eval output self-describing enough for comparison,
+publication, and later agent handoff without requiring raw responses to be
+public.
+
+Primary file:
+
+```text
+src/model_forge/evals/run_eval.py
+```
+
+Validation:
+
+```text
+.venv/bin/python -m model_forge.evals.run_eval --config configs/experiments/gemma4_26b_a4b_v0.yaml --dry-run --max-cases 2 --output-suffix unit_eval_provenance_smoke
+.venv/bin/python -m unittest tests.test_eval_quality.ObjectiveScoringTests.test_write_outputs_creates_eval_provenance_card -v
+```
+
+Observed result: eval output directories now include `eval_provenance_card.json`
+and `eval_provenance_card.md`. The card records prompt counts, prompt/check
+hashes, deterministic scoring version, metrics, sampling settings, trial count,
+output hashes, objective profile, config fingerprints, and marks
+`responses.jsonl` / `examples.md` as requiring redaction before public release.
+
 ## Roadmap Hygiene: CLI/Doc Drift Check
 
 Status: implemented and smoke-validated.

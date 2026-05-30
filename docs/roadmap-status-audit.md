@@ -14,16 +14,16 @@ This file is generated from the prioritized backlog in
 |---|---:|
 | implemented | 2 |
 | not_started | 27 |
-| scaffolded | 19 |
-| tested | 48 |
+| scaffolded | 18 |
+| tested | 49 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 54 |
-| smoke_validated | 40 |
+| planned | 53 |
+| smoke_validated | 41 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -44,7 +44,7 @@ No status audit findings.
 | MF-0006 | P0: Foundation | tested | planned | Add configs/objectives/dgx_spark_latency_throughput.yaml |
 | MF-0007 | P0: Foundation | tested | planned | Add variant graph and variant_node.json writer |
 | MF-0008 | P0: Foundation | tested | planned | Add artifact checksum and retention policy fields |
-| MF-0009 | P0: Foundation | scaffolded | planned | Add eval provenance card |
+| MF-0009 | P0: Foundation | tested | smoke_validated | Add eval provenance card |
 | MF-0010 | P0: Foundation | tested | smoke_validated | Add golden baseline create/check hardening |
 | MF-0011 | P0: Foundation | tested | smoke_validated | Add CLI/doc drift check for roadmap command examples |
 | MF-0012 | P0: Foundation | implemented | spark_single_node_validated | Finish Gemma local FT evaluation or failure-card it |

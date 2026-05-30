@@ -3714,7 +3714,7 @@ MF-0005 Add configs/objectives/quantized_quality_retention.yaml. implementation_
 MF-0006 Add configs/objectives/dgx_spark_latency_throughput.yaml. implementation_status=tested validation_state=planned
 MF-0007 Add variant graph and variant_node.json writer. implementation_status=tested validation_state=planned
 MF-0008 Add artifact checksum and retention policy fields. implementation_status=tested validation_state=planned
-MF-0009 Add eval provenance card. implementation_status=scaffolded validation_state=planned
+MF-0009 Add eval provenance card. implementation_status=tested validation_state=smoke_validated
 MF-0010 Add golden baseline create/check hardening. implementation_status=tested validation_state=smoke_validated
 MF-0011 Add CLI/doc drift check for roadmap command examples. implementation_status=tested validation_state=smoke_validated
 MF-0012 Finish Gemma local FT evaluation or failure-card it. implementation_status=implemented validation_state=spark_single_node_validated

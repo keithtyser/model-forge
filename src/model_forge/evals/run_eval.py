@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import html
 import json
 import math
@@ -27,9 +28,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from model_forge.runs.manifest import build_canonical_manifest
+from model_forge.runs.manifest import build_canonical_manifest, file_sha256, redact_value
 
 console = Console(stderr=True)
+EVAL_PROVENANCE_SCHEMA_VERSION = "model_forge.eval_provenance_card.v1"
+SCORING_VERSION = "model_forge.internal_eval_scoring.v1"
 
 REFUSAL_PATTERNS = [
     r"\bi can'?t fulfill\b",
@@ -577,6 +580,8 @@ def build_manifest(
         "responses_jsonl": "responses.jsonl",
         "scores_csv": "scores.csv",
         "examples_md": "examples.md",
+        "eval_provenance_card_json": "eval_provenance_card.json",
+        "eval_provenance_card_md": "eval_provenance_card.md",
     }
     canonical = build_canonical_manifest(
         run_type="eval",
@@ -1075,6 +1080,161 @@ def write_artifact_report(
     (root / "artifact_report.html").write_text(html_doc)
 
 
+def backend_sampling_fingerprint(backend: dict[str, Any]) -> dict[str, Any]:
+    extra_body = backend.get("extra_body") if isinstance(backend.get("extra_body"), dict) else {}
+    keys = ("temperature", "top_p", "min_p", "max_tokens", "timeout_seconds", "presence_penalty", "repetition_penalty")
+    fingerprint: dict[str, Any] = {}
+    for key in keys:
+        if key in backend:
+            fingerprint[key] = backend[key]
+        elif key in extra_body:
+            fingerprint[key] = extra_body[key]
+    for key, value in sorted(extra_body.items()):
+        fingerprint.setdefault(f"extra_body.{key}", value)
+    return redact_value(fingerprint)
+
+
+def output_file_entry(root: Path, name: str, public: bool = False) -> dict[str, Any]:
+    path = root / name
+    return {
+        "path": name,
+        "exists": path.exists(),
+        "sha256": file_sha256(path) if path.exists() and path.is_file() else None,
+        "public_safe": public,
+    }
+
+
+def build_eval_provenance_card(root: Path, manifest: dict[str, Any], results: list[EvalResult]) -> dict[str, Any]:
+    prompt_counts: dict[str, int] = {}
+    case_entries = []
+    seen_cases: set[tuple[str, str]] = set()
+    for result in results:
+        key = (result.case.bucket, result.case.case_id)
+        if key in seen_cases:
+            continue
+        seen_cases.add(key)
+        prompt_counts[result.case.bucket] = prompt_counts.get(result.case.bucket, 0) + 1
+        case_entries.append({
+            "bucket": result.case.bucket,
+            "case_id": result.case.case_id,
+            "category": result.case.category,
+            "expects_json": result.case.expects_json,
+            "prompt_sha256": hashlib.sha256(result.case.prompt.encode("utf-8")).hexdigest(),
+            "checks_sha256": hashlib.sha256(json.dumps(result.case.checks, sort_keys=True).encode("utf-8")).hexdigest(),
+        })
+
+    canonical = manifest.get("canonical", {}) if isinstance(manifest.get("canonical"), dict) else {}
+    metadata = canonical.get("metadata", {}) if isinstance(canonical.get("metadata"), dict) else {}
+    objective_profile = os.getenv("MODEL_FORGE_OBJECTIVE_PROFILE") or metadata.get("objective_profile") or "general_assistant"
+    runtime = dict(manifest.get("runtime", {}))
+    if runtime.get("hostname"):
+        runtime["hostname"] = "<redacted-host>"
+    outputs = {
+        "manifest": output_file_entry(root, "manifest.json", public=True),
+        "scores": output_file_entry(root, "scores.csv", public=True),
+        "examples": output_file_entry(root, "examples.md", public=False),
+        "responses": output_file_entry(root, "responses.jsonl", public=False),
+        "artifact_validations": output_file_entry(root, "artifact_validations.json", public=True),
+        "artifact_report": output_file_entry(root, "artifact_report.html", public=True),
+    }
+    return {
+        "schema_version": EVAL_PROVENANCE_SCHEMA_VERSION,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "experiment_name": manifest.get("experiment_name"),
+        "family": manifest.get("family"),
+        "variant": manifest.get("runtime", {}).get("variant") or manifest.get("variant"),
+        "model_id": manifest.get("model_id"),
+        "backend": {
+            "engine": manifest.get("backend", {}).get("engine"),
+            "base_url": manifest.get("backend", {}).get("base_url"),
+            "model_alias": manifest.get("backend", {}).get("model_alias"),
+            "sampling": backend_sampling_fingerprint(manifest.get("backend", {})),
+        },
+        "objective_profile": objective_profile,
+        "prompt_suite": {
+            "prompt_sets": metadata.get("prompt_sets") or sorted(prompt_counts),
+            "prompt_counts": prompt_counts,
+            "total_prompts": len(seen_cases),
+            "case_hashes": case_entries,
+        },
+        "judge": {
+            "type": "deterministic_rule_scoring",
+            "scoring_version": SCORING_VERSION,
+            "metrics": manifest.get("metrics", []),
+            "requires_llm_judge": False,
+        },
+        "run": {
+            "dry_run": manifest.get("dry_run"),
+            "trials": manifest.get("trials"),
+            "total_cases": manifest.get("total_cases"),
+            "config_fingerprints": canonical.get("configs", []),
+            "git": canonical.get("git", {}),
+            "runtime": runtime,
+        },
+        "outputs": outputs,
+        "publication": {
+            "raw_outputs_public_safe": False,
+            "raw_output_paths": ["responses.jsonl", "examples.md"],
+            "publishable_summary_paths": [
+                item.get("path")
+                for item in outputs.values()
+                if item.get("exists") and item.get("public_safe")
+            ],
+            "redaction_required_for_raw_outputs": True,
+        },
+    }
+
+
+def eval_provenance_markdown(card: dict[str, Any]) -> str:
+    prompt_counts = "\n".join(
+        f"- `{bucket}`: {count}"
+        for bucket, count in sorted(card.get("prompt_suite", {}).get("prompt_counts", {}).items())
+    ) or "- none"
+    outputs = "\n".join(
+        f"- `{name}`: `{item.get('path')}` sha256=`{item.get('sha256') or 'missing'}` public_safe=`{str(item.get('public_safe')).lower()}`"
+        for name, item in sorted(card.get("outputs", {}).items())
+    ) or "- none"
+    sampling = json.dumps(card.get("backend", {}).get("sampling", {}), sort_keys=True)
+    return f"""# Eval Provenance Card: {card.get('experiment_name')}
+
+## Run
+
+- Family: `{card.get('family')}`
+- Variant: `{card.get('variant')}`
+- Model: `{card.get('model_id')}`
+- Objective profile: `{card.get('objective_profile')}`
+- Trials: `{card.get('run', {}).get('trials')}`
+- Total cases: `{card.get('run', {}).get('total_cases')}`
+- Dry run: `{str(card.get('run', {}).get('dry_run')).lower()}`
+
+## Prompt Suite
+
+{prompt_counts}
+
+## Judge And Sampling
+
+- Judge type: `{card.get('judge', {}).get('type')}`
+- Scoring version: `{card.get('judge', {}).get('scoring_version')}`
+- Sampling: `{sampling}`
+
+## Outputs
+
+{outputs}
+
+## Publication
+
+Raw `responses.jsonl` and `examples.md` are not public-safe by default. Publish
+aggregate scores, manifests, and redacted examples unless a release class allows
+private raw-output retention.
+"""
+
+
+def write_eval_provenance_card(root: Path, manifest: dict[str, Any], results: list[EvalResult]) -> None:
+    card = redact_value(build_eval_provenance_card(root, manifest, results))
+    (root / "eval_provenance_card.json").write_text(json.dumps(card, indent=2, sort_keys=True) + "\n")
+    (root / "eval_provenance_card.md").write_text(eval_provenance_markdown(card))
+
+
 def write_outputs(root: Path, manifest: dict[str, Any], results: list[EvalResult]) -> None:
     root.mkdir(parents=True, exist_ok=True)
     (root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
@@ -1131,6 +1291,7 @@ def write_outputs(root: Path, manifest: dict[str, Any], results: list[EvalResult
                 "",
             ])
     (root / "examples.md").write_text("\n".join(example_sections).strip() + "\n")
+    write_eval_provenance_card(root, manifest, results)
 
 
 def run_case(case: EvalCase, cfg: EvalConfig, dry_run: bool, trial_index: int = 1) -> EvalResult:
