@@ -450,6 +450,10 @@ When publishing a model:
   public quantized checkpoint
 - never bypass failed `release_gates` in `hub_publish.json`; public full
   checkpoints require explicit allowance plus Spark validation evidence
+- for dataset releases, prefer `./forge data publish ... --source-license-checked`
+  and inspect `hf_publish_bundle/`; public dataset plans must not include raw
+  accepted/rejected rows or unredacted message text unless the release class
+  explicitly allows it
 - include a model card linking back to this repo
 - include source model, recipe config, eval scores, and intended-use caveats
 - upload completed models, prepared datasets, and needed eval artifacts to

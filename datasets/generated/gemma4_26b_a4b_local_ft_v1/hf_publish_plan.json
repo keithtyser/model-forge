@@ -1,27 +1,62 @@
 {
+  "blocked": true,
   "blocked_until": [
     "human reviews dataset_card.md and review_sheet.md",
     "license/provenance checks pass",
     "HF publish command is run explicitly",
     "dataset is expanded beyond smoke-only scaffold"
   ],
-  "created_at": "2026-05-19T12:48:25.997530+00:00",
+  "created_at": "2026-05-30T23:07:41.447303+00:00",
   "dataset_id": "gemma4_26b_a4b_local_ft_v1",
   "dry_run": true,
   "files": [
-    "datasets/generated/gemma4_26b_a4b_local_ft_v1/dataset.jsonl",
-    "datasets/generated/gemma4_26b_a4b_local_ft_v1/manifest.yaml",
-    "datasets/generated/gemma4_26b_a4b_local_ft_v1/quality_report.json",
-    "datasets/generated/gemma4_26b_a4b_local_ft_v1/dataset_card.md",
-    "datasets/generated/gemma4_26b_a4b_local_ft_v1/verification.jsonl",
-    "datasets/generated/gemma4_26b_a4b_local_ft_v1/generation_report.json",
-    "datasets/generated/gemma4_26b_a4b_local_ft_v1/accepted.jsonl",
-    "datasets/generated/gemma4_26b_a4b_local_ft_v1/rejected.jsonl",
-    "datasets/generated/gemma4_26b_a4b_local_ft_v1/gap_report.yaml",
-    "datasets/generated/gemma4_26b_a4b_local_ft_v1/review_report.json",
-    "datasets/generated/gemma4_26b_a4b_local_ft_v1/review_sheet.md"
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_bundle/README.md",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_bundle/dataset_redacted.jsonl",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_bundle/generation_report.json",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_bundle/manifest.yaml",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_bundle/quality_report.json",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_bundle/redaction_report.json",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_bundle/review_report.json",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_bundle/review_sheet.md",
+    "datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_bundle/verification.jsonl"
   ],
-  "release_class": "public_dataset_candidate",
+  "redacted_output_bundle": "datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_bundle",
+  "redaction_report": {
+    "accepted_rows_included": false,
+    "created_at": "2026-05-30T23:07:41.435624+00:00",
+    "dataset_id": "gemma4_26b_a4b_local_ft_v1",
+    "policy": "model_forge_public_dataset_redacted_v1",
+    "raw_message_content_published": false,
+    "redacted_dataset": "datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_bundle/dataset_redacted.jsonl",
+    "rejected_rows_included": false,
+    "release_class": "public_dataset",
+    "rows_redacted": 49,
+    "source_dataset": "datasets/generated/gemma4_26b_a4b_local_ft_v1/dataset.jsonl"
+  },
+  "release_class": "public_dataset",
+  "release_gates": [
+    {
+      "message": "dataset card contains required sections",
+      "name": "dataset_card_complete",
+      "status": "pass"
+    },
+    {
+      "message": "pass --source-license-checked after checking dataset source licenses and provenance",
+      "name": "source_license_checked",
+      "status": "pass"
+    },
+    {
+      "message": "public dataset bundle uses redacted message content",
+      "name": "unsafe_examples_redacted",
+      "status": "pass"
+    },
+    {
+      "message": "no secret-like literals or private absolute paths found",
+      "name": "no_private_tokens_or_paths",
+      "status": "pass"
+    }
+  ],
   "repo_id": "keithtyser/model-forge-gemma4_26b_a4b_local_ft_v1",
-  "repo_type": "dataset"
+  "repo_type": "dataset",
+  "visibility": "public"
 }

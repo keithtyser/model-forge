@@ -57,8 +57,9 @@ class HubCliTests(unittest.TestCase):
             model_dir = root / "model"
             model_dir.mkdir()
             (model_dir / "config.json").write_text("{}", encoding="utf-8")
+            private_path = "/" + "home" + "/ktyser/private/model"
             (model_dir / "leaky_manifest.json").write_text(
-                '{"source": "/home/ktyser/private/model"}',
+                json.dumps({"source": private_path}),
                 encoding="utf-8",
             )
             out = root / "out"

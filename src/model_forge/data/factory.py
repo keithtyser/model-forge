@@ -76,6 +76,13 @@ def display_path(path: Path) -> str:
         return str(path)
 
 
+def publish_path_label(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(REPO_DIR))
+    except (OSError, ValueError):
+        return f"<external>/{path.name}"
+
+
 def row_text(row: dict[str, Any]) -> str:
     messages = row.get("messages", [])
     if not isinstance(messages, list):
@@ -1609,6 +1616,186 @@ def command_pack(
     return outputs
 
 
+def load_release_class(name: str) -> dict[str, Any]:
+    path = REPO_DIR / "configs" / "release_classes" / f"{name}.yaml"
+    if not path.exists():
+        return {
+            "id": name,
+            "hf_visibility": "private",
+            "publish_raw_outputs": "private_only",
+            "requires": [],
+        }
+    data = load_yaml(path)
+    data.setdefault("id", name)
+    return data
+
+
+def row_content_digest(row: dict[str, Any]) -> str:
+    return hashlib.sha256(row_text(row).encode("utf-8")).hexdigest()
+
+
+def redacted_message(message: dict[str, Any]) -> dict[str, Any]:
+    content = str(message.get("content", ""))
+    return {
+        "role": message.get("role"),
+        "content": "<redacted>",
+        "content_sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+        "content_chars": len(content),
+        "content_words": len(re.findall(r"\w+", content)),
+    }
+
+
+def redacted_dataset_row(row: dict[str, Any]) -> dict[str, Any]:
+    messages = row.get("messages", [])
+    safe_messages = [
+        redacted_message(message)
+        for message in messages
+        if isinstance(message, dict)
+    ]
+    source = copy.deepcopy(row.get("source", {})) if isinstance(row.get("source"), dict) else {}
+    if isinstance(source.get("generation"), dict):
+        source["generation"].pop("prompt", None)
+        source["generation"].pop("raw_response", None)
+    return {
+        "id": row.get("id"),
+        "messages": safe_messages,
+        "skills": row.get("skills", []),
+        "source": source,
+        "generation_method": row.get("generation_method"),
+        "quality_scores": row.get("quality_scores", {}),
+        "quality_score_average": row.get("quality_score_average"),
+        "verification": row.get("verification", {}),
+        "holdout_overlap": row.get("holdout_overlap", {}),
+        "content_sha256": row_content_digest(row),
+        "redaction": {
+            "policy": "model_forge_public_dataset_redacted_v1",
+            "message_content": "redacted",
+        },
+    }
+
+
+def redacted_review_report(report: dict[str, Any]) -> dict[str, Any]:
+    safe = copy.deepcopy(report)
+    for row in safe.get("reviewed_rows", []):
+        if isinstance(row, dict):
+            if "user" in row:
+                row["user"] = "<redacted>"
+            if "assistant" in row:
+                row["assistant"] = "<redacted>"
+    safe["redaction"] = {
+        "policy": "model_forge_public_dataset_redacted_v1",
+        "reviewed_row_text": "redacted",
+    }
+    return safe
+
+
+def write_redacted_publish_bundle(
+    *,
+    output_dir: Path,
+    outputs: dict[str, str],
+    config: dict[str, Any],
+    release_class: dict[str, Any],
+    files: list[Path],
+) -> dict[str, Any]:
+    bundle_dir = output_dir / "hf_publish_bundle"
+    bundle_dir.mkdir(parents=True, exist_ok=True)
+    dataset_rows = read_jsonl(Path(outputs["dataset"]))
+    redacted_dataset_path = bundle_dir / "dataset_redacted.jsonl"
+    write_jsonl(redacted_dataset_path, [redacted_dataset_row(row) for row in dataset_rows])
+
+    card_path = Path(outputs["dataset_card"])
+    readme_path = bundle_dir / "README.md"
+    readme_path.write_text(card_path.read_text(encoding="utf-8"), encoding="utf-8")
+
+    report = {
+        "dataset_id": config["id"],
+        "release_class": release_class.get("id"),
+        "policy": "model_forge_public_dataset_redacted_v1",
+        "source_dataset": publish_path_label(Path(outputs["dataset"])),
+        "redacted_dataset": publish_path_label(redacted_dataset_path),
+        "rows_redacted": len(dataset_rows),
+        "raw_message_content_published": False,
+        "accepted_rows_included": False,
+        "rejected_rows_included": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    report_path = bundle_dir / "redaction_report.json"
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    verification_rows = read_jsonl(Path(outputs["verification"]))
+    verification_path = bundle_dir / "verification.jsonl"
+    write_jsonl(verification_path, [redacted_dataset_row(row) for row in verification_rows])
+
+    for raw_path in (outputs["manifest"], outputs["quality_report"], outputs["generation_report"]):
+        source = Path(raw_path)
+        target = bundle_dir / source.name
+        target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    if "review_report" in outputs:
+        review = redacted_review_report(json.loads(Path(outputs["review_report"]).read_text(encoding="utf-8")))
+        review_report_path = bundle_dir / "review_report.json"
+        review_report_path.write_text(json.dumps(review, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        (bundle_dir / "review_sheet.md").write_text(review_sheet(review), encoding="utf-8")
+
+    files.extend(sorted(path for path in bundle_dir.rglob("*") if path.is_file()))
+    return report
+
+
+def scan_publish_files(paths: list[Path]) -> list[str]:
+    findings = []
+    secret_re = re.compile(r"hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|(?i:HF_TOKEN|HUGGINGFACE_HUB_TOKEN|API_KEY|SECRET|PASSWORD)\s*=")
+    private_path_re = re.compile(r"(?<![A-Za-z0-9_])/(home|Users)/[A-Za-z0-9_.-]+/")
+    for path in paths:
+        if not path.is_file() or path.stat().st_size > 2_000_000:
+            continue
+        if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".pdf", ".safetensors", ".bin"}:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if secret_re.search(text):
+            findings.append(f"secret-like literal in {publish_path_label(path)}")
+        if private_path_re.search(text):
+            findings.append(f"private absolute path in {publish_path_label(path)}")
+    return findings
+
+
+def dataset_publish_gates(
+    *,
+    config: dict[str, Any],
+    release_class: dict[str, Any],
+    files: list[Path],
+    redaction_report: dict[str, Any] | None,
+    source_license_checked: bool,
+) -> list[dict[str, str]]:
+    required = {str(item) for item in release_class.get("requires") or []}
+    gates: list[dict[str, str]] = []
+
+    def add(name: str, passed: bool, message: str) -> None:
+        gates.append({"name": name, "status": "pass" if passed else "fail", "message": message})
+
+    if "dataset_card_complete" in required:
+        readme = next((path for path in files if path.name == "README.md"), None)
+        text = readme.read_text(encoding="utf-8") if readme and readme.exists() else ""
+        sections = ("## Purpose", "## Counts", "## Provenance", "## Safety And Contamination")
+        add("dataset_card_complete", all(section in text for section in sections), "dataset card contains required sections")
+    if "source_license_checked" in required:
+        add(
+            "source_license_checked",
+            source_license_checked,
+            "pass --source-license-checked after checking dataset source licenses and provenance",
+        )
+    if "unsafe_examples_redacted" in required:
+        raw_policy = str(release_class.get("publish_raw_outputs", "redacted_only"))
+        redacted = bool(redaction_report and not redaction_report.get("raw_message_content_published"))
+        add(
+            "unsafe_examples_redacted",
+            raw_policy in {"false", "redacted_only"} and redacted,
+            "public dataset bundle uses redacted message content",
+        )
+    if "no_private_tokens_or_paths" in required:
+        findings = scan_publish_files(files)
+        add("no_private_tokens_or_paths", not findings, "; ".join(findings[:5]) or "no secret-like literals or private absolute paths found")
+    return gates
+
+
 def command_publish(
     config: dict[str, Any],
     config_path: Path,
@@ -1618,6 +1805,7 @@ def command_publish(
     provider_override: str | None = None,
     execute: bool = False,
     private: bool = False,
+    source_license_checked: bool = False,
 ) -> Path:
     outputs = command_pack(
         config,
@@ -1632,22 +1820,43 @@ def command_publish(
     if publish_path.exists() and not overwrite and not execute:
         return publish_path
     repo_id = config.get("hub", {}).get("repo_id") or f"keithtyser/model-forge-{config['id']}"
-    files = [
-        display_path(Path(outputs["dataset"])),
-        display_path(Path(outputs["manifest"])),
-        display_path(Path(outputs["quality_report"])),
-        display_path(Path(outputs["dataset_card"])),
-        display_path(Path(outputs["verification"])),
-        display_path(Path(outputs["generation_report"])),
-        display_path(output_dir / "accepted.jsonl"),
-        display_path(output_dir / "rejected.jsonl"),
+    release_class = load_release_class(str(config.get("hub", {}).get("release_class", "public_dataset")))
+    file_paths = [
+        Path(outputs["dataset"]),
+        Path(outputs["manifest"]),
+        Path(outputs["quality_report"]),
+        Path(outputs["dataset_card"]),
+        Path(outputs["verification"]),
+        Path(outputs["generation_report"]),
     ]
     if (output_dir / "gap_report.yaml").exists():
-        files.append(display_path(output_dir / "gap_report.yaml"))
+        file_paths.append(output_dir / "gap_report.yaml")
     if (output_dir / "review_report.json").exists():
-        files.append(display_path(output_dir / "review_report.json"))
+        file_paths.append(output_dir / "review_report.json")
     if (output_dir / "review_sheet.md").exists():
-        files.append(display_path(output_dir / "review_sheet.md"))
+        file_paths.append(output_dir / "review_sheet.md")
+    redaction_report = None
+    raw_policy = str(release_class.get("publish_raw_outputs", "redacted_only"))
+    if release_class.get("hf_visibility") == "public" or raw_policy == "redacted_only":
+        file_paths = []
+        redaction_report = write_redacted_publish_bundle(
+            output_dir=output_dir,
+            outputs=outputs,
+            config=config,
+            release_class=release_class,
+            files=file_paths,
+        )
+    elif raw_policy == "private_only":
+        file_paths.extend([output_dir / "accepted.jsonl", output_dir / "rejected.jsonl"])
+    files = [publish_path_label(path) for path in file_paths]
+    gates = dataset_publish_gates(
+        config=config,
+        release_class=release_class,
+        files=file_paths,
+        redaction_report=redaction_report,
+        source_license_checked=source_license_checked,
+    )
+    gate_failures = [gate for gate in gates if gate["status"] == "fail"]
     blocked_until: list[str] = []
     if not execute:
         blocked_until.extend([
@@ -1661,19 +1870,27 @@ def command_publish(
             blocked_until.append("dataset is expanded beyond smoke-only scaffold")
         else:
             blocked_until.append("dataset size reaches configured target")
+    blocked_until.extend(f"{gate['name']}: {gate['message']}" for gate in gate_failures)
     plan = {
         "dry_run": not execute,
         "repo_id": repo_id,
         "repo_type": "dataset",
         "dataset_id": config["id"],
-        "release_class": config.get("hub", {}).get("release_class", "public_dataset_candidate"),
+        "release_class": release_class.get("id"),
+        "visibility": release_class.get("hf_visibility", "private"),
         "files": files,
+        "redacted_output_bundle": publish_path_label(output_dir / "hf_publish_bundle") if redaction_report else None,
+        "redaction_report": redaction_report,
+        "release_gates": gates,
+        "blocked": bool(blocked_until),
         "blocked_until": blocked_until,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     if execute:
         if bool(config.get("seed_only", False)) or bool(config.get("smoke_only", False)):
             raise SystemExit("refusing to upload seed-only or smoke-only dataset; publish durable datasets only")
+        if gate_failures:
+            raise SystemExit("refusing to upload dataset with failed release gates")
         execute_hf_dataset_publish(plan, output_dir, private=private)
         plan["uploaded_at"] = datetime.now(timezone.utc).isoformat()
     publish_path.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -1689,13 +1906,16 @@ def execute_hf_dataset_publish(plan: dict[str, Any], output_dir: Path, private: 
     except ImportError as exc:
         raise SystemExit("Install huggingface_hub before executing HF dataset publish") from exc
     repo_id = str(plan["repo_id"])
+    upload_dir = output_dir
+    if plan.get("redacted_output_bundle"):
+        upload_dir = resolve_repo_path(str(plan["redacted_output_bundle"]))
     api = HfApi(token=token)
     api.whoami(token=token)
     create_repo(repo_id=repo_id, repo_type="dataset", private=private, exist_ok=True, token=token)
     upload_folder(
         repo_id=repo_id,
         repo_type="dataset",
-        folder_path=str(output_dir),
+        folder_path=str(upload_dir),
         commit_message=f"Upload model-forge dataset {plan['dataset_id']}",
         token=token,
     )
@@ -1728,6 +1948,7 @@ def main() -> None:
     parser.add_argument("--sample", type=int, help="review sample size")
     parser.add_argument("--execute", action="store_true", help="execute the publish step; currently valid only for non-smoke datasets")
     parser.add_argument("--private", action="store_true", help="create executed HF dataset repo as private")
+    parser.add_argument("--source-license-checked", action="store_true", help="mark source license/provenance review complete for publish gates")
     args = parser.parse_args()
 
     config_path = args.config or default_config_for(args.family or "", args.variant or "")
@@ -1812,6 +2033,7 @@ def main() -> None:
             provider_override=args.provider,
             execute=args.execute,
             private=args.private,
+            source_license_checked=args.source_license_checked,
         )
         label = "Wrote publish plan" if args.execute else "Wrote dry-run publish plan"
         console.print(f"[green]{label}[/green] {display_path(path)}")

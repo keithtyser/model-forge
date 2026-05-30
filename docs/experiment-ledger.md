@@ -1012,6 +1012,33 @@ files, generated plans do not leak user-specific absolute paths, secret-like
 strings are blocked, and public full-checkpoint plans are blocked unless the
 release class and Spark validation state allow publication.
 
+## Dataset Publishing: Redacted Hub Bundle
+
+Status: implemented and smoke validated.
+
+Purpose: let public dataset release plans publish evidence and reproducibility
+metadata without exposing raw prompt/response text or rejected rows by default.
+
+Primary files:
+
+```text
+src/model_forge/data/factory.py
+datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_plan.json
+datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_bundle/
+```
+
+Validation:
+
+```text
+./forge data publish gemma4_26b_a4b local_ft_v1 --overwrite --source-license-checked
+.venv/bin/python -m unittest tests.test_data_factory.DatasetFactoryTests.test_publish_writes_dry_run_plan_only tests.test_data_factory.DatasetFactoryTests.test_publish_execute_refuses_smoke_dataset -v
+```
+
+Observed result: the public dataset plan includes only the redacted bundle,
+passes dataset-card, redaction, license/provenance, and no-secret/no-private-path
+gates, and remains blocked as a dry run because the local FT v1 pack is still a
+smoke scaffold.
+
 ## Roadmap Hygiene: CLI/Doc Drift Check
 
 Status: implemented and smoke-validated.

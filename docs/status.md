@@ -99,6 +99,9 @@ This is the short handoff state for humans and agents. Use
   `status`, `whoami`, `login`, `plan-model`, and dry-run `publish-model`
   generate model cards, `hub_publish.json` provenance, no-secret/no-private-path
   checks, and release-class gates from `configs/release_classes/`.
+- Dataset Hub dry runs now create a public redacted bundle for `public_dataset`
+  release plans. The bundle keeps provenance, hashes, verification, quality, and
+  review evidence while excluding raw accepted/rejected rows and message text.
 
 ## Current Dataset State
 
@@ -143,8 +146,8 @@ length filtering:
    those nodes.
 2. Add the eval provenance card so eval reports record suite version, judge
    config, prompt counts, trials, raw-output paths, and objective profile.
-3. Add the redacted-output dataset publishing path and guarded non-dry-run Hub
-   upload implementation after model release plans have human-reviewed evidence.
+3. Add guarded non-dry-run model Hub upload and CI dry-run workflows after
+   release plans have human-reviewed evidence.
 4. Finish/evaluate Gemma local FT or write a Training Method failure card with
    distributed Spark correctness evidence.
 5. Run one real Spark serving benchmark and attach endpoint evidence to the

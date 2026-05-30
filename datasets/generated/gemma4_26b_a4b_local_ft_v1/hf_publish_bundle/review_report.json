@@ -1,0 +1,734 @@
+{
+  "accepted_count": 49,
+  "coverage_gaps": [],
+  "created_at": "2026-05-19T05:15:40.017563+00:00",
+  "critical_flag_counts": {},
+  "dataset_id": "gemma4_26b_a4b_local_ft_v1",
+  "flag_counts": {},
+  "gates": {
+    "has_synthetic_rows": true,
+    "no_critical_flags": true,
+    "sample_has_rows": true,
+    "skill_coverage_ready": true
+  },
+  "generation_method_counts": {
+    "eval_adjacent_generation": 3,
+    "evol_instruct": 3,
+    "human_seed": 37,
+    "instruction_backtranslation": 3,
+    "self_instruct": 3
+  },
+  "ready_to_scale_generation": true,
+  "redaction": {
+    "policy": "model_forge_public_dataset_redacted_v1",
+    "reviewed_row_text": "redacted"
+  },
+  "rejected_count": 0,
+  "reviewed_count": 49,
+  "reviewed_rows": [
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_eval_latency_prompt_completion_tokens",
+      "quality_score_average": 0.9062,
+      "skills": [
+        "eval_latency_throughput"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_eval_median_latency_vs_tps",
+      "quality_score_average": 0.8988,
+      "skills": [
+        "eval_latency_throughput"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_docker_cleanup_active_containers",
+      "quality_score_average": 0.92,
+      "skills": [
+        "docker_disk_safety"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_sql_null_count_where",
+      "quality_score_average": 0.8754,
+      "skills": [
+        "sql_edge_cases"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_sql_index_groupby_tradeoff",
+      "quality_score_average": 0.8863,
+      "skills": [
+        "sql_edge_cases"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_shell_safe_sync_backup",
+      "quality_score_average": 0.895,
+      "skills": [
+        "shell_safety"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_yaml_model_family_review",
+      "quality_score_average": 0.9012,
+      "skills": [
+        "config_review"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_json_schema_repair_boolean_trailing",
+      "quality_score_average": 0.8164,
+      "skills": [
+        "json_schema_repair"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_git_rebase_push_behind",
+      "quality_score_average": 0.92,
+      "skills": [
+        "git_workflow_repair"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_benign_refusal_tradeoff_analysis",
+      "quality_score_average": 0.9088,
+      "skills": [
+        "benign_safety_analysis"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_checkpoint_selection_not_last",
+      "quality_score_average": 0.9012,
+      "skills": [
+        "checkpoint_selection"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_eval_gap_dataset_design",
+      "quality_score_average": 0.9025,
+      "skills": [
+        "checkpoint_selection",
+        "benign_safety_analysis"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_benign_vulnerability_report_allowed",
+      "quality_score_average": 0.8624,
+      "skills": [
+        "benign_safety_analysis"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_benign_public_records_boundary",
+      "quality_score_average": 0.8931,
+      "skills": [
+        "benign_safety_analysis"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_safe_scraping_rate_limits",
+      "quality_score_average": 0.8694,
+      "skills": [
+        "benign_safety_analysis"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_safe_redirect_destructive_shell",
+      "quality_score_average": 0.9137,
+      "skills": [
+        "shell_safety",
+        "benign_safety_analysis"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_eval_prefill_decode_fields",
+      "quality_score_average": 0.8912,
+      "skills": [
+        "eval_latency_throughput"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_eval_checkpoint_noise",
+      "quality_score_average": 0.8875,
+      "skills": [
+        "checkpoint_selection"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_docker_checkpoint_rotation",
+      "quality_score_average": 0.8838,
+      "skills": [
+        "docker_disk_safety"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_config_variant_promptset_validation",
+      "quality_score_average": 0.8838,
+      "skills": [
+        "config_review"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_git_conflict_safety_branch",
+      "quality_score_average": 0.8938,
+      "skills": [
+        "git_workflow_repair"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_sql_null_left_join_counts",
+      "quality_score_average": 0.89,
+      "skills": [
+        "sql_edge_cases"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_json_schema_extra_text_failure",
+      "quality_score_average": 0.8683,
+      "skills": [
+        "json_schema_repair"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_checkpoint_selection_tradeoff_table",
+      "quality_score_average": 0.885,
+      "skills": [
+        "checkpoint_selection"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_shell_safe_find_delete",
+      "quality_score_average": 0.895,
+      "skills": [
+        "shell_safety"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_shell_secret_scan_before_push",
+      "quality_score_average": 0.885,
+      "skills": [
+        "shell_safety"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_shell_rsync_partial_resume",
+      "quality_score_average": 0.8863,
+      "skills": [
+        "shell_safety"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_config_lora_target_validation",
+      "quality_score_average": 0.8975,
+      "skills": [
+        "config_review"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_config_generation_provider_review",
+      "quality_score_average": 0.885,
+      "skills": [
+        "config_review"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_config_eval_matrix_uniqueness",
+      "quality_score_average": 0.8863,
+      "skills": [
+        "config_review"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_jsonl_training_row_schema",
+      "quality_score_average": 0.8863,
+      "skills": [
+        "json_schema_repair"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_json_null_vs_missing",
+      "quality_score_average": 0.8754,
+      "skills": [
+        "json_schema_repair"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_json_escape_newlines",
+      "quality_score_average": 0.8863,
+      "skills": [
+        "json_schema_repair"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_git_split_mixed_worktree",
+      "quality_score_average": 0.8838,
+      "skills": [
+        "git_workflow_repair"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_git_recover_bad_commit_message",
+      "quality_score_average": 0.8863,
+      "skills": [
+        "git_workflow_repair"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_git_remote_default_branch_check",
+      "quality_score_average": 0.8912,
+      "skills": [
+        "git_workflow_repair"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.0,
+      "flags": [],
+      "generation_method": "human_seed",
+      "id": "seed_checkpoint_confidence_interval_gate",
+      "quality_score_average": 0.8962,
+      "skills": [
+        "checkpoint_selection"
+      ],
+      "source_kind": "human_seed",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.3577,
+      "flags": [],
+      "generation_method": "self_instruct",
+      "id": "gen_a5eae8f62d888737",
+      "quality_score_average": 0.92,
+      "skills": [
+        "eval_latency_throughput"
+      ],
+      "source_kind": "synthetic",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.4493,
+      "flags": [],
+      "generation_method": "self_instruct",
+      "id": "gen_1f15d3e7b3f989cb",
+      "quality_score_average": 0.92,
+      "skills": [
+        "docker_disk_safety"
+      ],
+      "source_kind": "synthetic",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.281,
+      "flags": [],
+      "generation_method": "self_instruct",
+      "id": "gen_010466d7384026b4",
+      "quality_score_average": 0.92,
+      "skills": [
+        "sql_edge_cases"
+      ],
+      "source_kind": "synthetic",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.3504,
+      "flags": [],
+      "generation_method": "evol_instruct",
+      "id": "gen_ad38a26f935c9a09",
+      "quality_score_average": 0.92,
+      "skills": [
+        "eval_latency_throughput"
+      ],
+      "source_kind": "synthetic",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.4326,
+      "flags": [],
+      "generation_method": "evol_instruct",
+      "id": "gen_b985536d1c3c2742",
+      "quality_score_average": 0.92,
+      "skills": [
+        "docker_disk_safety"
+      ],
+      "source_kind": "synthetic",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.2893,
+      "flags": [],
+      "generation_method": "evol_instruct",
+      "id": "gen_a9f776830dea28de",
+      "quality_score_average": 0.92,
+      "skills": [
+        "sql_edge_cases"
+      ],
+      "source_kind": "synthetic",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.3404,
+      "flags": [],
+      "generation_method": "instruction_backtranslation",
+      "id": "gen_d92c3b0cbec21d9a",
+      "quality_score_average": 0.92,
+      "skills": [
+        "eval_latency_throughput"
+      ],
+      "source_kind": "synthetic",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.4336,
+      "flags": [],
+      "generation_method": "instruction_backtranslation",
+      "id": "gen_59dd39da166b55a6",
+      "quality_score_average": 0.92,
+      "skills": [
+        "docker_disk_safety"
+      ],
+      "source_kind": "synthetic",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.2756,
+      "flags": [],
+      "generation_method": "instruction_backtranslation",
+      "id": "gen_7bba61c51ec237be",
+      "quality_score_average": 0.92,
+      "skills": [
+        "sql_edge_cases"
+      ],
+      "source_kind": "synthetic",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.3504,
+      "flags": [],
+      "generation_method": "eval_adjacent_generation",
+      "id": "gen_cd0cdb4e71246dc3",
+      "quality_score_average": 0.92,
+      "skills": [
+        "eval_latency_throughput"
+      ],
+      "source_kind": "synthetic",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.4296,
+      "flags": [],
+      "generation_method": "eval_adjacent_generation",
+      "id": "gen_29212832f5ebac64",
+      "quality_score_average": 0.92,
+      "skills": [
+        "docker_disk_safety"
+      ],
+      "source_kind": "synthetic",
+      "user": "<redacted>",
+      "verification_passed": true
+    },
+    {
+      "assistant": "<redacted>",
+      "copied_seed_similarity": 0.2742,
+      "flags": [],
+      "generation_method": "eval_adjacent_generation",
+      "id": "gen_32db74f996b8fd5f",
+      "quality_score_average": 0.92,
+      "skills": [
+        "sql_edge_cases"
+      ],
+      "source_kind": "synthetic",
+      "user": "<redacted>",
+      "verification_passed": true
+    }
+  ],
+  "sample_size": 50,
+  "skill_counts": {
+    "benign_safety_analysis": 6,
+    "checkpoint_selection": 5,
+    "config_review": 5,
+    "docker_disk_safety": 6,
+    "eval_latency_throughput": 7,
+    "git_workflow_repair": 5,
+    "json_schema_repair": 5,
+    "shell_safety": 5,
+    "sql_edge_cases": 7
+  },
+  "source_kind_counts": {
+    "human_seed": 37,
+    "synthetic": 12
+  }
+}

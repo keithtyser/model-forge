@@ -3805,7 +3805,7 @@ MF-0506 Add Hub dataset card generator. implementation_status=tested validation_
 MF-0507 Add release-class validators. implementation_status=tested validation_state=smoke_validated
 MF-0508 Add hub_publish.json provenance writer. implementation_status=tested validation_state=smoke_validated
 MF-0509 Add no-secrets/no-absolute-path publish validator. implementation_status=tested validation_state=smoke_validated
-MF-0510 Add redacted-output dataset publishing path. implementation_status=not_started validation_state=planned
+MF-0510 Add redacted-output dataset publishing path. implementation_status=tested validation_state=smoke_validated
 MF-0511 Block public checkpoint upload unless validation state and release class allow it. implementation_status=tested validation_state=smoke_validated
 ```
 

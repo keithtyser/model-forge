@@ -13,17 +13,17 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| not_started | 28 |
+| not_started | 27 |
 | scaffolded | 19 |
-| tested | 47 |
+| tested | 48 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 55 |
-| smoke_validated | 39 |
+| planned | 54 |
+| smoke_validated | 40 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -105,7 +105,7 @@ No status audit findings.
 | MF-0507 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add release-class validators |
 | MF-0508 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add hub_publish.json provenance writer |
 | MF-0509 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add no-secrets/no-absolute-path publish validator |
-| MF-0510 | P1: Hugging Face Hub publishing | not_started | planned | Add redacted-output dataset publishing path |
+| MF-0510 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add redacted-output dataset publishing path |
 | MF-0511 | P1: Hugging Face Hub publishing | tested | smoke_validated | Block public checkpoint upload unless validation state and release class allow it |
 | MF-0601 | P1: Multi-family | scaffolded | planned | Harden Qwen family config |
 | MF-0602 | P1: Multi-family | scaffolded | planned | Add adding-model-family checklist |

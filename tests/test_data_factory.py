@@ -234,12 +234,39 @@ class DatasetFactoryTests(unittest.TestCase):
         config = load_yaml(config_path)
         with tempfile.TemporaryDirectory() as tmp:
             config["output_dir"] = tmp
-            publish_plan = command_publish(config, config_path, overwrite=True)
-            text = Path(publish_plan).read_text(encoding="utf-8")
+            publish_plan = command_publish(
+                config,
+                config_path,
+                overwrite=True,
+                source_license_checked=True,
+            )
+            plan = json.loads(Path(publish_plan).read_text(encoding="utf-8"))
+            text = json.dumps(plan)
             self.assertIn('"dry_run": true', text)
             self.assertIn('"repo_type": "dataset"', text)
             self.assertIn("verification.jsonl", text)
             self.assertIn("generation_report.json", text)
+            self.assertEqual(plan["release_class"], "public_dataset")
+            self.assertTrue(plan["redacted_output_bundle"].endswith("hf_publish_bundle"))
+            self.assertTrue(all("accepted.jsonl" not in path for path in plan["files"]))
+            self.assertTrue(all("rejected.jsonl" not in path for path in plan["files"]))
+            self.assertTrue(any(path.endswith("dataset_redacted.jsonl") for path in plan["files"]))
+            self.assertTrue(any(gate["name"] == "unsafe_examples_redacted" and gate["status"] == "pass" for gate in plan["release_gates"]))
+
+            redacted_path = Path(tmp) / "hf_publish_bundle" / "dataset_redacted.jsonl"
+            rows = [
+                json.loads(line)
+                for line in redacted_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertGreater(len(rows), 0)
+            self.assertEqual(rows[0]["messages"][0]["content"], "<redacted>")
+            self.assertIn("content_sha256", rows[0]["messages"][0])
+            self.assertNotIn("Explain a safe workflow", redacted_path.read_text(encoding="utf-8"))
+            self.assertNotIn(
+                "A model run has higher total latency",
+                (Path(tmp) / "hf_publish_bundle" / "verification.jsonl").read_text(encoding="utf-8"),
+            )
 
     def test_publish_execute_refuses_smoke_dataset(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"

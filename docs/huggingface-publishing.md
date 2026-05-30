@@ -20,6 +20,12 @@ Plan a model release and generate local card/provenance files:
 ./forge hf publish-model <family> <variant> --release-class public_quantized_model --dry-run
 ```
 
+Plan a public dataset release through the dataset factory:
+
+```bash
+./forge data publish <family> <variant> --source-license-checked --overwrite
+```
+
 Plans are written under `reports/generated/hub/<run_id>/` by default:
 
 ```text
@@ -29,7 +35,9 @@ hub_model_plan.json
 ```
 
 `publish-model` is dry-run only for now. A blocked dry run returns nonzero so it
-can be used in CI or before a manual upload.
+can be used in CI or before a manual upload. Dataset publishing can execute only
+for non-smoke datasets and uploads the generated redacted bundle when the
+release class requires public redaction.
 
 ## Release Classes
 
@@ -66,6 +74,20 @@ Every model plan records `release_gates` in `hub_publish.json`. Common gates:
 
 Do not override these gates in generated JSON. Fix the evidence or choose a
 less permissive release class.
+
+Dataset publish plans record the same gate shape in `hf_publish_plan.json`. For
+`public_dataset`, the factory creates `hf_publish_bundle/` with:
+
+- `README.md`
+- `dataset_redacted.jsonl`
+- `redaction_report.json`
+- manifest, quality, verification, generation, and review reports
+
+`dataset_redacted.jsonl` preserves IDs, skills, provenance, verification,
+quality metadata, content hashes, and message lengths while replacing message
+text with `<redacted>`. Public plans exclude `accepted.jsonl`, `rejected.jsonl`,
+and raw `dataset.jsonl` unless a different release class explicitly allows raw
+outputs.
 
 ## Secrets And Paths
 
