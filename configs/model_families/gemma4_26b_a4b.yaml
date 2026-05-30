@@ -4,6 +4,32 @@ display_name: Gemma 4 26B-A4B
 models_dir_env: MODEL_FORGE_MODELS_DIR
 default_models_dir: ~/models
 
+architecture:
+  family: gemma
+  parameter_scale: 26b_a4b
+  tokenizer_family: gemma4
+  chat_template:
+    tool_call_parser: gemma4
+    reasoning_parser: gemma4
+  context_length: 32768
+  target_discovery:
+    inspect_before_training_or_ablation: true
+    common_attention_patterns:
+      - q_proj
+      - k_proj
+      - v_proj
+      - o_proj
+    common_mlp_patterns:
+      - gate_proj
+      - up_proj
+      - down_proj
+    edit_exclusion_patterns:
+      - embed_tokens
+      - lm_head
+      - router
+      - expert
+    router_or_expert_policy: exclude_router_and_experts_by_default
+
 variants:
   base:
     repo_id: google/gemma-4-26B-A4B-it

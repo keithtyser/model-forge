@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from model_forge.objectives import IMPLEMENTATION_STATUSES, VALIDATION_STATES
+from model_forge.variants.architecture_audit import build_architecture_audit
 from model_forge.variants.graph import ancestry, variant_graph
 from model_forge.variants.manifest import (
     DEFAULT_OUTPUT_ROOT,
@@ -125,6 +126,13 @@ def main() -> None:
     tokenizer_parser.add_argument("--strict", action="store_true", help="treat missing local dirs as errors")
     tokenizer_parser.add_argument("--json", action="store_true")
 
+    architecture_parser = subparsers.add_parser("architecture-audit", help="Check architecture target-discovery and MoE/router guardrails")
+    architecture_parser.add_argument("family")
+    architecture_parser.add_argument("--variant", help="Inspect one variant local config.json; defaults to base")
+    architecture_parser.add_argument("--models-dir", help="Override the family models directory")
+    architecture_parser.add_argument("--strict", action="store_true", help="treat missing local dirs or config.json as errors")
+    architecture_parser.add_argument("--json", action="store_true")
+
     args = parser.parse_args()
 
     if args.action == "graph":
@@ -200,6 +208,36 @@ def main() -> None:
             for finding in audit["findings"]:
                 style = "red" if finding["level"] == "error" else "yellow"
                 console.print(f"[{style}]{finding['level']} {finding['variant']} {finding['check']}: {finding['message']}[/{style}]")
+        raise SystemExit(0 if audit["passed"] else 1)
+
+    if args.action == "architecture-audit":
+        audit = build_architecture_audit(
+            args.family,
+            variant=args.variant,
+            models_dir_override=args.models_dir,
+            strict=args.strict,
+        )
+        if args.json:
+            print(json.dumps(audit, indent=2, sort_keys=True))
+        else:
+            table = Table(title=f"Architecture Audit: {audit['family']}")
+            table.add_column("Variant")
+            table.add_column("Exists")
+            table.add_column("Model Type")
+            table.add_column("MoE")
+            for record in audit["records"]:
+                model_config = record.get("model_config") or {}
+                table.add_row(
+                    str(record["variant"]),
+                    str(record.get("exists")),
+                    str(model_config.get("model_type") or ""),
+                    str(record.get("moe_detected", "")),
+                )
+            console.print(table)
+            for finding in audit["findings"]:
+                style = "red" if finding["level"] == "error" else "yellow"
+                variant = f" {finding['variant']}" if finding.get("variant") else ""
+                console.print(f"[{style}]{finding['level']}{variant} {finding['check']}: {finding['message']}[/{style}]")
         raise SystemExit(0 if audit["passed"] else 1)
 
     data = yaml.safe_load(args.path.read_text(encoding="utf-8")) if args.path.suffix in {".yaml", ".yml"} else json.loads(args.path.read_text(encoding="utf-8"))

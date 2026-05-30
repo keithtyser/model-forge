@@ -217,6 +217,44 @@ Result:
 - future agents have a concrete non-Gemma onboarding path instead of relying on
   roadmap prose
 
+## Multi-Family: Architecture Target Discovery Audit
+
+Status: implemented and pushed as metadata tooling. No model server, training
+run, quantization run, or eval job was started.
+
+Hypothesis: reusable post-training recipes fail when agents reuse Gemma target
+modules, layer assumptions, or MoE/router behavior on another architecture.
+Family configs need explicit target-discovery metadata and a cheap audit that
+can inspect local `config.json` without loading weights.
+
+Changes:
+
+- added `./forge variants architecture-audit <family>`
+- added architecture metadata to Gemma and Qwen family configs
+- audit checks attention/MLP target patterns, edit exclusions, and
+  router/expert policy
+- audit reads local `config.json` when present and reports model type,
+  layer/context fields, and MoE signals
+- `./forge doctor` family-config validation now requires architecture metadata
+  and embedding, LM-head, and router/expert exclusion patterns
+- updated README, AGENTS, config docs, status, variant graph docs, and
+  adding-model-family checklist
+
+Validation:
+
+```bash
+.venv/bin/python -m py_compile src/model_forge/variants/architecture_audit.py src/model_forge/variants/cli.py src/model_forge/variants/manifest.py
+.venv/bin/python -m unittest tests.test_variants tests.test_doctor -v
+./forge variants architecture-audit gemma4_26b_a4b --json
+./forge variants architecture-audit qwen35_9b --json
+```
+
+Result:
+
+- Gemma and Qwen family configs now pass architecture audit
+- local base config metadata is read when present, with no model-weight load
+- target discovery is no longer only prose in the roadmap
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

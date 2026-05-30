@@ -48,7 +48,8 @@ and experiment constants here instead of hard-coding them in scripts.
   instead of user-specific absolute paths.
 - Put architecture-specific constants in the family or recipe config: target
   modules, layer ranges, tokenizer behavior, context length, quantization, and
-  serving settings.
+  serving settings. Validate target-discovery metadata with
+  `./forge variants architecture-audit <family>`.
 - Derived variants should set `base_variant` so graph, comparison, and
   tokenizer-audit tools can verify preservation against the right source.
   If a derived checkpoint intentionally changes tokenizer or chat-template

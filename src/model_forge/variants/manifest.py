@@ -259,6 +259,34 @@ def validate_family_config(config: Mapping[str, Any], *, path: str | None = None
         variants = {}
     if "base" not in variants:
         errors.append(f"{prefix}variants.base is required")
+    architecture = config.get("architecture") or {}
+    if not isinstance(architecture, Mapping):
+        errors.append(f"{prefix}architecture must be a mapping")
+        architecture = {}
+    for field in ("family", "tokenizer_family", "context_length", "target_discovery"):
+        if not architecture.get(field):
+            errors.append(f"{prefix}architecture.{field} is required")
+    target = architecture.get("target_discovery") or {}
+    if not isinstance(target, Mapping):
+        errors.append(f"{prefix}architecture.target_discovery must be a mapping")
+        target = {}
+    for field in (
+        "inspect_before_training_or_ablation",
+        "common_attention_patterns",
+        "common_mlp_patterns",
+        "edit_exclusion_patterns",
+        "router_or_expert_policy",
+    ):
+        if target.get(field) in (None, "", []):
+            errors.append(f"{prefix}architecture.target_discovery.{field} is required")
+    exclusions = [str(item).lower() for item in target.get("edit_exclusion_patterns", []) if str(item).strip()]
+    if exclusions:
+        if not any("embed" in item for item in exclusions):
+            errors.append(f"{prefix}architecture.target_discovery.edit_exclusion_patterns must include embedding exclusions")
+        if not any("lm_head" in item for item in exclusions):
+            errors.append(f"{prefix}architecture.target_discovery.edit_exclusion_patterns must include lm_head exclusions")
+        if target.get("router_or_expert_policy") != "not_applicable_dense" and not any("router" in item or "expert" in item for item in exclusions):
+            errors.append(f"{prefix}architecture.target_discovery.edit_exclusion_patterns must include router or expert exclusions")
     for variant_name, raw_variant in variants.items():
         if not isinstance(raw_variant, Mapping):
             errors.append(f"{prefix}variants.{variant_name} must be a mapping")

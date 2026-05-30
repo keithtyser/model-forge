@@ -60,6 +60,7 @@ List configured families:
 ```bash
 ./forge families
 ./forge variants graph qwen35_9b
+./forge variants architecture-audit qwen35_9b
 ```
 
 Download a configured family:
@@ -279,11 +280,15 @@ Variant and tokenizer checks:
 
 ```bash
 ./forge variants graph gemma4_26b_a4b --variant local_abli
+./forge variants architecture-audit gemma4_26b_a4b --variant base
 ./forge variants tokenizer-audit gemma4_26b_a4b --variant local_abli
 ./forge variants tokenizer-audit gemma4_26b_a4b --variant local_abli --load-tokenizer --strict
 ```
 
-Use `tokenizer-audit` before promoting fine-tuned, ablated, merged-adapter, or
+Use `architecture-audit` before reusing LoRA or ablation targets on a new
+family. It checks target-discovery metadata and inspects local `config.json`
+when present so MoE/router/expert behavior is not missed. Use
+`tokenizer-audit` before promoting fine-tuned, ablated, merged-adapter, or
 quantized variants. Metadata mode compares tokenizer files, special tokens, and
 chat-template hashes; `--load-tokenizer` additionally runs a local
 `AutoTokenizer` chat-template round trip when the checkpoint is present.

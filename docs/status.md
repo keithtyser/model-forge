@@ -13,6 +13,9 @@ This is the short handoff state for humans and agents. Use
   defaults, serving/eval hooks, and doctor-audited source edges.
 - `docs/adding-model-family.md` now defines the portable checklist for adding
   non-Gemma families and is required by `./forge doctor`.
+- Architecture target-discovery checks are now wired through
+  `./forge variants architecture-audit`; family configs record attention/MLP
+  target patterns plus embedding, LM-head, and router/expert exclusions.
 - Gemma 4 A4B is the first worked family for base, downloaded FT, downloaded
   abli, local base abli, local FT, and local FT abli comparisons.
 - Internal evals now cover refusal suppression, benign paired quality,

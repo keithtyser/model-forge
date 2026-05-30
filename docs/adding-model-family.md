@@ -64,6 +64,7 @@ After adding the family config, run:
 ```bash
 ./forge families
 ./forge variants graph <family> --json
+./forge variants architecture-audit <family> --variant base --json
 ./forge variants tokenizer-audit <family> --variant base --json
 ./forge doctor --json
 ```

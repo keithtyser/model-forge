@@ -14,16 +14,16 @@ This file is generated from the prioritized backlog in
 |---|---:|
 | implemented | 2 |
 | not_started | 25 |
-| scaffolded | 16 |
-| tested | 53 |
+| scaffolded | 15 |
+| tested | 54 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 49 |
-| smoke_validated | 45 |
+| planned | 48 |
+| smoke_validated | 46 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -110,7 +110,7 @@ No status audit findings.
 | MF-0601 | P1: Multi-family | tested | smoke_validated | Harden Qwen family config |
 | MF-0602 | P1: Multi-family | tested | smoke_validated | Add adding-model-family checklist |
 | MF-0603 | P1: Multi-family | tested | smoke_validated | Add tokenizer/chat-template round-trip tests |
-| MF-0604 | P1: Multi-family | scaffolded | planned | Add architecture target discovery and MoE/router exclusion checks |
+| MF-0604 | P1: Multi-family | tested | smoke_validated | Add architecture target discovery and MoE/router exclusion checks |
 | MF-0605 | P1: Multi-family | not_started | planned | Add Llama/Mistral family plan |
 | MF-0606 | P1: Multi-family | scaffolded | planned | Ensure common code has no Gemma-only assumptions |
 | MF-0701 | P2: Agents | scaffolded | planned | Add agent experiment schema |

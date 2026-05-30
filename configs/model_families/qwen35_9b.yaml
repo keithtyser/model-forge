@@ -24,6 +24,11 @@ architecture:
       - gate_proj
       - up_proj
       - down_proj
+    edit_exclusion_patterns:
+      - embed_tokens
+      - lm_head
+      - router
+      - expert
     router_or_expert_policy: inspect_model_config
 
 variants:

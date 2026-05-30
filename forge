@@ -28,7 +28,7 @@ Usage:
   ./forge roadmap [audit|cli-drift]
   ./forge research [list|show|audit]
   ./forge hf [status|login|whoami|plan-model|publish-model]
-  ./forge variants [graph|node|audit-node|tokenizer-audit]
+  ./forge variants [graph|node|audit-node|tokenizer-audit|architecture-audit]
   ./forge manifest [write|show]
   ./forge artifacts [validate]
   ./forge bench [serve|serve-eval|sweep]
@@ -59,6 +59,7 @@ Examples:
   ./forge hf status
   ./forge hf plan-model gemma4_26b_a4b local_ft --release-class report_only
   ./forge variants graph gemma4_26b_a4b
+  ./forge variants architecture-audit gemma4_26b_a4b
   ./forge variants tokenizer-audit gemma4_26b_a4b
   ./forge manifest write --run-type eval --family gemma4_26b_a4b --variant base --command './forge eval gemma4_26b_a4b base --internal'
   ./forge artifacts validate reports/generated/.../artifacts/

@@ -250,6 +250,7 @@ Inspect or write variant graph nodes:
 ```bash
 ./forge variants graph gemma4_26b_a4b
 ./forge variants node gemma4_26b_a4b local_ft --write
+./forge variants architecture-audit gemma4_26b_a4b --variant base
 ./forge variants tokenizer-audit gemma4_26b_a4b --variant local_abli
 ```
 
@@ -363,6 +364,8 @@ limits, disk preflight, and a 5% available-RAM watchdog floor.
   same architecture family.
 - For new architectures, inspect target module names, layer counts, hidden
   sizes, MoE/expert layouts, and tokenizer/chat templates before editing.
+- Run `./forge variants architecture-audit <family> --variant base` before
+  reusing LoRA targets, ablation target modules, or quantization exclusions.
 - Before promoting a derived variant, run `./forge variants tokenizer-audit` to
   verify tokenizer and chat-template preservation against the configured source
   variant.

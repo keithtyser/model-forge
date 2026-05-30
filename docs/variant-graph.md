@@ -55,6 +55,23 @@ Validate a node:
 `./forge doctor` validates any tracked `variant_node.json` files, so checked-in
 examples cannot drift from the schema.
 
+## Architecture Audit
+
+Family configs must record target-discovery metadata before training,
+ablating, or quantizing a new architecture. The architecture audit checks those
+fields and, when a local checkpoint is present, reads `config.json` without
+loading weights to summarize layer/context metadata and MoE/expert signals.
+
+```bash
+./forge variants architecture-audit gemma4_26b_a4b --variant base
+./forge variants architecture-audit qwen35_9b --variant base --json
+```
+
+Use this before copying LoRA target modules, ablation module ranges, or
+quantization exclusions from another family. The audit expects embedding,
+LM-head, and router/expert exclusion patterns unless the family is explicitly
+documented as dense-only.
+
 ## Tokenizer And Chat Template Audit
 
 Derived variants should preserve tokenizer files, special-token semantics, and

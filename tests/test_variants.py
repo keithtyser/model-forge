@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from model_forge.variants.architecture_audit import audit_architecture_metadata, build_architecture_audit
 from model_forge.variants.graph import ancestry, variant_graph
 from model_forge.variants.manifest import default_variant_node, load_family, node_output_path, validate_family_config, validate_variant_node, write_variant_node
 from model_forge.variants.tokenizer_audit import build_tokenizer_audit
@@ -31,6 +32,21 @@ def write_tokenizer_fixture(path: Path, *, chat_template: str = "{{ messages }}"
         json.dumps({"bos_token": "<bos>", "eos_token": eos_token, "unk_token": "<unk>", "pad_token": "<pad>"}, sort_keys=True),
         encoding="utf-8",
     )
+
+
+def write_model_config_fixture(path: Path, **overrides: object) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    config = {
+        "model_type": "qwen3",
+        "architectures": ["Qwen3ForCausalLM"],
+        "num_hidden_layers": 2,
+        "hidden_size": 128,
+        "num_attention_heads": 4,
+        "intermediate_size": 512,
+        "max_position_embeddings": 32768,
+    }
+    config.update(overrides)
+    (path / "config.json").write_text(json.dumps(config, sort_keys=True), encoding="utf-8")
 
 
 class VariantGraphTests(unittest.TestCase):
@@ -66,6 +82,37 @@ class VariantGraphTests(unittest.TestCase):
         broken["variants"]["local_abli"].pop("base_variant")
         errors = validate_family_config(broken)
         self.assertTrue(any("local_abli.base_variant is required" in error for error in errors))
+
+    def test_family_config_validation_requires_architecture_metadata(self) -> None:
+        family = load_family("qwen35_9b")
+        broken = dict(family)
+        broken.pop("architecture")
+        errors = validate_family_config(broken)
+        self.assertTrue(any("architecture.family is required" in error for error in errors))
+
+    def test_architecture_audit_passes_configured_qwen_family(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            models = Path(tmp)
+            write_model_config_fixture(models / "Qwen3.5-9B")
+            audit = build_architecture_audit("qwen35_9b", models_dir_override=str(models), strict=True)
+        self.assertTrue(audit["passed"], audit["findings"])
+        self.assertEqual(audit["records"][0]["model_config"]["model_type"], "qwen3")
+
+    def test_architecture_audit_flags_moe_without_router_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            models = Path(tmp)
+            write_model_config_fixture(models / "Qwen3.5-9B", num_experts=8)
+            audit = build_architecture_audit("qwen35_9b", models_dir_override=str(models), strict=True)
+        self.assertTrue(audit["passed"], audit["findings"])
+
+        family = load_family("qwen35_9b")
+        target = dict(family["architecture"]["target_discovery"])
+        target["edit_exclusion_patterns"] = ["embed_tokens", "lm_head"]
+        broken = dict(family)
+        broken["architecture"] = dict(family["architecture"])
+        broken["architecture"]["target_discovery"] = target
+        findings = audit_architecture_metadata(broken)
+        self.assertTrue(any(finding.check == "edit_exclusion_patterns" for finding in findings))
 
     def test_variant_node_contains_validation_evidence_and_retention(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
