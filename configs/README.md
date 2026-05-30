@@ -6,7 +6,8 @@ and experiment constants here instead of hard-coding them in scripts.
 ## Directories
 
 - `model_families/`: source checkpoints, variants, served model names, report
-  paths, and serving defaults.
+  paths, serving defaults, architecture notes, tokenizer policy, and source
+  edges for derived variants. `./forge doctor` audits these configs.
 - `hardware/`: generic hardware profile defaults such as DGX Spark serving,
   training, quantization, and resource-policy recommendations.
 - `clusters/`: open-source-safe cluster inventory examples. Private hostnames,

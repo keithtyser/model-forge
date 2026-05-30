@@ -3816,7 +3816,7 @@ MF-0511 Block public checkpoint upload unless validation state and release class
 ### P1: Multi-family
 
 ```text
-MF-0601 Harden Qwen family config. implementation_status=scaffolded validation_state=planned
+MF-0601 Harden Qwen family config. implementation_status=tested validation_state=smoke_validated
 MF-0602 Add adding-model-family checklist. implementation_status=scaffolded validation_state=planned
 MF-0603 Add tokenizer/chat-template round-trip tests. implementation_status=tested validation_state=smoke_validated
 MF-0604 Add architecture target discovery and MoE/router exclusion checks. implementation_status=scaffolded validation_state=planned

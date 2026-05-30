@@ -8,6 +8,7 @@ from model_forge.doctor import (
     Finding,
     check_generated_dataset_policy,
     check_machine_paths,
+    check_model_family_configs,
     check_secret_literals,
     run_checks,
 )
@@ -71,6 +72,9 @@ class DoctorTests(unittest.TestCase):
             (path / "example.md").write_text(f"historical path: {machine_path}\n")
             findings = check_machine_paths(["docs/roadmaps/example.md"], root)
         self.assertEqual(findings, [])
+
+    def test_model_family_config_audit_passes_current_configs(self) -> None:
+        self.assertEqual(check_model_family_configs(), [])
 
 
 if __name__ == "__main__":

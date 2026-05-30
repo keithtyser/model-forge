@@ -144,6 +144,46 @@ Result:
   while the configured `local_abli` dir is not present; non-strict audit passes
   with a warning as intended
 
+## Multi-Family: Qwen Family Config Hardening
+
+Status: implemented and pushed as config/schema work. No model server, training
+run, quantization run, or eval job was started.
+
+Hypothesis: Model Forge is not truly model-family driven if Qwen only exists as
+one-off scripts and eval YAMLs. Qwen needs first-class family configs with
+source edges, architecture notes, serving/eval hooks, and doctor validation so
+agents can run the same workbench loop used for Gemma.
+
+Changes:
+
+- added `configs/model_families/qwen35_9b.yaml`
+- added `configs/model_families/qwen36_27b.yaml`
+- added `configs/experiments/qwen36_27b_artifacts_v0.yaml`
+- aligned Qwen eval config `model.family` fields with model-family ids
+- added model-family config validation to `./forge doctor`
+- doctor now checks required variant fields, derived-variant `base_variant`
+  edges, serve scripts, and eval config paths
+- added Qwen graph and family-validation tests
+- updated README, config docs, status, and roadmap state
+
+Validation:
+
+```bash
+.venv/bin/python -m py_compile src/model_forge/variants/manifest.py src/model_forge/doctor.py
+.venv/bin/python -m unittest tests.test_variants tests.test_doctor -v
+./forge variants graph qwen35_9b --variant local_ft_abli --json
+./forge variants tokenizer-audit qwen35_9b --variant local_abli --json
+```
+
+Result:
+
+- `qwen35_9b` and `qwen36_27b` each expose base, local FT, local abli, and local
+  FT+abli graph nodes
+- `qwen35_9b` ancestry resolves `base -> local_ft -> local_ft_abli`
+- local Qwen 3.5 base tokenizer metadata is visible and hashable; the configured
+  local abli output is not present yet, so non-strict tokenizer audit passes
+  with a missing-local-dir warning
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

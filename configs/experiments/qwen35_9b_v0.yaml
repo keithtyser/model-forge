@@ -1,7 +1,7 @@
 experiment_name: qwen35_9b_v0_base_eval
 
 model:
-  family: qwen3.5
+  family: qwen35_9b
   id: Qwen/Qwen3.5-9B
   variant: base
 

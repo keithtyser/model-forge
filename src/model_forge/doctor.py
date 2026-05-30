@@ -9,6 +9,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
+import yaml
+
 from model_forge.objectives import audit_profiles
 from model_forge.roadmap import (
     audit_roadmap_command_examples,
@@ -16,7 +18,7 @@ from model_forge.roadmap import (
     parse_roadmap_command_examples,
     parse_roadmap_items,
 )
-from model_forge.variants.manifest import validate_variant_node
+from model_forge.variants.manifest import validate_family_config, validate_variant_node
 
 
 REPO_DIR = Path(__file__).resolve().parents[2]
@@ -239,6 +241,31 @@ def check_tracked_variant_nodes(files: list[str], repo_dir: Path = REPO_DIR) -> 
     return findings
 
 
+def check_model_family_configs(repo_dir: Path = REPO_DIR) -> list[Finding]:
+    findings: list[Finding] = []
+    for path in sorted((repo_dir / "configs" / "model_families").glob("*.yaml")):
+        relative = str(path.relative_to(repo_dir))
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError) as exc:
+            findings.append(Finding("model_family_config", f"could not parse family config: {exc}", relative))
+            continue
+        if not isinstance(data, dict):
+            findings.append(Finding("model_family_config", "family config must be a mapping", relative))
+            continue
+        for error in validate_family_config(data, path=relative):
+            findings.append(Finding("model_family_config", error, relative))
+        serve = data.get("serve") or {}
+        if isinstance(serve, dict) and serve.get("script") and not (repo_dir / str(serve["script"])).exists():
+            findings.append(Finding("model_family_config", f"serve.script does not exist: {serve['script']}", relative))
+        eval_config = data.get("eval") or {}
+        if isinstance(eval_config, dict):
+            for field in ("config", "artifact_config"):
+                if eval_config.get(field) and not (repo_dir / str(eval_config[field])).exists():
+                    findings.append(Finding("model_family_config", f"eval.{field} does not exist: {eval_config[field]}", relative))
+    return findings
+
+
 def run_checks(repo_dir: Path = REPO_DIR) -> list[Finding]:
     files = tracked_files(repo_dir)
     findings: list[Finding] = []
@@ -251,6 +278,7 @@ def run_checks(repo_dir: Path = REPO_DIR) -> list[Finding]:
     findings.extend(check_objective_profiles())
     findings.extend(check_roadmap_status())
     findings.extend(check_roadmap_cli_drift())
+    findings.extend(check_model_family_configs(repo_dir))
     findings.extend(check_tracked_variant_nodes(files, repo_dir))
     return findings
 

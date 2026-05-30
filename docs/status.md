@@ -8,6 +8,9 @@ This is the short handoff state for humans and agents. Use
 ## Validated So Far
 
 - The repo is organized around model families, not Gemma-only scripts.
+- Qwen 3.5 9B and Qwen 3.6 27B now have model-family configs with base,
+  local-FT, local-abli, and local-FT-abli variant nodes, Qwen chat-template
+  defaults, serving/eval hooks, and doctor-audited source edges.
 - Gemma 4 A4B is the first worked family for base, downloaded FT, downloaded
   abli, local base abli, local FT, and local FT abli comparisons.
 - Internal evals now cover refusal suppression, benign paired quality,

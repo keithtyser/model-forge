@@ -1,7 +1,7 @@
 experiment_name: qwen36_27b_v0_base_eval
 
 model:
-  family: qwen3.6
+  family: qwen36_27b
   id: Qwen/Qwen3.6-27B
   variant: base
 

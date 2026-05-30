@@ -1,14 +1,14 @@
-experiment_name: qwen35_9b_artifact_workbench
+experiment_name: qwen36_27b_artifact_workbench
 
 model:
-  family: qwen35_9b
-  id: Qwen/Qwen3.5-9B
+  family: qwen36_27b
+  id: Qwen/Qwen3.6-27B
   variant: base
 
 backend:
   engine: local-openai-compatible
   base_url: http://127.0.0.1:8000/v1
-  model_alias: qwen35_9b_local
+  model_alias: qwen36_27b_local
   api_key_env: OPENAI_API_KEY
   temperature: 0.7
   max_tokens: 4096
@@ -23,7 +23,7 @@ backend:
       enable_thinking: false
 
 eval:
-  output_dir: results/qwen35_9b_v0/base
+  output_dir: results/qwen36_27b_v0/base
   prompt_sets:
     - artifact_web_design
     - artifact_canvas_webgl

@@ -1,0 +1,74 @@
+name: qwen36_27b
+display_name: Qwen 3.6 27B
+
+models_dir_env: MODEL_FORGE_MODELS_DIR
+default_models_dir: ~/models
+
+architecture:
+  family: qwen
+  parameter_scale: 27b
+  tokenizer_family: qwen3
+  chat_template:
+    default_chat_template_kwargs:
+      enable_thinking: false
+    reasoning_parser: qwen3
+  context_length: 32768
+  target_discovery:
+    inspect_before_training_or_ablation: true
+    common_attention_patterns:
+      - q_proj
+      - k_proj
+      - v_proj
+      - o_proj
+    common_mlp_patterns:
+      - gate_proj
+      - up_proj
+      - down_proj
+    router_or_expert_policy: inspect_model_config
+
+variants:
+  base:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B
+    served_model_name: Qwen/Qwen3.6-27B
+  local_ft:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-ft-v0
+    served_model_name: local/qwen36-27b-local-ft-v0
+    adapter: true
+    base_variant: base
+    downloadable: false
+  local_abli:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-abliterated-v0
+    served_model_name: local/qwen36-27b-local-abliterated-v0
+    base_variant: base
+    downloadable: false
+  local_ft_abli:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-ft-abliterated-v0
+    served_model_name: local/qwen36-27b-local-ft-abliterated-v0
+    base_variant: local_ft
+    downloadable: false
+
+serve:
+  script: scripts/dgx_spark_serve_qwen35_9b.sh
+  default_gpu_memory_utilization: "0.78"
+  default_max_model_len: "32768"
+
+eval:
+  config: configs/experiments/qwen36_27b_v0.yaml
+  artifact_config: configs/experiments/qwen36_27b_artifacts_v0.yaml
+  output_root: results/qwen36_27b_v0/base
+  run_prefix: qwen36_27b
+  smoke_suffix: "{family}_{variant}_smoke"
+  full_suffix: "{family}_{variant}_dgx_spark"
+  artifact_suffix: "{family}_{variant}_artifacts_dgx_spark"
+
+comparison:
+  output_dir: reports/generated/qwen36_27b_comparison
+
+external:
+  default_tool: lm-eval
+  default_tasks: ifeval
+  output_root: reports/generated/qwen36_27b_external

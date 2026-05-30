@@ -116,7 +116,7 @@ def tokenizer_record(path: Path | None) -> dict[str, Any]:
         record["tokenizer_config_sha256"] = file_sha256(path / "tokenizer_config.json")
         special_tokens = {
             key: tokenizer_config.get(key)
-            for key in ("bos_token", "eos_token", "unk_token", "pad_token", "chat_template")
+            for key in ("bos_token", "eos_token", "unk_token", "pad_token")
             if tokenizer_config.get(key) is not None
         }
         if special_tokens:

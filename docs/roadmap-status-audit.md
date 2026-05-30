@@ -14,16 +14,16 @@ This file is generated from the prioritized backlog in
 |---|---:|
 | implemented | 2 |
 | not_started | 25 |
-| scaffolded | 18 |
-| tested | 51 |
+| scaffolded | 17 |
+| tested | 52 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 51 |
-| smoke_validated | 43 |
+| planned | 50 |
+| smoke_validated | 44 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -107,7 +107,7 @@ No status audit findings.
 | MF-0509 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add no-secrets/no-absolute-path publish validator |
 | MF-0510 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add redacted-output dataset publishing path |
 | MF-0511 | P1: Hugging Face Hub publishing | tested | smoke_validated | Block public checkpoint upload unless validation state and release class allow it |
-| MF-0601 | P1: Multi-family | scaffolded | planned | Harden Qwen family config |
+| MF-0601 | P1: Multi-family | tested | smoke_validated | Harden Qwen family config |
 | MF-0602 | P1: Multi-family | scaffolded | planned | Add adding-model-family checklist |
 | MF-0603 | P1: Multi-family | tested | smoke_validated | Add tokenizer/chat-template round-trip tests |
 | MF-0604 | P1: Multi-family | scaffolded | planned | Add architecture target discovery and MoE/router exclusion checks |

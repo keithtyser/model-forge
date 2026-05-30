@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from model_forge.variants.graph import ancestry, variant_graph
-from model_forge.variants.manifest import default_variant_node, node_output_path, validate_variant_node, write_variant_node
+from model_forge.variants.manifest import default_variant_node, load_family, node_output_path, validate_family_config, validate_variant_node, write_variant_node
 from model_forge.variants.tokenizer_audit import build_tokenizer_audit
 
 
@@ -44,6 +44,28 @@ class VariantGraphTests(unittest.TestCase):
             ancestry(graph, "ft_local_abli_sota_internal_r7_selected_t34_transfer_nvfp4_modelopt"),
             ["base", "local_ft", "ft_local_abli_sota_internal_r7_selected_t34_transfer", "ft_local_abli_sota_internal_r7_selected_t34_transfer_nvfp4_modelopt"],
         )
+
+    def test_qwen_family_configs_are_graph_ready(self) -> None:
+        qwen35 = variant_graph("qwen35_9b")
+        self.assertEqual(qwen35["node_count"], 4)
+        self.assertEqual(ancestry(qwen35, "local_ft_abli"), ["base", "local_ft", "local_ft_abli"])
+        targets = {edge["target"]: edge for edge in qwen35["edges"]}
+        self.assertEqual(targets["local_abli"]["transform"]["type"], "behavior_edit")
+        self.assertEqual(targets["local_ft"]["transform"]["type"], "fine_tune")
+
+        qwen36 = variant_graph("qwen36_27b")
+        self.assertEqual(qwen36["node_count"], 4)
+        self.assertEqual(ancestry(qwen36, "local_abli"), ["base", "local_abli"])
+
+    def test_family_config_validation_requires_source_edges_for_derived_variants(self) -> None:
+        family = load_family("qwen35_9b")
+        self.assertEqual(validate_family_config(family), [])
+        broken = dict(family)
+        broken["variants"] = dict(family["variants"])
+        broken["variants"]["local_abli"] = dict(broken["variants"]["local_abli"])
+        broken["variants"]["local_abli"].pop("base_variant")
+        errors = validate_family_config(broken)
+        self.assertTrue(any("local_abli.base_variant is required" in error for error in errors))
 
     def test_variant_node_contains_validation_evidence_and_retention(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

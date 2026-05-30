@@ -247,6 +247,57 @@ def validate_variant_node(node: Mapping[str, Any]) -> list[str]:
     return errors
 
 
+def validate_family_config(config: Mapping[str, Any], *, path: str | None = None) -> list[str]:
+    prefix = f"{path}: " if path else ""
+    errors: list[str] = []
+    for field in ("name", "display_name", "variants", "serve", "eval", "comparison"):
+        if not config.get(field):
+            errors.append(f"{prefix}{field} is required")
+    variants = config.get("variants") or {}
+    if not isinstance(variants, Mapping):
+        errors.append(f"{prefix}variants must be a mapping")
+        variants = {}
+    if "base" not in variants:
+        errors.append(f"{prefix}variants.base is required")
+    for variant_name, raw_variant in variants.items():
+        if not isinstance(raw_variant, Mapping):
+            errors.append(f"{prefix}variants.{variant_name} must be a mapping")
+            continue
+        for field in ("repo_id", "local_dir", "served_model_name"):
+            if not raw_variant.get(field):
+                errors.append(f"{prefix}variants.{variant_name}.{field} is required")
+        base_variant = raw_variant.get("base_variant")
+        if base_variant and str(base_variant) not in variants:
+            errors.append(f"{prefix}variants.{variant_name}.base_variant references unknown variant {base_variant!r}")
+        transform_type = infer_transform_type(str(variant_name), raw_variant)
+        if transform_type in {"fine_tune", "behavior_edit", "quantize", "derive"} and str(variant_name) != "base":
+            tokenizer_policy = raw_variant.get("tokenizer_policy") or {}
+            documented_change = isinstance(tokenizer_policy, Mapping) and bool(tokenizer_policy.get("documented_change"))
+            if not base_variant and not documented_change:
+                errors.append(f"{prefix}variants.{variant_name}.base_variant is required for derived variants")
+        if raw_variant.get("adapter") and not base_variant:
+            errors.append(f"{prefix}variants.{variant_name}.base_variant is required for adapter variants")
+    serve = config.get("serve") or {}
+    if not isinstance(serve, Mapping):
+        errors.append(f"{prefix}serve must be a mapping")
+        serve = {}
+    elif not serve.get("script"):
+        errors.append(f"{prefix}serve.script is required")
+    eval_config = config.get("eval") or {}
+    if not isinstance(eval_config, Mapping):
+        errors.append(f"{prefix}eval must be a mapping")
+        eval_config = {}
+    for field in ("config", "output_root", "smoke_suffix", "full_suffix", "artifact_suffix"):
+        if not eval_config.get(field):
+            errors.append(f"{prefix}eval.{field} is required")
+    comparison = config.get("comparison") or {}
+    if not isinstance(comparison, Mapping):
+        errors.append(f"{prefix}comparison must be a mapping")
+    elif not comparison.get("output_dir"):
+        errors.append(f"{prefix}comparison.output_dir is required")
+    return errors
+
+
 def node_output_path(family: str, variant: str, output_root: Path = DEFAULT_OUTPUT_ROOT) -> Path:
     return output_root / sanitize_run_id(family) / sanitize_run_id(variant) / "variant_node.json"
 
