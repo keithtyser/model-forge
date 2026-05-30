@@ -3751,12 +3751,12 @@ MF-0208 Add two-node torchrun/NCCL Spark preflight. implementation_status=tested
 ### P0: Artifact validation
 
 ```text
-MF-0251 Add Playwright HTML validation. implementation_status=not_started validation_state=planned
-MF-0252 Add Python artifact compile/run validation. implementation_status=not_started validation_state=planned
-MF-0253 Add artifact screenshots and nonblank canvas/WebGL checks. implementation_status=not_started validation_state=planned
-MF-0254 Add Artifact Execution Card. implementation_status=not_started validation_state=planned
-MF-0255 Add artifact execution score to compare report. implementation_status=not_started validation_state=planned
-MF-0256 Require artifact validation before artifact-generation improvement claims. implementation_status=not_started validation_state=planned
+MF-0251 Add Playwright HTML validation. implementation_status=tested validation_state=smoke_validated
+MF-0252 Add Python artifact compile/run validation. implementation_status=tested validation_state=smoke_validated
+MF-0253 Add artifact screenshots and nonblank canvas/WebGL checks. implementation_status=tested validation_state=smoke_validated
+MF-0254 Add Artifact Execution Card. implementation_status=tested validation_state=smoke_validated
+MF-0255 Add artifact execution score to compare report. implementation_status=tested validation_state=smoke_validated
+MF-0256 Require artifact validation before artifact-generation improvement claims. implementation_status=tested validation_state=smoke_validated
 ```
 
 ### P1: Quantization

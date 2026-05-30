@@ -155,6 +155,65 @@ class CompareReportV2Tests(unittest.TestCase):
         self.assertFalse(comparison["provenance"]["runs"]["ft"]["canonical_available"])
         self.assertTrue(any(warning["field"] == "canonical" for warning in comparison["provenance"]["comparability_warnings"]))
 
+    def test_artifact_validation_score_is_compared_as_artifact_execution_metric(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_run(root / "base", variant="base", alias="base", git_commit="a" * 40, config_sha="same")
+            write_run(root / "candidate", variant="candidate", alias="candidate", git_commit="a" * 40, config_sha="same")
+            for variant, value in {"base": 0.5, "candidate": 1.0}.items():
+                with (root / variant / "scores.csv").open("a", newline="") as handle:
+                    writer = csv.DictWriter(
+                        handle,
+                        fieldnames=["bucket", "metric", "value", "count", "pass_count", "fail_count", "ci_low", "ci_high", "stddev"],
+                    )
+                    writer.writerow({
+                        "bucket": "artifact_generation",
+                        "metric": "artifact_validation_pass_rate",
+                        "value": value,
+                        "count": 2,
+                    })
+
+            comparison = compare_runs({
+                "base": load_run("base", root / "base"),
+                "candidate": load_run("candidate", root / "candidate"),
+            })
+
+        row = next(
+            item for item in comparison["score_rows"]
+            if item["bucket"] == "artifact_generation" and item["metric"] == "artifact_validation_pass_rate"
+        )
+        self.assertEqual(row["base"], 0.5)
+        self.assertEqual(row["candidate"], 1.0)
+        self.assertEqual(row["candidate_delta"], 0.5)
+        self.assertEqual(comparison["claim_warnings"], [])
+
+    def test_artifact_improvement_without_validation_gets_claim_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_run(root / "base", variant="base", alias="base", git_commit="a" * 40, config_sha="same")
+            write_run(root / "candidate", variant="candidate", alias="candidate", git_commit="a" * 40, config_sha="same")
+            for variant, value in {"base": 0.5, "candidate": 1.0}.items():
+                with (root / variant / "scores.csv").open("a", newline="") as handle:
+                    writer = csv.DictWriter(
+                        handle,
+                        fieldnames=["bucket", "metric", "value", "count", "pass_count", "fail_count", "ci_low", "ci_high", "stddev"],
+                    )
+                    writer.writerow({
+                        "bucket": "artifact_generation",
+                        "metric": "workflow_success",
+                        "value": value,
+                        "count": 2,
+                    })
+
+            comparison = compare_runs({
+                "base": load_run("base", root / "base"),
+                "candidate": load_run("candidate", root / "candidate"),
+            })
+
+        self.assertEqual(len(comparison["claim_warnings"]), 1)
+        self.assertEqual(comparison["claim_warnings"][0]["variant"], "candidate")
+        self.assertEqual(comparison["claim_warnings"][0]["metric"], "workflow_success")
+
 
 if __name__ == "__main__":
     unittest.main()

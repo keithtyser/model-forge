@@ -88,6 +88,13 @@ This is the short handoff state for humans and agents. Use
 - Variant graph metadata is now wired through `./forge variants graph|node`.
   Variant nodes can record source variant, transform, artifact checksums,
   validation state, Spark evidence, promotion decision, and retention decision.
+- Standalone artifact execution validation is now wired through
+  `./forge artifacts validate`. It validates HTML artifacts with Playwright
+  browser checks, screenshots, and nonblank canvas checks when available;
+  validates Python artifacts with compile/help/fixture checks; and writes
+  `artifact_execution_card.json` / `.md`. Compare reports also emit claim
+  warnings when an artifact-generation metric improves without
+  `artifact_validation_pass_rate` evidence.
 
 ## Current Dataset State
 
@@ -132,8 +139,8 @@ length filtering:
    those nodes.
 2. Add the eval provenance card so eval reports record suite version, judge
    config, prompt counts, trials, raw-output paths, and objective profile.
-3. Add artifact execution validators for HTML and Python artifacts before using
-   artifact quality as a promotion claim.
+3. Add release-class validators and public/private risk report gates before
+   model or dataset publication commands can upload risky artifacts.
 4. Finish/evaluate Gemma local FT or write a Training Method failure card with
    distributed Spark correctness evidence.
 5. Run one real Spark serving benchmark and attach endpoint evidence to the

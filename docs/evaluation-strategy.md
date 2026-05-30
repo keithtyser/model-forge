@@ -83,7 +83,12 @@ Primary use:
 
 ### 3. Execution Validation
 
-This is the next planned layer.
+This layer is available through eval-time artifact checks and the standalone
+Artifact Execution Card command:
+
+```bash
+./forge artifacts validate reports/generated/<run>/artifacts/ --strict
+```
 
 HTML artifacts should be opened in a browser runner and checked for:
 
@@ -101,6 +106,8 @@ Python artifacts should be checked with:
 - expected stdout fields
 
 The purpose is to avoid rewarding artifacts that look plausible in text but fail when executed.
+Compare reports emit claim warnings when an artifact-generation metric improves
+without `artifact_validation_pass_rate` evidence.
 
 ### 4. External Baselines
 

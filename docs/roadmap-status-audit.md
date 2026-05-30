@@ -13,17 +13,17 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| not_started | 38 |
+| not_started | 32 |
 | scaffolded | 23 |
-| tested | 33 |
+| tested | 39 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 67 |
-| smoke_validated | 27 |
+| planned | 61 |
+| smoke_validated | 33 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -66,12 +66,12 @@ No status audit findings.
 | MF-0206 | P0: Serving | tested | smoke_validated | Add quality/behavior sampled eval under serving configs |
 | MF-0207 | P0: Serving | scaffolded | planned | Mark serving work complete only after real endpoint evidence is attached |
 | MF-0208 | P0: Serving | tested | spark_cluster_validated | Add two-node torchrun/NCCL Spark preflight |
-| MF-0251 | P0: Artifact validation | not_started | planned | Add Playwright HTML validation |
-| MF-0252 | P0: Artifact validation | not_started | planned | Add Python artifact compile/run validation |
-| MF-0253 | P0: Artifact validation | not_started | planned | Add artifact screenshots and nonblank canvas/WebGL checks |
-| MF-0254 | P0: Artifact validation | not_started | planned | Add Artifact Execution Card |
-| MF-0255 | P0: Artifact validation | not_started | planned | Add artifact execution score to compare report |
-| MF-0256 | P0: Artifact validation | not_started | planned | Require artifact validation before artifact-generation improvement claims |
+| MF-0251 | P0: Artifact validation | tested | smoke_validated | Add Playwright HTML validation |
+| MF-0252 | P0: Artifact validation | tested | smoke_validated | Add Python artifact compile/run validation |
+| MF-0253 | P0: Artifact validation | tested | smoke_validated | Add artifact screenshots and nonblank canvas/WebGL checks |
+| MF-0254 | P0: Artifact validation | tested | smoke_validated | Add Artifact Execution Card |
+| MF-0255 | P0: Artifact validation | tested | smoke_validated | Add artifact execution score to compare report |
+| MF-0256 | P0: Artifact validation | tested | smoke_validated | Require artifact validation before artifact-generation improvement claims |
 | MF-0301 | P1: Quantization | tested | smoke_validated | Add forge quantize or mark target CLI until implemented |
 | MF-0302 | P1: Quantization | scaffolded | planned | Add calibration dataset manifests |
 | MF-0303 | P1: Quantization | scaffolded | planned | Add FP8 KV behavior report |

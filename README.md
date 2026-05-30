@@ -92,6 +92,7 @@ Run evals from another terminal:
 ./forge research audit
 ./forge manifest write --run-type eval --family gemma4_26b_a4b --variant base --command './forge eval gemma4_26b_a4b base --internal'
 ./forge variants graph gemma4_26b_a4b
+./forge artifacts validate reports/generated/.../artifacts/
 ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
 ./forge bench sweep plan --family gemma4_26b_a4b --variant base
 ./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan
@@ -112,6 +113,16 @@ Evaluation:
 ./forge compare gemma4_26b_a4b
 ./forge promote gemma4_26b_a4b local_ft_vs_jackrong
 ```
+
+Artifact validation:
+
+```bash
+./forge artifacts validate reports/generated/<run>/artifacts/ --strict
+./forge artifacts validate reports/generated/<run>/artifacts/ --require-browser
+```
+
+See [docs/artifact-validation.md](docs/artifact-validation.md) before using
+artifact quality as a promotion claim.
 
 Fine-tuning:
 
@@ -267,7 +278,8 @@ Read [docs/dgx-spark.md](docs/dgx-spark.md),
 [docs/spark-optimizations.md](docs/spark-optimizations.md), and
 [docs/finetuning.md](docs/finetuning.md) before starting long jobs. Read
 [docs/serving-benchmarks.md](docs/serving-benchmarks.md) before publishing
-serving claims.
+serving claims, and [docs/artifact-validation.md](docs/artifact-validation.md)
+before publishing artifact-generation claims.
 
 ## Repository Layout
 

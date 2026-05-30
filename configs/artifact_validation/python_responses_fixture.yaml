@@ -1,0 +1,8 @@
+python:
+  validation_fixture:
+    kind: responses_jsonl
+    args:
+      - "{fixture}"
+    stdout_any:
+      - workflow
+

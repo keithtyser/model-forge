@@ -25,6 +25,8 @@ reusable pipeline code over one-off scripts.
 - `docs/finetuning.md`: SFT/QLoRA workflow and promotion gates
 - `docs/abliteration.md`: refusal-ablation methodology and promotion criteria
 - `docs/evaluation-strategy.md`: eval design and interpretation
+- `docs/artifact-validation.md`: standalone HTML/Python artifact execution
+  validators and Artifact Execution Card rules
 - `docs/experiment-ledger.md`: handoff ledger for hypotheses, experiments,
   artifacts, validation, and publish status
 - `docs/run-manifests.md`: canonical run manifest schema and handoff rules
@@ -225,6 +227,17 @@ Use manifests for planned, running, completed, and failed work. They preserve
 git state, config hashes, command lines, hardware, safe environment variables,
 outputs, artifacts, metrics, and notes. Never pass secrets through manifest
 metadata or notes.
+
+Validate generated artifacts before making artifact-quality claims:
+
+```bash
+./forge artifacts validate reports/generated/<run>/artifacts/ --strict
+./forge artifacts validate reports/generated/<run>/artifacts/ --require-browser
+```
+
+The command writes `artifact_validations.json`, `artifact_execution_card.json`,
+and `artifact_execution_card.md`. Browser-skipped validation is acceptable only
+for smoke checks; promotion paths should use `--require-browser`.
 
 Inspect or write variant graph nodes:
 

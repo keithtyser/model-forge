@@ -273,6 +273,50 @@ Next validation: run the full-MoE self-export through
 the published full-MoE NVFP4 artifact before promoting any local NVFP4
 checkpoint.
 
+## Evaluation Hardening: Standalone Artifact Execution Validation
+
+Status: implemented and smoke-validated.
+
+Purpose: make artifact execution validation a first-class P0 workflow instead
+of only per-response metadata inside eval runs. This supports the roadmap gate
+that coding, HTML, tool-use, and artifact-generation claims need executable
+artifact evidence.
+
+Implemented command:
+
+```text
+./forge artifacts validate <artifact-file-or-dir>
+```
+
+Outputs:
+
+```text
+artifact_validations.json
+artifact_execution_card.json
+artifact_execution_card.md
+```
+
+Validation behavior:
+
+- HTML artifacts get static structure checks plus Playwright browser validation
+  when available: console/page errors, desktop/mobile DOM checks, horizontal
+  overflow, text overlap, screenshots, and nonblank canvas/WebGL pixel checks.
+- Python artifacts get `py_compile`, `--help`, and optional fixture execution.
+- `--require-browser` turns skipped browser validation into a failure for
+  promotion gates.
+- `--strict` exits nonzero if any artifact fails.
+
+Smoke evidence: unit tests create a synthetic HTML/canvas artifact and a Python
+fixture artifact, run the validator with browser required, and assert the card
+metrics and output files. A failing Python artifact is also tested under
+`--strict`.
+
+Compare reports now also emit claim warnings when an artifact-generation metric
+improves without `artifact_validation_pass_rate` evidence. Next validation:
+wire release-class and publication gates so public uploads cannot claim
+artifact-generation improvement without an attached Artifact Execution Card or
+equivalent eval-time artifact validation.
+
 ## Roadmap Utility Layer: Sources, Publish, Promotion, Teacher Serve
 
 Status: implemented as config/code/docs only. No model server, training run, live

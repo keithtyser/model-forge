@@ -719,6 +719,7 @@ def compare_runs(runs: dict[str, dict[str, Any]]) -> dict[str, Any]:
         "provenance": provenance,
         "research_basis": select_research_basis(runs),
         "score_rows": rows,
+        "claim_warnings": artifact_claim_warnings(rows, runs),
         "objective_profiles": serializable_objective_profiles(),
         "variant_assessments": objective_assessments[DEFAULT_OBJECTIVE],
         "recommendations": recommendations_by_objective[DEFAULT_OBJECTIVE],
@@ -826,6 +827,38 @@ def build_recommendations(assessments: dict[str, dict[str, list[dict[str, Any]]]
     return recommendations
 
 
+def artifact_validation_value(run: dict[str, Any]) -> float | None:
+    for (_bucket, metric), score in run.get("scores", {}).items():
+        if metric == "artifact_validation_pass_rate":
+            value = score.get("value")
+            return float(value) if isinstance(value, (int, float)) else None
+    return None
+
+
+def artifact_claim_warnings(rows: list[dict[str, Any]], runs: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    warnings: list[dict[str, Any]] = []
+    for row in rows:
+        bucket = str(row.get("bucket") or "")
+        metric = str(row.get("metric") or "")
+        if "artifact" not in bucket.lower() or metric == "artifact_validation_pass_rate":
+            continue
+        for name, run in runs.items():
+            if name == "base":
+                continue
+            delta = row.get(f"{name}_delta")
+            if not isinstance(delta, (int, float)) or delta <= 0:
+                continue
+            if artifact_validation_value(run) is None:
+                warnings.append({
+                    "variant": name,
+                    "bucket": bucket,
+                    "metric": metric,
+                    "delta": delta,
+                    "message": "artifact-generation improvement claim has no artifact_validation_pass_rate evidence",
+                })
+    return warnings
+
+
 def write_csv(path: Path, comparison: dict[str, Any], variant_names: list[str]) -> None:
     fields = ["bucket", "metric"]
     for name in variant_names:
@@ -881,6 +914,12 @@ def write_html(path: Path, comparison: dict[str, Any], variant_names: list[str])
         comparability_items.append(
             f"<li><strong>{html.escape(warning.get('variant', ''))} / {html.escape(warning.get('field', ''))}</strong>: "
             f"{html.escape(warning.get('message', ''))}</li>"
+        )
+    claim_warning_items = []
+    for warning in comparison.get("claim_warnings", []):
+        claim_warning_items.append(
+            f"<li><strong>{html.escape(warning.get('variant', ''))} / {html.escape(warning.get('bucket', ''))} / "
+            f"{html.escape(warning.get('metric', ''))}</strong>: {html.escape(warning.get('message', ''))}</li>"
         )
 
     research = comparison.get("research_basis", {})
@@ -1079,6 +1118,8 @@ def write_html(path: Path, comparison: dict[str, Any], variant_names: list[str])
   </table>
   <h2>Comparability Warnings</h2>
   <ul>{''.join(comparability_items) or '<li>No manifest comparability warnings.</li>'}</ul>
+  <h2>Claim Warnings</h2>
+  <ul>{''.join(claim_warning_items) or '<li>No claim warnings.</li>'}</ul>
   <h2>Research Basis</h2>
   <p>Registry: <code>{html.escape(str(research.get('registry_path') or '<unavailable>'))}</code>; snapshot {html.escape(str(research.get('snapshot_date') or 'unknown'))}</p>
   <ul>{research_warnings}</ul>
@@ -1235,6 +1276,13 @@ def print_terminal_results(comparison: dict[str, Any], variant_names: list[str],
             for item in provenance_warnings[:10]
         )
         console.print(Panel(warning_text, title="Manifest Comparability Warnings", border_style="yellow"))
+    claim_warnings = comparison.get("claim_warnings", [])
+    if claim_warnings:
+        warning_text = "\n".join(
+            f"{item.get('variant')}/{item.get('bucket')}/{item.get('metric')}: {item.get('message')}"
+            for item in claim_warnings[:10]
+        )
+        console.print(Panel(warning_text, title="Claim Warnings", border_style="yellow"))
 
     score_rows = comparison.get("score_rows", [])
     key_rows = [
