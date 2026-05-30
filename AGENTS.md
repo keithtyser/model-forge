@@ -443,6 +443,13 @@ support around Gemma-specific layer names or constants.
 
 When publishing a model:
 
+- start with `./forge hf status --offline` and
+  `./forge hf plan-model <family> <variant> --release-class <class>`
+- use release classes from `configs/release_classes/` to decide whether a
+  release is report-only, adapter-only, private research, public dataset, or a
+  public quantized checkpoint
+- never bypass failed `release_gates` in `hub_publish.json`; public full
+  checkpoints require explicit allowance plus Spark validation evidence
 - include a model card linking back to this repo
 - include source model, recipe config, eval scores, and intended-use caveats
 - upload completed models, prepared datasets, and needed eval artifacts to

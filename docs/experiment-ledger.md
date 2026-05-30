@@ -982,6 +982,36 @@ Publish status: already uploaded to Hugging Face before the FT handoff. No
 additional upload needed for this completed ablated checkpoint unless the model
 card or files need revision.
 
+## Hugging Face Release Planning Layer
+
+Status: implemented and smoke validated.
+
+Purpose: make Hub publication a reproducible, gated step instead of an ad hoc
+manual upload. The repo now has a `forge hf` CLI for auth status, model release
+planning, dry-run publish checks, generated model cards, `hub_publish.json`
+provenance, and release-class gates.
+
+Primary files:
+
+```text
+src/model_forge/hub/cli.py
+configs/hub.yaml
+configs/release_classes/
+docs/huggingface-publishing.md
+tests/test_hub_cli.py
+```
+
+Validation:
+
+```text
+.venv/bin/python -m unittest tests.test_hub_cli -v
+```
+
+Observed result: report-only plans avoid scanning or including checkpoint
+files, generated plans do not leak user-specific absolute paths, secret-like
+strings are blocked, and public full-checkpoint plans are blocked unless the
+release class and Spark validation state allow publication.
+
 ## Roadmap Hygiene: CLI/Doc Drift Check
 
 Status: implemented and smoke-validated.

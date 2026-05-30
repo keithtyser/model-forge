@@ -95,6 +95,10 @@ This is the short handoff state for humans and agents. Use
   `artifact_execution_card.json` / `.md`. Compare reports also emit claim
   warnings when an artifact-generation metric improves without
   `artifact_validation_pass_rate` evidence.
+- Hugging Face model release planning is now wired through `./forge hf`.
+  `status`, `whoami`, `login`, `plan-model`, and dry-run `publish-model`
+  generate model cards, `hub_publish.json` provenance, no-secret/no-private-path
+  checks, and release-class gates from `configs/release_classes/`.
 
 ## Current Dataset State
 
@@ -139,8 +143,8 @@ length filtering:
    those nodes.
 2. Add the eval provenance card so eval reports record suite version, judge
    config, prompt counts, trials, raw-output paths, and objective profile.
-3. Add release-class validators and public/private risk report gates before
-   model or dataset publication commands can upload risky artifacts.
+3. Add the redacted-output dataset publishing path and guarded non-dry-run Hub
+   upload implementation after model release plans have human-reviewed evidence.
 4. Finish/evaluate Gemma local FT or write a Training Method failure card with
    distributed Spark correctness evidence.
 5. Run one real Spark serving benchmark and attach endpoint evidence to the

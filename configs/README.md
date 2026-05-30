@@ -27,6 +27,9 @@ and experiment constants here instead of hard-coding them in scripts.
   promotion gates.
 - `datasets/`: dataset factory configs for seed, generation, verification,
   review, pack, and publish planning.
+- `release_classes/`: Hugging Face publication gates for report-only releases,
+  adapter releases, private research checkpoints, public quantized checkpoints,
+  and datasets.
 - `objectives/`: reusable objective profiles with implementation status,
   validation state, required evidence, comparison metric preferences, and
   research basis. Validate with `./forge objectives audit`.

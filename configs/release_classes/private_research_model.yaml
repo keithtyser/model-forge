@@ -1,0 +1,13 @@
+id: private_research_model
+description: Private checkpoint release for research handoff and reproducibility.
+hf_visibility: private
+publish_weights: true
+publish_adapter: true
+publish_reports: true
+publish_raw_outputs: private_only
+allow_public_checkpoint: false
+minimum_validation_state: planned
+requires:
+  - model_card_complete
+  - source_license_checked
+  - no_private_tokens_or_paths

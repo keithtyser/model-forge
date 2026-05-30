@@ -3796,17 +3796,17 @@ MF-0363 Require bounded Spark fine-tune evidence before dataset recipe is marked
 ### P1: Hugging Face Hub publishing
 
 ```text
-MF-0501 Add forge hf status/login/whoami. implementation_status=not_started validation_state=planned
-MF-0502 Add forge hf plan-model. implementation_status=not_started validation_state=planned
-MF-0503 Add forge hf publish-model --dry-run. implementation_status=scaffolded validation_state=planned
+MF-0501 Add forge hf status/login/whoami. implementation_status=tested validation_state=smoke_validated
+MF-0502 Add forge hf plan-model. implementation_status=tested validation_state=smoke_validated
+MF-0503 Add forge hf publish-model --dry-run. implementation_status=tested validation_state=smoke_validated
 MF-0504 Add forge hf publish-dataset --dry-run. implementation_status=scaffolded validation_state=smoke_validated
-MF-0505 Add Hub model card generator. implementation_status=scaffolded validation_state=planned
+MF-0505 Add Hub model card generator. implementation_status=tested validation_state=smoke_validated
 MF-0506 Add Hub dataset card generator. implementation_status=tested validation_state=smoke_validated
-MF-0507 Add release-class validators. implementation_status=not_started validation_state=planned
-MF-0508 Add hub_publish.json provenance writer. implementation_status=scaffolded validation_state=smoke_validated
-MF-0509 Add no-secrets/no-absolute-path publish validator. implementation_status=scaffolded validation_state=smoke_validated
+MF-0507 Add release-class validators. implementation_status=tested validation_state=smoke_validated
+MF-0508 Add hub_publish.json provenance writer. implementation_status=tested validation_state=smoke_validated
+MF-0509 Add no-secrets/no-absolute-path publish validator. implementation_status=tested validation_state=smoke_validated
 MF-0510 Add redacted-output dataset publishing path. implementation_status=not_started validation_state=planned
-MF-0511 Block public checkpoint upload unless validation state and release class allow it. implementation_status=not_started validation_state=planned
+MF-0511 Block public checkpoint upload unless validation state and release class allow it. implementation_status=tested validation_state=smoke_validated
 ```
 
 ### P1: Multi-family

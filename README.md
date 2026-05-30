@@ -91,6 +91,8 @@ Run evals from another terminal:
 ./forge roadmap cli-drift
 ./forge research audit
 ./forge manifest write --run-type eval --family gemma4_26b_a4b --variant base --command './forge eval gemma4_26b_a4b base --internal'
+./forge hf status --offline
+./forge hf plan-model gemma4_26b_a4b base --release-class report_only
 ./forge variants graph gemma4_26b_a4b
 ./forge artifacts validate reports/generated/.../artifacts/
 ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
@@ -301,6 +303,8 @@ forge           User-facing CLI wrapper
 
 See [configs/README.md](configs/README.md) and
 [scripts/README.md](scripts/README.md) for directory-specific guidance.
+See [docs/huggingface-publishing.md](docs/huggingface-publishing.md) for Hub
+release planning, model-card generation, and public/private release gates.
 
 Generated run directories, model weights, tokenized datasets, large reports, and
 logs are not committed. See
@@ -317,5 +321,6 @@ commit, delete, or upload.
   regressions.
 - Keep model-family support in config and reusable pipeline code.
 - Push code, configs, docs, recipes, and lightweight manifests to GitHub.
-- Upload completed models, datasets, and durable eval artifacts to Hugging Face.
+- Upload completed models, datasets, and durable eval artifacts to Hugging Face
+  through dry-run release plans and explicit release-class gates.
 - Never commit tokens or raw model weights.

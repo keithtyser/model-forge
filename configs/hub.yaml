@@ -1,0 +1,14 @@
+default_owner: keithtyser
+default_visibility: private
+default_dry_run: true
+repo_prefix: model-forge
+cache_dir: ${HF_HOME:-~/.cache/huggingface}
+
+publication:
+  require_clean_git: true
+  require_model_card: true
+  require_dataset_card: true
+  require_license: true
+  require_eval_results: true
+  require_manifest: true
+  redact_unsafe_examples_by_default: true

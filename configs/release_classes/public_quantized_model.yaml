@@ -1,0 +1,18 @@
+id: public_quantized_model
+description: Public quantized checkpoint release with quantization and serving evidence.
+hf_visibility: public
+publish_weights: true
+publish_adapter: false
+publish_reports: true
+publish_raw_outputs: false
+allow_public_checkpoint: true
+minimum_validation_state: spark_single_node_validated
+requires:
+  - model_card_complete
+  - source_license_checked
+  - eval_results_present
+  - quantization_card_present
+  - serving_card_present
+  - unsafe_examples_redacted
+  - no_private_tokens_or_paths
+  - promotion_gates_passed_or_research_report_only

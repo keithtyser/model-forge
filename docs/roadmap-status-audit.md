@@ -13,17 +13,17 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| not_started | 32 |
-| scaffolded | 23 |
-| tested | 39 |
+| not_started | 28 |
+| scaffolded | 19 |
+| tested | 47 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 61 |
-| smoke_validated | 33 |
+| planned | 55 |
+| smoke_validated | 39 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -96,17 +96,17 @@ No status audit findings.
 | MF-0361 | P1: Dataset factory | tested | smoke_validated | Add forge data review with curation flags and scale-up gate |
 | MF-0362 | P1: Dataset factory | scaffolded | smoke_validated | Add smoke_pack, medium_pack, and training_pack promotion gates |
 | MF-0363 | P1: Dataset factory | not_started | planned | Require bounded Spark fine-tune evidence before dataset recipe is marked validated |
-| MF-0501 | P1: Hugging Face Hub publishing | not_started | planned | Add forge hf status/login/whoami |
-| MF-0502 | P1: Hugging Face Hub publishing | not_started | planned | Add forge hf plan-model |
-| MF-0503 | P1: Hugging Face Hub publishing | scaffolded | planned | Add forge hf publish-model --dry-run |
+| MF-0501 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add forge hf status/login/whoami |
+| MF-0502 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add forge hf plan-model |
+| MF-0503 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add forge hf publish-model --dry-run |
 | MF-0504 | P1: Hugging Face Hub publishing | scaffolded | smoke_validated | Add forge hf publish-dataset --dry-run |
-| MF-0505 | P1: Hugging Face Hub publishing | scaffolded | planned | Add Hub model card generator |
+| MF-0505 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add Hub model card generator |
 | MF-0506 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add Hub dataset card generator |
-| MF-0507 | P1: Hugging Face Hub publishing | not_started | planned | Add release-class validators |
-| MF-0508 | P1: Hugging Face Hub publishing | scaffolded | smoke_validated | Add hub_publish.json provenance writer |
-| MF-0509 | P1: Hugging Face Hub publishing | scaffolded | smoke_validated | Add no-secrets/no-absolute-path publish validator |
+| MF-0507 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add release-class validators |
+| MF-0508 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add hub_publish.json provenance writer |
+| MF-0509 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add no-secrets/no-absolute-path publish validator |
 | MF-0510 | P1: Hugging Face Hub publishing | not_started | planned | Add redacted-output dataset publishing path |
-| MF-0511 | P1: Hugging Face Hub publishing | not_started | planned | Block public checkpoint upload unless validation state and release class allow it |
+| MF-0511 | P1: Hugging Face Hub publishing | tested | smoke_validated | Block public checkpoint upload unless validation state and release class allow it |
 | MF-0601 | P1: Multi-family | scaffolded | planned | Harden Qwen family config |
 | MF-0602 | P1: Multi-family | scaffolded | planned | Add adding-model-family checklist |
 | MF-0603 | P1: Multi-family | not_started | planned | Add tokenizer/chat-template round-trip tests |
