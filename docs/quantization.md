@@ -59,6 +59,38 @@ The Gemma matrix covers:
 - `local_abli_sota -> local_abli_sota_nvfp4_modelopt`
 - `ft_local_abli_sota_internal_r7_selected_t34_transfer -> ft_local_abli_sota_internal_r7_selected_t34_transfer_nvfp4_modelopt`
 
+Gemma 4 A4B uses the repo-native `gemma4_moe_modelopt` strategy in
+`scripts/quantization/gemma4_moe_nvfp4.py`. Stock ModelOpt export can leave
+Gemma's fused 3D MoE expert tensors out of the NVFP4 path; that produces a
+large checkpoint and only a modest decode-speed gain. The full-MoE strategy
+registers a ModelOpt `Gemma4TextExperts` plugin, exposes fused experts as
+per-expert linear layers during calibration, exports ModelOpt NVFP4 weights,
+and rewrites expert key names into the vLLM `moe.experts.<id>.*` layout.
+
+Serve full-MoE Gemma NVFP4 checkpoints with Marlin on Spark:
+
+```text
+VLLM_NVFP4_GEMM_BACKEND=marlin
+--quantization modelopt
+--kv-cache-dtype fp8
+--moe-backend marlin
+--language-model-only
+```
+
+The previous MLP-only recipe remains useful as loader evidence, but it should
+not be promoted as the optimized Gemma path. A real Gemma 4 NVFP4 candidate
+should approach the published DGX Spark expectation of roughly 45-60 output
+tokens/sec on decode-heavy chat workloads before it is called production-ready.
+The published full-MoE reference checkpoint was also served locally on
+2026-05-30 with this Marlin stack and reached about 50 output tok/s on the
+repo's core serving benchmark. Use that as the near-term apples-to-apples target
+for self-quantized Gemma variants.
+ModelOpt `--low_memory_mode` was tested on the earlier stock export path and
+failed with a meta-tensor dispatch error, so the checked-in recipe uses normal
+loading with a full-RAM Spark resource profile: CPU remains capped, disk is
+checked, Docker has a hard memory limit, and the watchdog stops the export if
+host available RAM drops below 5%.
+
 For a two-Spark cluster, assign independent variant exports across nodes with
 an environment variable instead of committing hosts:
 
@@ -92,8 +124,8 @@ account has access:
 ```bash
 export HF_HOME=~/cache/model-forge-hf-user
 export MODEL_FORGE_QUANT_CALIB_DATASET=cnn_dailymail,nemotron-post-training-dataset-v2
-export MODEL_FORGE_QUANT_CALIB_SIZE=64,64
-export MODEL_FORGE_QUANT_CALIB_SEQ=2048
+export MODEL_FORGE_QUANT_CALIB_SIZE=4096
+export MODEL_FORGE_QUANT_CALIB_SEQ=1024
 ./forge quantize export gemma4_26b_a4b base \
   --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml \
   --run-id gemma4_base_nvfp4_modelopt \
@@ -125,6 +157,13 @@ Every quantization candidate needs these artifacts:
 - source sampled serving eval scores
 - candidate sampled serving eval scores
 - quantization card comparing latency, throughput, memory, quality, and behavior
+
+For NVFP4 promotion, request/sec is not enough. The candidate should show a
+clear `output_tokens_per_second` improvement, especially on the `decode_heavy`
+workload, against the matching BF16/FP16 source served with the same model
+length, batching, scheduler, prompt set, max tokens, and hardware allocation.
+If token throughput does not improve, keep the run as loader evidence instead
+of claiming an optimized NVFP4 path.
 
 Write the card:
 
@@ -167,7 +206,7 @@ DGX Spark defaults live in `src/model_forge/hardware.py` and
 `configs/hardware/dgx_spark.yaml`. NVFP4 serving starts conservative:
 
 ```text
-VLLM_NVFP4_GEMM_BACKEND=cutlass
+VLLM_NVFP4_GEMM_BACKEND=marlin
 VLLM_KV_CACHE_DTYPE=fp8_e4m3
 VLLM_ENABLE_PREFIX_CACHING=1
 VLLM_ENABLE_CHUNKED_PREFILL=1
@@ -175,8 +214,8 @@ GPU_MEMORY_UTILIZATION=0.85
 VLLM_MAX_NUM_SEQS=4
 ```
 
-Large NVFP4 MoE serving on Spark should generally start lower than that
-(`gpu_memory_utilization=0.60`, `max_model_len=8192`, `max_num_seqs=2`) and only
+Large NVFP4 MoE serving on Spark should generally start lower than dense-model
+defaults (`gpu_memory_utilization=0.40-0.60`, `max_num_seqs=1-2`) and only
 increase one variable at a time after smoke benchmarks pass.
 
 ## Generalization Rule

@@ -196,6 +196,83 @@ export`. Do not bypass the runner with raw Docker. Promotion requires a complete
 checkpoint, vLLM load proof, serving benchmark, internal eval, and quantization
 card against the matching unquantized source variant.
 
+## Quantization: Gemma4 NVFP4 MLP-Only Loader Evidence And Full-MoE Pivot
+
+Status: MLP-only loader path validated but not promoted; repo recipe pivoted to
+full-MoE Gemma4 NVFP4.
+
+Hypothesis tested: a bounded ModelOpt NVFP4 export using
+`general/ptq/nvfp4_mlp_only-fp8_kv` could provide a safe first self-quantized
+Gemma4 artifact and show a clear serving throughput gain over the BF16 source.
+
+Observed run evidence:
+
+- Plain `--qformat nvfp4` exported a checkpoint but vLLM treated Gemma4 fused
+  expert tensors as FP4 MoE weights and failed with a `1408` vs `2816` expert
+  tensor shape mismatch.
+- ModelOpt `--low_memory_mode` failed with a meta-tensor dispatch error.
+- Normal-mode MLP-only export completed:
+  `~/models/model-forge-quantized/gemma4_26b_a4b/base_nvfp4_modelopt_mlp_fullram_smoke16_20260530`.
+- The artifact loaded only after metadata forced MoE/expert tensors out of the
+  FP4 fused-MoE path. vLLM then selected `CutlassNvFp4LinearKernel` for dense
+  layers and `TRITON Unquantized MoE backend` for experts.
+- Core serving benchmark, 3 repetitions, same single-Spark request limits:
+  - BF16 baseline:
+    `reports/generated/serve_bench/gemma4_base_bf16_core_r3_20260530/summary.json`
+  - MLP-only NVFP4:
+    `reports/generated/serve_bench/gemma4_base_nvfp4_mlp_fullram_smoke16_core_r3_metrics_20260530/summary.json`
+  - overall output p50: BF16 `22.761425 tok/s`, MLP-only NVFP4
+    `25.098482 tok/s`
+  - decode-heavy output p50: BF16 `22.771325 tok/s`, MLP-only NVFP4
+    `25.098482 tok/s`
+
+Interpretation: this is a real loader and modest speed win, but it is not the
+expected optimized Gemma4 path. Public Spark evidence for fully quantized
+Gemma4 MoE targets roughly 45-60 tok/s by quantizing the experts, using Marlin
+NVFP4 GEMM and Marlin NVFP4 MoE, and serving with FP8 KV cache. The checked-in
+recipe now uses `scripts/quantization/gemma4_moe_nvfp4.py` to register a
+Gemma4 expert plugin, quantize fused experts, rewrite exported expert keys for
+vLLM, and serve with Marlin.
+
+Reference basis recorded for future agents:
+
+- Reddit performance/debug thread:
+  `https://www.reddit.com/r/LocalLLaMA/comments/1sbekgc/gemma_4_26ba4b_moe_running_at_4560_toks_on_dgx/`
+- Published full-MoE NVFP4 artifact:
+  `https://huggingface.co/bg-digitalservices/Gemma-4-26B-A4B-it-NVFP4`
+- Quantization script reference:
+  `https://huggingface.co/bg-digitalservices/Gemma-4-26B-A4B-it-NVFP4/blob/main/quantize_gemma4_moe.py`
+
+Reference endpoint validation on 2026-05-30:
+
+- Served `bg-digitalservices/Gemma-4-26B-A4B-it-NVFP4` on one local DGX Spark
+  GB10 with current `vllm-node-tf5`, `VLLM_NVFP4_GEMM_BACKEND=marlin`,
+  `--quantization modelopt`, `--kv-cache-dtype fp8`, `--moe-backend marlin`,
+  and `--language-model-only`.
+- vLLM selected `MarlinNvFp4LinearKernel` and the `MARLIN` NVFP4 MoE backend
+  without the old HF `gemma4_patched.py` override. Mounting the older patch was
+  incompatible with this vLLM build because it passed the removed
+  `FusedMoE(..., reduce_results=...)` argument.
+- The server downloaded 15.30 GiB of checkpoint shards, loaded in text-only
+  mode, and completed the core serving benchmark with 27/27 successful
+  requests:
+  `reports/generated/serve_bench/bg_gemma4_nvfp4_marlin_core_r3_20260530/summary.json`.
+- Observed p50 throughput:
+  - overall output: `49.963774 tok/s`
+  - overall decode: `50.574538 tok/s`
+  - decode-heavy output: `50.34832 tok/s`
+  - decode-heavy decode: `50.514792 tok/s`
+
+Interpretation: the 45-60 tok/s target is realistic on this Spark only when
+Gemma4 MoE experts are also in the optimized NVFP4/Marlin path. The repo's
+local self-export still needs to reproduce this result from our own source
+checkpoints before base, FT, abli, or FT+abli NVFP4 variants can be promoted.
+
+Next validation: run the full-MoE self-export through
+`./forge quantize export`, serve it with Marlin, and benchmark against BF16 and
+the published full-MoE NVFP4 artifact before promoting any local NVFP4
+checkpoint.
+
 ## Roadmap Utility Layer: Sources, Publish, Promotion, Teacher Serve
 
 Status: implemented as config/code/docs only. No model server, training run, live

@@ -13,31 +13,32 @@ objective: quantized_quality_retention
 hardware_profile: dgx_spark
 
 calibration:
-  dataset: cnn_dailymail,wikipedia
-  samples: 64,64
-  seq_len: 2048
-  batch_size: 1
-  production_samples: 256,256
-  production_seq_len: 4096
+  dataset: cnn_dailymail
+  samples: 4096
+  seq_len: 1024
+  batch_size: 16
+  smoke_samples: 64
+  smoke_seq_len: 1024
+  production_samples: 4096
+  production_seq_len: 1024
   optional_gated_dataset: cnn_dailymail,nemotron-post-training-dataset-v2
   notes: >
-    The checked-in default is a bounded Spark smoke recipe. Promotion runs
-    should increase to production_samples/production_seq_len after the export,
-    load, and eval loop is proven stable for the model family. NVIDIA's
+    The checked-in default is the full Gemma4 MoE NVFP4 recipe because the
+    MLP-only ModelOpt recipe leaves the fused expert tensors in BF16 and does
+    not reach the expected DGX Spark serving throughput. Smoke runs can override
+    MODEL_FORGE_QUANT_CALIB_SIZE/MODEL_FORGE_QUANT_CALIB_SEQ for loader tests.
+    NVIDIA's
     Nemotron post-training data is an optional production calibration source,
     but it is gated, so the default recipe uses public datasets.
 
 exclusions:
+  apply_recommended_keep_patterns: false
   modules:
     - lm_head
     - embed_vision
     - vision
     - visual
     - multi_modal_projector
-    - router
-    - gate
-    - self_attn
-    - early_layers
 
 export:
   image: model-forge-modelopt-nvfp4:0.43.0
@@ -46,29 +47,31 @@ export:
   modelopt_version: 0.43.0
   output_root: ~/models/model-forge-quantized/gemma4_26b_a4b
   output_subdir: "{target_variant}"
-  start_if_memory_available_above_fraction: 0.20
-  stop_if_memory_available_below_fraction: 0.15
+  start_if_memory_available_above_fraction: 0.10
+  stop_if_memory_available_below_fraction: 0.05
   watchdog_poll_seconds: 2
   require_disk_free_fraction: 0.15
   systemd_scope:
     enabled: true
     user: true
     CPUQuota: "80%"
-    MemoryMax: "85%"
+    MemoryMax: "95%"
     IOWeight: 100
   docker:
     cpus: 8
     omp_num_threads: 8
-    memory_gb: 100
-    memory_swap_gb: 110
+    memory_gb: 112
+    memory_swap_gb: 112
     shm_size_gb: 32
     nice: 10
   ptq:
+    strategy: gemma4_moe_modelopt
+    script: scripts/quantization/gemma4_moe_nvfp4.py
     qformat: nvfp4
-    dataset: cnn_dailymail,wikipedia
-    calib_size: 64,64
-    calib_seq: 2048
-    batch_size: 1
+    dataset: cnn_dailymail
+    calib_size: 4096
+    calib_seq: 1024
+    batch_size: 16
     tensor_parallel: 1
     pipeline_parallel: 1
     gpu_max_mem_percentage: 0.70
@@ -77,7 +80,7 @@ export:
     use_seq_device_map: true
     trust_remote_code: true
     skip_generate: true
-    moe_calib_experts_ratio: 0.25
+    max_shard_size_gb: 8
 
 runtime:
   served_model_name: model-forge/gemma4-26b-a4b-nvfp4-modelopt
@@ -98,6 +101,8 @@ runtime:
     mem_limit_gb: 110
     mem_swap_limit_gb: 120
     shm_size_gb: 32
+  env:
+    VLLM_NVFP4_GEMM_BACKEND: marlin
   vllm_flags:
     tool_call_parser: gemma4
     reasoning_parser: gemma4
@@ -105,7 +110,9 @@ runtime:
     trust_remote_code: true
     quantization: modelopt
     kv_cache_dtype: fp8
-    load_format: fastsafetensors
+    load_format: auto
+    moe_backend: marlin
+    language_model_only: true
 
 matrix:
   workers_env: MODEL_FORGE_QUANT_WORKERS

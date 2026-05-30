@@ -7,7 +7,14 @@ from pathlib import Path
 from unittest import mock
 
 from model_forge.hardware import HardwareProfile
-from model_forge.runs.manifest import build_canonical_manifest, key_value_mapping, porcelain_path, write_manifest
+from model_forge.runs.manifest import (
+    build_canonical_manifest,
+    key_value_mapping,
+    porcelain_path,
+    redact_value,
+    safe_environment,
+    write_manifest,
+)
 
 
 class RunManifestTests(unittest.TestCase):
@@ -67,6 +74,40 @@ class RunManifestTests(unittest.TestCase):
             self.assertEqual(path.name, "manifest.json")
             self.assertEqual(path.parent.name, "dataset-smoke")
             self.assertTrue(path.exists())
+
+    def test_redaction_preserves_token_metrics_but_scrubs_secret_keys(self) -> None:
+        payload = {
+            "completion_tokens": 128,
+            "output_tokens_per_second": 42.5,
+            "decode_tokens_per_second": 45.0,
+            "TOKENIZERS_PARALLELISM": "false",
+            "token": "plain-secret",
+            "HF_TOKEN": "plain-secret",
+            "MODEL_FORGE_API_KEY": "plain-secret",
+            "authorization": "Bearer plain-secret",
+        }
+
+        redacted = redact_value(payload)
+
+        self.assertEqual(redacted["completion_tokens"], 128)
+        self.assertEqual(redacted["output_tokens_per_second"], 42.5)
+        self.assertEqual(redacted["decode_tokens_per_second"], 45.0)
+        self.assertEqual(redacted["TOKENIZERS_PARALLELISM"], "false")
+        self.assertEqual(redacted["token"], "<redacted>")
+        self.assertEqual(redacted["HF_TOKEN"], "<redacted>")
+        self.assertEqual(redacted["MODEL_FORGE_API_KEY"], "<redacted>")
+        self.assertEqual(redacted["authorization"], "<redacted>")
+
+    def test_safe_environment_preserves_tokenizers_parallelism(self) -> None:
+        env = {
+            "TOKENIZERS_PARALLELISM": "false",
+            "MODEL_FORGE_API_KEY": "plain-secret",
+        }
+
+        snapshot = safe_environment(env)
+
+        self.assertEqual(snapshot["TOKENIZERS_PARALLELISM"], "false")
+        self.assertEqual(snapshot["MODEL_FORGE_API_KEY"], "<redacted>")
 
     def test_key_value_mapping_accepts_json_values(self) -> None:
         mapping = key_value_mapping(["pass_rate=0.75", "name=local", "ok=true"])

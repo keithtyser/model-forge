@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-24.
+Last updated: 2026-05-30.
 
 This is the short handoff state for humans and agents. Use
 `docs/experiment-ledger.md` for detailed run history and raw observations.
@@ -67,8 +67,13 @@ This is the short handoff state for humans and agents. Use
 - Quantization planning is now first-class for Blackwell NVFP4 runtime import
   and ModelOpt self-quantization. The self-quantization export path has a
   checkout-local lock, preflight memory/disk gates, `systemd-run --scope`,
-  Docker CPU/memory limits, and a runtime memory watchdog. No completed
-  self-quantized Gemma NVFP4 checkpoint has passed the evidence contract yet.
+  Docker CPU/memory limits, and a runtime memory watchdog. The initial Gemma4
+  MLP-only NVFP4 export loaded and showed a modest decode-speed gain, but it did
+  not meet the expected fully quantized MoE Spark target. The active Gemma4
+  self-quantization path now uses a full-MoE ModelOpt plugin exporter plus
+  Marlin serving. The published full-MoE NVFP4 reference checkpoint served with
+  Marlin on 2026-05-30 and reached about 50 output tok/s on the core serving
+  benchmark, confirming the target path.
 - Objective profiles are now config-backed and auditable through
   `./forge objectives audit`: `capability_sft`,
   `zero_refusal_capability_retention`, `quantized_quality_retention`, and
@@ -133,10 +138,11 @@ length filtering:
    distributed Spark correctness evidence.
 5. Run one real Spark serving benchmark and attach endpoint evidence to the
    Serving Card.
-6. Run one guarded ModelOpt NVFP4 export through the Spark cluster path now that
-   sync, health, runtime, and torchrun/NCCL preflights pass. Quantization
-   remains incomplete until base, FT, abli, and FT+abli checkpoints load and
-   match their unquantized baselines.
+6. Run the guarded full-MoE Gemma4 ModelOpt NVFP4 export through the Spark path,
+   serve it with Marlin, and compare tok/s against BF16 and the now-validated
+   published full-MoE NVFP4 reference. Quantization remains incomplete until
+   base, FT, abli, and FT+abli checkpoints load and match their unquantized
+   baselines.
 7. Scale the local FT v1 dataset through medium-pack review before treating it
    as a training dataset.
 

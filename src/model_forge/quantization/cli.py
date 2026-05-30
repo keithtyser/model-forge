@@ -276,53 +276,93 @@ def build_modelopt_export_command(
     image = str(export.get("image") or "model-forge-modelopt-nvfp4:0.43.0")
     container_name = sanitize_run_id(f"model_forge_quantize_{run_id}")
     qformat = str(ptq.get("qformat") or ("fp8" if config.method.startswith("fp8") else "nvfp4"))
+    recipe = str(ptq.get("recipe") or "")
+    strategy = str(ptq.get("strategy") or export.get("strategy") or "hf_ptq")
     batch_size = int(ptq.get("batch_size") or config.calibration.get("batch_size") or 1)
     tensor_parallel = int(ptq.get("tensor_parallel") or 1)
     pipeline_parallel = int(ptq.get("pipeline_parallel") or 1)
     gpu_max_mem_percentage = float(ptq.get("gpu_max_mem_percentage") or 0.7)
     kv_cache_qformat = str(ptq.get("kv_cache_qformat") or "fp8_cast")
 
-    hf_ptq = [
-        "python3",
-        "/opt/TensorRT-Model-Optimizer/examples/llm_ptq/hf_ptq.py",
-        "--pyt_ckpt_path",
-        container_source,
-        "--export_path",
-        container_output,
-        "--sparsity_fmt",
-        str(ptq.get("sparsity_fmt") or "dense"),
-        "--qformat",
-        qformat,
-        "--calib_size",
-        calib_size,
-        "--batch_size",
-        str(batch_size),
-        "--calib_seq",
-        calib_seq,
-        "--dataset",
-        dataset,
-        "--inference_tensor_parallel",
-        str(tensor_parallel),
-        "--inference_pipeline_parallel",
-        str(pipeline_parallel),
-        "--gpu_max_mem_percentage",
-        str(gpu_max_mem_percentage),
-        "--kv_cache_qformat",
-        kv_cache_qformat,
-        "--skip_generate",
-    ]
-    if bool(ptq.get("trust_remote_code", True)):
-        hf_ptq.append("--trust_remote_code")
-    if bool(ptq.get("low_memory_mode", True)):
-        hf_ptq.append("--low_memory_mode")
-    if bool(ptq.get("use_seq_device_map", True)):
-        hf_ptq.append("--use_seq_device_map")
-    if ptq.get("moe_calib_experts_ratio") is not None:
-        hf_ptq.extend(["--moe_calib_experts_ratio", str(ptq["moe_calib_experts_ratio"])])
-    if ptq.get("attn_implementation"):
-        hf_ptq.extend(["--attn_implementation", str(ptq["attn_implementation"])])
-    if not bool(ptq.get("verbose", True)):
-        hf_ptq.append("--no-verbose")
+    repo_mount: list[str] = []
+    if strategy == "gemma4_moe_modelopt":
+        script = Path(str(ptq.get("script") or export.get("script") or "scripts/quantization/gemma4_moe_nvfp4.py"))
+        script_host_path = resolve_repo_path(script)
+        if not script_host_path.exists():
+            raise ValueError(f"Gemma4 MoE quantization script not found: {display_path(script_host_path)}")
+        repo_mount = ["-v", f"{REPO_DIR}:/workspace/model-forge:ro"]
+        container_command = [
+            "python3",
+            f"/workspace/model-forge/{display_path(script_host_path)}",
+            "--model",
+            container_source,
+            "--output",
+            container_output,
+            "--qformat",
+            qformat,
+            "--dataset",
+            dataset,
+            "--calib-samples",
+            calib_size,
+            "--calib-seq-len",
+            calib_seq,
+            "--batch-size",
+            str(batch_size),
+            "--device",
+            str(ptq.get("device") or "cuda:0"),
+            "--device-map",
+            str(ptq.get("device_map") or "auto"),
+            "--max-shard-size-gb",
+            str(ptq.get("max_shard_size_gb") or 8),
+        ]
+        if bool(ptq.get("trust_remote_code", True)):
+            container_command.append("--trust-remote-code")
+    elif strategy == "hf_ptq":
+        container_command = [
+            "python3",
+            "/opt/TensorRT-Model-Optimizer/examples/llm_ptq/hf_ptq.py",
+            "--pyt_ckpt_path",
+            container_source,
+            "--export_path",
+            container_output,
+            "--sparsity_fmt",
+            str(ptq.get("sparsity_fmt") or "dense"),
+            "--qformat",
+            qformat,
+            "--calib_size",
+            calib_size,
+            "--batch_size",
+            str(batch_size),
+            "--calib_seq",
+            calib_seq,
+            "--dataset",
+            dataset,
+            "--inference_tensor_parallel",
+            str(tensor_parallel),
+            "--inference_pipeline_parallel",
+            str(pipeline_parallel),
+            "--gpu_max_mem_percentage",
+            str(gpu_max_mem_percentage),
+            "--kv_cache_qformat",
+            kv_cache_qformat,
+            "--skip_generate",
+        ]
+        if bool(ptq.get("trust_remote_code", True)):
+            container_command.append("--trust_remote_code")
+        if recipe:
+            container_command.extend(["--recipe", recipe])
+        if bool(ptq.get("low_memory_mode", True)):
+            container_command.append("--low_memory_mode")
+        if bool(ptq.get("use_seq_device_map", True)):
+            container_command.append("--use_seq_device_map")
+        if ptq.get("moe_calib_experts_ratio") is not None:
+            container_command.extend(["--moe_calib_experts_ratio", str(ptq["moe_calib_experts_ratio"])])
+        if ptq.get("attn_implementation"):
+            container_command.extend(["--attn_implementation", str(ptq["attn_implementation"])])
+        if not bool(ptq.get("verbose", True)):
+            container_command.append("--no-verbose")
+    else:
+        raise ValueError(f"unknown ModelOpt export strategy {strategy!r}")
 
     docker_run = [
         "docker",
@@ -351,6 +391,7 @@ def build_modelopt_export_command(
         f"{hf_cache}:/root/.cache/huggingface",
         "-v",
         f"{output_path.parent}:{container_output_root}",
+        *repo_mount,
         "-e",
         "HF_TOKEN",
         "-e",
@@ -358,7 +399,7 @@ def build_modelopt_export_command(
         "-e",
         f"OMP_NUM_THREADS={docker.get('omp_num_threads', docker.get('cpus', 8))}",
         image,
-        *hf_ptq,
+        *container_command,
     ]
     shell_command = ["nice", "-n", str(docker.get("nice", 10)), *docker_run]
     systemd_scope = dict(export.get("systemd_scope") or {})
@@ -395,6 +436,7 @@ def build_modelopt_export_command(
         },
         "method": config.method,
         "backend": config.backend,
+        "strategy": strategy,
         "image": image,
         "calibration": {
             "dataset": dataset,
@@ -402,6 +444,7 @@ def build_modelopt_export_command(
             "calib_seq": calib_seq,
             "batch_size": batch_size,
             "kv_cache_qformat": kv_cache_qformat,
+            "recipe": recipe or None,
             "moe_calib_experts_ratio": ptq.get("moe_calib_experts_ratio"),
         },
         "resource_policy": {
@@ -452,7 +495,8 @@ def stop_export_container(export_plan: Mapping[str, Any]) -> None:
         container_name = command[name_index]
     except (ValueError, IndexError):
         return
-    subprocess.run(["docker", "stop", "--time", "15", container_name], cwd=REPO_DIR, check=False)
+    subprocess.run(["docker", "stop", "--timeout", "5", container_name], cwd=REPO_DIR, check=False)
+    subprocess.run(["docker", "kill", container_name], cwd=REPO_DIR, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def terminate_process(process: subprocess.Popen[Any], export_plan: Mapping[str, Any]) -> None:
@@ -558,6 +602,9 @@ def build_runtime_command(config: QuantizationConfig, source: QuantizationSource
     for item in launch.get("extra_launcher_args") or []:
         launcher.append(str(item))
 
+    runtime_env = dict(runtime.get("env") or {})
+    env_prefix = [f"{key}={value}" for key, value in sorted(runtime_env.items())]
+
     serve = [
         "exec",
         "vllm",
@@ -589,7 +636,7 @@ def build_runtime_command(config: QuantizationConfig, source: QuantizationSource
         else:
             serve.extend([flag, str(value)])
 
-    return ["cd", spark_dir, "&&", *launcher, *serve]
+    return ["cd", spark_dir, "&&", *env_prefix, *launcher, *serve]
 
 
 def build_plan(
@@ -611,10 +658,15 @@ def build_plan(
     quant_env = recommended_quantization_env(env)
     exclusions = dict(config.exclusions)
     keep_patterns = comma_list(quant_env.get("MODEL_FORGE_QUANT_KEEP_BF16_PATTERNS"))
-    if keep_patterns:
+    if keep_patterns and truthy(exclusions.get("apply_recommended_keep_patterns"), True):
         modules = list(exclusions.get("modules") or [])
         modules.extend(pattern for pattern in keep_patterns if pattern not in modules)
         exclusions["modules"] = modules
+    export_policy = dict(config.export or {})
+    export_systemd_scope = dict(export_policy.get("systemd_scope") or {})
+    export_docker = dict(export_policy.get("docker") or {})
+    start_memory_floor = float(export_policy.get("start_if_memory_available_above_fraction", 0.05))
+    stop_memory_floor = float(export_policy.get("stop_if_memory_available_below_fraction", start_memory_floor))
 
     plan = {
         "schema_version": PLAN_SCHEMA_VERSION,
@@ -657,10 +709,15 @@ def build_plan(
         "resource_policy": {
             "max_concurrent_large_jobs": 1,
             "require_job_lock": True,
-            "start_if_memory_available_above_fraction": 0.05,
-            "stop_if_memory_available_below_fraction": 0.05,
-            "require_disk_free_fraction": 0.15,
-            "systemd_scope": {"CPUQuota": "80%", "MemoryMax": "85%", "IOWeight": 100, "nice": 10},
+            "start_if_memory_available_above_fraction": start_memory_floor,
+            "stop_if_memory_available_below_fraction": stop_memory_floor,
+            "require_disk_free_fraction": float(export_policy.get("require_disk_free_fraction", 0.15)),
+            "systemd_scope": {
+                "CPUQuota": str(export_systemd_scope.get("CPUQuota", "80%")),
+                "MemoryMax": str(export_systemd_scope.get("MemoryMax", "85%")),
+                "IOWeight": int(export_systemd_scope.get("IOWeight", 100)),
+                "nice": int(export_docker.get("nice", 10)),
+            },
         },
         "outputs": {
             "output_dir": display_path(plan_output_dir),
@@ -825,6 +882,24 @@ def build_card(
     serving_metrics = {
         "success_rate": ("success_rate",),
         "throughput_req_per_s": ("request_throughput_per_second_serial_estimate",),
+        "output_tokens_per_second_p50": ("metrics", "output_tokens_per_second", "p50"),
+        "output_tokens_per_second_p95": ("metrics", "output_tokens_per_second", "p95"),
+        "decode_tokens_per_second_p50": ("metrics", "decode_tokens_per_second", "p50"),
+        "total_tokens_per_second_p50": ("metrics", "total_tokens_per_second", "p50"),
+        "decode_heavy_output_tokens_per_second_p50": (
+            "by_category",
+            "decode_heavy",
+            "metrics",
+            "output_tokens_per_second",
+            "p50",
+        ),
+        "decode_heavy_decode_tokens_per_second_p50": (
+            "by_category",
+            "decode_heavy",
+            "metrics",
+            "decode_tokens_per_second",
+            "p50",
+        ),
         "total_latency_p50": ("metrics", "total_latency_seconds", "p50"),
         "total_latency_p95": ("metrics", "total_latency_seconds", "p95"),
         "ttft_p50": ("metrics", "time_to_first_chunk_seconds", "p50"),

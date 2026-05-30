@@ -60,6 +60,17 @@ class QuantizationCliTests(unittest.TestCase):
                         "metrics": {
                             "total_latency_seconds": {"p50": 5.0, "p95": 10.0},
                             "time_to_first_chunk_seconds": {"p50": 0.5, "p95": 1.0},
+                            "output_tokens_per_second": {"p50": 10.0, "p95": 12.0},
+                            "decode_tokens_per_second": {"p50": 11.0},
+                            "total_tokens_per_second": {"p50": 20.0},
+                        },
+                        "by_category": {
+                            "decode_heavy": {
+                                "metrics": {
+                                    "output_tokens_per_second": {"p50": 9.0},
+                                    "decode_tokens_per_second": {"p50": 10.0},
+                                },
+                            },
                         },
                         "memory": {
                             "system": {"available_fraction": {"min": 0.2}},
@@ -78,6 +89,17 @@ class QuantizationCliTests(unittest.TestCase):
                         "metrics": {
                             "total_latency_seconds": {"p50": 4.0, "p95": 8.0},
                             "time_to_first_chunk_seconds": {"p50": 0.4, "p95": 0.9},
+                            "output_tokens_per_second": {"p50": 16.0, "p95": 18.0},
+                            "decode_tokens_per_second": {"p50": 17.0},
+                            "total_tokens_per_second": {"p50": 28.0},
+                        },
+                        "by_category": {
+                            "decode_heavy": {
+                                "metrics": {
+                                    "output_tokens_per_second": {"p50": 15.0},
+                                    "decode_tokens_per_second": {"p50": 16.0},
+                                },
+                            },
                         },
                         "memory": {
                             "system": {"available_fraction": {"min": 0.25}},
@@ -107,6 +129,8 @@ class QuantizationCliTests(unittest.TestCase):
             )
 
         self.assertEqual(card["serving_deltas"]["throughput_req_per_s"]["delta"], 0.1)
+        self.assertEqual(card["serving_deltas"]["output_tokens_per_second_p50"]["delta"], 6.0)
+        self.assertEqual(card["serving_deltas"]["decode_heavy_output_tokens_per_second_p50"]["delta"], 6.0)
         self.assertEqual(card["serving_deltas"]["total_latency_p50"]["delta"], -1.0)
         sampled = card["sampled_eval_deltas"]["normal_use_regression.normal_use_regression_pass_rate"]
         self.assertEqual(sampled["delta"], -0.5)
@@ -185,17 +209,24 @@ class QuantizationCliTests(unittest.TestCase):
         self.assertEqual(export["backend"], "modelopt")
         self.assertEqual(command[:3], ["systemd-run", "--user", "--scope"])
         self.assertIn("CPUQuota=80%", command)
-        self.assertIn("MemoryMax=85%", command)
+        self.assertIn("MemoryMax=95%", command)
         self.assertIn("model-forge-modelopt-nvfp4:0.43.0", command)
         self.assertIn("--qformat nvfp4", joined)
+        self.assertIn("scripts/quantization/gemma4_moe_nvfp4.py", joined)
+        self.assertIn("--calib-samples 4096", joined)
+        self.assertIn("--batch-size 16", joined)
+        self.assertIn(f"{Path.cwd()}:/workspace/model-forge:ro", command)
         self.assertNotIn("--low_memory_mode", command)
         self.assertIn("/models/gemma-4-26B-A4B-it", command)
         self.assertIn(f"{output_root}:/workspace/output_models", command)
         self.assertIsNone(re.search(r"hf_[A-Za-z0-9]{20,}", export["command_display"]))
-        self.assertEqual(export["resource_policy"]["stop_if_memory_available_below_fraction"], 0.15)
+        self.assertEqual(export["strategy"], "gemma4_moe_modelopt")
+        self.assertEqual(export["resource_policy"]["stop_if_memory_available_below_fraction"], 0.05)
         self.assertEqual(export["resource_policy"]["watchdog_poll_seconds"], 2.0)
-        self.assertEqual(export["resource_policy"]["systemd_scope"]["MemoryMax"], "85%")
+        self.assertEqual(export["resource_policy"]["systemd_scope"]["MemoryMax"], "95%")
         self.assertTrue(export["resource_policy"]["systemd_scope"]["user"])
+        self.assertEqual(export["resource_policy"]["docker"]["memory_gb"], 112)
+        self.assertIsNone(export["calibration"]["recipe"])
         self.assertIn("quantization_export.lock", export["resource_policy"]["lock_path"])
 
     def test_gemma_nvfp4_matrix_has_variant_specific_baselines(self) -> None:
@@ -246,8 +277,31 @@ class QuantizationCliTests(unittest.TestCase):
 
         joined = " ".join(export["command"])
         self.assertIn("--dataset cnn_dailymail,nemotron-post-training-dataset-v2", joined)
-        self.assertIn("--calib_size 256,256", joined)
-        self.assertIn("--calib_seq 4096", joined)
+        self.assertIn("--calib-samples 256,256", joined)
+        self.assertIn("--calib-seq-len 4096", joined)
+
+    def test_gemma_nvfp4_runtime_plan_uses_marlin_for_full_moe(self) -> None:
+        config_path = Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml")
+        config = load_quantization_config(config_path)
+        plan = build_plan(
+            config,
+            config_path=config_path,
+            family="gemma4_26b_a4b",
+            variant="base",
+            output_dir=None,
+            run_id="unit_gemma4_marlin_plan",
+            env={"MODEL_FORGE_HARDWARE_PROFILE": "dgx_spark", "MODEL_FORGE_MODELS_DIR": "/models-host"},
+        )
+
+        launch = " ".join(plan["launch_command"])
+        self.assertIn("VLLM_NVFP4_GEMM_BACKEND=marlin", launch)
+        self.assertIn("--moe-backend marlin", launch)
+        self.assertIn("--language-model-only", launch)
+        self.assertNotIn("experts", plan["quantization"]["exclusions"]["modules"])
+        self.assertNotIn("router", plan["quantization"]["exclusions"]["modules"])
+        self.assertEqual(plan["resource_policy"]["systemd_scope"]["MemoryMax"], "95%")
+        self.assertEqual(plan["resource_policy"]["start_if_memory_available_above_fraction"], 0.10)
+        self.assertEqual(plan["resource_policy"]["stop_if_memory_available_below_fraction"], 0.05)
 
     def test_modelopt_export_output_can_follow_target_variant(self) -> None:
         config = load_quantization_config(Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml"))

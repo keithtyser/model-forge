@@ -293,6 +293,9 @@ NVFP4 is the priority Blackwell path. `nvfp4_runtime` means Model Forge is
 validating an already-quantized checkpoint; do not imply the repo created those
 weights. A real quantization claim needs a candidate endpoint, serving summary,
 sampled behavior scores, and quantization card.
+For NVFP4 promotion, require a clear `output_tokens_per_second` improvement
+over the matching BF16/FP16 endpoint, especially on `decode_heavy`; otherwise
+treat the run as loader evidence only.
 
 For self-quantization, use the ModelOpt export runner and the matrix config:
 
@@ -312,6 +315,21 @@ configured systemd mode fails or asks for interactive authorization, stop and
 fix the host execution path; do not rerun the same heavy command without
 equivalent limits. Use `--target-variant` on single exports so metadata matches
 the actual matrix candidate.
+
+For Gemma 4 A4B NVFP4, use the full-MoE ModelOpt path in
+`scripts/quantization/gemma4_moe_nvfp4.py` through
+`configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml`. The earlier
+MLP-only recipe loaded after metadata fixes but left the fused experts in BF16
+and only reached about 25 output tok/s in the repo benchmark. Full-MoE Gemma
+NVFP4 should serve with `VLLM_NVFP4_GEMM_BACKEND=marlin`,
+`--moe-backend marlin`, `--quantization modelopt`, FP8 KV cache, and
+`--language-model-only`. The published full-MoE reference checkpoint reached
+about 50 output tok/s on the repo core serving benchmark on 2026-05-30, so use
+that as the target when validating self-quantized Gemma variants.
+Do not enable ModelOpt `--low_memory_mode` for this recipe without retesting;
+it failed with a meta-tensor dispatch error on the earlier stock path. The
+normal-mode export uses a full-RAM Spark profile with CPU limits, Docker memory
+limits, disk preflight, and a 5% available-RAM watchdog floor.
 
 ## Abliteration Rules
 
@@ -362,10 +380,12 @@ the actual matrix candidate.
   parser names, quantization format, loader patches, and drafter paths in family
   config or environment overrides.
 - For Blackwell NVFP4 serving, start with conservative Spark settings and record
-  the actual backend, for example `VLLM_NVFP4_GEMM_BACKEND=cutlass` and
-  `--moe-backend cutlass`.
-- For MoE quantization, keep routers and multimodal projection/vision modules
-  in BF16 unless a family-specific recipe and eval pass justify otherwise.
+  the actual backend. Full-MoE Gemma4 uses Marlin; MLP-only or dense-only
+  fallback tests may use Cutlass.
+- For MoE quantization, keep multimodal projection/vision modules in BF16
+  unless a family-specific recipe and eval pass justify otherwise. Expert
+  tensors require family-specific handling; do not assume stock exporters
+  quantize fused expert layouts correctly.
 - `MODEL_FORGE_PARALLELISM=192` is for preprocessing/input-pipeline work, not
   for multiplying large model forward passes.
 - Optional watchdog, started outside the training job:

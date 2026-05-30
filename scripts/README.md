@@ -12,6 +12,8 @@ wrappers, operational helpers, or hardware-specific launchers.
   local teacher used by dataset generation.
 - `run_finetune_spark_container.sh`: guarded CUDA container launcher for full
   fine-tuning on Spark.
+- `quantization/gemma4_moe_nvfp4.py`: lower-level ModelOpt helper used by
+  `./forge quantize export` for Gemma4 full-MoE NVFP4 checkpoint creation.
 - `merge_peft_adapter.py`: PEFT adapter merge helper when live LoRA serving is
   unsupported or inconvenient.
 - `publish_hf_artifact.py`: Hugging Face upload helper for completed models,

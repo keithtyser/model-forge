@@ -47,7 +47,7 @@ SAFE_ENV_KEYS = {
     "HF_HUB_CACHE",
     "TRANSFORMERS_CACHE",
 }
-SECRET_KEY_MARKERS = ("TOKEN", "SECRET", "PASSWORD", "API_KEY", "AUTH", "CREDENTIAL")
+SECRET_KEY_MARKERS = ("SECRET", "PASSWORD", "API_KEY", "AUTHORIZATION", "CREDENTIAL")
 SECRET_VALUE_PATTERNS = (
     re.compile(r"hf_[A-Za-z0-9]{20,}"),
     re.compile(r"sk-[A-Za-z0-9]{20,}"),
@@ -117,9 +117,17 @@ def porcelain_path(line: str) -> str:
     return ""
 
 
-def redact_env_value(key: str, value: str) -> str:
+def is_secret_key(key: str) -> bool:
     upper = key.upper()
+    if not upper:
+        return False
     if any(marker in upper for marker in SECRET_KEY_MARKERS):
+        return True
+    return upper == "TOKEN" or upper.endswith(("_TOKEN", "-TOKEN", ".TOKEN"))
+
+
+def redact_env_value(key: str, value: str) -> str:
+    if is_secret_key(key):
         return "<redacted>"
     redacted = value
     for pattern in SECRET_VALUE_PATTERNS:
@@ -128,8 +136,7 @@ def redact_env_value(key: str, value: str) -> str:
 
 
 def redact_value(value: Any, key: str = "") -> Any:
-    upper = key.upper()
-    if any(marker in upper for marker in SECRET_KEY_MARKERS):
+    if is_secret_key(key):
         return "<redacted>"
     if isinstance(value, str):
         return redact_env_value(key, value)
