@@ -19,6 +19,7 @@ from model_forge.variants.manifest import (
     validate_variant_node,
     write_variant_node,
 )
+from model_forge.variants.tokenizer_audit import build_tokenizer_audit
 
 
 console = Console()
@@ -116,6 +117,14 @@ def main() -> None:
     audit_parser.add_argument("path", type=Path)
     audit_parser.add_argument("--json", action="store_true")
 
+    tokenizer_parser = subparsers.add_parser("tokenizer-audit", help="Check tokenizer/chat-template preservation for configured variants")
+    tokenizer_parser.add_argument("family")
+    tokenizer_parser.add_argument("--variant", help="Audit one variant plus any needed source variant")
+    tokenizer_parser.add_argument("--models-dir", help="Override the family models directory")
+    tokenizer_parser.add_argument("--load-tokenizer", action="store_true", help="Run a live AutoTokenizer chat-template round trip for present local dirs")
+    tokenizer_parser.add_argument("--strict", action="store_true", help="treat missing local dirs as errors")
+    tokenizer_parser.add_argument("--json", action="store_true")
+
     args = parser.parse_args()
 
     if args.action == "graph":
@@ -159,6 +168,39 @@ def main() -> None:
         else:
             render_node(node)
         return
+
+    if args.action == "tokenizer-audit":
+        audit = build_tokenizer_audit(
+            args.family,
+            variant=args.variant,
+            models_dir_override=args.models_dir,
+            load_tokenizer=args.load_tokenizer,
+            strict=args.strict,
+        )
+        if args.json:
+            print(json.dumps(audit, indent=2, sort_keys=True))
+        else:
+            table = Table(title=f"Tokenizer Audit: {audit['family']}")
+            table.add_column("Variant")
+            table.add_column("Exists")
+            table.add_column("Source")
+            table.add_column("Template")
+            table.add_column("Tokenizer")
+            for record in audit["records"]:
+                files = record.get("files") or {}
+                tokenizer_kind = "json" if "tokenizer.json" in files else "model" if "tokenizer.model" in files else ""
+                table.add_row(
+                    str(record["variant"]),
+                    str(record.get("exists")),
+                    str(record.get("source_variant") or ""),
+                    str(record.get("chat_template_source") or ""),
+                    tokenizer_kind,
+                )
+            console.print(table)
+            for finding in audit["findings"]:
+                style = "red" if finding["level"] == "error" else "yellow"
+                console.print(f"[{style}]{finding['level']} {finding['variant']} {finding['check']}: {finding['message']}[/{style}]")
+        raise SystemExit(0 if audit["passed"] else 1)
 
     data = yaml.safe_load(args.path.read_text(encoding="utf-8")) if args.path.suffix in {".yaml", ".yml"} else json.loads(args.path.read_text(encoding="utf-8"))
     errors = validate_variant_node(data)

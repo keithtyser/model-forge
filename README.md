@@ -271,6 +271,19 @@ For new families, reuse the workflow, not Gemma constants. Recalibrate module
 targets, layer ranges, direction prompts, strength/search bounds, tokenizer
 behavior, and serving settings per architecture.
 
+Variant and tokenizer checks:
+
+```bash
+./forge variants graph gemma4_26b_a4b --variant local_abli
+./forge variants tokenizer-audit gemma4_26b_a4b --variant local_abli
+./forge variants tokenizer-audit gemma4_26b_a4b --variant local_abli --load-tokenizer --strict
+```
+
+Use `tokenizer-audit` before promoting fine-tuned, ablated, merged-adapter, or
+quantized variants. Metadata mode compares tokenizer files, special tokens, and
+chat-template hashes; `--load-tokenizer` additionally runs a local
+`AutoTokenizer` chat-template round trip when the checkpoint is present.
+
 ## DGX Spark Rules
 
 DGX Spark settings are hardware policy, not model constants. Default training

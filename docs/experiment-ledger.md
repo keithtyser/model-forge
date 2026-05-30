@@ -101,6 +101,49 @@ Result:
 - recommended candidate generation floor is 272 rows before verification,
   filtering, review, and packing
 
+## Multi-Family: Tokenizer And Chat Template Audit
+
+Status: implemented and pushed. No model server, training run, quantization
+run, or checkpoint export was started.
+
+Hypothesis: fine-tune merges, ablation exports, quantization exports, and future
+GGUF conversions can silently break tokenizer metadata or chat-template
+behavior. Model Forge needs a family-driven audit that compares derived
+variants against their configured source variant and can run a live tokenizer
+round trip when local checkpoints are present.
+
+Changes:
+
+- added `./forge variants tokenizer-audit <family>`
+- added metadata hashing for tokenizer files, special tokens, and chat-template
+  sources
+- added optional `--load-tokenizer` live `AutoTokenizer` chat-template
+  round-trip probe
+- added `--strict` release-gate mode that treats missing configured local dirs
+  as errors
+- updated Gemma ablation variants to declare `base_variant: base` so graph and
+  tokenizer preservation checks know the correct source
+- updated README, variant graph docs, config docs, status, and agent handoff
+  instructions
+
+Validation:
+
+```bash
+.venv/bin/python -m py_compile src/model_forge/variants/tokenizer_audit.py src/model_forge/variants/cli.py
+.venv/bin/python -m unittest tests.test_variants -v
+./forge variants tokenizer-audit gemma4_26b_a4b --variant local_abli --json
+./forge variants graph gemma4_26b_a4b --variant local_abli --json
+```
+
+Result:
+
+- fixture tests prove preservation pass, chat-template drift failure, and
+  non-strict missing-local-dir warning behavior
+- current Gemma graph now records `base -> local_abli` ancestry
+- on this machine, the base tokenizer metadata is visible under `~/models`,
+  while the configured `local_abli` dir is not present; non-strict audit passes
+  with a warning as intended
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

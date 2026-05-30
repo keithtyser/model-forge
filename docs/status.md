@@ -88,6 +88,11 @@ This is the short handoff state for humans and agents. Use
 - Variant graph metadata is now wired through `./forge variants graph|node`.
   Variant nodes can record source variant, transform, artifact checksums,
   validation state, Spark evidence, promotion decision, and retention decision.
+- Tokenizer and chat-template preservation checks are now wired through
+  `./forge variants tokenizer-audit`. Metadata mode compares tokenizer files,
+  special tokens, and chat-template hashes against each variant's configured
+  source; `--load-tokenizer --strict` adds a local AutoTokenizer round trip for
+  release gates.
 - Standalone artifact execution validation is now wired through
   `./forge artifacts validate`. It validates HTML artifacts with Playwright
   browser checks, screenshots, and nonblank canvas checks when available;

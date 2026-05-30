@@ -54,3 +54,35 @@ Validate a node:
 
 `./forge doctor` validates any tracked `variant_node.json` files, so checked-in
 examples cannot drift from the schema.
+
+## Tokenizer And Chat Template Audit
+
+Derived variants should preserve tokenizer files, special-token semantics, and
+chat-template behavior unless a config explicitly documents a change. This is
+especially important after adapter merges, refusal ablation exports,
+quantization exports, and future GGUF conversions.
+
+Run a metadata-only audit without loading model weights:
+
+```bash
+./forge variants tokenizer-audit gemma4_26b_a4b --variant local_abli
+```
+
+Metadata mode checks configured local dirs when present, hashes tokenizer files,
+extracts special tokens and chat-template sources, and compares derived variants
+against their `base_variant` source. Missing local dirs are warnings by default
+so open-source configs remain portable.
+
+For a release or promotion gate, use strict mode and a live tokenizer round
+trip:
+
+```bash
+./forge variants tokenizer-audit gemma4_26b_a4b \
+  --variant local_abli \
+  --load-tokenizer \
+  --strict
+```
+
+`--load-tokenizer` uses `AutoTokenizer.from_pretrained(..., local_files_only=True)`
+and applies the chat template to a small message fixture, then tokenizes and
+decodes it to catch broken templates before serving or publishing.

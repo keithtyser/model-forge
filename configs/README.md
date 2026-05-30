@@ -47,6 +47,10 @@ and experiment constants here instead of hard-coding them in scripts.
 - Put architecture-specific constants in the family or recipe config: target
   modules, layer ranges, tokenizer behavior, context length, quantization, and
   serving settings.
+- Derived variants should set `base_variant` so graph, comparison, and
+  tokenizer-audit tools can verify preservation against the right source.
+  If a derived checkpoint intentionally changes tokenizer or chat-template
+  behavior, document it under `tokenizer_policy.documented_change: true`.
 - Read secrets from environment variables only. Do not write tokens into YAML.
 - Keep generated artifacts out of `configs/`; store small reusable snapshots in
   `recipes/` and large outputs in ignored runtime directories or Hugging Face.

@@ -4,9 +4,33 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from model_forge.variants.graph import ancestry, variant_graph
 from model_forge.variants.manifest import default_variant_node, node_output_path, validate_variant_node, write_variant_node
+from model_forge.variants.tokenizer_audit import build_tokenizer_audit
+
+
+def write_tokenizer_fixture(path: Path, *, chat_template: str = "{{ messages }}", eos_token: str = "<eos>") -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "tokenizer.json").write_text(json.dumps({"version": "1.0", "model": {"type": "WordLevel"}}), encoding="utf-8")
+    (path / "tokenizer_config.json").write_text(
+        json.dumps(
+            {
+                "bos_token": "<bos>",
+                "eos_token": eos_token,
+                "unk_token": "<unk>",
+                "pad_token": "<pad>",
+                "chat_template": chat_template,
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (path / "special_tokens_map.json").write_text(
+        json.dumps({"bos_token": "<bos>", "eos_token": eos_token, "unk_token": "<unk>", "pad_token": "<pad>"}, sort_keys=True),
+        encoding="utf-8",
+    )
 
 
 class VariantGraphTests(unittest.TestCase):
@@ -60,6 +84,65 @@ class VariantGraphTests(unittest.TestCase):
         errors = validate_variant_node({"schema_version": "wrong"})
         self.assertIn("schema_version must be model_forge.variant_node.v1", errors)
         self.assertTrue(any("validation" in error for error in errors))
+
+    def test_tokenizer_audit_passes_when_derived_variant_preserves_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            models = Path(tmp)
+            write_tokenizer_fixture(models / "gemma-4-26B-A4B-it")
+            write_tokenizer_fixture(models / "gemma-4-26B-A4B-it-local-abliterated-v3")
+            audit = build_tokenizer_audit(
+                "gemma4_26b_a4b",
+                variant="local_abli",
+                models_dir_override=str(models),
+                strict=True,
+            )
+        self.assertTrue(audit["passed"])
+        self.assertEqual(audit["findings"], [])
+
+    def test_tokenizer_audit_reports_chat_template_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            models = Path(tmp)
+            write_tokenizer_fixture(models / "gemma-4-26B-A4B-it", chat_template="{{ messages }}")
+            write_tokenizer_fixture(models / "gemma-4-26B-A4B-it-local-abliterated-v3", chat_template="{{ broken }}")
+            audit = build_tokenizer_audit(
+                "gemma4_26b_a4b",
+                variant="local_abli",
+                models_dir_override=str(models),
+                strict=True,
+            )
+        self.assertFalse(audit["passed"])
+        self.assertTrue(
+            any(finding["check"] == "tokenizer_preservation" and "chat_template_sha256" in finding["message"] for finding in audit["findings"])
+        )
+
+    def test_tokenizer_audit_non_strict_allows_missing_local_dirs_as_warnings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            audit = build_tokenizer_audit(
+                "gemma4_26b_a4b",
+                variant="local_abli",
+                models_dir_override=tmp,
+                strict=False,
+            )
+        self.assertTrue(audit["passed"])
+        self.assertTrue(any(finding["level"] == "warning" for finding in audit["findings"]))
+
+    def test_tokenizer_audit_strict_fails_skipped_live_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            models = Path(tmp)
+            write_tokenizer_fixture(models / "gemma-4-26B-A4B-it")
+            with patch(
+                "model_forge.variants.tokenizer_audit.live_round_trip",
+                return_value={"status": "skipped", "reason": "fixture unavailable"},
+            ):
+                audit = build_tokenizer_audit(
+                    "gemma4_26b_a4b",
+                    variant="base",
+                    models_dir_override=str(models),
+                    load_tokenizer=True,
+                    strict=True,
+                )
+        self.assertFalse(audit["passed"])
+        self.assertTrue(any(finding["level"] == "error" and finding["check"] == "round_trip" for finding in audit["findings"]))
 
 
 if __name__ == "__main__":

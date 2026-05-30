@@ -246,12 +246,16 @@ Inspect or write variant graph nodes:
 ```bash
 ./forge variants graph gemma4_26b_a4b
 ./forge variants node gemma4_26b_a4b local_ft --write
+./forge variants tokenizer-audit gemma4_26b_a4b --variant local_abli
 ```
 
 Variant nodes record the source variant, transform, checkpoint reference,
 validation state, evidence path, artifact checksums, promotion decision, and
 retention decision. Keep generated nodes in `reports/generated/` unless a small
-example is intentionally promoted.
+example is intentionally promoted. Run `tokenizer-audit --load-tokenizer
+--strict` before release gates so adapter merges, ablation exports,
+quantization exports, and future GGUF conversions cannot silently lose
+chat-template or special-token behavior.
 
 Validate or plan cluster usage:
 
@@ -355,6 +359,9 @@ limits, disk preflight, and a 5% available-RAM watchdog floor.
   same architecture family.
 - For new architectures, inspect target module names, layer counts, hidden
   sizes, MoE/expert layouts, and tokenizer/chat templates before editing.
+- Before promoting a derived variant, run `./forge variants tokenizer-audit` to
+  verify tokenizer and chat-template preservation against the configured source
+  variant.
 - Recalibrate layer ranges, strengths, direction scope, and search bounds per
   family.
 - Keep embeddings, LM heads, routers, and expert weights untouched unless the

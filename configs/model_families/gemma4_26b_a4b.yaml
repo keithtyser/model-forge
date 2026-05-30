@@ -27,15 +27,18 @@ variants:
     repo_id: huihui-ai/Huihui-gemma-4-26B-A4B-it-abliterated
     local_dir: Huihui-gemma-4-26B-A4B-it-abliterated
     served_model_name: huihui-ai/Huihui-gemma-4-26B-A4B-it-abliterated
+    base_variant: base
   local_abli:
     repo_id: google/gemma-4-26B-A4B-it
     local_dir: gemma-4-26B-A4B-it-local-abliterated-v3
     served_model_name: local/gemma-4-26B-A4B-it-abliterated-v3
+    base_variant: base
     downloadable: false
   local_abli_sota:
     repo_id: google/gemma-4-26B-A4B-it
     local_dir: gemma-4-26B-A4B-it-local-abliterated-sota
     served_model_name: local/gemma-4-26B-A4B-it-abliterated-sota
+    base_variant: base
     downloadable: false
   base_fp8_runtime:
     repo_id: google/gemma-4-26B-A4B-it
@@ -89,16 +92,19 @@ variants:
     repo_id: google/gemma-4-26B-A4B-it
     local_dir: gemma-4-26B-A4B-it-local-abliterated-huihui-like
     served_model_name: local/gemma-4-26B-A4B-it-abliterated-huihui-like
+    base_variant: base
     downloadable: false
   local_abli_huihui_like_s4:
     repo_id: google/gemma-4-26B-A4B-it
     local_dir: gemma-4-26B-A4B-it-local-abliterated-huihui-like-s4
     served_model_name: local/gemma-4-26B-A4B-it-abliterated-huihui-like-s4
+    base_variant: base
     downloadable: false
   local_abli_huihui_shaped:
     repo_id: google/gemma-4-26B-A4B-it
     local_dir: gemma-4-26B-A4B-it-local-abliterated-huihui-shaped-s33
     served_model_name: local/gemma-4-26B-A4B-it-abliterated-huihui-shaped-s33
+    base_variant: base
     downloadable: false
 
 serve:
