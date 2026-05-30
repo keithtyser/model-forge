@@ -146,6 +146,7 @@ Dataset factory:
 ```bash
 ./forge data plan gemma4_26b_a4b local_ft_v1
 ./forge data gaps gemma4_26b_a4b local_ft_v1
+./forge data propose gemma4_26b_a4b local_ft_v1
 ./forge data generate gemma4_26b_a4b local_ft_v1 --smoke
 ./forge data verify gemma4_26b_a4b local_ft_v1 --smoke
 ./forge data review gemma4_26b_a4b local_ft_v1 --smoke --sample 50
@@ -155,6 +156,8 @@ Dataset factory:
 
 Use `generate --overwrite` only when replacing candidates intentionally.
 Downstream `--overwrite` refreshes derived artifacts from existing candidates.
+`propose` turns saved eval failures into the next dataset skill targets and a
+candidate config patch.
 `publish` writes a dry-run HF plan by default; `publish --execute` refuses
 seed-only and smoke-only datasets.
 

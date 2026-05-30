@@ -826,6 +826,132 @@ def command_gaps(config: dict[str, Any], overwrite: bool) -> Path:
     return output_path
 
 
+def build_feedback_proposal(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
+    gap_report = build_gap_report(config)
+    plan = build_plan(config, config_path)
+    targets = skill_targets(config)
+    seed_counts = {
+        str(skill): int(count)
+        for skill, count in plan.get("seed_skill_counts", {}).items()
+    }
+    gap_counts = Counter({
+        str(skill): int(count)
+        for skill, count in gap_report.get("recommended_skill_counts", {}).items()
+    })
+    top_cases_by_skill: dict[str, list[str]] = {}
+    concepts_by_skill: dict[str, Counter[str]] = {}
+    for gap in gap_report.get("gaps", []):
+        if not isinstance(gap, dict):
+            continue
+        skill = str(gap.get("recommended_skill", "checkpoint_selection"))
+        case_key = f"{gap.get('bucket', 'unknown')}.{gap.get('case_id', 'unknown')}"
+        top_cases_by_skill.setdefault(skill, [])
+        if case_key not in top_cases_by_skill[skill]:
+            top_cases_by_skill[skill].append(case_key)
+        concepts_by_skill.setdefault(skill, Counter())
+        for concept in gap.get("missed_concepts", []):
+            concepts_by_skill[skill][str(concept)] += 1
+
+    recommended_skill_updates = []
+    for priority, (skill, gap_count) in enumerate(gap_counts.most_common(), start=1):
+        current_target = int(targets.get(skill, 0))
+        current_seed_rows = int(seed_counts.get(skill, 0))
+        shortage = max(0, current_target - current_seed_rows)
+        gap_weighted_bump = max(24, min(160, int(gap_count) * 8))
+        proposed_target = current_target + gap_weighted_bump
+        concepts = [concept for concept, _ in concepts_by_skill.get(skill, Counter()).most_common(8)]
+        cases = top_cases_by_skill.get(skill, [])[:8]
+        rationale_parts = [
+            f"{gap_count} eval failure rows mapped to {skill}",
+            f"{shortage} rows below the current target before generation",
+        ]
+        if concepts:
+            rationale_parts.append("missed concepts: " + ", ".join(concepts[:5]))
+        if cases:
+            rationale_parts.append("top cases: " + ", ".join(cases[:3]))
+        recommended_skill_updates.append({
+            "priority": priority,
+            "skill": skill,
+            "gap_count": int(gap_count),
+            "current_target_examples": current_target,
+            "current_seed_rows": current_seed_rows,
+            "current_shortage": shortage,
+            "proposed_target_examples": proposed_target,
+            "proposed_increment": proposed_target - current_target,
+            "top_failure_cases": cases,
+            "missed_concepts": concepts,
+            "rationale": "; ".join(rationale_parts),
+        })
+
+    gap_rows = int(gap_report.get("gap_rows", 0) or 0)
+    recommended_min_candidates = max(64, min(512, gap_rows * 4 if gap_rows else 64))
+    focus_skills = [item["skill"] for item in recommended_skill_updates[:6]]
+    candidate_skills = [
+        {
+            "id": item["skill"],
+            "target_examples": item["proposed_target_examples"],
+        }
+        for item in recommended_skill_updates
+    ]
+    proposal = {
+        "schema_version": "model_forge.dataset_feedback_proposal.v1",
+        "dataset_id": config["id"],
+        "family": config["family"],
+        "variant": config["variant"],
+        "objective": config["objective"],
+        "config_path": display_path(config_path),
+        "output_dir": display_path(resolve_repo_path(config["output_dir"])),
+        "source_result_path": gap_report["source_result_path"],
+        "responses_path": gap_report["responses_path"],
+        "total_rows": gap_report["total_rows"],
+        "gap_rows": gap_rows,
+        "top_failure_buckets": gap_report.get("bucket_counts", {}),
+        "top_failure_cases": gap_report.get("top_cases", {}),
+        "missed_concepts": gap_report.get("missed_concepts", {}),
+        "recommended_skill_updates": recommended_skill_updates,
+        "recommended_generation": {
+            "min_generated_candidates": recommended_min_candidates,
+            "medium_pack_min_candidates": max(recommended_min_candidates, 256),
+            "focus_skills": focus_skills,
+            "rationale": (
+                "Scale candidate generation from observed eval failures, then keep only rows "
+                "that pass verification, holdout-overlap, source, and review gates."
+            ),
+        },
+        "candidate_config_patch": {
+            "skills": candidate_skills,
+            "generation": {
+                "max_generated_candidates": recommended_min_candidates,
+                "resource_limits": {
+                    "max_candidates_per_run": min(256, recommended_min_candidates),
+                },
+            },
+            "review": {
+                "focus_skills": list(focus_skills),
+                "sample_size": max(int(config.get("review", {}).get("sample_size", 50) or 50), 75),
+            },
+        },
+        "next_actions": [
+            f"./forge data generate {config['family']} {config['variant']} --overwrite --max-generated-candidates {recommended_min_candidates}",
+            f"./forge data verify {config['family']} {config['variant']} --overwrite",
+            f"./forge data filter {config['family']} {config['variant']} --overwrite",
+            f"./forge data review {config['family']} {config['variant']} --overwrite --sample 75",
+            f"./forge data pack {config['family']} {config['variant']} --overwrite",
+        ],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    return proposal
+
+
+def command_propose(config: dict[str, Any], config_path: Path, overwrite: bool) -> Path:
+    output_path = resolve_repo_path(config["output_dir"]) / "feedback_proposal.yaml"
+    if output_path.exists() and not overwrite:
+        return output_path
+    proposal = build_feedback_proposal(config, config_path)
+    write_yaml(output_path, proposal)
+    return output_path
+
+
 def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
     output_dir = resolve_repo_path(config["output_dir"])
     objective_path = REPO_DIR / "configs" / "objectives" / f"{config['objective']}.yaml"
@@ -1930,7 +2056,7 @@ def default_config_for(family: str, variant: str) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Plan and pack model-forge dataset-factory artifacts")
-    parser.add_argument("step", choices=["plan", "gaps", "seed", "generate", "judge", "verify", "filter", "review", "pack", "publish"])
+    parser.add_argument("step", choices=["plan", "gaps", "propose", "seed", "generate", "judge", "verify", "filter", "review", "pack", "publish"])
     parser.add_argument("family", nargs="?")
     parser.add_argument("variant", nargs="?")
     parser.add_argument("--config", type=Path)
@@ -1960,6 +2086,9 @@ def main() -> None:
         console.print(f"[green]Wrote[/green] {display_path(path)}")
     elif args.step == "gaps":
         path = command_gaps(config, args.overwrite)
+        console.print(f"[green]Wrote[/green] {display_path(path)}")
+    elif args.step == "propose":
+        path = command_propose(config, config_path, args.overwrite)
         console.print(f"[green]Wrote[/green] {display_path(path)}")
     elif args.step == "seed":
         path = command_seed(config, args.overwrite)

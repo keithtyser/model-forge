@@ -376,6 +376,7 @@ The first no-training implementation slice is the local FT v1 dataset factory:
 ```bash
 ./forge data plan gemma4_26b_a4b local_ft_v1
 ./forge data gaps gemma4_26b_a4b local_ft_v1
+./forge data propose gemma4_26b_a4b local_ft_v1
 ./forge data seed gemma4_26b_a4b local_ft_v1
 ./forge data generate gemma4_26b_a4b local_ft_v1 --smoke
 ./forge data judge gemma4_26b_a4b local_ft_v1 --smoke
@@ -387,12 +388,12 @@ The first no-training implementation slice is the local FT v1 dataset factory:
 ```
 
 Current MVP behavior is deterministic and local: it uses human seed rows,
-saved eval failure extraction, template-provider candidate generation,
-heuristic scoring, static skill verification, holdout-overlap checks,
-accepted/rejected row reports, curation review, coverage warnings, and a dry-run
-Hugging Face publish plan. It does not call a live teacher model unless an
-OpenAI-compatible provider is configured explicitly, and it does not upload
-anything.
+saved eval failure extraction, feedback proposals for the next data iteration,
+template-provider candidate generation, heuristic scoring, static skill
+verification, holdout-overlap checks, accepted/rejected row reports, curation
+review, coverage warnings, and a dry-run Hugging Face publish plan. It does not
+call a live teacher model unless an OpenAI-compatible provider is configured
+explicitly, and it does not upload anything.
 
 Use `generate --overwrite` only when replacing candidates intentionally.
 Downstream `judge`, `verify`, `filter`, `review`, `pack`, and `publish`
@@ -473,6 +474,14 @@ summarizes failed buckets, missed concepts, and recommended next dataset skills:
 
 ```text
 datasets/generated/gemma4_26b_a4b_local_ft_v1/gap_report.yaml
+```
+
+The feedback proposal converts that gap report into ranked skill-target updates,
+generation scale recommendations, and a candidate config patch for the next
+dataset iteration:
+
+```text
+datasets/generated/gemma4_26b_a4b_local_ft_v1/feedback_proposal.yaml
 ```
 
 ## Adding A New Model Family

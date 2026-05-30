@@ -21,9 +21,9 @@ This is the short handoff state for humans and agents. Use
   close to Jackrong on challenge capability and better on paired benign quality,
   but it did not clear the primary challenge-capability promotion gate.
 - The local FT v1 dataset factory MVP is implemented with planning, gap
-  extraction, seed rows, generation adapters, verification, filtering, review,
-  packing, dry-run publish planning, non-cascading overwrite semantics, and
-  length-violation rejection gates.
+  extraction, feedback proposals, seed rows, generation adapters, verification,
+  filtering, review, packing, dry-run publish planning, non-cascading overwrite
+  semantics, and length-violation rejection gates.
 - The repo now has reusable dataset source registries, guarded HF dataset
   publish execution, a local FT v1 dry-run config, saved-comparison promotion
   reports, and a safe Qwen 3.5 9B teacher launcher.

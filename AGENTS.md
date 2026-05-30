@@ -160,11 +160,13 @@ another backend without hard-coding Gemma behavior.
 - Treat `runs/finetune/<name>/` as local generated scratch. Tracked reusable
   templates belong under `recipes/finetuning/<name>/`.
 - For FT data iteration, use
-  `./forge data plan|gaps|generate|verify|review|pack <family> <variant> --smoke`
+  `./forge data plan|gaps|propose|generate|verify|review|pack <family> <variant> --smoke`
   before editing training configs. The local FT v1 pack defaults to the
   deterministic `template` generation provider; OpenAI-compatible generation is
   available only when configured explicitly. Treat `review_report.json`
   `ready_to_scale_generation=true` as the gate before scaling generation.
+  `propose` reads saved eval failures and writes `feedback_proposal.yaml` with
+  ranked skill targets, generation scale, and candidate config-patch guidance.
   Run `generate --overwrite` only when replacing candidates intentionally;
   downstream `--overwrite` refreshes derived artifacts from existing
   candidates. Current local FT v1 configs reject assistant length violations

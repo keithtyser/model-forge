@@ -9,11 +9,13 @@ from pathlib import Path
 from model_forge.data.factory import (
     REPO_DIR,
     build_provider,
+    build_feedback_proposal,
     build_gap_report,
     build_plan,
     command_generate,
     command_gaps,
     command_pack,
+    command_propose,
     command_publish,
     command_review,
     command_verify,
@@ -228,6 +230,33 @@ class DatasetFactoryTests(unittest.TestCase):
             self.assertTrue(Path(path).exists())
             text = Path(path).read_text(encoding="utf-8")
             self.assertIn("recommended_skill_counts", text)
+
+    def test_feedback_proposal_prioritizes_eval_failures(self) -> None:
+        config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
+        config = load_yaml(config_path)
+        proposal = build_feedback_proposal(config, config_path)
+        self.assertEqual(proposal["schema_version"], "model_forge.dataset_feedback_proposal.v1")
+        self.assertGreater(proposal["gap_rows"], 0)
+        self.assertIn("candidate_config_patch", proposal)
+        updates = proposal["recommended_skill_updates"]
+        self.assertGreater(len(updates), 0)
+        skills = {item["skill"] for item in updates}
+        self.assertIn("benign_safety_analysis", skills)
+        self.assertIn("eval_latency_throughput", skills)
+        for item in updates:
+            self.assertGreaterEqual(item["proposed_target_examples"], item["current_target_examples"])
+        self.assertIn("min_generated_candidates", proposal["recommended_generation"])
+
+    def test_propose_command_writes_feedback_proposal(self) -> None:
+        config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["output_dir"] = tmp
+            path = command_propose(config, config_path, overwrite=True)
+            self.assertTrue(Path(path).exists())
+            proposal = load_yaml(Path(path))
+            self.assertEqual(proposal["schema_version"], "model_forge.dataset_feedback_proposal.v1")
+            self.assertTrue(proposal["recommended_skill_updates"])
 
     def test_publish_writes_dry_run_plan_only(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"

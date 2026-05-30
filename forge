@@ -20,7 +20,7 @@ Usage:
   ./forge external <family> [variant] [tasks]
   ./forge finetune <family> [plan|prepare|run] [--execute]
   ./forge finetune --config <path> [plan|prepare|run]
-  ./forge data [plan|gaps|seed|generate|judge|verify|filter|review|pack|publish] <family> <variant> [--overwrite] [--smoke]
+  ./forge data [plan|gaps|propose|seed|generate|judge|verify|filter|review|pack|publish] <family> <variant> [--overwrite] [--smoke]
   ./forge ablate <family> [plan|collect|analyze-reference|sweep-reference|export|sota-plan|sota-prepare|sota-run] [--execute]
   ./forge compare <family>
   ./forge promote <family> [profile]
@@ -48,6 +48,7 @@ Examples:
   ./forge finetune gemma4_26b_a4b plan
   ./forge finetune --config configs/finetuning/gemma4_26b_a4b_local_ft_v1_dryrun.yaml plan
   ./forge data plan gemma4_26b_a4b local_ft_v1
+  ./forge data propose gemma4_26b_a4b local_ft_v1
   ./forge ablate gemma4_26b_a4b plan
   ./forge compare gemma4_26b_a4b
   ./forge promote gemma4_26b_a4b local_ft_vs_jackrong

@@ -64,6 +64,43 @@ Result:
 - variant node validation covers implementation status, validation state,
   promotion decision, retention fields, and artifact checksum entries
 
+## Dataset Factory: Eval Feedback Proposal
+
+Status: implemented and pushed. No model server, training run, quantization
+run, or live teacher generation was started.
+
+Hypothesis: eval failures should feed the next dataset iteration through a
+durable proposal artifact, not only through informal notes. The proposal should
+rank failed skills, preserve top failed buckets/cases, recommend conservative
+target-count bumps, and provide a candidate config patch for the next data run.
+
+Changes:
+
+- added `./forge data propose <family> <variant>`
+- added `feedback_proposal.yaml` generation from saved eval `responses.jsonl`
+- added ranked skill updates, generation scale recommendations, focus skills,
+  top failure cases, missed concepts, and candidate config patch output
+- tracked the local FT v1 proposal at
+  `datasets/generated/gemma4_26b_a4b_local_ft_v1/feedback_proposal.yaml`
+- updated README, fine-tuning docs, status, and agent handoff instructions
+
+Validation:
+
+```bash
+.venv/bin/python -m py_compile src/model_forge/data/factory.py
+.venv/bin/python -m unittest tests.test_data_factory -v
+./forge data propose gemma4_26b_a4b local_ft_v1 --overwrite
+```
+
+Result:
+
+- proposal generated from 318 saved local FT v0 internal eval rows
+- 68 rows mapped to dataset gaps
+- top proposed skill update is `benign_safety_analysis` with 39 mapped gap
+  rows and a target bump from 180 to 340 examples
+- recommended candidate generation floor is 272 rows before verification,
+  filtering, review, and packing
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,
@@ -820,6 +857,7 @@ objective: create a no-training path for local_ft_v1 data cleanup and handoff
 commands:
   ./forge data plan gemma4_26b_a4b local_ft_v1 --overwrite
   ./forge data gaps gemma4_26b_a4b local_ft_v1 --overwrite
+  ./forge data propose gemma4_26b_a4b local_ft_v1 --overwrite
   ./forge data generate gemma4_26b_a4b local_ft_v1 --overwrite --smoke
   ./forge data verify gemma4_26b_a4b local_ft_v1 --smoke
   ./forge data review gemma4_26b_a4b local_ft_v1 --smoke --sample 50
@@ -829,6 +867,7 @@ objective profile: configs/objectives/capability_sft.yaml
 dataset config: configs/datasets/gemma4_26b_a4b_local_ft_v1.yaml
 seed rows: datasets/seeds/gemma4_26b_a4b_local_ft_v1.jsonl
 generated artifact dir: datasets/generated/gemma4_26b_a4b_local_ft_v1
+feedback proposal: datasets/generated/gemma4_26b_a4b_local_ft_v1/feedback_proposal.yaml
 accepted rows: 49
 human seed rows: 37
 synthetic rows: 12
