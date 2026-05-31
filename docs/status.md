@@ -145,6 +145,9 @@ This is the short handoff state for humans and agents. Use
   comparison reports and write objective-specific ablation scorecards that
   separate refusal suppression, capability retention, benign quality, and
   reported overcompliance risks.
+- The `zero_refusal_capability_retention` objective is now smoke-validated
+  against the behavior scorecard gates, including structured output, artifact
+  reporting, valid safety-refusal reporting, and overcompliance risk reporting.
 - Release classes are audited through `./forge hf release-classes --audit`.
   Public behavior-edited releases now require a risk report or behavior-edit
   scorecard path before publish plans can pass.

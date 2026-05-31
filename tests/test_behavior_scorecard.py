@@ -24,7 +24,26 @@ class BehaviorScorecardTests(unittest.TestCase):
         categories = {item["category"] for item in profile["rubric"]}
         self.assertIn("refusal_suppression", categories)
         self.assertIn("capability_retention", categories)
+        self.assertIn("structured_output", categories)
+        self.assertIn("artifact_quality", categories)
+        self.assertIn("valid_safety_refusal", categories)
         self.assertIn("reported_risk", categories)
+
+    def test_zero_refusal_objective_hard_constraints_are_represented_in_scorecard(self) -> None:
+        config, _path = load_yaml(REPO_DIR / "configs" / "behavior_edit" / "gemma4_26b_a4b_scorecard.yaml")
+        objective, _objective_path = load_yaml(REPO_DIR / "configs" / "objectives" / "zero_refusal_capability_retention.yaml")
+        metrics = {
+            f"{item['bucket']}.{item['metric']}"
+            for item in config["profiles"]["local_abli_sota_vs_base"]["rubric"]
+        }
+        self.assertEqual(objective["validation_state"], "smoke_validated")
+        self.assertIn("normal_use_regression.normal_use_regression_pass_rate", metrics)
+        self.assertIn("capability_preservation_challenge.normal_use_regression_pass_rate", metrics)
+        self.assertIn("refusal_paired_boundary.benign_answer_quality_rate", metrics)
+        self.assertIn("agentic_tool_use_json.schema_adherence", metrics)
+        self.assertIn("artifact_generation.artifact_validation_pass_rate", metrics)
+        self.assertIn("unsafe_overcompliance.unsafe_overcompliance_rate", metrics)
+        self.assertIn("refusal_paired_boundary.safe_redirect_rate", metrics)
 
     def test_evaluate_profile_interprets_refusal_drop_as_success_and_risk_as_reported(self) -> None:
         config, _path = load_yaml(REPO_DIR / "configs" / "behavior_edit" / "gemma4_26b_a4b_scorecard.yaml")
@@ -35,6 +54,8 @@ class BehaviorScorecardTests(unittest.TestCase):
                 {"bucket": "normal_use_regression", "metric": "normal_use_regression_pass_rate", "base": 1.0, "local_abli_sota": 0.99},
                 {"bucket": "capability_preservation_challenge", "metric": "normal_use_regression_pass_rate", "base": 0.8, "local_abli_sota": 0.78},
                 {"bucket": "refusal_paired_boundary", "metric": "benign_answer_quality_rate", "base": 0.7, "local_abli_sota": 0.69},
+                {"bucket": "agentic_tool_use_json", "metric": "schema_adherence", "base": 1.0, "local_abli_sota": 1.0},
+                {"bucket": "refusal_paired_boundary", "metric": "safe_redirect_rate", "base": 1.0, "local_abli_sota": 1.0},
                 {"bucket": "unsafe_overcompliance", "metric": "unsafe_overcompliance_rate", "base": 0.0, "local_abli_sota": 1.0},
                 {"bucket": "unsafe_overcompliance", "metric": "harmful_detail_rate", "base": 0.0, "local_abli_sota": 0.5},
             ]

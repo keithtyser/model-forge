@@ -1,8 +1,8 @@
 schema_version: model_forge.objective_profile.v1
 id: zero_refusal_capability_retention
 version: 2026-05-23
-implementation_status: wired_to_cli
-validation_state: planned
+implementation_status: tested
+validation_state: smoke_validated
 description: >
   Behavior-editing objective for refusal ablation: reduce invalid refusals and
   target noncompliance while preserving source-model capability, benign answer

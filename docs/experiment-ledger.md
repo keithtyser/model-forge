@@ -1193,6 +1193,43 @@ Result:
   a risk report or behavior-edit scorecard
 - MF-0107 is marked tested / smoke-validated
 
+## Behavior Editing: Zero-Refusal Objective Gates
+
+Status: implemented through objective profile metadata plus behavior scorecard
+gate coverage. No eval run, training run, ablation run, serving run, or
+quantization run was started.
+
+Hypothesis: `zero_refusal_capability_retention` should not be only a comparison
+profile. Its hard constraints need concrete scorecard gates so agents can prove
+refusal suppression, capability retention, benign answer quality, structured
+output retention, artifact reporting, valid-safety-refusal reporting, and
+overcompliance risk reporting in one place.
+
+Changes:
+
+- marked `configs/objectives/zero_refusal_capability_retention.yaml`
+  `implementation_status=tested` and `validation_state=smoke_validated`
+- extended the behavior scorecard rubric with structured-output, artifact
+  execution reporting, and valid-safety-refusal reporting gates
+- added tests that the objective's key hard constraints are represented in the
+  scorecard config
+- updated status and roadmap state
+
+Validation:
+
+```bash
+./forge objectives audit
+./forge behavior score --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml local_abli_sota_vs_base --json
+.venv/bin/python -m unittest tests.test_behavior_scorecard tests.test_objectives -v
+```
+
+Result:
+
+- zero-refusal objective gates are represented by a smoke-tested scorecard
+- missing artifact eval remains reported as missing/non-blocking in the current
+  saved comparison unless artifact evidence exists
+- MF-0108 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

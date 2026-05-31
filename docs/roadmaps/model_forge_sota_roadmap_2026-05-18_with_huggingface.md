@@ -3735,7 +3735,7 @@ MF-0104 Add behavior edit scorecard. implementation_status=tested validation_sta
 MF-0105 Add candidate frontier report from actual local candidates. implementation_status=scaffolded validation_state=planned
 MF-0106 Add redacted public risk-report mode and private raw-output retention. implementation_status=scaffolded validation_state=planned
 MF-0107 Add release classes and release-class validators. implementation_status=tested validation_state=smoke_validated
-MF-0108 Add zero_refusal_capability_retention objective gates. implementation_status=tested validation_state=planned
+MF-0108 Add zero_refusal_capability_retention objective gates. implementation_status=tested validation_state=smoke_validated
 ```
 
 ### P0: Serving
