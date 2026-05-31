@@ -395,6 +395,7 @@ Plan and report quantization without loading a model:
 
 ```bash
 ./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan
+./forge quantize calibration-manifest gemma4_26b_a4b base --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --write-manifest
 ./forge quantize card \
   --config configs/quantization/nvfp4_blackwell_runtime.yaml \
   --source-serving-summary <source>/summary.json \
@@ -412,6 +413,10 @@ sampled behavior scores, and quantization card.
 For NVFP4 promotion, require a clear `output_tokens_per_second` improvement
 over the matching BF16/FP16 endpoint, especially on `decode_heavy`; otherwise
 treat the run as loader evidence only.
+Before starting a self-quantization export, write a calibration manifest for the
+same family/variant/config. If you override datasets through
+`MODEL_FORGE_QUANT_CALIB_*`, regenerate the manifest so the export and evidence
+card point at the same calibration contract.
 
 For self-quantization, use the ModelOpt export runner and the matrix config:
 

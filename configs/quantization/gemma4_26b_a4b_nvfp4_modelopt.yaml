@@ -21,7 +21,7 @@ calibration:
   smoke_seq_len: 1024
   production_samples: 4096
   production_seq_len: 1024
-  optional_gated_dataset: cnn_dailymail,nemotron-post-training-dataset-v2
+  optional_gated_dataset: nemotron-post-training-dataset-v2
   notes: >
     The checked-in default is the full Gemma4 MoE NVFP4 recipe because the
     MLP-only ModelOpt recipe leaves the fused expert tensors in BF16 and does

@@ -39,7 +39,7 @@ Usage:
   ./forge artifacts [validate]
   ./forge bench [serve|serve-eval|sweep|kernel]
   ./forge profile [nsight]
-  ./forge quantize [plan|export|matrix-plan|card]
+  ./forge quantize [plan|export|calibration-manifest|matrix-plan|card]
   ./forge cluster [plan|doctor|sync|health|runtime|torchrun-smoke]
   ./forge golden-summary <family> [output-json]
   ./forge golden-check <family> [baseline-json]
@@ -96,6 +96,7 @@ Examples:
   ./forge profile nsight plan --config configs/profiling/nsight_serving_smoke.yaml
   ./forge profile nsight summarize --plan reports/generated/profiles/nsight/<run>/nsight_profile_plan.json
   ./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan
+  ./forge quantize calibration-manifest gemma4_26b_a4b base --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --write-manifest
   ./forge quantize matrix-plan --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml
   ./forge cluster plan --config configs/clusters/dgx_spark_x2.example.yaml --workload train
   ./forge cluster sync --config configs/clusters/dgx_spark_x2.example.yaml

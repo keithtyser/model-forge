@@ -7,7 +7,9 @@ import unittest
 from pathlib import Path
 
 from model_forge.quantization.cli import (
+    CALIBRATION_MANIFEST_SCHEMA_VERSION,
     build_card,
+    build_calibration_manifest,
     build_modelopt_export_command,
     build_plan,
     filter_matrix_entries,
@@ -231,6 +233,34 @@ class QuantizationCliTests(unittest.TestCase):
         self.assertEqual(export["resource_policy"]["docker"]["memory_gb"], 112)
         self.assertIsNone(export["calibration"]["recipe"])
         self.assertIn("quantization_export.lock", export["resource_policy"]["lock_path"])
+
+    def test_calibration_manifest_resolves_exact_dataset_inputs(self) -> None:
+        config_path = Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml")
+        config = load_quantization_config(config_path)
+        manifest = build_calibration_manifest(
+            config,
+            config_path=config_path,
+            family="gemma4_26b_a4b",
+            variant="base",
+            output_dir="/tmp/model-forge-quant-tests",
+            run_id="unit_calib",
+            dataset="cnn_dailymail,nemotron-post-training-dataset-v2",
+            samples="64,64",
+            seq_len="1024",
+            env={"MODEL_FORGE_MODELS_DIR": "/models-host"},
+        )
+
+        self.assertEqual(manifest["schema_version"], CALIBRATION_MANIFEST_SCHEMA_VERSION)
+        self.assertEqual(manifest["source"]["variant"], "base")
+        self.assertEqual(manifest["calibration"]["dataset"], "cnn_dailymail,nemotron-post-training-dataset-v2")
+        self.assertEqual(manifest["calibration"]["samples"], "64,64")
+        self.assertEqual(manifest["calibration"]["seq_len"], "1024")
+        self.assertEqual(manifest["calibration"]["selection_source"]["dataset"], "argument")
+        datasets = manifest["calibration"]["datasets"]
+        self.assertEqual([item["name"] for item in datasets], ["cnn_dailymail", "nemotron-post-training-dataset-v2"])
+        self.assertEqual(datasets[0]["access"], "public_or_local")
+        self.assertEqual(datasets[1]["access"], "gated")
+        self.assertIn("serving metrics", " ".join(manifest["promotion_requirements"]))
 
     def test_gemma_nvfp4_matrix_has_variant_specific_baselines(self) -> None:
         config = load_quantization_config(Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml"))

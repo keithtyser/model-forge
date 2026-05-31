@@ -1336,6 +1336,46 @@ Result:
   `validation_state=planned`; Spark evidence remains objective-specific future
   work
 
+## Quantization: Calibration Dataset Manifests
+
+Status: implemented as code/docs only. No model server, export job,
+quantization run, eval, or benchmark was started.
+
+Hypothesis: NVFP4 self-quantization should record the exact calibration
+contract before a heavy ModelOpt export starts. This lets agents compare base,
+FT, abli, and FT+abli variants apples-to-apples and prevents silent drift when
+`MODEL_FORGE_QUANT_CALIB_*` overrides are used.
+
+Implemented command:
+
+```bash
+./forge quantize calibration-manifest gemma4_26b_a4b base \
+  --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml \
+  --write-manifest
+```
+
+Changes:
+
+- added `model_forge.quantization_calibration_manifest.v1`
+- resolves calibration dataset, sample count, sequence length, batch size, and
+  source/target variant from config, CLI args, or environment overrides
+- classifies configured optional gated datasets separately from public/local
+  calibration sources
+- writes `calibration_manifest.json` and `.md`
+- updated README, AGENTS, quantization docs, and roadmap state
+
+Validation:
+
+```bash
+.venv/bin/python -m unittest tests.test_quantization_cli -v
+./forge quantize calibration-manifest gemma4_26b_a4b base --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --dataset cnn_dailymail,nemotron-post-training-dataset-v2 --samples 64,64 --seq-len 1024 --write-manifest --json --output-dir /tmp/model_forge_calibration_manifest --run-id unit_calib_cli
+```
+
+Result:
+
+- self-quantization exports now have a pre-run calibration manifest contract
+- MF-0302 is marked tested / smoke-validated
+
 ## Quantization: ModelOpt NVFP4 Self-Export Guardrail Incident
 
 Status: stopped before a completed NVFP4 checkpoint. Code and docs now enforce

@@ -29,6 +29,7 @@ DEFAULT_CONFIG = REPO_DIR / "configs" / "quantization" / "nvfp4_blackwell_runtim
 CONFIG_SCHEMA_VERSION = "model_forge.quantization.v1"
 PLAN_SCHEMA_VERSION = "model_forge.quantization_plan.v1"
 CARD_SCHEMA_VERSION = "model_forge.quantization_card.v1"
+CALIBRATION_MANIFEST_SCHEMA_VERSION = "model_forge.quantization_calibration_manifest.v1"
 
 console = Console(stderr=True)
 
@@ -465,6 +466,133 @@ def build_modelopt_export_command(
         "command": shell_command,
         "command_display": shlex.join(shell_command),
     }
+
+
+def calibration_dataset_entries(raw_dataset: str, *, optional_gated_dataset: str | None = None) -> list[dict[str, Any]]:
+    selected = comma_list(raw_dataset)
+    gated = set(comma_list(optional_gated_dataset))
+    entries = []
+    for index, dataset in enumerate(selected):
+        entries.append(
+            {
+                "name": dataset,
+                "order": index,
+                "role": "primary" if index == 0 else "supplemental",
+                "access": "gated" if dataset in gated else "public_or_local",
+                "checksum": None,
+                "revision": None,
+            }
+        )
+    return entries
+
+
+def build_calibration_manifest(
+    config: QuantizationConfig,
+    *,
+    config_path: Path,
+    family: str | None,
+    variant: str | None,
+    output_dir: str | Path | None,
+    run_id: str | None,
+    dataset: str | None = None,
+    samples: str | None = None,
+    seq_len: str | None = None,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    env = env or os.environ
+    source = resolve_source(config, family, variant, env)
+    calibration = dict(config.calibration)
+    ptq = dict((config.export or {}).get("ptq") or {})
+    resolved_dataset = dataset or env.get("MODEL_FORGE_QUANT_CALIB_DATASET") or str(ptq.get("dataset") or calibration.get("dataset") or "")
+    resolved_samples = samples or env.get("MODEL_FORGE_QUANT_CALIB_SIZE") or str(ptq.get("calib_size") or calibration.get("samples") or "")
+    resolved_seq_len = seq_len or env.get("MODEL_FORGE_QUANT_CALIB_SEQ") or str(ptq.get("calib_seq") or calibration.get("seq_len") or "")
+    batch_size = int(ptq.get("batch_size") or calibration.get("batch_size") or 1)
+    actual_run_id = sanitize_run_id(run_id or f"{config.name}_{source.variant or 'runtime'}_calibration_manifest")
+    output_root = resolve_repo_path(output_dir or config.outputs.get("reports_dir") or "reports/generated/quantization")
+    manifest_dir = output_root / actual_run_id
+    return redact_value(
+        {
+            "schema_version": CALIBRATION_MANIFEST_SCHEMA_VERSION,
+            "created_at": utc_now().isoformat(),
+            "run_id": actual_run_id,
+            "config": display_path(config_path),
+            "name": config.name,
+            "objective": config.objective,
+            "method": config.method,
+            "backend": config.backend,
+            "source": {
+                "family": source.family,
+                "variant": source.variant,
+                "model_id": source.model_id,
+                "local_path": display_path(source.local_path) if source.local_path else None,
+                "local_path_exists": source.local_path.exists() if source.local_path else None,
+            },
+            "target": {
+                "variant": config.target_variant or f"{source.variant or 'runtime'}_{config.method}_{config.backend}",
+            },
+            "calibration": {
+                "dataset": resolved_dataset,
+                "datasets": calibration_dataset_entries(
+                    resolved_dataset,
+                    optional_gated_dataset=str(calibration.get("optional_gated_dataset") or ""),
+                ),
+                "samples": resolved_samples,
+                "seq_len": resolved_seq_len,
+                "batch_size": batch_size,
+                "smoke_samples": calibration.get("smoke_samples"),
+                "smoke_seq_len": calibration.get("smoke_seq_len"),
+                "production_samples": calibration.get("production_samples"),
+                "production_seq_len": calibration.get("production_seq_len"),
+                "selection_source": {
+                    "dataset": "argument" if dataset else ("environment" if env.get("MODEL_FORGE_QUANT_CALIB_DATASET") else "config"),
+                    "samples": "argument" if samples else ("environment" if env.get("MODEL_FORGE_QUANT_CALIB_SIZE") else "config"),
+                    "seq_len": "argument" if seq_len else ("environment" if env.get("MODEL_FORGE_QUANT_CALIB_SEQ") else "config"),
+                },
+                "notes": calibration.get("notes"),
+            },
+            "exclusions": config.exclusions,
+            "output_dir": display_path(manifest_dir),
+            "promotion_requirements": [
+                "Attach dataset revisions/checksums when calibration rows are materialized.",
+                "Record the exact export command and quantized checkpoint path.",
+                "Compare the quantized checkpoint against the matching unquantized source variant.",
+                "Attach serving metrics and sampled quality/behavior evidence before promotion.",
+            ],
+        }
+    )
+
+
+def write_calibration_manifest_outputs(manifest: Mapping[str, Any]) -> Path:
+    output_dir = resolve_repo_path(str(manifest["output_dir"]))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    json_path = output_dir / "calibration_manifest.json"
+    json_path.write_text(json.dumps(redact_value(manifest), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    calibration = manifest.get("calibration") or {}
+    source = manifest.get("source") or {}
+    lines = [
+        f"# Quantization Calibration Manifest: {manifest.get('run_id')}",
+        "",
+        f"- Source: `{source.get('family') or 'n/a'}` / `{source.get('variant') or 'n/a'}`",
+        f"- Method/backend: `{manifest.get('method')}` / `{manifest.get('backend')}`",
+        f"- Dataset: `{calibration.get('dataset')}`",
+        f"- Samples: `{calibration.get('samples')}`",
+        f"- Sequence length: `{calibration.get('seq_len')}`",
+        f"- Batch size: `{calibration.get('batch_size')}`",
+        "",
+        "## Datasets",
+        "",
+        "| Order | Name | Role | Access | Revision | Checksum |",
+        "|---:|---|---|---|---|---|",
+    ]
+    for item in calibration.get("datasets") or []:
+        lines.append(
+            f"| {item.get('order')} | {item.get('name')} | {item.get('role')} | {item.get('access')} | "
+            f"{item.get('revision')} | {item.get('checksum')} |"
+        )
+    lines.extend(["", "## Promotion Requirements", ""])
+    lines.extend(f"- {item}" for item in manifest.get("promotion_requirements") or [])
+    (output_dir / "calibration_manifest.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return output_dir
 
 
 def guard_export(export_plan: Mapping[str, Any]) -> None:
@@ -1071,6 +1199,19 @@ def add_export_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json", action="store_true", help="Print JSON export plan")
 
 
+def add_calibration_manifest_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("family", nargs="?", help="Optional model family")
+    parser.add_argument("variant", nargs="?", help="Optional source variant")
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument("--dataset", help="Override calibration dataset list")
+    parser.add_argument("--samples", help="Override calibration sample count or comma-separated per-dataset counts")
+    parser.add_argument("--seq-len", help="Override calibration sequence length or comma-separated per-dataset lengths")
+    parser.add_argument("--output-dir", type=Path, help="Manifest artifact output root")
+    parser.add_argument("--run-id", help="Stable output subdirectory name")
+    parser.add_argument("--write-manifest", action="store_true", help="Write calibration_manifest.json and calibration_manifest.md")
+    parser.add_argument("--json", action="store_true", help="Print JSON manifest")
+
+
 def matrix_entries(config: QuantizationConfig) -> list[dict[str, Any]]:
     entries = config.matrix.get("variants") or []
     if not isinstance(entries, list):
@@ -1135,6 +1276,9 @@ def main() -> None:
 
     export_parser = subparsers.add_parser("export", help="Export a self-quantized checkpoint from a source variant")
     add_export_args(export_parser)
+
+    calibration_parser = subparsers.add_parser("calibration-manifest", help="Resolve exact calibration inputs for a quantization run")
+    add_calibration_manifest_args(calibration_parser)
 
     matrix_parser = subparsers.add_parser("matrix-plan", help="Print export plans for all variants in config matrix")
     matrix_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
@@ -1219,6 +1363,32 @@ def main() -> None:
             console.print(export_plan["command_display"])
         if args.execute:
             raise SystemExit(execute_export(export_plan))
+        return
+
+    if args.command == "calibration-manifest":
+        manifest = build_calibration_manifest(
+            config,
+            config_path=config_path,
+            family=args.family,
+            variant=args.variant,
+            output_dir=args.output_dir,
+            run_id=args.run_id,
+            dataset=args.dataset,
+            samples=args.samples,
+            seq_len=args.seq_len,
+        )
+        if args.write_manifest:
+            write_calibration_manifest_outputs(manifest)
+        if args.json:
+            print(json.dumps(redact_value(manifest), indent=2, sort_keys=True) + "\n")
+        else:
+            calibration = manifest.get("calibration") or {}
+            table = Table(title="Calibration Manifest")
+            table.add_column("Field")
+            table.add_column("Value")
+            for key in ["dataset", "samples", "seq_len", "batch_size"]:
+                table.add_row(key, str(calibration.get(key)))
+            console.print(table)
         return
 
     if args.command == "matrix-plan":

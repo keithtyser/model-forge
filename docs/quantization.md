@@ -52,6 +52,22 @@ docker build \
   --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml
 ```
 
+Before running a heavy export, write the calibration manifest for the exact
+source variant and config:
+
+```bash
+./forge quantize calibration-manifest gemma4_26b_a4b base \
+  --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml \
+  --write-manifest
+```
+
+The manifest records the source variant, target variant, dataset list, sample
+counts, sequence length, batch size, gated/public access classification, and
+promotion requirements. If you override calibration with
+`MODEL_FORGE_QUANT_CALIB_DATASET`, `MODEL_FORGE_QUANT_CALIB_SIZE`, or
+`MODEL_FORGE_QUANT_CALIB_SEQ`, regenerate the manifest before the export so the
+evidence matches the actual calibration contract.
+
 The Gemma matrix covers:
 
 - `base -> base_nvfp4_modelopt`
