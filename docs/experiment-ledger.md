@@ -917,6 +917,16 @@ Follow-up hardening:
 - this keeps MF-0808 auditable without allowing a local plan to masquerade as
   an upstream contribution
 
+Verification hardening:
+
+- added `./forge upstream verify-pr`
+- added `model_forge.upstream_pr_verification.v1`
+- verification checks candidate status, concrete target URL, GitHub PR URL
+  shape, existing local evidence, local evidence secret/path scans, and optional
+  GitHub API PR metadata
+- `--offline` is allowed for drafting but cannot complete MF-0808; completion
+  requires a non-offline report with `verified=true`
+
 ## Advanced Serving: SGLang Backend Planner
 
 Status: implemented as planning code only. No SGLang server, vLLM server,

@@ -331,6 +331,7 @@ Upstream PR planning:
 ```bash
 ./forge upstream audit --config configs/upstream/pr_candidates.yaml
 ./forge upstream plan --config configs/upstream/pr_candidates.yaml --candidate kernel_card_docs_or_example --write-plan
+./forge upstream verify-pr --config configs/upstream/pr_candidates.yaml --candidate kernel_card_docs_or_example --offline --write-report
 ```
 
 See [docs/upstream-prs.md](docs/upstream-prs.md). Upstream PR planning is an
@@ -338,7 +339,8 @@ evidence gate, not a substitute for opening a real external pull request.
 Run `./forge upstream audit --config configs/upstream/pr_candidates.yaml --strict`
 after replacing placeholder targets; strict audit rejects placeholder targets
 and opened/merged records without a real GitHub PR URL plus existing local
-evidence.
+evidence. `verify-pr --offline` checks the recorded fields and local evidence;
+completion requires a non-offline verification report with GitHub PR metadata.
 
 Profiling:
 

@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import urllib.error
+import urllib.request
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,9 +21,11 @@ from model_forge.runs.manifest import REPO_DIR, display_path, redact_value, sani
 DEFAULT_CONFIG = REPO_DIR / "configs" / "upstream" / "pr_candidates.yaml"
 SCHEMA_VERSION = "model_forge.upstream_pr_candidates.v1"
 PLAN_SCHEMA_VERSION = "model_forge.upstream_pr_plan.v1"
+VERIFICATION_SCHEMA_VERSION = "model_forge.upstream_pr_verification.v1"
 SECRET_PATTERN = re.compile(r"(hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,})")
 PRIVATE_PATH_PATTERN = re.compile(r"^/(home|Users)/[^/]+/")
 GITHUB_PR_URL_PATTERN = re.compile(r"^https://github\.com/[^/\s]+/[^/\s]+/pull/[0-9]+/?$")
+GITHUB_PR_PARSE_PATTERN = re.compile(r"^https://github\.com/(?P<owner>[^/\s]+)/(?P<repo>[^/\s]+)/pull/(?P<number>[0-9]+)/?$")
 PLACEHOLDER_PATTERN = re.compile(r"<[^>]+>")
 
 console = Console(stderr=True)
@@ -33,6 +38,13 @@ class Finding:
     message: str
     path: str | None = None
     candidate: str | None = None
+
+
+@dataclass(frozen=True)
+class VerificationCheck:
+    name: str
+    status: str
+    message: str
 
 
 def utc_timestamp() -> str:
@@ -56,6 +68,10 @@ def load_yaml(path: str | Path) -> tuple[dict[str, Any], Path]:
 
 def has_placeholder(value: Any) -> bool:
     return isinstance(value, str) and bool(PLACEHOLDER_PATTERN.search(value))
+
+
+def check_status(name: str, passed: bool, message: str) -> VerificationCheck:
+    return VerificationCheck(name=name, status="pass" if passed else "fail", message=message)
 
 
 def scan_value(value: Any, findings: list[Finding], *, path: str, candidate: str | None = None) -> None:
@@ -160,6 +176,128 @@ def build_plan(config: Mapping[str, Any], config_path: Path, *, candidate_id: st
     )
 
 
+def parse_github_pr_url(url: str) -> dict[str, str] | None:
+    match = GITHUB_PR_PARSE_PATTERN.match(url)
+    if not match:
+        return None
+    return match.groupdict()
+
+
+def fetch_github_pr_metadata(url: str, *, timeout: int = 20) -> tuple[dict[str, Any] | None, str | None]:
+    parsed = parse_github_pr_url(url)
+    if not parsed:
+        return None, "external_pr_url is not a GitHub pull request URL"
+    api_url = f"https://api.github.com/repos/{parsed['owner']}/{parsed['repo']}/pulls/{parsed['number']}"
+    request = urllib.request.Request(api_url, headers={"Accept": "application/vnd.github+json", "User-Agent": "model-forge-upstream-verifier"})
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        request.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        return None, f"GitHub API returned HTTP {exc.code}"
+    except Exception as exc:
+        return None, f"GitHub API request failed: {exc}"
+    if not isinstance(payload, dict):
+        return None, "GitHub API response was not an object"
+    return payload, None
+
+
+def evidence_checks(paths: list[Any]) -> tuple[list[VerificationCheck], list[str]]:
+    checks: list[VerificationCheck] = []
+    resolved_paths: list[str] = []
+    checks.append(check_status("local_evidence_present", bool(paths), "candidate records local_evidence paths"))
+    for index, raw_path in enumerate(paths):
+        evidence = str(raw_path)
+        if has_placeholder(evidence):
+            checks.append(check_status(f"local_evidence_{index}_no_placeholder", False, f"unresolved placeholder: {evidence}"))
+            continue
+        path = resolve_repo_path(evidence)
+        exists = path.exists()
+        checks.append(check_status(f"local_evidence_{index}_exists", exists, display_path(path)))
+        if exists:
+            resolved_paths.append(display_path(path))
+            findings: list[Finding] = []
+            scan_value(path.read_text(encoding="utf-8", errors="replace") if path.is_file() and path.stat().st_size <= 2_000_000 else display_path(path), findings, path=display_path(path))
+            checks.append(check_status(f"local_evidence_{index}_no_sensitive_literals", not findings, "; ".join(f.message for f in findings) or "no private paths or secret-like literals found"))
+    return checks, resolved_paths
+
+
+def build_verification(
+    config: Mapping[str, Any],
+    config_path: Path,
+    *,
+    candidate_id: str | None = None,
+    offline: bool = False,
+    require_merged: bool = False,
+    run_id: str | None = None,
+) -> dict[str, Any]:
+    candidate = candidate_by_id(config, candidate_id)
+    candidate_run_id = sanitize_run_id(run_id or f"upstream_verify_{candidate['id']}")
+    output_dir = REPO_DIR / "reports" / "generated" / "upstream_prs" / candidate_run_id
+    external_pr_url = str(candidate.get("external_pr_url") or "")
+    checks = [
+        check_status("candidate_status_opened_or_merged", candidate.get("status") in {"opened", "merged"}, f"status={candidate.get('status')}"),
+        check_status("target_url_concrete", bool(candidate.get("target_url")) and not has_placeholder(candidate.get("target_url")), str(candidate.get("target_url") or "")),
+        check_status("external_pr_url_present", bool(external_pr_url), external_pr_url or "missing external_pr_url"),
+        check_status("external_pr_url_shape", bool(parse_github_pr_url(external_pr_url)), external_pr_url or "missing external_pr_url"),
+    ]
+    evidence, evidence_paths = evidence_checks(candidate.get("local_evidence") or [])
+    checks.extend(evidence)
+    remote: dict[str, Any] | None = None
+    remote_error: str | None = None
+    if offline:
+        checks.append(VerificationCheck("github_pr_remote_verified", "skip", "offline mode skipped GitHub API verification"))
+    elif external_pr_url:
+        remote, remote_error = fetch_github_pr_metadata(external_pr_url)
+        checks.append(check_status("github_pr_remote_verified", remote is not None, remote_error or "GitHub API returned pull request metadata"))
+        if remote is not None:
+            checks.append(check_status("github_pr_state_open", remote.get("state") == "open" or bool(remote.get("merged_at")), f"state={remote.get('state')} merged_at={remote.get('merged_at')}"))
+            checks.append(check_status("github_pr_not_draft", not bool(remote.get("draft")), f"draft={remote.get('draft')}"))
+            if require_merged or candidate.get("status") == "merged":
+                checks.append(check_status("github_pr_merged", bool(remote.get("merged_at")), f"merged_at={remote.get('merged_at')}"))
+    failures = [check for check in checks if check.status == "fail" and check.name != "github_pr_remote_verified"]
+    if not offline:
+        failures.extend(check for check in checks if check.name == "github_pr_remote_verified" and check.status == "fail")
+    verification = redact_value({
+        "schema_version": VERIFICATION_SCHEMA_VERSION,
+        "created_at": utc_timestamp(),
+        "run_id": candidate_run_id,
+        "source_config": display_path(config_path),
+        "output_dir": display_path(output_dir),
+        "candidate_id": candidate.get("id"),
+        "status": candidate.get("status"),
+        "target_url": candidate.get("target_url"),
+        "external_pr_url": external_pr_url,
+        "offline": offline,
+        "require_merged": require_merged,
+        "local_evidence": evidence_paths,
+        "remote": {
+            "available": remote is not None,
+            "error": remote_error,
+            "state": remote.get("state") if remote else None,
+            "draft": remote.get("draft") if remote else None,
+            "merged_at": remote.get("merged_at") if remote else None,
+            "html_url": remote.get("html_url") if remote else None,
+            "title": remote.get("title") if remote else None,
+        },
+        "checks": [asdict(check) for check in checks],
+        "verified": not failures,
+        "blocked_until": [f"{check.name}: {check.message}" for check in failures],
+        "completion_rule": "MF-0808 can be marked complete only when this verification is non-offline and verified=true for a real external PR.",
+    })
+    return verification
+
+
+def write_verification(verification: Mapping[str, Any]) -> Path:
+    output_dir = resolve_repo_path(str(verification["output_dir"]))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / "upstream_pr_verification.json"
+    path.write_text(json.dumps(verification, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
 def render_plan_markdown(plan: Mapping[str, Any]) -> str:
     candidate = plan.get("candidate") or {}
     lines = [
@@ -231,6 +369,22 @@ def render_plan(plan: Mapping[str, Any]) -> None:
     console.print(table)
 
 
+def render_verification(verification: Mapping[str, Any]) -> None:
+    table = Table(title=f"Upstream PR Verification: {verification.get('candidate_id')}")
+    table.add_column("Field")
+    table.add_column("Value")
+    for key in ("status", "target_url", "external_pr_url", "offline", "verified"):
+        table.add_row(key, str(verification.get(key)))
+    console.print(table)
+    check_table = Table(title="Verification Checks")
+    check_table.add_column("Check")
+    check_table.add_column("Status")
+    check_table.add_column("Message")
+    for check in verification.get("checks") or []:
+        check_table.add_row(str(check.get("name")), str(check.get("status")), str(check.get("message")))
+    console.print(check_table)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Plan upstream pull requests with evidence requirements")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -244,6 +398,14 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--run-id")
     plan.add_argument("--write-plan", action="store_true")
     plan.add_argument("--json", action="store_true")
+    verify = sub.add_parser("verify-pr", help="Verify recorded upstream PR URL and local evidence")
+    verify.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    verify.add_argument("--candidate")
+    verify.add_argument("--offline", action="store_true", help="Skip GitHub API lookup and verify only recorded fields/evidence")
+    verify.add_argument("--require-merged", action="store_true")
+    verify.add_argument("--run-id")
+    verify.add_argument("--write-report", action="store_true")
+    verify.add_argument("--json", action="store_true")
     return parser
 
 
@@ -266,6 +428,24 @@ def main() -> None:
             print(json.dumps(plan, indent=2, sort_keys=True) + "\n")
         else:
             render_plan(plan)
+        return
+
+    if args.command == "verify-pr":
+        verification = build_verification(
+            config,
+            config_path,
+            candidate_id=args.candidate,
+            offline=args.offline,
+            require_merged=args.require_merged,
+            run_id=args.run_id,
+        )
+        if args.write_report:
+            write_verification(verification)
+        if args.json:
+            print(json.dumps(verification, indent=2, sort_keys=True) + "\n")
+        else:
+            render_verification(verification)
+        raise SystemExit(0 if verification.get("verified") else 1)
 
 
 if __name__ == "__main__":

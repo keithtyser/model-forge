@@ -6,7 +6,18 @@ from pathlib import Path
 
 import yaml
 
-from model_forge.upstream import DEFAULT_CONFIG, PLAN_SCHEMA_VERSION, audit_config, build_plan, load_yaml, write_plan
+from model_forge.upstream import (
+    DEFAULT_CONFIG,
+    PLAN_SCHEMA_VERSION,
+    VERIFICATION_SCHEMA_VERSION,
+    audit_config,
+    build_plan,
+    build_verification,
+    load_yaml,
+    parse_github_pr_url,
+    write_plan,
+    write_verification,
+)
 
 
 class UpstreamPlanTests(unittest.TestCase):
@@ -138,6 +149,74 @@ class UpstreamPlanTests(unittest.TestCase):
 
         self.assertEqual(plan_path.name, "upstream_pr_plan.json")
         self.assertIn("# Upstream PR Plan: unit_upstream_write", markdown)
+
+    def test_parse_github_pr_url_accepts_pull_urls_only(self) -> None:
+        parsed = parse_github_pr_url("https://github.com/vllm-project/vllm/pull/123")
+        self.assertEqual(parsed, {"owner": "vllm-project", "repo": "vllm", "number": "123"})
+        self.assertIsNone(parse_github_pr_url("https://github.com/vllm-project/vllm/issues/123"))
+
+    def test_offline_verification_passes_recorded_open_pr_with_existing_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            evidence = root / "kernel_card.json"
+            evidence.write_text('{"schema_version":"model_forge.kernel_card.v1"}', encoding="utf-8")
+            config_path = root / "upstream.yaml"
+            config_path.write_text(
+                yaml.safe_dump(
+                    {
+                        "schema_version": "model_forge.upstream_pr_candidates.v1",
+                        "candidates": [
+                            {
+                                "id": "opened_with_evidence",
+                                "target_project": "vllm",
+                                "target_url": "https://github.com/vllm-project/vllm",
+                                "status": "opened",
+                                "external_pr_url": "https://github.com/vllm-project/vllm/pull/123",
+                                "hypothesis": "docs can cite measured evidence",
+                                "contribution_type": "docs",
+                                "local_evidence": [str(evidence)],
+                                "next_action": "wait for review",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config, path = load_yaml(config_path)
+            verification = build_verification(config, path, candidate_id="opened_with_evidence", offline=True)
+
+        self.assertEqual(verification["schema_version"], VERIFICATION_SCHEMA_VERSION)
+        self.assertTrue(verification["verified"], verification["blocked_until"])
+        checks = {check["name"]: check for check in verification["checks"]}
+        self.assertEqual(checks["github_pr_remote_verified"]["status"], "skip")
+        self.assertIn("offline mode skipped", checks["github_pr_remote_verified"]["message"])
+
+    def test_verification_blocks_placeholder_target_and_missing_evidence(self) -> None:
+        config, path = load_yaml(DEFAULT_CONFIG)
+        verification = build_verification(config, path, candidate_id="kernel_card_docs_or_example", offline=True)
+
+        self.assertFalse(verification["verified"])
+        failures = {check["name"] for check in verification["checks"] if check["status"] == "fail"}
+        self.assertIn("candidate_status_opened_or_merged", failures)
+        self.assertIn("target_url_concrete", failures)
+        self.assertIn("external_pr_url_present", failures)
+
+    def test_write_verification_creates_report(self) -> None:
+        config, path = load_yaml(DEFAULT_CONFIG)
+        with tempfile.TemporaryDirectory() as tmp:
+            verification = build_verification(
+                config,
+                path,
+                candidate_id="kernel_card_docs_or_example",
+                offline=True,
+                run_id="unit_upstream_verify",
+            )
+            verification = {**verification, "output_dir": tmp}
+            report_path = write_verification(verification)
+            saved = yaml.safe_load(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(report_path.name, "upstream_pr_verification.json")
+        self.assertEqual(saved["schema_version"], VERIFICATION_SCHEMA_VERSION)
 
 
 if __name__ == "__main__":

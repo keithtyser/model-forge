@@ -25,10 +25,23 @@ Write an upstream PR plan:
   --write-plan
 ```
 
+Verify a recorded PR and evidence paths:
+
+```bash
+./forge upstream verify-pr \
+  --config configs/upstream/pr_candidates.yaml \
+  --candidate kernel_card_docs_or_example \
+  --write-report
+```
+
+Use `--offline` only while drafting. Offline reports verify the config and local
+evidence paths, but they do not prove the external PR exists.
+
 Plans are written under `reports/generated/upstream_prs/<run>/`:
 
 - `upstream_pr_plan.json`
 - `upstream_pr_plan.md`
+- `upstream_pr_verification.json`
 
 Completion rule:
 
@@ -39,5 +52,7 @@ Completion rule:
 - Opened or merged PR records must point at existing local evidence files.
 - The evidence must not contain private paths, private hostnames, unresolved
   placeholders, or secrets.
+- Completion requires a non-offline `upstream_pr_verification.json` with
+  `verified=true`.
 - A docs/example PR is acceptable only when it is grounded in real measured
   artifacts, not generic advice.

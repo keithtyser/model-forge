@@ -2428,10 +2428,12 @@ candidate target_url is a real external repository
 external_pr_url is a GitHub pull request URL
 local evidence paths exist and contain no unresolved <run> placeholders
 evidence includes benchmark, profiler, Kernel Card, or serving data relevant to the target
+forge upstream verify-pr writes non-offline verified=true evidence
 ```
 
 Local `forge upstream plan` output is preparation evidence only. It must not
-be used to mark the upstream PR item complete.
+be used to mark the upstream PR item complete. Offline verification is also
+preparation evidence only because it cannot prove the external PR exists.
 
 ---
 

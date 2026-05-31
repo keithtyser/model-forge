@@ -531,6 +531,7 @@ Plan upstream PRs only when there is evidence:
 ```bash
 ./forge upstream audit --config configs/upstream/pr_candidates.yaml
 ./forge upstream plan --config configs/upstream/pr_candidates.yaml --candidate kernel_card_docs_or_example --write-plan
+./forge upstream verify-pr --config configs/upstream/pr_candidates.yaml --candidate kernel_card_docs_or_example --offline --write-report
 ```
 
 Do not mark `MF-0808` complete from a local plan alone. It requires a real
@@ -541,6 +542,9 @@ after replacing placeholder targets and before claiming completion.
 Opened or merged upstream records must use a real GitHub pull request URL and
 existing local evidence paths; unresolved `<run>` placeholders are planning
 markers, not completion evidence.
+`verify-pr --offline` is useful while drafting, but MF-0808 completion requires
+a non-offline verification report so the GitHub API has confirmed the external
+pull request metadata.
 
 ## Abliteration Rules
 
