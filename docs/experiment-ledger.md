@@ -1208,6 +1208,10 @@ Result:
 
 - MF-0101, MF-0102, MF-0105, and MF-0106 are marked tested /
   smoke-validated
+- MF-0103 is marked tested / smoke-validated because harmful-overcompliance
+  and harmful-detail scoring are implemented in eval scoring, exposed in the
+  noncompliance taxonomy, reported in behavior scorecards/risk reports, and
+  covered by `tests.test_behavior_scorecard`
 
 ## Behavior Editing: Release Classes And Validators
 
@@ -2370,6 +2374,12 @@ paired-benign behavior. Likely moves: increase high-quality code/math reasoning
 share, add stronger held-out challenge-style data that does not overlap eval
 prompts, train longer from this validated setup, and keep the same resource
 guardrails.
+
+Roadmap status audit: MF-0012 is marked tested / spark-single-node validated
+because the local FT evaluation completed on DGX Spark, saved 318 internal
+cases, and produced a tracked promotion report with an explicit hold decision
+against Jackrong. The item required finishing the eval or failure-carding it;
+the promotion report is the failure card for the "beat Jackrong" gate.
 
 Planned v1 hypothesis:
 

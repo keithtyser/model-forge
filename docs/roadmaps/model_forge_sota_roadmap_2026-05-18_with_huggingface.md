@@ -3733,7 +3733,7 @@ MF-0008 Add artifact checksum and retention policy fields. implementation_status
 MF-0009 Add eval provenance card. implementation_status=tested validation_state=smoke_validated
 MF-0010 Add golden baseline create/check hardening. implementation_status=tested validation_state=smoke_validated
 MF-0011 Add CLI/doc drift check for roadmap command examples. implementation_status=tested validation_state=smoke_validated
-MF-0012 Finish Gemma local FT evaluation or failure-card it. implementation_status=implemented validation_state=spark_single_node_validated
+MF-0012 Finish Gemma local FT evaluation or failure-card it. implementation_status=tested validation_state=spark_single_node_validated
 MF-0013 Publish Training Method Card with distributed training correctness. implementation_status=tested validation_state=smoke_validated
 ```
 
@@ -3742,7 +3742,7 @@ MF-0013 Publish Training Method Card with distributed training correctness. impl
 ```text
 MF-0101 Add noncompliance taxonomy. implementation_status=tested validation_state=smoke_validated
 MF-0102 Add invalid-refusal vs valid-safety-refusal classifier fields. implementation_status=tested validation_state=smoke_validated
-MF-0103 Add harmful-overcompliance and behavior-drift scoring. implementation_status=implemented validation_state=smoke_validated
+MF-0103 Add harmful-overcompliance and behavior-drift scoring. implementation_status=tested validation_state=smoke_validated
 MF-0104 Add behavior edit scorecard. implementation_status=tested validation_state=smoke_validated
 MF-0105 Add candidate frontier report from actual local candidates. implementation_status=tested validation_state=smoke_validated
 MF-0106 Add redacted public risk-report mode and private raw-output retention. implementation_status=tested validation_state=smoke_validated

@@ -12,9 +12,8 @@ This file is generated from the prioritized backlog in
 
 | Status | Count |
 |---|---:|
-| implemented | 2 |
 | scaffolded | 1 |
-| tested | 94 |
+| tested | 96 |
 
 ## Validation State
 
@@ -45,11 +44,11 @@ No status audit findings.
 | MF-0009 | P0: Foundation | tested | smoke_validated | Add eval provenance card |
 | MF-0010 | P0: Foundation | tested | smoke_validated | Add golden baseline create/check hardening |
 | MF-0011 | P0: Foundation | tested | smoke_validated | Add CLI/doc drift check for roadmap command examples |
-| MF-0012 | P0: Foundation | implemented | spark_single_node_validated | Finish Gemma local FT evaluation or failure-card it |
+| MF-0012 | P0: Foundation | tested | spark_single_node_validated | Finish Gemma local FT evaluation or failure-card it |
 | MF-0013 | P0: Foundation | tested | smoke_validated | Publish Training Method Card with distributed training correctness |
 | MF-0101 | P0: Behavior editing | tested | smoke_validated | Add noncompliance taxonomy |
 | MF-0102 | P0: Behavior editing | tested | smoke_validated | Add invalid-refusal vs valid-safety-refusal classifier fields |
-| MF-0103 | P0: Behavior editing | implemented | smoke_validated | Add harmful-overcompliance and behavior-drift scoring |
+| MF-0103 | P0: Behavior editing | tested | smoke_validated | Add harmful-overcompliance and behavior-drift scoring |
 | MF-0104 | P0: Behavior editing | tested | smoke_validated | Add behavior edit scorecard |
 | MF-0105 | P0: Behavior editing | tested | smoke_validated | Add candidate frontier report from actual local candidates |
 | MF-0106 | P0: Behavior editing | tested | smoke_validated | Add redacted public risk-report mode and private raw-output retention |
