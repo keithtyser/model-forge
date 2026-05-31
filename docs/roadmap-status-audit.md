@@ -13,15 +13,15 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| scaffolded | 4 |
-| tested | 91 |
+| scaffolded | 3 |
+| tested | 92 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 10 |
-| smoke_validated | 84 |
+| planned | 9 |
+| smoke_validated | 85 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -34,7 +34,7 @@ No status audit findings.
 | Item | Section | Implementation | Validation | Title |
 |---|---|---|---|---|
 | MF-0000 | P0: Foundation | tested | planned | Convert legacy [x] backlog into implementation_status + validation_state |
-| MF-0001 | P0: Foundation | scaffolded | planned | Add required validation schema to manifests, cards, objectives, and variant nodes |
+| MF-0001 | P0: Foundation | tested | smoke_validated | Add required validation schema to manifests, cards, objectives, and variant nodes |
 | MF-0002 | P0: Foundation | tested | planned | Add evidence ledger with command, node count, topology, logs, metrics, checksums, and promotion decision |
 | MF-0003 | P0: Foundation | tested | planned | Add objective profile loader and objective audit |
 | MF-0004 | P0: Foundation | tested | planned | Add configs/objectives/zero_refusal_capability_retention.yaml |

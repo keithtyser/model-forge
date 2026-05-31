@@ -176,6 +176,9 @@ This is the short handoff state for humans and agents. Use
   `zero_refusal_capability_retention`, `quantized_quality_retention`, and
   `dgx_spark_latency_throughput`. Compare reports load objective metric
   preferences from these configs.
+- Required validation schemas are auditable through `./forge schema audit`
+  across run manifests, objective profiles, variant nodes, and generated card
+  schema versions.
 - The prioritized roadmap backlog now has explicit `implementation_status` and
   `validation_state` on every MF item. `./forge roadmap audit --write-doc`
   validates those fields and refreshes `docs/roadmap-status-audit.md`.

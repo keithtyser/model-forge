@@ -3710,7 +3710,7 @@ validation_state:
 
 ```text
 MF-0000 Convert legacy [x] backlog into implementation_status + validation_state. implementation_status=tested validation_state=planned
-MF-0001 Add required validation schema to manifests, cards, objectives, and variant nodes. implementation_status=scaffolded validation_state=planned
+MF-0001 Add required validation schema to manifests, cards, objectives, and variant nodes. implementation_status=tested validation_state=smoke_validated
 MF-0002 Add evidence ledger with command, node count, topology, logs, metrics, checksums, and promotion decision. implementation_status=tested validation_state=planned
 MF-0003 Add objective profile loader and objective audit. implementation_status=tested validation_state=planned
 MF-0004 Add configs/objectives/zero_refusal_capability_retention.yaml. implementation_status=tested validation_state=planned

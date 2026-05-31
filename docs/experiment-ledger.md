@@ -2580,6 +2580,34 @@ Publish status: already uploaded to Hugging Face before the FT handoff. No
 additional upload needed for this completed ablated checkpoint unless the model
 card or files need revision.
 
+## Foundation: Validation Schema Audit
+
+Status: smoke-validated schema audit; no heavy run launched.
+
+Purpose: make `MF-0001` concrete by checking required validation schemas across
+the core artifact classes instead of relying on prose. The audit covers run
+manifests, objective profiles, variant nodes, and generated card/report schema
+versions.
+
+Implemented:
+
+```text
+./forge schema audit
+```
+
+Validation:
+
+```text
+./forge schema audit --json
+.venv/bin/python -m unittest tests.test_schema_audit -v
+./forge roadmap cli-drift
+```
+
+Result: the audit passes for registered `model_forge.*.v1` schemas, objective
+profiles audit cleanly, canonical run manifests expose required fields, and a
+default variant node validates with validation evidence and retention fields.
+`MF-0001` is now `tested` / `smoke_validated`.
+
 ## Dataset Factory: Bounded Fine-Tune Evidence Gate
 
 Status: smoke-validated artifact gate; no heavy training launched.

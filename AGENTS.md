@@ -238,6 +238,7 @@ Inspect or validate the research basis:
 ```bash
 ./forge objectives list
 ./forge objectives audit
+./forge schema audit
 ./forge roadmap audit --write-doc
 ./forge research list
 ./forge research show arditi_2024_refusal_direction

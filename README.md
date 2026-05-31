@@ -95,6 +95,7 @@ Run evals from another terminal:
 ./forge compare gemma4_26b_a4b
 ./forge promote gemma4_26b_a4b local_ft_vs_jackrong
 ./forge objectives audit
+./forge schema audit
 ./forge roadmap audit --write-doc
 ./forge roadmap cli-drift
 ./forge generalization audit

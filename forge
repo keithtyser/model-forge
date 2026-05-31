@@ -28,6 +28,7 @@ Usage:
   ./forge behavior [doctor|score]
   ./forge promote <family> [profile]
   ./forge objectives [list|show|audit]
+  ./forge schema [audit]
   ./forge roadmap [audit|cli-drift]
   ./forge generalization [audit]
   ./forge agent [schema|audit|card|init|optimize-serving|optimize-quantization|optimize-behavior-edit]
@@ -68,6 +69,7 @@ Examples:
   ./forge behavior risk-report --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml local_abli_sota_vs_base --write-report
   ./forge promote gemma4_26b_a4b local_ft_vs_jackrong
   ./forge objectives audit
+  ./forge schema audit
   ./forge roadmap audit --write-doc
   ./forge roadmap cli-drift
   ./forge generalization audit
@@ -307,6 +309,9 @@ PY
     ;;
   objectives)
     "$PYTHON" -m model_forge.objectives "$@"
+    ;;
+  schema)
+    "$PYTHON" -m model_forge.schema_audit "$@"
     ;;
   roadmap)
     "$PYTHON" -m model_forge.roadmap "$@"
