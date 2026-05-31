@@ -1,0 +1,71 @@
+schema_version: model_forge.quantization.v1
+name: gguf_llama_cpp_q4_k_m
+description: >
+  Generic llama.cpp GGUF conversion and Q4_K_M quantization recipe. Pass an
+  explicit family and source variant; do not bake model-family assumptions into
+  the common pipeline.
+target_variant: "{source_variant}_gguf_q4_k_m"
+method: gguf_q4_k_m
+backend: llama_cpp
+objective: quantized_quality_retention
+hardware_profile: portable
+
+calibration:
+  required: false
+  reason: GGUF Q4_K_M uses llama.cpp post-conversion quantization. Importance
+    matrices are optional future extensions and must be recorded separately.
+
+conversion:
+  llama_cpp_dir: "${MODEL_FORGE_LLAMA_CPP_DIR:?/path/to/llama.cpp}"
+  convert_script: convert_hf_to_gguf.py
+  quantize_binary: ./llama-quantize
+  llama_cli: ./llama-cli
+  llama_bench: ./llama-bench
+  quant_type: Q4_K_M
+  intermediate_outtype: f16
+  intermediate_filename: "{target_variant}.f16.gguf"
+  output_filename: "{target_variant}.gguf"
+  preserve_tokenizer: true
+  preserve_chat_template: true
+  trust_remote_code: true
+  load_prompt: ping
+  load_tokens: 32
+
+export:
+  output_root: ~/models/model-forge-quantized/gguf
+  output_subdir: "{source_family}/{target_variant}"
+  start_if_memory_available_above_fraction: 0.05
+  stop_if_memory_available_below_fraction: 0.05
+  require_disk_free_fraction: 0.15
+  systemd_scope:
+    enabled: true
+    user: true
+    CPUQuota: "80%"
+    MemoryMax: "85%"
+    IOWeight: 100
+  nice: 10
+
+runtime: {}
+exclusions:
+  apply_recommended_keep_patterns: false
+matrix:
+  variants: []
+
+outputs:
+  reports_dir: reports/generated/quantization
+  models_dir: ~/models/model-forge-quantized/gguf
+
+evals:
+  required:
+    - ./forge quantize export <family> <variant> --config configs/quantization/gguf_llama_cpp_q4_k_m.yaml --execute
+    - ./forge quantize tokenizer-report --source-tokenizer-dir <source_model_dir> --candidate-tokenizer-dir <gguf_export_dir> --run-id <run_id> --write-report
+    - llama-cli -m <output>.gguf -p ping -n 32
+    - llama-bench -m <output>.gguf
+    - ./forge quantize behavior-report --config configs/quantization/gguf_llama_cpp_q4_k_m.yaml --source-serving-summary <source>/summary.json --candidate-serving-summary <candidate>/summary.json --source-serving-eval <source_eval> --candidate-serving-eval <candidate_eval> --run-id <run_id> --write-report
+  card_metrics:
+    - normal_use_regression.normal_use_regression_pass_rate
+    - capability_preservation_challenge.normal_use_regression_pass_rate
+    - agentic_tool_use_json.schema_adherence
+    - agentic_tool_use_json.workflow_success
+    - refusal_paired_boundary.benign_answer_quality_rate
+    - unsafe_overcompliance.unsafe_overcompliance_rate

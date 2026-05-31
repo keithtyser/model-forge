@@ -13,17 +13,17 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| not_started | 2 |
+| not_started | 1 |
 | scaffolded | 8 |
-| tested | 84 |
+| tested | 85 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 17 |
-| smoke_validated | 77 |
+| planned | 16 |
+| smoke_validated | 78 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -77,7 +77,7 @@ No status audit findings.
 | MF-0303 | P1: Quantization | tested | smoke_validated | Add FP8 KV behavior report |
 | MF-0304 | P1: Quantization | tested | smoke_validated | Add FP8 W8A8 pipeline |
 | MF-0305 | P1: Quantization | wired_to_cli | planned | Add Blackwell ModelOpt/NVFP4 pipeline |
-| MF-0306 | P1: Quantization | not_started | planned | Add GGUF/llama.cpp conversion and quantization pipeline |
+| MF-0306 | P1: Quantization | tested | smoke_validated | Add GGUF/llama.cpp conversion and quantization pipeline |
 | MF-0307 | P1: Quantization | tested | smoke_validated | Add Quantization Card |
 | MF-0308 | P1: Quantization | tested | smoke_validated | Add layer/component sensitivity scan |
 | MF-0309 | P1: Quantization | tested | smoke_validated | Add quantization-preserves-behavior report |

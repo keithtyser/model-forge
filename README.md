@@ -340,6 +340,7 @@ Quantization:
 ```bash
 ./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan
 ./forge quantize plan llama31_8b base --config configs/quantization/fp8_w8a8_modelopt.yaml --write-plan
+./forge quantize export llama31_8b base --config configs/quantization/gguf_llama_cpp_q4_k_m.yaml --write-plan
 ./forge quantize calibration-manifest gemma4_26b_a4b base --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --write-manifest
 ./forge quantize matrix-plan --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --variants base,local_ft
 ./forge quantize card \

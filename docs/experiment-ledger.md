@@ -1600,6 +1600,51 @@ Result:
   report
 - MF-0308 is marked tested / smoke_validated
 
+## Quantization: GGUF llama.cpp Pipeline
+
+Status: implemented as config/CLI planning and export-command generation. No
+model server, export job, quantization run, eval, or benchmark was started.
+
+Hypothesis: Model Forge needs a portable local-inference quantization path in
+addition to Spark-native NVFP4/FP8. A reusable GGUF recipe should generate a
+guarded llama.cpp conversion, quantization, load probe, and benchmark command
+for an explicit family/variant, while requiring tokenizer and behavior evidence
+before promotion.
+
+Implemented command:
+
+```bash
+export MODEL_FORGE_LLAMA_CPP_DIR=/path/to/llama.cpp
+./forge quantize export llama31_8b base \
+  --config configs/quantization/gguf_llama_cpp_q4_k_m.yaml \
+  --target-variant base_gguf_q4_k_m \
+  --write-plan
+```
+
+Changes:
+
+- added generic `configs/quantization/gguf_llama_cpp_q4_k_m.yaml`
+- added `llama_cpp_gguf` export-command generation under the existing
+  `./forge quantize export` path
+- generated command includes `convert_hf_to_gguf.py`, `llama-quantize`,
+  `llama-cli`, and `llama-bench`
+- records tokenizer, behavior, load, bench, and quantization-card validation
+  gates
+- updated README, AGENTS, quantization docs, and roadmap state
+
+Validation:
+
+```bash
+.venv/bin/python -m unittest tests.test_quantization_cli -v
+./forge quantize export llama31_8b base --config configs/quantization/gguf_llama_cpp_q4_k_m.yaml --write-plan --json --output-dir /tmp/model_forge_gguf --run-id unit_gguf_cli
+```
+
+Result:
+
+- GGUF/llama.cpp now has a reusable export pipeline scaffold with tested command
+  generation
+- MF-0306 is marked tested / smoke_validated
+
 ## Quantization: ModelOpt NVFP4 Self-Export Guardrail Incident
 
 Status: stopped before a completed NVFP4 checkpoint. Code and docs now enforce

@@ -16,6 +16,8 @@ from model_forge.quantization.cli import (
     build_behavior_report,
     build_calibration_manifest,
     build_fp8_kv_report,
+    build_export_command,
+    build_gguf_export_command,
     build_modelopt_export_command,
     build_sensitivity_report,
     build_tokenizer_report,
@@ -537,6 +539,49 @@ class QuantizationCliTests(unittest.TestCase):
         self.assertTrue(plan["target"]["checkpoint_written_by_this_plan"])
         self.assertEqual(plan["target"]["variant"], "base_fp8_w8a8_modelopt")
         self.assertIn("FP8 W8A8 checkpoint creation", " ".join(plan["quantization"]["notes"]))
+
+    def test_gguf_llama_cpp_export_command_is_guarded_and_generic(self) -> None:
+        config_path = Path("configs/quantization/gguf_llama_cpp_q4_k_m.yaml")
+        config = load_quantization_config(config_path)
+        source = resolve_source(
+            config,
+            "llama31_8b",
+            "base",
+            {"MODEL_FORGE_MODELS_DIR": "/models-host"},
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp) / "gguf"
+            export = build_gguf_export_command(
+                config,
+                source,
+                output_dir=output_root,
+                run_id="unit_llama_gguf",
+                env={"MODEL_FORGE_MODELS_DIR": "/models-host", "MODEL_FORGE_LLAMA_CPP_DIR": "/opt/llama.cpp"},
+            )
+            dispatched = build_export_command(
+                config,
+                source,
+                output_dir=output_root,
+                run_id="unit_llama_gguf_dispatch",
+                env={"MODEL_FORGE_MODELS_DIR": "/models-host", "MODEL_FORGE_LLAMA_CPP_DIR": "/opt/llama.cpp"},
+            )
+
+        self.assertEqual(export["method"], "gguf_q4_k_m")
+        self.assertEqual(export["backend"], "llama_cpp")
+        self.assertEqual(export["strategy"], "llama_cpp_gguf")
+        self.assertEqual(export["target"]["variant"], "base_gguf_q4_k_m")
+        self.assertEqual(export["target"]["host_output_path"], str(output_root / "llama31_8b" / "base_gguf_q4_k_m" / "base_gguf_q4_k_m.gguf"))
+        self.assertEqual(export["target"]["intermediate_output_path"], str(output_root / "llama31_8b" / "base_gguf_q4_k_m" / "base_gguf_q4_k_m.f16.gguf"))
+        self.assertIn("CPUQuota=80%", export["command"])
+        self.assertIn("MemoryMax=85%", export["command"])
+        command = export["command_display"]
+        self.assertIn("convert_hf_to_gguf.py", command)
+        self.assertIn("llama-quantize", command)
+        self.assertIn("Q4_K_M", command)
+        self.assertIn("llama-cli", command)
+        self.assertIn("llama-bench", command)
+        self.assertIn("tokenizer-report passes", " ".join(export["validation_gates"]))
+        self.assertEqual(dispatched["strategy"], "llama_cpp_gguf")
 
     def test_calibration_manifest_resolves_exact_dataset_inputs(self) -> None:
         config_path = Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml")

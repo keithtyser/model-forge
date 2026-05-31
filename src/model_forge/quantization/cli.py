@@ -233,6 +233,9 @@ def method_notes(method: str, backend: str) -> list[str]:
     elif method == "fp8_w8a8":
         notes.append("FP8 W8A8 checkpoint creation must record calibration data, backend versions, exported loader format, and source deltas.")
         notes.append("Promotion requires source-vs-FP8 W8A8 serving and sampled behavior evidence for the same family/variant.")
+    elif method.startswith("gguf"):
+        notes.append("GGUF export must preserve tokenizer/chat-template metadata and prove llama.cpp load plus benchmark evidence.")
+        notes.append("Promotion requires comparing the GGUF candidate against the same source variant with behavior and tokenizer reports.")
     else:
         notes.append("Custom quantization method; treat generated commands as a reproducibility contract.")
     if "blackwell" in backend:
@@ -498,6 +501,191 @@ def build_modelopt_export_command(
         "command": shell_command,
         "command_display": shlex.join(shell_command),
     }
+
+
+def gguf_output_paths(config: QuantizationConfig, source: QuantizationSource, output_dir: Path) -> tuple[Path, Path]:
+    conversion = dict(config.raw_config.get("conversion") or {})
+    target = target_variant_label(config, source)
+    output_subdir = str((config.export or {}).get("output_subdir") or "{source_family}/{target_variant}")
+    root = output_dir / sanitize_relative_subpath(
+        render_template(
+            output_subdir,
+            {
+                "source_variant": source.variant or "runtime",
+                "source_family": source.family or "generic",
+                "target_variant": target,
+                "method": config.method,
+                "backend": config.backend,
+            },
+        )
+    )
+    filename = render_template(
+        str(conversion.get("output_filename") or "{target_variant}.gguf"),
+        {
+            "source_variant": source.variant or "runtime",
+            "source_family": source.family or "generic",
+            "target_variant": target,
+            "method": config.method,
+            "backend": config.backend,
+        },
+    )
+    quantized = root / sanitize_relative_subpath(filename)
+    intermediate_name = render_template(
+        str(conversion.get("intermediate_filename") or "{target_variant}.f16.gguf"),
+        {
+            "source_variant": source.variant or "runtime",
+            "source_family": source.family or "generic",
+            "target_variant": target,
+            "method": config.method,
+            "backend": config.backend,
+        },
+    )
+    intermediate = root / sanitize_relative_subpath(intermediate_name)
+    return intermediate, quantized
+
+
+def build_gguf_export_command(
+    config: QuantizationConfig,
+    source: QuantizationSource,
+    *,
+    output_dir: Path,
+    run_id: str,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    env = env or os.environ
+    if config.backend not in {"llama_cpp", "llama-cpp"}:
+        raise ValueError(f"GGUF export requires backend=llama_cpp, got {config.backend!r}")
+    conversion = dict(config.raw_config.get("conversion") or {})
+    export = dict(config.export or {})
+    intermediate, quantized = gguf_output_paths(config, source, output_dir)
+    quantized.parent.mkdir(parents=True, exist_ok=True)
+    llama_cpp_dir = str(env.get("MODEL_FORGE_LLAMA_CPP_DIR") or conversion.get("llama_cpp_dir") or "${MODEL_FORGE_LLAMA_CPP_DIR:?/path/to/llama.cpp}")
+    convert_script = str(conversion.get("convert_script") or "convert_hf_to_gguf.py")
+    quantize_binary = str(conversion.get("quantize_binary") or "./llama-quantize")
+    llama_cli = str(conversion.get("llama_cli") or "./llama-cli")
+    llama_bench = str(conversion.get("llama_bench") or "./llama-bench")
+    quant_type = str(conversion.get("quant_type") or "Q4_K_M")
+    outtype = str(conversion.get("intermediate_outtype") or "f16")
+    source_path = display_path(source.local_path) if source.local_path else source.model_id
+    convert_command = [
+        "python3",
+        convert_script,
+        shlex.quote(source_path),
+        "--outfile",
+        shlex.quote(display_path(intermediate)),
+        "--outtype",
+        shlex.quote(outtype),
+    ]
+    if truthy(conversion.get("trust_remote_code"), True):
+        convert_command.append("--trust-remote-code")
+    quantize_command = [
+        shlex.quote(quantize_binary),
+        shlex.quote(display_path(intermediate)),
+        shlex.quote(display_path(quantized)),
+        shlex.quote(quant_type),
+    ]
+    load_command = [
+        shlex.quote(str(conversion.get("load_binary") or llama_cli)),
+        "-m",
+        shlex.quote(display_path(quantized)),
+        "-p",
+        shlex.quote(str(conversion.get("load_prompt") or "ping")),
+        "-n",
+        str(int(conversion.get("load_tokens") or 32)),
+    ]
+    bench_command = [
+        shlex.quote(llama_bench),
+        "-m",
+        shlex.quote(display_path(quantized)),
+    ]
+    shell_steps = [
+        "cd " + shlex.quote(llama_cpp_dir),
+        " ".join(convert_command),
+        " ".join(quantize_command),
+        " ".join(load_command),
+        " ".join(bench_command),
+    ]
+    shell_script = " && ".join(shell_steps)
+    command = ["nice", "-n", str((export.get("docker") or {}).get("nice", export.get("nice", 10))), "bash", "-lc", shell_script]
+    systemd_scope = dict(export.get("systemd_scope") or {})
+    if truthy(systemd_scope.get("enabled"), True):
+        scope_command = ["systemd-run", "--scope"]
+        if truthy(systemd_scope.get("user"), True):
+            scope_command = ["systemd-run", "--user", "--scope"]
+        command = [
+            *scope_command,
+            "-p",
+            f"CPUQuota={systemd_scope.get('CPUQuota', '80%')}",
+            "-p",
+            f"MemoryMax={systemd_scope.get('MemoryMax', '85%')}",
+            "-p",
+            f"IOWeight={systemd_scope.get('IOWeight', 100)}",
+            *command,
+        ]
+    return {
+        "schema_version": "model_forge.quantization_export.v1",
+        "created_at": utc_now().isoformat(),
+        "run_id": run_id,
+        "source": {
+            "family": source.family,
+            "variant": source.variant,
+            "model_id": source.model_id,
+            "local_path": display_path(source.local_path) if source.local_path else None,
+        },
+        "target": {
+            "variant": target_variant_label(config, source),
+            "host_output_path": display_path(quantized),
+            "intermediate_output_path": display_path(intermediate),
+            "served_model_name": str(config.runtime.get("served_model_name") or f"{source.served_model_name}-{config.method}"),
+        },
+        "method": config.method,
+        "backend": config.backend,
+        "strategy": "llama_cpp_gguf",
+        "conversion": {
+            "llama_cpp_dir": llama_cpp_dir,
+            "convert_script": convert_script,
+            "quantize_binary": quantize_binary,
+            "quant_type": quant_type,
+            "intermediate_outtype": outtype,
+            "preserve_tokenizer": truthy(conversion.get("preserve_tokenizer"), True),
+            "preserve_chat_template": truthy(conversion.get("preserve_chat_template"), True),
+        },
+        "resource_policy": {
+            "start_if_memory_available_above_fraction": float(export.get("start_if_memory_available_above_fraction", 0.05)),
+            "stop_if_memory_available_below_fraction": float(export.get("stop_if_memory_available_below_fraction", 0.05)),
+            "require_disk_free_fraction": float(export.get("require_disk_free_fraction", 0.15)),
+            "systemd_scope": {
+                "enabled": truthy(systemd_scope.get("enabled"), True),
+                "user": truthy(systemd_scope.get("user"), True),
+                "CPUQuota": str(systemd_scope.get("CPUQuota", "80%")),
+                "MemoryMax": str(systemd_scope.get("MemoryMax", "85%")),
+                "IOWeight": int(systemd_scope.get("IOWeight", 100)),
+            },
+        },
+        "command": command,
+        "command_display": shlex.join(command),
+        "validation_gates": [
+            "llama.cpp conversion command completes",
+            "llama-quantize command completes",
+            "llama-cli load probe completes",
+            "llama-bench completes",
+            "tokenizer-report passes against the source tokenizer",
+            "behavior-report passes against the source serving/eval evidence",
+        ],
+    }
+
+
+def build_export_command(
+    config: QuantizationConfig,
+    source: QuantizationSource,
+    *,
+    output_dir: Path,
+    run_id: str,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    if config.backend in {"llama_cpp", "llama-cpp"} or config.method.startswith("gguf"):
+        return build_gguf_export_command(config, source, output_dir=output_dir, run_id=run_id, env=env)
+    return build_modelopt_export_command(config, source, output_dir=output_dir, run_id=run_id, env=env)
 
 
 def calibration_dataset_entries(raw_dataset: str, *, optional_gated_dataset: str | None = None) -> list[dict[str, Any]]:
@@ -1985,7 +2173,7 @@ def main() -> None:
                 evals=config.evals,
                 raw_config=config.raw_config,
             )
-        export_plan = build_modelopt_export_command(
+        export_plan = build_export_command(
             export_config,
             source,
             output_dir=output_root,
@@ -2057,7 +2245,7 @@ def main() -> None:
                 raw_config=config.raw_config,
             )
             run_id = matrix_run_id(config, {"source_variant": source.variant, "target_variant": target_variant})
-            plan = build_modelopt_export_command(variant_config, source, output_dir=output_root, run_id=run_id)
+            plan = build_export_command(variant_config, source, output_dir=output_root, run_id=run_id)
             annotate_matrix_worker(plan, workers[index % len(workers)], index % len(workers))
             plan["baseline_eval"] = entry.get("baseline_eval")
             plan["baseline_artifact_eval"] = entry.get("baseline_artifact_eval")

@@ -396,6 +396,7 @@ Plan and report quantization without loading a model:
 ```bash
 ./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan
 ./forge quantize plan llama31_8b base --config configs/quantization/fp8_w8a8_modelopt.yaml --write-plan
+./forge quantize export llama31_8b base --config configs/quantization/gguf_llama_cpp_q4_k_m.yaml --write-plan
 ./forge quantize calibration-manifest gemma4_26b_a4b base --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --write-manifest
 ./forge quantize card \
   --config configs/quantization/nvfp4_blackwell_runtime.yaml \
@@ -462,6 +463,10 @@ tokens, and chat-template metadata directly against the source model directory.
 Use `./forge quantize sensitivity-report` after candidate runs exist to rank
 component policies such as all-linear, MLP-only, attention-only, or experts-only.
 Do not infer component sensitivity from a single candidate.
+For GGUF exports, set `MODEL_FORGE_LLAMA_CPP_DIR` outside git, run the guarded
+`./forge quantize export ... --config configs/quantization/gguf_llama_cpp_q4_k_m.yaml`
+path, and attach tokenizer, llama-cli load, llama-bench, behavior, and
+quantization-card evidence before promotion.
 
 For self-quantization, use the ModelOpt export runner and the matrix config:
 

@@ -268,6 +268,26 @@ checks pass. Use it to compare all-linear, MLP-only, attention-only,
 experts-only, keep-router-BF16, or similar policies without baking
 architecture-specific constants into the common pipeline.
 
+## GGUF And llama.cpp
+
+GGUF is the portable local-inference path. It is separate from Spark-native
+NVFP4/FP8 serving and must prove llama.cpp conversion, quantization, load, bench,
+tokenizer preservation, and behavior retention.
+
+```bash
+export MODEL_FORGE_LLAMA_CPP_DIR=/path/to/llama.cpp
+
+./forge quantize export llama31_8b base \
+  --config configs/quantization/gguf_llama_cpp_q4_k_m.yaml \
+  --target-variant base_gguf_q4_k_m \
+  --write-plan
+```
+
+The generated command runs under `systemd-run --scope` and `nice`, then calls
+`convert_hf_to_gguf.py`, `llama-quantize`, `llama-cli`, and `llama-bench`.
+Promotion still requires `quantize tokenizer-report`, `quantize
+behavior-report`, and a quantization card from real source-vs-GGUF evidence.
+
 ## FP8 W8A8 Checkpoint Pipeline
 
 FP8 W8A8 is a checkpoint-creation path, unlike runtime FP8 KV cache. Use the
