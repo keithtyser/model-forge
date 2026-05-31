@@ -429,6 +429,31 @@ def conversation_hash(messages: list[dict[str, str]]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def remap_repo_path(value: Any, repo_root: Path) -> Any:
+    if not isinstance(value, str):
+        return value
+    path = Path(value)
+    if not path.is_absolute():
+        return value
+    parts = path.parts
+    for anchor in ("runs", "configs", "datasets", "evals", "recipes"):
+        if anchor in parts:
+            idx = parts.index(anchor)
+            return str(repo_root.joinpath(*parts[idx:]))
+    return value
+
+
+def remap_plan_repo_paths(plan: dict[str, Any]) -> dict[str, Any]:
+    repo_root = Path(__file__).resolve().parents[3]
+    for key in ("config_path", "run_dir"):
+        if key in plan:
+            plan[key] = remap_repo_path(plan[key], repo_root)
+    data = plan.get("data")
+    if isinstance(data, dict):
+        data["manifest"] = remap_repo_path(data.get("manifest"), repo_root)
+    return plan
+
+
 def valid_messages(messages: list[dict[str, str]], gates: dict[str, Any]) -> bool:
     if len(messages) < 2:
         return False
@@ -815,7 +840,7 @@ def main() -> None:
     parser.add_argument("--train", action="store_true")
     parser.add_argument("--data-limit", type=int, default=None)
     args = parser.parse_args()
-    plan = json.loads(Path(args.plan).read_text())
+    plan = remap_plan_repo_paths(json.loads(Path(args.plan).read_text()))
     dataset_path = Path(plan["run_dir"]) / "train.jsonl"
     if args.prepare_data:
         summary = build_dataset(plan, dataset_path, args.data_limit)
