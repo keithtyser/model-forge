@@ -1016,7 +1016,10 @@ for node in config.get("nodes", []):
     user = str(node.get("user") or "")
     target = f"{{user + '@' if user else ''}}{{host}}:{{run_dir}}/"
     subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", f"{{user + '@' if user else ''}}{{host}}", shlex.join(["mkdir", "-p", str(run_dir)])], check=True)
-    subprocess.run(["rsync", "-az", str(run_dir).rstrip("/") + "/", target], check=True)
+    subprocess.run(
+        ["rsync", "-az", "--exclude", "tokenized_train_*/", "--exclude", "__pycache__/", str(run_dir).rstrip("/") + "/", target],
+        check=True,
+    )
 PY
 
 "$PYTHON" - "$CLUSTER_CONFIG" "$TRAIN_IMAGE" "$NCCL_SOCKET_IFNAME" "$TRAINER" "$PLAN" "$RUN_DIR" "${{MODEL_FORGE_EXECUTE_CLUSTER_TRAIN:-0}}" <<'PY'
@@ -1074,6 +1077,8 @@ def command_for(rank, node):
         "-e", "TORCH_NCCL_ASYNC_ERROR_HANDLING=1",
         "-e", "HF_TOKEN",
         "-e", "HUGGINGFACE_HUB_TOKEN",
+        "-e", "MODEL_FORGE_TRAIN_TP_SIZE",
+        "-e", "MODEL_FORGE_TRAIN_TP_PLAN",
     ]
     if iface:
         docker.extend(["-e", f"NCCL_SOCKET_IFNAME={{iface}}"])
