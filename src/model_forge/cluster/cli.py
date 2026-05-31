@@ -17,6 +17,8 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from model_forge.variants.checkpoint_audit import build_checkpoint_audit
+
 
 REPO_DIR = Path(__file__).resolve().parents[3]
 DEFAULT_CONFIG = REPO_DIR / "configs" / "clusters" / "local.example.yaml"
@@ -895,6 +897,18 @@ def build_model_sync_plan(
     }
 
 
+def checkpoint_gate_payload(family: str, variant: str, models_dir: str | None = None) -> dict[str, Any]:
+    audit = build_checkpoint_audit(family, variant=variant, models_dir_override=models_dir, strict=True)
+    return {
+        "created_at": utc_timestamp(),
+        "ok": bool(audit["passed"]),
+        "family": family,
+        "variant": variant,
+        "models_dir": models_dir,
+        "checkpoint_audit": audit,
+    }
+
+
 def directory_size_bytes(path: Path) -> int:
     total = 0
     for item in path.rglob("*"):
@@ -1141,6 +1155,9 @@ def main() -> None:
     model_sync_parser = subparsers.add_parser("model-sync", help="Plan or execute model directory sync to worker nodes")
     model_sync_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     model_sync_parser.add_argument("--source", type=Path, required=True, help="Local coordinator model directory to copy")
+    model_sync_parser.add_argument("--family", help="Optional model family checkpoint gate before syncing")
+    model_sync_parser.add_argument("--variant", help="Optional model variant checkpoint gate before syncing")
+    model_sync_parser.add_argument("--models-dir", help="Override models dir for the optional checkpoint gate")
     model_sync_parser.add_argument("--target-name", help="Directory name under each worker models_dir; defaults to source basename")
     model_sync_parser.add_argument("--execute", action="store_true", help="Run mkdir/rsync commands")
     model_sync_parser.add_argument("--delete", action="store_true", help="Pass --delete to rsync")
@@ -1294,6 +1311,9 @@ def main() -> None:
         raise SystemExit(0 if sync["ok"] else 1)
 
     if args.action == "model-sync":
+        if bool(args.family) != bool(args.variant):
+            console.print("[red]--family and --variant must be provided together for checkpoint-gated model-sync[/red]")
+            raise SystemExit(2)
         findings = audit_cluster(cluster, config_path, hardware=hardware, strict=True)
         if findings:
             data = {
@@ -1309,6 +1329,29 @@ def main() -> None:
             else:
                 render_findings(findings)
             raise SystemExit(1)
+        checkpoint_gate = None
+        if args.family and args.variant:
+            checkpoint_gate = checkpoint_gate_payload(args.family, args.variant, args.models_dir)
+            if not checkpoint_gate["ok"]:
+                data = {
+                    "created_at": utc_timestamp(),
+                    "cluster": {"id": cluster.get("id"), "config": display_path(config_path)},
+                    "ok": False,
+                    "checkpoint_gate": checkpoint_gate,
+                }
+                output = args.output if args.output else default_cluster_output("model_sync")
+                output_path = output if output.is_absolute() else REPO_DIR / output
+                write_json(output_path, data)
+                data["output"] = display_path(output_path)
+                if args.json:
+                    print(json.dumps(data, indent=2, sort_keys=True) + "\n")
+                else:
+                    console.print("cluster model-sync: FAILED (checkpoint gate)")
+                    console.print(f"evidence: {display_path(output_path)}")
+                    for finding in checkpoint_gate["checkpoint_audit"].get("findings") or []:
+                        style = "red" if finding["level"] == "error" else "yellow"
+                        console.print(f"[{style}]{finding['level']} {finding['variant']} {finding['check']}: {finding['message']}[/{style}]")
+                raise SystemExit(1)
         sync = build_model_sync_plan(
             cluster,
             hardware,
@@ -1317,6 +1360,8 @@ def main() -> None:
             target_name=args.target_name,
             delete=args.delete,
         )
+        if checkpoint_gate:
+            sync["checkpoint_gate"] = checkpoint_gate
         if args.execute:
             sync = execute_sync_plan(sync, timeout=args.timeout)
         else:

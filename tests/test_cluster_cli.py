@@ -6,6 +6,7 @@ from pathlib import Path
 from model_forge.cluster.cli import (
     REPO_DIR,
     audit_cluster,
+    checkpoint_gate_payload,
     build_sync_plan,
     build_model_sync_plan,
     build_launcher_plan,
@@ -110,6 +111,13 @@ class ClusterCliTests(unittest.TestCase):
         self.assertGreater(plan["actions"][1]["source_bytes"], 0)
         self.assertIn("runner@spark-b:" + "/" + "models-b/Qwen3.6-27B/", plan["actions"][1]["rsync_command"])
         self.assertIn("--partial", plan["actions"][1]["rsync_command"])
+
+    def test_checkpoint_gate_payload_fails_incomplete_source(self) -> None:
+        payload = checkpoint_gate_payload("qwen36_27b", "base", models_dir=str(REPO_DIR / "missing-models"))
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["family"], "qwen36_27b")
+        self.assertEqual(payload["variant"], "base")
+        self.assertTrue(payload["checkpoint_audit"]["findings"])
 
     def test_runtime_command_is_bounded_docker_gpu_probe(self) -> None:
         command = docker_gpu_runtime_command("nemotron-runner:latest")

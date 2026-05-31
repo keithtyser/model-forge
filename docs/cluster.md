@@ -152,12 +152,17 @@ start cluster serving until `./forge variants checkpoint-audit <family>
 ./forge cluster model-sync \
   --config configs/clusters/my_cluster.yaml \
   --source <coordinator-models-dir>/<model-dir> \
+  --family <family> \
+  --variant <variant> \
+  --models-dir <coordinator-models-dir> \
   --execute
 ```
 
 `model-sync` resolves each worker's `models_dir` from the cluster config or
 environment, skips the local coordinator, and copies the model directory with
-`rsync --partial` so interrupted transfers can resume.
+`rsync --partial` so interrupted transfers can resume. When `--family` and
+`--variant` are provided, it runs the strict checkpoint audit before copying so
+partial Hugging Face downloads cannot be synced to workers.
 
 ## Plan
 

@@ -443,6 +443,18 @@ of hand-written `rsync` where possible so generated evidence captures what was
 copied.
 Do not run `model-sync` on an active or incomplete HF download; first run
 `./forge variants wait-checkpoint qwen36_27b --variant base`.
+When the source directory corresponds to a configured family variant, pass the
+same identity into `model-sync` so the command enforces the checkpoint gate:
+
+```bash
+./forge cluster model-sync \
+  --config <private-cluster.yaml> \
+  --source <models-dir>/Qwen3.6-27B \
+  --family qwen36_27b \
+  --variant base \
+  --models-dir <models-dir> \
+  --execute
+```
 
 Before launching a large Qwen server, dry-run the exact command and inspect the
 vLLM image, chat-template JSON, tensor parallel size, GPU memory utilization,
