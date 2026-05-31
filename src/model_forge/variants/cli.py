@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -98,30 +99,56 @@ def checkpoint_progress(audit: dict[str, Any]) -> float | None:
     return min(progress_values)
 
 
+def format_bytes(value: Any) -> str:
+    try:
+        size = float(value or 0)
+    except (TypeError, ValueError):
+        return "0 B"
+    units = ["B", "KiB", "MiB", "GiB", "TiB"]
+    unit = units[0]
+    for unit in units:
+        if abs(size) < 1024 or unit == units[-1]:
+            break
+        size /= 1024
+    if unit == "B":
+        return f"{int(size)} {unit}"
+    return f"{size:.1f} {unit}"
+
+
+def format_checkpoint_timestamp(value: Any) -> str:
+    text = str(value or "")
+    if not text:
+        return ""
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return text.replace("+00:00", "Z").replace("T", " ")
+    return parsed.strftime("%m-%d %H:%MZ")
+
+
 def render_checkpoint_audit(audit: dict[str, Any]) -> None:
     table = Table(title=f"Checkpoint Audit: {audit['family']}")
     table.add_column("Variant")
     table.add_column("Exists")
     table.add_column("Shards")
-    table.add_column("Bytes")
+    table.add_column("Bytes", no_wrap=True)
     table.add_column("Incomplete")
-    table.add_column("Partial Bytes")
-    table.add_column("Partial Updated")
+    table.add_column("Partial Bytes", no_wrap=True)
+    table.add_column("Partial Updated", no_wrap=True)
     table.add_column("Progress")
     for record in audit["records"]:
         safetensors = record.get("safetensors") or {}
         progress = record.get("download_progress_fraction")
         if progress is None and record.get("merged_checkpoint"):
             progress = record["merged_checkpoint"].get("download_progress_fraction")
-        partial_updated = str(record.get("incomplete_download_latest_mtime") or "")
         table.add_row(
             str(record["variant"]),
             str(record.get("exists")),
             str(safetensors.get("shard_count") or 0),
-            str(safetensors.get("total_shard_bytes") or 0),
+            format_bytes(safetensors.get("total_shard_bytes") or 0),
             str(len(record.get("incomplete_download_files") or [])),
-            str(record.get("incomplete_download_bytes") or 0),
-            partial_updated.replace("+00:00", "Z"),
+            format_bytes(record.get("incomplete_download_bytes") or 0),
+            format_checkpoint_timestamp(record.get("incomplete_download_latest_mtime")),
             f"{float(progress) * 100:.1f}%" if progress is not None else "",
         )
     console.print(table)

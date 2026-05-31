@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from model_forge.variants.architecture_audit import audit_architecture_metadata, build_architecture_audit
 from model_forge.variants.checkpoint_audit import build_checkpoint_audit
-from model_forge.variants.cli import checkpoint_progress
+from model_forge.variants.cli import checkpoint_progress, format_bytes, format_checkpoint_timestamp
 from model_forge.variants.graph import ancestry, variant_graph
 from model_forge.variants.manifest import default_variant_node, load_family, node_output_path, validate_family_config, validate_variant_node, write_variant_node
 from model_forge.variants.tokenizer_audit import build_tokenizer_audit
@@ -373,6 +373,12 @@ class VariantGraphTests(unittest.TestCase):
             ]
         }
         self.assertEqual(checkpoint_progress(audit), 0.45)
+
+    def test_checkpoint_audit_display_helpers_are_compact(self) -> None:
+        self.assertEqual(format_bytes(0), "0 B")
+        self.assertEqual(format_bytes(1536), "1.5 KiB")
+        self.assertEqual(format_bytes(33810262880), "31.5 GiB")
+        self.assertEqual(format_checkpoint_timestamp("2026-05-31T08:45:27.781590+00:00"), "05-31 08:45Z")
 
 
 if __name__ == "__main__":
