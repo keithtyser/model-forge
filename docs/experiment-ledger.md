@@ -1470,6 +1470,49 @@ Result:
   generation
 - MF-0304 is marked tested / smoke-validated
 
+## Quantization: Behavior Preservation Report
+
+Status: implemented as report code/docs only. No model server, export job,
+quantization run, eval, or benchmark was started.
+
+Hypothesis: A quantized checkpoint should not be promoted from speed or memory
+numbers alone. The repo needs a report that converts source-vs-candidate eval
+deltas into an explicit behavior-preservation decision using the
+`quantized_quality_retention` objective tolerances.
+
+Implemented command:
+
+```bash
+./forge quantize behavior-report \
+  --config configs/quantization/fp8_w8a8_modelopt.yaml \
+  --source-serving-summary <source>/summary.json \
+  --candidate-serving-summary <candidate>/summary.json \
+  --source-serving-eval <source_eval> \
+  --candidate-serving-eval <candidate_eval> \
+  --run-id source_vs_quantized_behavior \
+  --write-report
+```
+
+Changes:
+
+- added `model_forge.quantization_behavior_preservation_report.v1`
+- checks candidate serving success plus required quality-retention deltas
+- reports risk metrics such as unsafe overcompliance without failing ablated
+  quantized models for objective-aligned refusal changes
+- writes `behavior_preservation_report.json` and `.md`
+- updated README, AGENTS, quantization docs, and roadmap state
+
+Validation:
+
+```bash
+.venv/bin/python -m unittest tests.test_quantization_cli -v
+```
+
+Result:
+
+- quantized candidates now have an explicit behavior-preservation gate
+- MF-0309 is marked tested / smoke-validated
+
 ## Quantization: ModelOpt NVFP4 Self-Export Guardrail Incident
 
 Status: stopped before a completed NVFP4 checkpoint. Code and docs now enforce

@@ -212,6 +212,25 @@ completed all serving requests, and retained normal-use, schema, and workflow
 scores within the objective tolerance. It is not a replacement for the broader
 quantization card.
 
+Write the behavior-preservation report for every quantized candidate:
+
+```bash
+./forge quantize behavior-report \
+  --config configs/quantization/fp8_w8a8_modelopt.yaml \
+  --source-serving-summary reports/generated/source/serve_bench/summary.json \
+  --candidate-serving-summary reports/generated/candidate/serve_bench/summary.json \
+  --source-serving-eval reports/generated/source/serve_eval \
+  --candidate-serving-eval reports/generated/candidate/serve_eval \
+  --run-id source_vs_quantized_behavior \
+  --write-report
+```
+
+The report applies the `quantized_quality_retention` tolerances: normal use,
+challenge capability, schema adherence, workflow success, and benign answer
+quality must stay within allowed deltas. Risk metrics such as unsafe
+overcompliance are reported separately because ablated models may intentionally
+change refusal behavior.
+
 ## FP8 W8A8 Checkpoint Pipeline
 
 FP8 W8A8 is a checkpoint-creation path, unlike runtime FP8 KV cache. Use the

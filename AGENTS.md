@@ -413,6 +413,14 @@ Plan and report quantization without loading a model:
   --candidate-serving-eval <candidate_eval_dir> \
   --run-id source_vs_fp8_kv \
   --write-report
+./forge quantize behavior-report \
+  --config configs/quantization/fp8_w8a8_modelopt.yaml \
+  --source-serving-summary <source>/summary.json \
+  --candidate-serving-summary <candidate>/summary.json \
+  --source-serving-eval <source_eval_dir> \
+  --candidate-serving-eval <candidate_eval_dir> \
+  --run-id source_vs_quantized_behavior \
+  --write-report
 ```
 
 NVFP4 is the priority Blackwell path. `nvfp4_runtime` means Model Forge is
@@ -433,6 +441,9 @@ For FP8 W8A8 checkpoint creation, use
 `configs/quantization/fp8_w8a8_modelopt.yaml` with an explicit family and
 variant. The config is intentionally generic; do not add Gemma-only defaults to
 common quantization code.
+For every quantized candidate, write a behavior-preservation report from the
+same source/candidate eval evidence used by the quantization card. Throughput
+does not compensate for failing the required behavior-retention checks.
 
 For self-quantization, use the ModelOpt export runner and the matrix config:
 

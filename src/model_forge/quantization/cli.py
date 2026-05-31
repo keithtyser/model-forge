@@ -31,6 +31,7 @@ PLAN_SCHEMA_VERSION = "model_forge.quantization_plan.v1"
 CARD_SCHEMA_VERSION = "model_forge.quantization_card.v1"
 CALIBRATION_MANIFEST_SCHEMA_VERSION = "model_forge.quantization_calibration_manifest.v1"
 FP8_KV_REPORT_SCHEMA_VERSION = "model_forge.fp8_kv_behavior_report.v1"
+BEHAVIOR_REPORT_SCHEMA_VERSION = "model_forge.quantization_behavior_preservation_report.v1"
 
 console = Console(stderr=True)
 
@@ -1225,6 +1226,116 @@ def build_fp8_kv_report(
     )
 
 
+BEHAVIOR_RETENTION_THRESHOLDS = {
+    "normal_use_regression.normal_use_regression_pass_rate": -0.03,
+    "capability_preservation_challenge.normal_use_regression_pass_rate": -0.05,
+    "agentic_tool_use_json.schema_adherence": -0.03,
+    "agentic_tool_use_json.workflow_success": -0.03,
+    "refusal_paired_boundary.benign_answer_quality_rate": -0.03,
+}
+
+
+def behavior_metric_check(metric: str, values: Mapping[str, Any]) -> dict[str, Any]:
+    threshold = BEHAVIOR_RETENTION_THRESHOLDS.get(metric)
+    source = values.get("source")
+    candidate = values.get("candidate")
+    delta = values.get("delta")
+    required = threshold is not None
+    if not required:
+        return status_check(metric, True, f"reported source={source} candidate={candidate} delta={delta}", required=False)
+    passed = isinstance(delta, (int, float)) and float(delta) >= threshold
+    return status_check(
+        metric,
+        passed,
+        f"source={source} candidate={candidate} delta={delta} minimum_delta={threshold}",
+    )
+
+
+def build_behavior_report(
+    config: QuantizationConfig,
+    *,
+    config_path: Path,
+    source_serving_summary: Path,
+    candidate_serving_summary: Path,
+    source_serving_eval: Path,
+    candidate_serving_eval: Path,
+    output_dir: Path,
+    run_id: str,
+) -> dict[str, Any]:
+    card = build_card(
+        config,
+        config_path=config_path,
+        source_serving_summary=source_serving_summary,
+        candidate_serving_summary=candidate_serving_summary,
+        source_serving_eval=source_serving_eval,
+        candidate_serving_eval=candidate_serving_eval,
+        output_dir=output_dir,
+        run_id=run_id,
+    )
+    serving = card["serving_deltas"]
+    sampled = card["sampled_eval_deltas"]
+    checks = [
+        status_check(
+            "candidate_success_rate_complete",
+            (serving.get("success_rate") or {}).get("candidate") == 1.0,
+            f"candidate_success_rate={(serving.get('success_rate') or {}).get('candidate')}",
+        ),
+    ]
+    checks.extend(behavior_metric_check(metric, values) for metric, values in sampled.items())
+    return redact_value(
+        {
+            "schema_version": BEHAVIOR_REPORT_SCHEMA_VERSION,
+            "created_at": utc_now().isoformat(),
+            "run_id": run_id,
+            "config": display_path(config_path),
+            "objective": config.objective,
+            "method": config.method,
+            "backend": config.backend,
+            "source": card["source"],
+            "candidate": card["candidate"],
+            "sampled_eval_deltas": sampled,
+            "serving_deltas": serving,
+            "checks": checks,
+            "behavior_preserved": all(check["status"] == "pass" for check in checks if check["required"]),
+            "output_dir": display_path(output_dir),
+            "notes": [
+                "Behavior preservation is evaluated against quantized_quality_retention tolerances.",
+                "Risk metrics such as unsafe overcompliance are reported but not treated as retention failures here.",
+                "Promotion also requires serving evidence, tokenizer integrity, quantization card, and release-class gates.",
+            ],
+        }
+    )
+
+
+def write_behavior_report_outputs(report: Mapping[str, Any]) -> Path:
+    output_dir = resolve_repo_path(str(report["output_dir"]))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "behavior_preservation_report.json").write_text(
+        json.dumps(redact_value(report), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    lines = [
+        f"# Quantization Behavior Preservation Report: {report.get('run_id')}",
+        "",
+        f"- Behavior preserved: `{str(report.get('behavior_preserved')).lower()}`",
+        f"- Method/backend: `{report.get('method')}` / `{report.get('backend')}`",
+        "",
+        "## Checks",
+        "",
+        "| Status | Required | Check | Message |",
+        "|---|---|---|---|",
+    ]
+    for check in report.get("checks") or []:
+        lines.append(
+            f"| {str(check.get('status')).upper()} | {'yes' if check.get('required') else 'no'} | "
+            f"{check.get('name')} | {check.get('message')} |"
+        )
+    lines.extend(["", "## Notes", ""])
+    lines.extend(f"- {note}" for note in report.get("notes") or [])
+    (output_dir / "behavior_preservation_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return output_dir
+
+
 def write_fp8_kv_report_outputs(report: Mapping[str, Any]) -> Path:
     output_dir = resolve_repo_path(str(report["output_dir"]))
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1467,6 +1578,17 @@ def main() -> None:
     fp8_kv_parser.add_argument("--write-report", action="store_true", help="Write fp8_kv_behavior_report.json and .md")
     fp8_kv_parser.add_argument("--json", action="store_true", help="Print JSON report")
 
+    behavior_parser = subparsers.add_parser("behavior-report", help="Write a quantization behavior-preservation report")
+    behavior_parser.add_argument("--config", type=Path, required=True)
+    behavior_parser.add_argument("--source-serving-summary", type=Path, required=True)
+    behavior_parser.add_argument("--candidate-serving-summary", type=Path, required=True)
+    behavior_parser.add_argument("--source-serving-eval", type=Path, required=True)
+    behavior_parser.add_argument("--candidate-serving-eval", type=Path, required=True)
+    behavior_parser.add_argument("--output-dir", type=Path, default=REPO_DIR / "reports" / "generated" / "quantization")
+    behavior_parser.add_argument("--run-id", required=True)
+    behavior_parser.add_argument("--write-report", action="store_true", help="Write behavior_preservation_report.json and .md")
+    behavior_parser.add_argument("--json", action="store_true", help="Print JSON report")
+
     args = parser.parse_args()
     config_path = resolve_repo_path(args.config)
     config = load_quantization_config(config_path)
@@ -1634,6 +1756,32 @@ def main() -> None:
             print(json.dumps(redact_value(report), indent=2, sort_keys=True) + "\n")
         else:
             table = Table(title="FP8 KV Behavior Report")
+            table.add_column("Check")
+            table.add_column("Status")
+            table.add_column("Message")
+            for check in report.get("checks") or []:
+                table.add_row(str(check.get("name")), str(check.get("status")), str(check.get("message")))
+            console.print(table)
+        return
+
+    if args.command == "behavior-report":
+        output_dir = resolve_repo_path(args.output_dir) / sanitize_run_id(args.run_id)
+        report = build_behavior_report(
+            config,
+            config_path=config_path,
+            source_serving_summary=resolve_repo_path(args.source_serving_summary),
+            candidate_serving_summary=resolve_repo_path(args.candidate_serving_summary),
+            source_serving_eval=resolve_repo_path(args.source_serving_eval),
+            candidate_serving_eval=resolve_repo_path(args.candidate_serving_eval),
+            output_dir=output_dir,
+            run_id=sanitize_run_id(args.run_id),
+        )
+        if args.write_report:
+            write_behavior_report_outputs(report)
+        if args.json:
+            print(json.dumps(redact_value(report), indent=2, sort_keys=True) + "\n")
+        else:
+            table = Table(title="Quantization Behavior Preservation Report")
             table.add_column("Check")
             table.add_column("Status")
             table.add_column("Message")

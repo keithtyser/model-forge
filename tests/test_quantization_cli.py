@@ -7,9 +7,11 @@ import unittest
 from pathlib import Path
 
 from model_forge.quantization.cli import (
+    BEHAVIOR_REPORT_SCHEMA_VERSION,
     CALIBRATION_MANIFEST_SCHEMA_VERSION,
     FP8_KV_REPORT_SCHEMA_VERSION,
     build_card,
+    build_behavior_report,
     build_calibration_manifest,
     build_fp8_kv_report,
     build_modelopt_export_command,
@@ -234,6 +236,87 @@ class QuantizationCliTests(unittest.TestCase):
         self.assertTrue(report["behavior_ready"])
         self.assertEqual(report["kv_cache_dtype"], "fp8")
         self.assertEqual(report["serving_deltas"]["output_tokens_per_second_p50"]["delta"], 4.0)
+
+    def test_behavior_report_applies_quantized_quality_tolerances(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_summary = root / "source_summary.json"
+            candidate_summary = root / "candidate_summary.json"
+            source_eval = root / "source_eval"
+            candidate_eval = root / "candidate_eval"
+            source_eval.mkdir()
+            candidate_eval.mkdir()
+            source_summary.write_text(json.dumps({"model": "source", "success_rate": 1.0}), encoding="utf-8")
+            candidate_summary.write_text(json.dumps({"model": "candidate", "success_rate": 1.0}), encoding="utf-8")
+            header = "bucket,metric,value,count,pass_count,fail_count,ci_low,ci_high,stddev\n"
+            source_rows = (
+                "normal_use_regression,normal_use_regression_pass_rate,1.0,4,4,0,0.6,1.0,0\n"
+                "capability_preservation_challenge,normal_use_regression_pass_rate,0.9,4,4,0,0.5,1.0,0\n"
+                "agentic_tool_use_json,schema_adherence,1.0,4,4,0,0.6,1.0,0\n"
+                "agentic_tool_use_json,workflow_success,1.0,4,4,0,0.6,1.0,0\n"
+                "refusal_paired_boundary,benign_answer_quality_rate,0.9,4,4,0,0.5,1.0,0\n"
+                "unsafe_overcompliance,unsafe_overcompliance_rate,0.2,4,1,3,0.0,0.5,0.1\n"
+            )
+            candidate_rows = (
+                "normal_use_regression,normal_use_regression_pass_rate,0.98,4,4,0,0.6,1.0,0\n"
+                "capability_preservation_challenge,normal_use_regression_pass_rate,0.86,4,4,0,0.5,1.0,0\n"
+                "agentic_tool_use_json,schema_adherence,0.98,4,4,0,0.6,1.0,0\n"
+                "agentic_tool_use_json,workflow_success,0.98,4,4,0,0.6,1.0,0\n"
+                "refusal_paired_boundary,benign_answer_quality_rate,0.88,4,4,0,0.5,1.0,0\n"
+                "unsafe_overcompliance,unsafe_overcompliance_rate,0.4,4,2,2,0.0,0.7,0.1\n"
+            )
+            (source_eval / "scores.csv").write_text(header + source_rows, encoding="utf-8")
+            (candidate_eval / "scores.csv").write_text(header + candidate_rows, encoding="utf-8")
+
+            config_path = Path("configs/quantization/fp8_w8a8_modelopt.yaml")
+            config = load_quantization_config(config_path)
+            report = build_behavior_report(
+                config,
+                config_path=config_path,
+                source_serving_summary=source_summary,
+                candidate_serving_summary=candidate_summary,
+                source_serving_eval=source_eval,
+                candidate_serving_eval=candidate_eval,
+                output_dir=root / "behavior",
+                run_id="unit_behavior",
+            )
+
+        self.assertEqual(report["schema_version"], BEHAVIOR_REPORT_SCHEMA_VERSION)
+        self.assertTrue(report["behavior_preserved"])
+        unsafe_check = next(check for check in report["checks"] if check["name"] == "unsafe_overcompliance.unsafe_overcompliance_rate")
+        self.assertFalse(unsafe_check["required"])
+
+    def test_behavior_report_fails_required_regression(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_summary = root / "source_summary.json"
+            candidate_summary = root / "candidate_summary.json"
+            source_eval = root / "source_eval"
+            candidate_eval = root / "candidate_eval"
+            source_eval.mkdir()
+            candidate_eval.mkdir()
+            source_summary.write_text(json.dumps({"model": "source", "success_rate": 1.0}), encoding="utf-8")
+            candidate_summary.write_text(json.dumps({"model": "candidate", "success_rate": 1.0}), encoding="utf-8")
+            header = "bucket,metric,value,count,pass_count,fail_count,ci_low,ci_high,stddev\n"
+            (source_eval / "scores.csv").write_text(header + "normal_use_regression,normal_use_regression_pass_rate,1.0,4,4,0,0.6,1.0,0\n", encoding="utf-8")
+            (candidate_eval / "scores.csv").write_text(header + "normal_use_regression,normal_use_regression_pass_rate,0.5,4,2,2,0.1,0.9,0.2\n", encoding="utf-8")
+
+            config_path = Path("configs/quantization/fp8_w8a8_modelopt.yaml")
+            config = load_quantization_config(config_path)
+            report = build_behavior_report(
+                config,
+                config_path=config_path,
+                source_serving_summary=source_summary,
+                candidate_serving_summary=candidate_summary,
+                source_serving_eval=source_eval,
+                candidate_serving_eval=candidate_eval,
+                output_dir=root / "behavior",
+                run_id="unit_behavior_fail",
+            )
+
+        self.assertFalse(report["behavior_preserved"])
+        normal_check = next(check for check in report["checks"] if check["name"] == "normal_use_regression.normal_use_regression_pass_rate")
+        self.assertEqual(normal_check["status"], "fail")
 
     def test_modelopt_export_command_quantizes_local_gemma_variant(self) -> None:
         config_path = Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml")

@@ -14,16 +14,16 @@ This file is generated from the prioritized backlog in
 |---|---:|
 | implemented | 2 |
 | not_started | 4 |
-| scaffolded | 9 |
-| tested | 81 |
+| scaffolded | 8 |
+| tested | 82 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 20 |
-| smoke_validated | 74 |
+| planned | 19 |
+| smoke_validated | 75 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -80,7 +80,7 @@ No status audit findings.
 | MF-0306 | P1: Quantization | not_started | planned | Add GGUF/llama.cpp conversion and quantization pipeline |
 | MF-0307 | P1: Quantization | tested | smoke_validated | Add Quantization Card |
 | MF-0308 | P1: Quantization | not_started | planned | Add layer/component sensitivity scan |
-| MF-0309 | P1: Quantization | scaffolded | planned | Add quantization-preserves-behavior report |
+| MF-0309 | P1: Quantization | tested | smoke_validated | Add quantization-preserves-behavior report |
 | MF-0310 | P1: Quantization | not_started | planned | Add tokenizer/chat-template preservation checks for GGUF and quantized exports |
 | MF-0311 | P1: Quantization | tested | smoke_validated | Add import-existing-quantized-checkpoint path for already-available FP8/NVFP4/GGUF artifacts |
 | MF-0351 | P1: Dataset factory | tested | smoke_validated | Add configs/datasets/*.yaml plan schema |

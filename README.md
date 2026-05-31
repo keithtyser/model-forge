@@ -358,6 +358,14 @@ Quantization:
   --candidate-serving-eval <candidate_eval_dir> \
   --run-id source_vs_fp8_kv \
   --write-report
+./forge quantize behavior-report \
+  --config configs/quantization/fp8_w8a8_modelopt.yaml \
+  --source-serving-summary <source>/summary.json \
+  --candidate-serving-summary <candidate>/summary.json \
+  --source-serving-eval <source_eval_dir> \
+  --candidate-serving-eval <candidate_eval_dir> \
+  --run-id source_vs_quantized_behavior \
+  --write-report
 ```
 
 See [docs/quantization.md](docs/quantization.md). NVFP4 is the priority
