@@ -513,28 +513,35 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
             if source.get("enabled", True) is False:
                 continue
             split = source.get("split", "train")
-            if limit is not None and not source.get("path"):
-                if source.get("subset"):
-                    ds_iter = load_dataset(source["dataset"], source["subset"], split=split, streaming=True)
-                else:
-                    ds_iter = load_dataset(source["dataset"], split=split, streaming=True)
-                ds = list(ds_iter.take(limit))
-                target = len(ds)
-            elif source.get("path"):
+            name = source.get("name", source.get("dataset", ""))
+            configured_target = int(source.get("target_samples", 0) or 0)
+            if source.get("path"):
                 ds = load_dataset("json", data_files=source["path"], split="train")
-                target = int(source.get("target_samples", 0) or len(ds))
+                target = configured_target or len(ds)
                 target = min(target, len(ds))
                 if limit is not None:
                     target = min(target, limit)
             else:
-                if source.get("subset"):
-                    ds = load_dataset(source["dataset"], source["subset"], split=split)
+                target = limit or configured_target
+                if target:
+                    if source.get("subset"):
+                        ds_iter = load_dataset(source["dataset"], source["subset"], split=split, streaming=True)
+                    else:
+                        ds_iter = load_dataset(source["dataset"], split=split, streaming=True)
+                    buffer_size = int(os.getenv("MODEL_FORGE_DATA_STREAM_BUFFER", str(min(max(target * 2, 1000), 20000))))
+                    if hasattr(ds_iter, "shuffle"):
+                        ds_iter = ds_iter.shuffle(seed=int(plan["trainer"]["seed"]), buffer_size=buffer_size)
+                    ds = list(ds_iter.take(target))
+                    target = len(ds)
                 else:
-                    ds = load_dataset(source["dataset"], split=split)
-                target = int(source.get("target_samples", 0) or len(ds))
-                target = min(target, len(ds))
+                    if source.get("subset"):
+                        ds = load_dataset(source["dataset"], source["subset"], split=split)
+                    else:
+                        ds = load_dataset(source["dataset"], split=split)
+                    target = len(ds)
             if target <= 0:
                 continue
+            print(f"[model-forge] preparing source {name}: target={target}", flush=True)
             if hasattr(ds, "shuffle"):
                 ds = ds.shuffle(seed=int(plan["trainer"]["seed"])).select(range(target))
             else:
@@ -557,10 +564,11 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
                     rejected += 1
                     continue
                 seen.add(digest)
-                rows.append({"id": digest, "source": source.get("name", source.get("dataset", "")), "messages": messages, "text": text, "token_count": token_count})
+                rows.append({"id": digest, "source": name, "messages": messages, "text": text, "token_count": token_count})
             if rows:
                 chunks.append(Dataset.from_list(rows))
-            source_stats.append({"name": source.get("name", source.get("dataset", "")), "sampled": target, "accepted": len(rows), "rejected": rejected})
+            source_stats.append({"name": name, "sampled": target, "accepted": len(rows), "rejected": rejected})
+            print(f"[model-forge] prepared source {name}: accepted={len(rows)} rejected={rejected}", flush=True)
 
         if not chunks:
             raise SystemExit("no training rows survived data preparation")
