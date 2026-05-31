@@ -8,8 +8,10 @@ from pathlib import Path
 
 from model_forge.quantization.cli import (
     CALIBRATION_MANIFEST_SCHEMA_VERSION,
+    FP8_KV_REPORT_SCHEMA_VERSION,
     build_card,
     build_calibration_manifest,
+    build_fp8_kv_report,
     build_modelopt_export_command,
     build_plan,
     filter_matrix_entries,
@@ -188,6 +190,50 @@ class QuantizationCliTests(unittest.TestCase):
         sampled = card["sampled_eval_deltas"]["normal_use_regression.normal_use_regression_pass_rate"]
         self.assertEqual(sampled["candidate"], 1.0)
         self.assertIsNone(sampled["delta"])
+
+    def test_fp8_kv_report_checks_behavior_retention(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_summary = root / "source_summary.json"
+            candidate_summary = root / "candidate_summary.json"
+            source_eval = root / "source_eval"
+            candidate_eval = root / "candidate_eval"
+            source_eval.mkdir()
+            candidate_eval.mkdir()
+            source_summary.write_text(
+                json.dumps({"model": "source", "success_rate": 1.0, "metrics": {"output_tokens_per_second": {"p50": 20.0}}}),
+                encoding="utf-8",
+            )
+            candidate_summary.write_text(
+                json.dumps({"model": "candidate", "success_rate": 1.0, "metrics": {"output_tokens_per_second": {"p50": 24.0}}}),
+                encoding="utf-8",
+            )
+            header = "bucket,metric,value,count,pass_count,fail_count,ci_low,ci_high,stddev\n"
+            rows = (
+                "normal_use_regression,normal_use_regression_pass_rate,1.0,2,2,0,0.3,1.0,0\n"
+                "agentic_tool_use_json,schema_adherence,1.0,2,2,0,0.3,1.0,0\n"
+                "agentic_tool_use_json,workflow_success,1.0,2,2,0,0.3,1.0,0\n"
+            )
+            (source_eval / "scores.csv").write_text(header + rows, encoding="utf-8")
+            (candidate_eval / "scores.csv").write_text(header + rows, encoding="utf-8")
+
+            config_path = Path("configs/quantization/gemma4_26b_a4b_fp8_runtime.yaml")
+            config = load_quantization_config(config_path)
+            report = build_fp8_kv_report(
+                config,
+                config_path=config_path,
+                source_serving_summary=source_summary,
+                candidate_serving_summary=candidate_summary,
+                source_serving_eval=source_eval,
+                candidate_serving_eval=candidate_eval,
+                output_dir=root / "fp8_kv",
+                run_id="unit_fp8_kv",
+            )
+
+        self.assertEqual(report["schema_version"], FP8_KV_REPORT_SCHEMA_VERSION)
+        self.assertTrue(report["behavior_ready"])
+        self.assertEqual(report["kv_cache_dtype"], "fp8")
+        self.assertEqual(report["serving_deltas"]["output_tokens_per_second_p50"]["delta"], 4.0)
 
     def test_modelopt_export_command_quantizes_local_gemma_variant(self) -> None:
         config_path = Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml")

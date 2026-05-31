@@ -1376,6 +1376,49 @@ Result:
 - self-quantization exports now have a pre-run calibration manifest contract
 - MF-0302 is marked tested / smoke-validated
 
+## Quantization: FP8 KV Behavior Report
+
+Status: implemented as report code/docs only. No server, benchmark, eval,
+quantization export, or training job was started.
+
+Hypothesis: FP8 KV cache experiments need a focused behavior report in addition
+to the broader quantization card because KV quantization is a runtime serving
+choice, not a checkpoint export. The report should prove that completed
+candidate endpoint evidence retained key behavior metrics against the matching
+source endpoint.
+
+Implemented command:
+
+```bash
+./forge quantize fp8-kv-report \
+  --config configs/quantization/gemma4_26b_a4b_fp8_runtime.yaml \
+  --source-serving-summary <source>/summary.json \
+  --candidate-serving-summary <candidate>/summary.json \
+  --source-serving-eval <source_eval> \
+  --candidate-serving-eval <candidate_eval> \
+  --run-id source_vs_fp8_kv \
+  --write-report
+```
+
+Changes:
+
+- added `model_forge.fp8_kv_behavior_report.v1`
+- validates FP8 KV config intent, candidate success rate, normal-use retention,
+  schema adherence retention, and workflow success retention
+- writes `fp8_kv_behavior_report.json` and `.md`
+- updated README, AGENTS, quantization docs, and roadmap state
+
+Validation:
+
+```bash
+.venv/bin/python -m unittest tests.test_quantization_cli -v
+```
+
+Result:
+
+- FP8 KV runtime candidates now have a dedicated behavior-retention report
+- MF-0303 is marked tested / smoke-validated
+
 ## Quantization: ModelOpt NVFP4 Self-Export Guardrail Incident
 
 Status: stopped before a completed NVFP4 checkpoint. Code and docs now enforce

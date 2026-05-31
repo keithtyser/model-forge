@@ -30,6 +30,7 @@ CONFIG_SCHEMA_VERSION = "model_forge.quantization.v1"
 PLAN_SCHEMA_VERSION = "model_forge.quantization_plan.v1"
 CARD_SCHEMA_VERSION = "model_forge.quantization_card.v1"
 CALIBRATION_MANIFEST_SCHEMA_VERSION = "model_forge.quantization_calibration_manifest.v1"
+FP8_KV_REPORT_SCHEMA_VERSION = "model_forge.fp8_kv_behavior_report.v1"
 
 console = Console(stderr=True)
 
@@ -1103,6 +1104,131 @@ def build_card(
     }
 
 
+def status_check(name: str, passed: bool, message: str, *, required: bool = True) -> dict[str, Any]:
+    return {
+        "name": name,
+        "status": "pass" if passed else ("fail" if required else "missing"),
+        "required": required,
+        "message": message,
+    }
+
+
+def build_fp8_kv_report(
+    config: QuantizationConfig,
+    *,
+    config_path: Path,
+    source_serving_summary: Path,
+    candidate_serving_summary: Path,
+    source_serving_eval: Path,
+    candidate_serving_eval: Path,
+    output_dir: Path,
+    run_id: str,
+) -> dict[str, Any]:
+    card = build_card(
+        config,
+        config_path=config_path,
+        source_serving_summary=source_serving_summary,
+        candidate_serving_summary=candidate_serving_summary,
+        source_serving_eval=source_serving_eval,
+        candidate_serving_eval=candidate_serving_eval,
+        output_dir=output_dir,
+        run_id=run_id,
+    )
+    runtime_flags = dict((config.runtime or {}).get("vllm_flags") or {})
+    kv_cache_dtype = str(runtime_flags.get("kv_cache_dtype") or runtime_flags.get("kv-cache-dtype") or "")
+    serving_deltas = card["serving_deltas"]
+    sampled = card["sampled_eval_deltas"]
+    normal = sampled.get("normal_use_regression.normal_use_regression_pass_rate") or {}
+    schema = sampled.get("agentic_tool_use_json.schema_adherence") or {}
+    workflow = sampled.get("agentic_tool_use_json.workflow_success") or {}
+
+    def retained(values: Mapping[str, Any], tolerance: float) -> bool:
+        source = values.get("source")
+        candidate = values.get("candidate")
+        if source is None or candidate is None:
+            return False
+        return float(candidate) >= float(source) - tolerance
+
+    checks = [
+        status_check("kv_cache_dtype_fp8", "fp8" in kv_cache_dtype, f"kv_cache_dtype={kv_cache_dtype or 'unset'}"),
+        status_check(
+            "candidate_success_rate_complete",
+            (serving_deltas.get("success_rate") or {}).get("candidate") == 1.0,
+            f"candidate_success_rate={(serving_deltas.get('success_rate') or {}).get('candidate')}",
+        ),
+        status_check(
+            "normal_use_retained",
+            retained(normal, 0.03),
+            f"source={normal.get('source')} candidate={normal.get('candidate')} tolerance=0.03",
+        ),
+        status_check(
+            "schema_adherence_retained",
+            retained(schema, 0.03),
+            f"source={schema.get('source')} candidate={schema.get('candidate')} tolerance=0.03",
+        ),
+        status_check(
+            "workflow_success_retained",
+            retained(workflow, 0.03),
+            f"source={workflow.get('source')} candidate={workflow.get('candidate')} tolerance=0.03",
+        ),
+    ]
+    return redact_value(
+        {
+            "schema_version": FP8_KV_REPORT_SCHEMA_VERSION,
+            "created_at": utc_now().isoformat(),
+            "run_id": run_id,
+            "config": display_path(config_path),
+            "objective": config.objective,
+            "method": config.method,
+            "backend": config.backend,
+            "kv_cache_dtype": kv_cache_dtype or None,
+            "source": card["source"],
+            "candidate": card["candidate"],
+            "serving_deltas": serving_deltas,
+            "sampled_eval_deltas": sampled,
+            "checks": checks,
+            "behavior_ready": all(check["status"] == "pass" for check in checks if check["required"]),
+            "output_dir": display_path(output_dir),
+            "notes": [
+                "FP8 KV reports compare completed source and candidate endpoint evidence.",
+                "This report does not start a server and does not prove checkpoint quantization.",
+                "Promotion still requires the broader quantization card and serving evidence gate.",
+            ],
+        }
+    )
+
+
+def write_fp8_kv_report_outputs(report: Mapping[str, Any]) -> Path:
+    output_dir = resolve_repo_path(str(report["output_dir"]))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "fp8_kv_behavior_report.json").write_text(
+        json.dumps(redact_value(report), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    lines = [
+        f"# FP8 KV Behavior Report: {report.get('run_id')}",
+        "",
+        f"- Behavior ready: `{str(report.get('behavior_ready')).lower()}`",
+        f"- KV cache dtype: `{report.get('kv_cache_dtype')}`",
+        f"- Method/backend: `{report.get('method')}` / `{report.get('backend')}`",
+        "",
+        "## Checks",
+        "",
+        "| Status | Required | Check | Message |",
+        "|---|---|---|---|",
+    ]
+    for check in report.get("checks") or []:
+        lines.append(
+            f"| {str(check.get('status')).upper()} | {'yes' if check.get('required') else 'no'} | "
+            f"{check.get('name')} | {check.get('message')} |"
+        )
+    lines.extend(["", "## Serving Deltas", "", "| Metric | Source | Candidate | Delta |", "|---|---:|---:|---:|"])
+    for metric, values in (report.get("serving_deltas") or {}).items():
+        lines.append(f"| {metric} | {values.get('source')} | {values.get('candidate')} | {values.get('delta')} |")
+    (output_dir / "fp8_kv_behavior_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return output_dir
+
+
 def write_card_markdown(path: Path, card: Mapping[str, Any]) -> None:
     source = card.get("source") or {}
     candidate = card.get("candidate") or {}
@@ -1303,6 +1429,17 @@ def main() -> None:
     card_parser.add_argument("--write-card", action="store_true", help="Write quantization_card.json and quantization_card.md")
     card_parser.add_argument("--json", action="store_true", help="Print JSON card")
 
+    fp8_kv_parser = subparsers.add_parser("fp8-kv-report", help="Write an FP8 KV source-vs-candidate behavior report")
+    fp8_kv_parser.add_argument("--config", type=Path, required=True)
+    fp8_kv_parser.add_argument("--source-serving-summary", type=Path, required=True)
+    fp8_kv_parser.add_argument("--candidate-serving-summary", type=Path, required=True)
+    fp8_kv_parser.add_argument("--source-serving-eval", type=Path, required=True)
+    fp8_kv_parser.add_argument("--candidate-serving-eval", type=Path, required=True)
+    fp8_kv_parser.add_argument("--output-dir", type=Path, default=REPO_DIR / "reports" / "generated" / "quantization")
+    fp8_kv_parser.add_argument("--run-id", required=True)
+    fp8_kv_parser.add_argument("--write-report", action="store_true", help="Write fp8_kv_behavior_report.json and .md")
+    fp8_kv_parser.add_argument("--json", action="store_true", help="Print JSON report")
+
     args = parser.parse_args()
     config_path = resolve_repo_path(args.config)
     config = load_quantization_config(config_path)
@@ -1449,6 +1586,32 @@ def main() -> None:
                 target = plan.get("target") or {}
                 execution = plan.get("execution") or {}
                 table.add_row(str(source.get("variant")), str(target.get("variant")), str(execution.get("worker")), str(target.get("host_output_path")))
+            console.print(table)
+        return
+
+    if args.command == "fp8-kv-report":
+        output_dir = resolve_repo_path(args.output_dir) / sanitize_run_id(args.run_id)
+        report = build_fp8_kv_report(
+            config,
+            config_path=config_path,
+            source_serving_summary=resolve_repo_path(args.source_serving_summary),
+            candidate_serving_summary=resolve_repo_path(args.candidate_serving_summary),
+            source_serving_eval=resolve_repo_path(args.source_serving_eval),
+            candidate_serving_eval=resolve_repo_path(args.candidate_serving_eval),
+            output_dir=output_dir,
+            run_id=sanitize_run_id(args.run_id),
+        )
+        if args.write_report:
+            write_fp8_kv_report_outputs(report)
+        if args.json:
+            print(json.dumps(redact_value(report), indent=2, sort_keys=True) + "\n")
+        else:
+            table = Table(title="FP8 KV Behavior Report")
+            table.add_column("Check")
+            table.add_column("Status")
+            table.add_column("Message")
+            for check in report.get("checks") or []:
+                table.add_row(str(check.get("name")), str(check.get("status")), str(check.get("message")))
             console.print(table)
         return
 

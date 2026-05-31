@@ -404,6 +404,14 @@ Plan and report quantization without loading a model:
   --candidate-serving-eval <candidate_eval_dir> \
   --run-id source_vs_nvfp4 \
   --write-card
+./forge quantize fp8-kv-report \
+  --config configs/quantization/gemma4_26b_a4b_fp8_runtime.yaml \
+  --source-serving-summary <source>/summary.json \
+  --candidate-serving-summary <candidate>/summary.json \
+  --source-serving-eval <source_eval_dir> \
+  --candidate-serving-eval <candidate_eval_dir> \
+  --run-id source_vs_fp8_kv \
+  --write-report
 ```
 
 NVFP4 is the priority Blackwell path. `nvfp4_runtime` means Model Forge is
@@ -417,6 +425,9 @@ Before starting a self-quantization export, write a calibration manifest for the
 same family/variant/config. If you override datasets through
 `MODEL_FORGE_QUANT_CALIB_*`, regenerate the manifest so the export and evidence
 card point at the same calibration contract.
+For FP8 KV cache experiments, write `./forge quantize fp8-kv-report` from
+completed source and candidate endpoint evidence. Treat it as a behavior report,
+not as a checkpoint quantization claim.
 
 For self-quantization, use the ModelOpt export runner and the matrix config:
 

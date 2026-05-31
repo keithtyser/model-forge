@@ -194,6 +194,24 @@ Write the card:
   --write-card
 ```
 
+For FP8 KV cache runs, also write the focused behavior report:
+
+```bash
+./forge quantize fp8-kv-report \
+  --config configs/quantization/gemma4_26b_a4b_fp8_runtime.yaml \
+  --source-serving-summary reports/generated/source/serve_bench/summary.json \
+  --candidate-serving-summary reports/generated/candidate/serve_bench/summary.json \
+  --source-serving-eval reports/generated/source/serve_eval \
+  --candidate-serving-eval reports/generated/candidate/serve_eval \
+  --run-id source_vs_fp8_kv \
+  --write-report
+```
+
+This report checks that the candidate endpoint actually used FP8 KV settings,
+completed all serving requests, and retained normal-use, schema, and workflow
+scores within the objective tolerance. It is not a replacement for the broader
+quantization card.
+
 The card intentionally reports both safety/refusal behavior and utility metrics.
 For ablated models, lower harmful-prompt refusal can be the objective, but only
 if normal-use quality, instruction following, structured output, and artifact
