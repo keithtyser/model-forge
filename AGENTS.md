@@ -434,6 +434,25 @@ download once there and run `./forge cluster model-sync --source <model-dir>
 of hand-written `rsync` where possible so generated evidence captures what was
 copied.
 
+Before launching a large Qwen server, dry-run the exact command and inspect the
+vLLM image, chat-template JSON, tensor parallel size, GPU memory utilization,
+batched tokens, and max sequence count:
+
+```bash
+MODEL_FORGE_DRY_RUN=1 \
+MODEL_FORGE_SPARK_CLUSTER=1 \
+MODEL_FORGE_SPARK_CLUSTER_NODES=<coordinator-ip>,<worker-ip> \
+MODEL_FORGE_SPARK_ETH_IF=<direct-link-interface> \
+MODEL_FORGE_TENSOR_PARALLEL_SIZE=2 \
+./forge serve qwen36_27b base
+```
+
+Family `serve:` defaults are intentional safety bounds and should win over
+generic hardware recommendations. For Qwen 3.6 27B the repo defaults to the
+Transformers-5 Spark vLLM image, `GPU_MEMORY_UTILIZATION=0.78`,
+`MAX_NUM_BATCHED_TOKENS=16384`, and `VLLM_MAX_NUM_SEQS=4`; raise them only after
+baseline serving works and a benchmark proves the change helps.
+
 Benchmark serving only after an endpoint is already running:
 
 ```bash
