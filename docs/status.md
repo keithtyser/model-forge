@@ -148,6 +148,10 @@ This is the short handoff state for humans and agents. Use
   comparison reports and write objective-specific ablation scorecards that
   separate refusal suppression, capability retention, benign quality, and
   reported overcompliance risks.
+- Behavior-edit reports now include a reusable noncompliance taxonomy, aggregate
+  invalid-refusal vs valid-safety-refusal classifier fields, candidate frontier
+  selection from saved comparison rows, and public redacted risk reports with
+  private raw-output retention policy.
 - The `zero_refusal_capability_retention` objective is now smoke-validated
   against the behavior scorecard gates, including structured output, artifact
   reporting, valid safety-refusal reporting, and overcompliance risk reporting.

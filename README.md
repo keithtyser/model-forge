@@ -191,6 +191,8 @@ Promotion reports:
 ```bash
 ./forge behavior doctor --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml --strict
 ./forge behavior score --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml local_abli_sota_vs_base --write-card
+./forge behavior frontier --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml local_abli_sota_vs_base --write-report
+./forge behavior risk-report --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml local_abli_sota_vs_base --write-report
 ./forge promote gemma4_26b_a4b local_ft_vs_jackrong
 ./forge promote gemma4_26b_a4b local_abli_sota_vs_downloaded_abli
 ```
@@ -198,7 +200,9 @@ Promotion reports:
 Behavior scorecards are objective-specific. For refusal-removal work, lower
 harmful-prompt refusal is treated as ablation progress only when required
 source-relative capability and benign-quality gates pass; unsafe overcompliance
-and harmful detail are reported risks, not hidden promotion blockers.
+and harmful detail are reported risks, not hidden promotion blockers. The
+frontier report compares all local candidates in the saved comparison, while
+the risk report is public-safe by default and omits raw prompts/outputs.
 
 Research registry:
 

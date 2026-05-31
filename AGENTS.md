@@ -191,12 +191,17 @@ Use the behavior scorecard before claiming an ablation is successful:
 ```bash
 ./forge behavior doctor --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml --strict
 ./forge behavior score --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml local_abli_sota_vs_base --write-card
+./forge behavior frontier --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml local_abli_sota_vs_base --write-report
+./forge behavior risk-report --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml local_abli_sota_vs_base --write-report
 ```
 
 For refusal-removal objectives, lower harmful-prompt refusal can be success.
 The scorecard still requires source-relative capability and benign-quality
 retention, and it reports unsafe overcompliance or harmful detail as explicit
-risks rather than silently ignoring them.
+risks rather than silently ignoring them. Use `frontier` when multiple
+candidates exist; it selects from actual saved comparison rows instead of
+claiming a single winner by hand. Use public `risk-report` for aggregate-only
+release evidence; raw harmful prompts/outputs stay in private ignored artifacts.
   Run `generate --overwrite` only when replacing candidates intentionally;
   downstream `--overwrite` refreshes derived artifacts from existing
   candidates. Current local FT v1 configs reject assistant length violations

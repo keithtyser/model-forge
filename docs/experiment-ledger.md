@@ -1160,6 +1160,45 @@ Result:
   refusal-removal objective, not silent hard-fail gates
 - MF-0104 is marked tested / smoke-validated
 
+## Behavior Editing: Taxonomy, Frontier, And Redacted Risk Reports
+
+Status: implemented as aggregate comparison-derived reporting code. No eval
+run, training run, ablation run, serving run, or quantization run was started.
+
+Hypothesis: ablation work needs reusable behavior categories and candidate
+frontier reporting. A single scorecard for one candidate is not enough when the
+workflow searches many ablation candidates and must separate invalid refusals,
+valid safety refusals, capability retention, and public-safe risk reporting.
+
+Changes:
+
+- added `src/model_forge/scoring/noncompliance_taxonomy.py`
+- behavior scorecard rows now carry noncompliance type, invalid-refusal,
+  valid-safety-refusal, harmful-overcompliance, and risk-category fields
+- added `./forge behavior frontier`
+- added `./forge behavior risk-report`
+- public risk reports are aggregate-only and state that raw harmful
+  prompts/outputs remain private
+- updated README, AGENTS, status, and roadmap state
+
+Validation:
+
+```bash
+./forge behavior doctor --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml --strict --json
+./forge behavior frontier --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml local_abli_sota_vs_base --write-report --json
+./forge behavior risk-report --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml local_abli_sota_vs_base --write-report --json
+.venv/bin/python -m unittest tests.test_behavior_scorecard -v
+```
+
+Observed result from the saved Gemma comparison: the frontier report selected
+`local_abli_sota` from seven comparison candidates, and the public risk report
+used `aggregate_metrics_only_no_raw_prompts_or_outputs`.
+
+Result:
+
+- MF-0101, MF-0102, MF-0105, and MF-0106 are marked tested /
+  smoke-validated
+
 ## Behavior Editing: Release Classes And Validators
 
 Status: implemented as config validation and publish-plan gates. No model
