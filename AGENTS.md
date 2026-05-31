@@ -250,6 +250,7 @@ Write or validate an agent experiment plan before starting material work:
   --output recipes/agents/next_agent_step.yaml
 ./forge agent optimize-serving --family gemma4_26b_a4b --variant base
 ./forge agent optimize-quantization --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --variants base,local_ft
+./forge agent optimize-behavior-edit --family gemma4_26b_a4b
 ```
 
 Agent plans are pre-run contracts. They should state the hypothesis, resource

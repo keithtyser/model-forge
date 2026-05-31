@@ -38,6 +38,18 @@ Create a quantization optimization plan without loading model weights:
   --output recipes/agents/gemma4_nvfp4_quantization.yaml
 ```
 
+Create a behavior-edit optimization plan without running ablation:
+
+```bash
+./forge agent optimize-behavior-edit \
+  --family gemma4_26b_a4b \
+  --config configs/abliteration/gemma4_26b_a4b_ft_local_abli.yaml \
+  --source-variant local_ft \
+  --target-variant ft_local_abli_sota_internal_r7_selected_t34_transfer \
+  --backend heretic \
+  --output recipes/agents/gemma4_ft_behavior_edit.yaml
+```
+
 Create a new plan from the template:
 
 ```bash

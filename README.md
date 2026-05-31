@@ -100,6 +100,7 @@ Run evals from another terminal:
 ./forge generalization audit
 ./forge agent audit
 ./forge agent optimize-quantization --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --variants base
+./forge agent optimize-behavior-edit --family gemma4_26b_a4b
 ./forge research audit
 ./forge manifest write --run-type eval --family gemma4_26b_a4b --variant base --command './forge eval gemma4_26b_a4b base --internal'
 ./forge hf status --offline
@@ -223,6 +224,7 @@ Agent experiment plans:
 ./forge agent audit
 ./forge agent optimize-serving --family gemma4_26b_a4b --variant base
 ./forge agent optimize-quantization --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --variants base,local_ft
+./forge agent optimize-behavior-edit --family gemma4_26b_a4b --config configs/abliteration/gemma4_26b_a4b_ft_local_abli.yaml --source-variant local_ft --target-variant ft_local_abli_sota_internal_r7_selected_t34_transfer --backend heretic
 ./forge agent init --experiment-id next_step --title "Next step" --family gemma4_26b_a4b --variant base --objective-profile capability_sft --output recipes/agents/next_step.yaml
 ```
 

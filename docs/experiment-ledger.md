@@ -472,6 +472,54 @@ Result:
   commands stay lightweight
 - MF-0703 is marked tested / smoke-validated
 
+## Agents: Optimize Behavior-Edit Plan
+
+Status: implemented and pushed as planning CLI work. No model server, training
+run, behavior-edit run, checkpoint export, or eval job was started.
+
+Hypothesis: refusal-ablation behavior editing needs the same pre-run guardrails
+as serving and quantization because it mixes external SOTA backends, heavy
+checkpoint edits, source-vs-edited comparisons, and risk metrics that should be
+interpreted differently for ablated models. `./forge agent
+optimize-behavior-edit` should generate a validated plan that reuses the
+existing abliteration configs, marks SOTA runs and server starts as heavy
+execute-only work, and requires source-relative internal evals plus promotion
+gates before publishing.
+
+Changes:
+
+- added `./forge agent optimize-behavior-edit`
+- reused `configs/abliteration/*` and `src/model_forge.pipelines.abliterate`
+  planning instead of adding a separate behavior-edit config format
+- generated agent experiment plans with plan, SOTA plan, SOTA prepare, guarded
+  SOTA run, serving, internal eval, compare, and promote commands
+- marked SOTA behavior-edit runs and vLLM server starts as `starts_heavy_job:
+  true` and `requires_execute: true`
+- fixed the top-level wrapper so `./forge ablate --config <path> ...` works,
+  matching existing docs and direct module usage
+- added behavior-edit optimization coverage to `tests/test_agents.py`
+- updated README, AGENTS, agent experiment docs, status, and roadmap state
+
+Validation:
+
+```bash
+./forge agent optimize-behavior-edit --family gemma4_26b_a4b --json
+./forge agent optimize-behavior-edit --family gemma4_26b_a4b --config configs/abliteration/gemma4_26b_a4b_ft_local_abli.yaml --source-variant local_ft --target-variant ft_local_abli_sota_internal_r7_selected_t34_transfer --backend heretic --json
+./forge ablate --config configs/abliteration/gemma4_26b_a4b_ft_local_abli.yaml plan
+.venv/bin/python -m unittest tests.test_agents -v
+bash -n forge
+.venv/bin/python -m py_compile src/model_forge/agents.py
+```
+
+Result:
+
+- optimize-behavior-edit emits a valid `model_forge.agent_experiment.v1` plan
+- default family discovery plans the base-to-local-abli-SOTA path
+- explicit FT config planning targets the local-FT-to-local-FT-abli candidate
+- SOTA runs and serve commands are marked heavy and execute-only; planning and
+  prep commands stay lightweight
+- MF-0704 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

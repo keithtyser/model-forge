@@ -12,6 +12,7 @@ import yaml
 
 from model_forge.benchmarks.sweep import DEFAULT_CONFIG as DEFAULT_SERVING_SWEEP_CONFIG
 from model_forge.benchmarks.sweep import build_sweep_plan, load_sweep_config
+from model_forge.pipelines.abliterate import build_plan as build_abliteration_plan
 from model_forge.quantization.cli import DEFAULT_CONFIG as DEFAULT_QUANTIZATION_CONFIG
 from model_forge.quantization.cli import filter_matrix_entries, load_quantization_config, matrix_entries
 from model_forge.runs.manifest import REPO_DIR, display_path, sanitize_run_id
@@ -511,6 +512,236 @@ def optimize_quantization_plan(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _default_ablation_config_for_family(family: str) -> Path:
+    return REPO_DIR / "configs" / "abliteration" / f"{family}_local_abli.yaml"
+
+
+def _infer_family_from_ablation_config(config_path: Path) -> str | None:
+    stem = config_path.stem
+    suffixes = (
+        "_ft_local_abli",
+        "_local_abli",
+        "_huihui_like",
+        "_huihui_shaped",
+    )
+    for suffix in suffixes:
+        if stem.endswith(suffix):
+            return stem[: -len(suffix)]
+    return None
+
+
+def _ablation_config_path(args: argparse.Namespace) -> Path:
+    if args.config:
+        return Path(args.config)
+    if not args.family:
+        raise ValueError("optimize-behavior-edit needs --family or --config")
+    return _default_ablation_config_for_family(args.family)
+
+
+def _family_variants(family: str) -> dict[str, Any]:
+    family_path = REPO_DIR / "configs" / "model_families" / f"{family}.yaml"
+    if not family_path.exists():
+        return {}
+    family_config = load_yaml(family_path)
+    return dict(family_config.get("variants") or {})
+
+
+def _infer_behavior_source_variant(family: str, plan: Mapping[str, Any], config_path: Path) -> str:
+    variants = _family_variants(family)
+    model = plan.get("model") or {}
+    source_model = str(model.get("source") or "")
+    local_dir = str(model.get("local_dir") or "")
+    for name, variant in variants.items():
+        if not isinstance(variant, Mapping):
+            continue
+        if source_model and source_model == str(variant.get("repo_id") or ""):
+            return str(name)
+        if local_dir and local_dir.endswith(str(variant.get("local_dir") or "\0")):
+            return str(name)
+    if "_ft_" in config_path.stem:
+        return "local_ft" if "local_ft" in variants else "ft"
+    return "base"
+
+
+def _infer_behavior_target_variant(family: str, source_variant: str) -> str:
+    variants = _family_variants(family)
+    if source_variant == "base":
+        for candidate in ("local_abli_sota", "local_abli", "abli"):
+            if candidate in variants:
+                return candidate
+    scored: list[tuple[int, str]] = []
+    for name, variant in variants.items():
+        if not isinstance(variant, Mapping):
+            continue
+        if "abli" not in name:
+            continue
+        score = 0
+        if variant.get("base_variant") == source_variant:
+            score += 4
+        if name.startswith(source_variant):
+            score += 2
+        if "sota" in name:
+            score += 1
+        scored.append((score, name))
+    if scored:
+        return sorted(scored, key=lambda item: (-item[0], item[1]))[0][1]
+    return f"{source_variant}_local_abli"
+
+
+def optimize_behavior_edit_plan(args: argparse.Namespace) -> dict[str, Any]:
+    config_path = _ablation_config_path(args)
+    config = load_yaml(config_path)
+    plan = build_abliteration_plan(config, config_path)
+    family = args.family or _infer_family_from_ablation_config(config_path)
+    if not family:
+        raise ValueError("optimize-behavior-edit needs --family when it cannot infer one from --config")
+    source_variant = args.source_variant
+    target_variant = args.target_variant
+    if not source_variant:
+        source_variant = _infer_behavior_source_variant(family, plan, config_path)
+    if not target_variant:
+        target_variant = _infer_behavior_target_variant(family, source_variant)
+    backend_arg = f" --backend {args.backend}" if args.backend else ""
+    experiment_id = sanitize_run_id(args.experiment_id or f"{family}_{source_variant}_behavior_edit_optimization")
+    config_display = display_path(config_path)
+    planned_commands: list[dict[str, Any]] = [
+        {
+            "command": f"./forge ablate --config {config_display} plan",
+            "purpose": "Validate the behavior-edit config, prompt counts, hardware profile, and memory guard without loading model weights.",
+            "starts_heavy_job": False,
+            "requires_execute": False,
+            "expected_artifacts": ["terminal_output"],
+        },
+        {
+            "command": f"./forge ablate --config {config_display} sota-plan{backend_arg}",
+            "purpose": "Inspect the configured SOTA behavior-edit backend and selected recipe before writing runner artifacts.",
+            "starts_heavy_job": False,
+            "requires_execute": False,
+            "expected_artifacts": ["terminal_output"],
+        },
+        {
+            "command": f"./forge ablate --config {config_display} sota-prepare{backend_arg}",
+            "purpose": "Write backend-specific behavior-edit runner/config artifacts without executing the edit.",
+            "starts_heavy_job": False,
+            "requires_execute": False,
+            "expected_artifacts": ["sota_runner", "sota_config", "README.md"],
+        },
+        {
+            "command": f"./forge ablate --config {config_display} sota-run{backend_arg} --execute",
+            "purpose": f"Run the guarded behavior-edit backend for {family}/{source_variant} -> {target_variant}.",
+            "starts_heavy_job": True,
+            "requires_execute": True,
+            "expected_artifacts": ["edited_checkpoint", "model_forge_sota_summary.json"],
+        },
+        {
+            "command": f"./forge serve {family} {target_variant}",
+            "purpose": f"Serve the edited candidate {target_variant} for loader and sampled quality validation.",
+            "starts_heavy_job": True,
+            "requires_execute": True,
+            "expected_artifacts": ["running_openai_compatible_endpoint"],
+        },
+        {
+            "command": f"./forge eval {family} {target_variant} --internal",
+            "purpose": f"Run internal refusal, capability, paired-quality, artifact, and regression evals for {target_variant}.",
+            "starts_heavy_job": False,
+            "requires_execute": True,
+            "expected_artifacts": ["manifest.json", "scores.csv", "eval_provenance_card.json"],
+        },
+        {
+            "command": f"./forge compare {family}",
+            "purpose": "Refresh saved comparisons against the unedited source and downloaded references.",
+            "starts_heavy_job": False,
+            "requires_execute": True,
+            "expected_artifacts": ["comparison.json", "comparison.md"],
+        },
+        {
+            "command": f"./forge promote {family}",
+            "purpose": "Apply objective-profile promotion gates before publishing or calling the behavior edit successful.",
+            "starts_heavy_job": False,
+            "requires_execute": True,
+            "expected_artifacts": ["promotion_report.json", "promotion_report.md"],
+        },
+    ]
+    safety = plan.get("safety") or {}
+    return {
+        "schema_version": AGENT_EXPERIMENT_VERSION,
+        "experiment_id": experiment_id,
+        "title": args.title or f"Optimize behavior edit for {family}/{source_variant}",
+        "hypothesis": args.hypothesis
+        or (
+            "A guarded behavior-edit workflow can reduce invalid refusals and target noncompliance "
+            "while preserving the source model's normal-use, challenge, paired-benign, and artifact quality."
+        ),
+        "owner_agent": args.owner_agent,
+        "experiment_type": "ablation",
+        "status": "planned",
+        "family": family,
+        "variant": source_variant,
+        "objective_profile": args.objective_profile,
+        "planned_commands": planned_commands,
+        "resource_policy": {
+            "max_concurrent_large_jobs": 1,
+            "start_if_memory_available_above_fraction": args.start_memory_fraction,
+            "stop_if_memory_available_below_fraction": args.stop_memory_fraction,
+            "require_disk_free_fraction": args.disk_free_fraction,
+            "use_cluster_when_heavy": True,
+            "checkpoint_or_write_plan_before_execute": True,
+        },
+        "evidence_plan": {
+            "manifest_required": True,
+            "ledger_update_required": True,
+            "expected_reports": [
+                "sota_runner",
+                "model_forge_sota_summary.json",
+                "eval_provenance_card.json",
+                "comparison.json",
+                "promotion_report.md",
+                "manifest.json",
+            ],
+            "required_validation_commands": [
+                f"./forge ablate --config {config_display} plan",
+                f"./forge variants tokenizer-audit {family} --variant {source_variant} --json",
+                f"./forge variants tokenizer-audit {family} --variant {target_variant} --json",
+                "./forge doctor --json",
+            ],
+        },
+        "success_criteria": [
+            "Invalid refusal and target noncompliance metrics improve versus the unedited source checkpoint.",
+            "Normal-use, challenge, paired-benign, structured-output, and artifact-quality regressions stay within the objective profile gates.",
+            "Unsafe overcompliance is reported as an expected risk metric for refusal-ablated models, not used as a blanket failure label.",
+            "Tokenizer, chat-template, and architecture audits pass for the edited candidate before promotion.",
+            "The selected recipe, eval deltas, caveats, and publish decision are recorded in docs/experiment-ledger.md.",
+        ],
+        "rollback_plan": [
+            "Stop active behavior-edit or serving jobs through the guarded launcher if system health degrades.",
+            "Keep the unedited source variant as the serving and release fallback.",
+            "Reject edits that remove refusals by destroying normal-use or challenge capability.",
+            "Do not publish edited checkpoints without matching eval, comparison, and promotion evidence.",
+        ],
+        "handoff": {
+            "push_to_github": True,
+            "update_status_docs": True,
+            "hf_upload_policy": "upload_completed_behavior_edited_checkpoints_only_after_release_gate",
+            "raw_artifact_policy": "keep_large_outputs_untracked_or_upload_to_hf",
+            "notes": "This plan does not execute behavior editing. Run one heavy edit or server at a time and attach objective evidence before promotion.",
+        },
+        "metadata": {
+            "config": config_display,
+            "method": plan.get("method"),
+            "source_model": plan["model"].get("source"),
+            "source_variant": source_variant,
+            "target_variant": target_variant,
+            "output_dir": plan["model"].get("output_dir"),
+            "sota_output_dir": ((config.get("sota") or {}).get("output_dir")),
+            "backend": args.backend or ((config.get("sota") or {}).get("preferred_backend")),
+            "usable_pairs": (plan.get("data") or {}).get("usable_pairs"),
+            "high_parallelism_c": (plan.get("activation_collection") or {}).get("high_parallelism_c"),
+            "min_free_cuda_gb": safety.get("min_free_cuda_gb"),
+            "review_required_before_export": bool((plan.get("edit") or {}).get("review_required_before_export", True)),
+        },
+    }
+
+
 def render_findings(findings: list[Finding]) -> None:
     if not findings:
         print("model-forge agent audit: OK")
@@ -570,6 +801,23 @@ def main() -> None:
     optimize_quantization.add_argument("--owner-agent", default="codex")
     optimize_quantization.add_argument("--output", type=Path)
     optimize_quantization.add_argument("--json", action="store_true")
+
+    optimize_behavior = sub.add_parser("optimize-behavior-edit", help="Create a refusal-ablation behavior-edit agent experiment plan")
+    optimize_behavior.add_argument("--family", help="Model family to edit; also discovers configs/abliteration/<family>_local_abli.yaml")
+    optimize_behavior.add_argument("--config", type=Path, help="Abliteration config to plan from")
+    optimize_behavior.add_argument("--source-variant", help="Source variant being edited; defaults from config shape")
+    optimize_behavior.add_argument("--target-variant", help="Expected edited candidate variant")
+    optimize_behavior.add_argument("--backend", choices=["obliteratus", "heretic"], help="SOTA backend to plan")
+    optimize_behavior.add_argument("--objective-profile", default="zero_refusal_capability_retention")
+    optimize_behavior.add_argument("--experiment-id")
+    optimize_behavior.add_argument("--title")
+    optimize_behavior.add_argument("--hypothesis")
+    optimize_behavior.add_argument("--owner-agent", default="codex")
+    optimize_behavior.add_argument("--start-memory-fraction", type=float, default=0.05)
+    optimize_behavior.add_argument("--stop-memory-fraction", type=float, default=0.05)
+    optimize_behavior.add_argument("--disk-free-fraction", type=float, default=0.15)
+    optimize_behavior.add_argument("--output", type=Path)
+    optimize_behavior.add_argument("--json", action="store_true")
 
     args = parser.parse_args()
     if args.command == "schema":
@@ -636,6 +884,29 @@ def main() -> None:
     if args.command == "optimize-quantization":
         try:
             plan = optimize_quantization_plan(args)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        findings = validate_agent_experiment(plan, path=str(args.output) if args.output else None)
+        if findings:
+            if args.json:
+                print(json.dumps({"findings": [asdict(finding) for finding in findings]}, indent=2, sort_keys=True) + "\n")
+            else:
+                render_findings(findings)
+            raise SystemExit(1)
+        text = yaml.safe_dump(plan, sort_keys=False)
+        if args.output:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(text, encoding="utf-8")
+        if args.json:
+            print(json.dumps(plan, indent=2, sort_keys=True) + "\n")
+        else:
+            if not args.output:
+                print(text)
+        return
+
+    if args.command == "optimize-behavior-edit":
+        try:
+            plan = optimize_behavior_edit_plan(args)
         except ValueError as exc:
             raise SystemExit(str(exc)) from exc
         findings = validate_agent_experiment(plan, path=str(args.output) if args.output else None)

@@ -22,12 +22,13 @@ Usage:
   ./forge finetune --config <path> [plan|prepare|run]
   ./forge data [plan|gaps|propose|seed|generate|judge|verify|filter|review|pack|publish] <family> <variant> [--overwrite] [--smoke]
   ./forge ablate <family> [plan|collect|analyze-reference|sweep-reference|export|sota-plan|sota-prepare|sota-run] [--execute]
+  ./forge ablate --config <path> [plan|collect|analyze-reference|sweep-reference|export|sota-plan|sota-prepare|sota-run] [--execute]
   ./forge compare <family>
   ./forge promote <family> [profile]
   ./forge objectives [list|show|audit]
   ./forge roadmap [audit|cli-drift]
   ./forge generalization [audit]
-  ./forge agent [schema|audit|init|optimize-serving|optimize-quantization]
+  ./forge agent [schema|audit|init|optimize-serving|optimize-quantization|optimize-behavior-edit]
   ./forge research [list|show|audit]
   ./forge hf [status|login|whoami|plan-model|publish-model]
   ./forge variants [graph|node|audit-node|tokenizer-audit|architecture-audit]
@@ -61,6 +62,7 @@ Examples:
   ./forge agent audit
   ./forge agent optimize-serving --family gemma4_26b_a4b --variant base
   ./forge agent optimize-quantization --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --variants base
+  ./forge agent optimize-behavior-edit --family gemma4_26b_a4b
   ./forge research audit
   ./forge hf status
   ./forge hf plan-model gemma4_26b_a4b local_ft --release-class report_only
@@ -220,12 +222,25 @@ PY
   ablate)
     FAMILY=${1:?family is required}
     shift
-    STEP=${1:-plan}
-    if [[ $# -gt 0 ]]; then
-      shift
-    fi
-    CONFIG="$REPO_DIR/configs/abliteration/${FAMILY}_local_abli.yaml"
-    require_config "$CONFIG" "missing ablation config for family '$FAMILY': configs/abliteration/${FAMILY}_local_abli.yaml"
+    case "$FAMILY" in
+      --config)
+        CONFIG=${1:?config path is required after --config}
+        shift
+        STEP=${1:-plan}
+        if [[ $# -gt 0 ]]; then
+          shift
+        fi
+        require_config "$CONFIG" "missing ablation config: $CONFIG"
+        ;;
+      *)
+        STEP=${1:-plan}
+        if [[ $# -gt 0 ]]; then
+          shift
+        fi
+        CONFIG="$REPO_DIR/configs/abliteration/${FAMILY}_local_abli.yaml"
+        require_config "$CONFIG" "missing ablation config for family '$FAMILY': configs/abliteration/${FAMILY}_local_abli.yaml"
+        ;;
+    esac
     "$PYTHON" -m model_forge.pipelines.abliterate --config "$CONFIG" "$STEP" "$@"
     ;;
   compare)

@@ -13,17 +13,17 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| not_started | 22 |
+| not_started | 21 |
 | scaffolded | 13 |
-| tested | 59 |
+| tested | 60 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 43 |
-| smoke_validated | 51 |
+| planned | 42 |
+| smoke_validated | 52 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -116,7 +116,7 @@ No status audit findings.
 | MF-0701 | P2: Agents | tested | smoke_validated | Add agent experiment schema |
 | MF-0702 | P2: Agents | tested | smoke_validated | Add forge agent optimize-serving |
 | MF-0703 | P2: Agents | tested | smoke_validated | Add forge agent optimize-quantization |
-| MF-0704 | P2: Agents | not_started | planned | Add forge agent optimize-behavior-edit |
+| MF-0704 | P2: Agents | tested | smoke_validated | Add forge agent optimize-behavior-edit |
 | MF-0705 | P2: Agents | not_started | planned | Add agent run card |
 | MF-0706 | P2: Agents | not_started | planned | Add automatic ledger update |
 | MF-0801 | P2: Kernel/perf | not_started | planned | Add Nsight profile integration |
