@@ -1230,6 +1230,40 @@ Result:
   saved comparison unless artifact evidence exists
 - MF-0108 is marked tested / smoke-validated
 
+## Serving: Completion Evidence Gate
+
+Status: implemented as artifact validation code. No server, serving benchmark,
+serving eval, training run, ablation run, or quantization run was started.
+
+Hypothesis: Serving work should not be marked complete just because a benchmark
+plan or Serving Card exists. A completion claim needs successful endpoint
+metrics, a manifest, a Serving Card, and sampled quality/behavior evidence under
+the same model/base URL.
+
+Changes:
+
+- added `./forge bench serve --evidence-gate`
+- added `model_forge.serving_evidence_gate.v1`
+- validates existing `summary.json`, `manifest.json`, `serving_card.md`, and
+  optional serving-eval artifacts
+- fails completion readiness when sampled quality/behavior evidence is missing
+  unless explicitly run as an operational smoke check
+- writes `serving_evidence_gate.json` and `.md` with `--write-gate`
+- updated README, AGENTS, serving benchmark docs, status, and roadmap state
+
+Validation:
+
+```bash
+.venv/bin/python -m unittest tests.test_serve_benchmark -v
+./forge bench serve --evidence-gate --summary <summary.json> --serving-eval <serve-eval-dir> --write-gate
+```
+
+Result:
+
+- serving completion claims now have a concrete artifact gate
+- same-endpoint sampled quality/behavior evidence is required for completion
+- MF-0207 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

@@ -11,11 +11,13 @@ from model_forge.benchmarks.serve import (
     DEFAULT_CONFIG,
     build_metrics,
     build_plan,
+    evaluate_serving_evidence,
     load_config,
     optional_float,
     parse_streaming_chunks,
     run_benchmark,
     summarize_memory,
+    write_evidence_gate_report,
     write_outputs,
 )
 
@@ -209,6 +211,49 @@ class ServeBenchmarkTests(unittest.TestCase):
             self.assertIn("TTFT seconds", card)
             self.assertIn("Output tok/sec", card)
             self.assertIn("System available fraction", card)
+
+    def test_serving_evidence_gate_requires_quality_behavior_eval(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = load_config(DEFAULT_CONFIG, family="gemma4_26b_a4b", variant="base", output_dir=tmp, limit=1, env={})
+            output_dir, summary, _manifest = write_outputs(
+                config,
+                DEFAULT_CONFIG,
+                [
+                    {
+                        "request_id": "short_instruction",
+                        "category": "short_chat",
+                        "repetition": 1,
+                        "ok": True,
+                        "metrics": {"total_latency_seconds": 1.0},
+                        "memory": {"before": {}, "after": {}},
+                    }
+                ],
+                run_id="unit_serve_evidence",
+            )
+            report = evaluate_serving_evidence(summary_path=output_dir / "summary.json")
+            self.assertFalse(report["completion_ready"])
+            eval_check = next(check for check in report["checks"] if check["name"] == "sampled_quality_behavior_attached")
+            self.assertEqual(eval_check["status"], "fail")
+
+            eval_dir = Path(tmp) / "serving_eval"
+            eval_dir.mkdir()
+            (eval_dir / "serving_eval_card.md").write_text("# card\n", encoding="utf-8")
+            (eval_dir / "manifest.json").write_text(
+                json.dumps({"serving_context": {"target": {"model": summary["model"], "base_url": summary["base_url"]}}}) + "\n",
+                encoding="utf-8",
+            )
+            report = evaluate_serving_evidence(summary_path=output_dir / "summary.json", serving_eval=eval_dir)
+            self.assertTrue(report["completion_ready"])
+            gate_path = write_evidence_gate_report(report, Path(tmp) / "gate.json")
+            self.assertTrue(gate_path.exists())
+            self.assertTrue(gate_path.with_suffix(".md").exists())
+
+    def test_serving_evidence_gate_reports_missing_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            report = evaluate_serving_evidence(summary_path=Path(tmp) / "missing" / "summary.json")
+            self.assertFalse(report["completion_ready"])
+            self.assertEqual(report["checks"][0]["name"], "summary_exists")
+            self.assertEqual(report["checks"][0]["status"], "fail")
 
     def test_actual_streaming_http_benchmark_against_mock_server(self) -> None:
         class Handler(BaseHTTPRequestHandler):

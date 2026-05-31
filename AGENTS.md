@@ -341,6 +341,7 @@ Benchmark serving only after an endpoint is already running:
 ./forge serving architecture-doctor --config configs/serving/architectures/distributed_kv_placeholder.yaml --strict
 ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
 ./forge bench serve --family gemma4_26b_a4b --variant base
+./forge bench serve --evidence-gate --summary reports/generated/serve_bench/<run>/summary.json --serving-eval reports/generated/serve_eval/<run> --write-gate
 ./forge bench sweep doctor --config configs/sweeps/dgx_spark_vllm_baseline.yaml --strict
 ./forge bench sweep plan --family gemma4_26b_a4b --variant base
 ./forge bench sweep doctor --config configs/sweeps/dgx_spark_vllm_disagg_prefill_decode.yaml --strict
@@ -369,6 +370,11 @@ itself. A good latency result is not a quality or behavior pass. Use the
 generated `manifest.json`, `summary.json`, `requests.jsonl`,
 `serving_card.md`, kernel card, profile plan, and profile summary with eval
 results before making serving claims.
+
+Use `./forge bench serve --evidence-gate` before marking serving work complete.
+Without sampled quality/behavior evidence under the same served model and base
+URL, the gate should fail; do not use `--allow-missing-serving-eval` for
+promotion or completion claims.
 
 `./forge serving plan` currently supports SGLang and TensorRT-LLM planning. It
 writes launch and benchmark commands but does not start a backend. Start at most

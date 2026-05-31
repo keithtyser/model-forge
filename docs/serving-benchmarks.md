@@ -90,6 +90,22 @@ The architecture file records roles, candidate transport paths, validation
 gates, promotion blockers, and open questions for future LMCache/NIXL/Dynamo or
 vLLM-disaggregated work. It is not executable evidence.
 
+Gate existing serving evidence before marking serving work complete:
+
+```bash
+./forge bench serve \
+  --evidence-gate \
+  --summary reports/generated/serve_bench/<run>/summary.json \
+  --serving-eval reports/generated/serve_eval/<run> \
+  --write-gate
+```
+
+The gate writes `serving_evidence_gate.json` and `.md` when `--write-gate` is
+used. It requires successful endpoint benchmark evidence, a manifest, a Serving
+Card, and sampled quality/behavior evidence attached to the same model/base URL.
+Use `--allow-missing-serving-eval` only for operational smoke checks that are not
+promotion or completion claims.
+
 Before treating a serving config as better, attach a sampled quality/behavior
 check to the same endpoint and served model:
 

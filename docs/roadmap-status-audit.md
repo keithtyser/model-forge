@@ -14,16 +14,16 @@ This file is generated from the prioritized backlog in
 |---|---:|
 | implemented | 2 |
 | not_started | 4 |
-| scaffolded | 13 |
-| tested | 77 |
+| scaffolded | 12 |
+| tested | 78 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 24 |
-| smoke_validated | 70 |
+| planned | 23 |
+| smoke_validated | 71 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -64,7 +64,7 @@ No status audit findings.
 | MF-0204 | P0: Serving | tested | smoke_validated | Add Serving Card |
 | MF-0205 | P0: Serving | tested | smoke_validated | Add TTFT/ITL/memory/tok-sec capture |
 | MF-0206 | P0: Serving | tested | smoke_validated | Add quality/behavior sampled eval under serving configs |
-| MF-0207 | P0: Serving | scaffolded | planned | Mark serving work complete only after real endpoint evidence is attached |
+| MF-0207 | P0: Serving | tested | smoke_validated | Mark serving work complete only after real endpoint evidence is attached |
 | MF-0208 | P0: Serving | tested | spark_cluster_validated | Add two-node torchrun/NCCL Spark preflight |
 | MF-0251 | P0: Artifact validation | tested | smoke_validated | Add Playwright HTML validation |
 | MF-0252 | P0: Artifact validation | tested | smoke_validated | Add Python artifact compile/run validation |

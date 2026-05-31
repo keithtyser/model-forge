@@ -3748,7 +3748,7 @@ MF-0203 Add serving workload definitions. implementation_status=tested validatio
 MF-0204 Add Serving Card. implementation_status=tested validation_state=smoke_validated
 MF-0205 Add TTFT/ITL/memory/tok-sec capture. implementation_status=tested validation_state=smoke_validated
 MF-0206 Add quality/behavior sampled eval under serving configs. implementation_status=tested validation_state=smoke_validated
-MF-0207 Mark serving work complete only after real endpoint evidence is attached. implementation_status=scaffolded validation_state=planned
+MF-0207 Mark serving work complete only after real endpoint evidence is attached. implementation_status=tested validation_state=smoke_validated
 MF-0208 Add two-node torchrun/NCCL Spark preflight. implementation_status=tested validation_state=spark_cluster_validated
 ```
 

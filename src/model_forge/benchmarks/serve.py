@@ -33,6 +33,7 @@ from model_forge.runs.manifest import (
 DEFAULT_CONFIG = REPO_DIR / "configs" / "serving" / "serve_bench_smoke.yaml"
 DEFAULT_BASE_URL = "http://127.0.0.1:8000/v1"
 SCHEMA_VERSION = "model_forge.serve_benchmark.v1"
+EVIDENCE_SCHEMA_VERSION = "model_forge.serving_evidence_gate.v1"
 
 console = Console(stderr=True)
 
@@ -1076,6 +1077,185 @@ def write_outputs(
     return output_dir, summary, manifest
 
 
+def load_json_object(path: Path) -> dict[str, Any]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"expected JSON object in {display_path(path)}")
+    return data
+
+
+def evidence_status(name: str, passed: bool, message: str, *, required: bool = True) -> dict[str, Any]:
+    return {
+        "name": name,
+        "status": "pass" if passed else ("fail" if required else "missing"),
+        "required": required,
+        "message": message,
+    }
+
+
+def resolve_evidence_path(path: Path | None, base_dir: Path, default_name: str) -> Path:
+    if path:
+        return resolve_repo_path(path)
+    return base_dir / default_name
+
+
+def serving_eval_context(serving_eval: Path | None) -> dict[str, Any]:
+    if not serving_eval:
+        return {"path": None, "exists": False}
+    path = resolve_repo_path(serving_eval)
+    if path.is_dir():
+        manifest_path = path / "manifest.json"
+        card_path = path / "serving_eval_card.md"
+        context_path = path / "serving_eval_context.json"
+    else:
+        manifest_path = path
+        card_path = path.with_name("serving_eval_card.md")
+        context_path = path.with_name("serving_eval_context.json")
+    manifest = load_json_object(manifest_path) if manifest_path.exists() else {}
+    context = load_json_object(context_path) if context_path.exists() else {}
+    return {
+        "path": display_path(path),
+        "exists": path.exists(),
+        "manifest_path": display_path(manifest_path),
+        "manifest_exists": manifest_path.exists(),
+        "card_path": display_path(card_path),
+        "card_exists": card_path.exists(),
+        "context_path": display_path(context_path),
+        "context_exists": context_path.exists(),
+        "manifest": manifest,
+        "context": context,
+    }
+
+
+def evaluate_serving_evidence(
+    *,
+    summary_path: Path,
+    manifest_path: Path | None = None,
+    serving_eval: Path | None = None,
+    require_serving_eval: bool = True,
+) -> dict[str, Any]:
+    resolved_summary = resolve_repo_path(summary_path)
+    if not resolved_summary.exists():
+        return redact_value(
+            {
+                "schema_version": EVIDENCE_SCHEMA_VERSION,
+                "created_at": utc_now().isoformat(),
+                "summary_path": display_path(resolved_summary),
+                "manifest_path": None,
+                "serving_eval": {"path": display_path(resolve_repo_path(serving_eval)) if serving_eval else None, "exists": False},
+                "model": None,
+                "family": None,
+                "variant": None,
+                "base_url": None,
+                "request_count": None,
+                "success_rate": None,
+                "checks": [
+                    evidence_status("summary_exists", False, f"summary: {display_path(resolved_summary)}"),
+                ],
+                "completion_ready": False,
+                "notes": [
+                    "Serving completion requires successful endpoint benchmark evidence.",
+                    "Promotion claims additionally require sampled quality/behavior evidence under the same endpoint.",
+                    "This gate does not start a server or run new benchmarks.",
+                ],
+            }
+        )
+    summary = load_json_object(resolved_summary)
+    run_dir = resolved_summary.parent
+    resolved_manifest = resolve_evidence_path(manifest_path, run_dir, "manifest.json")
+    manifest = load_json_object(resolved_manifest) if resolved_manifest.exists() else {}
+    card_path = run_dir / "serving_card.md"
+    eval_ctx = serving_eval_context(serving_eval)
+    checks = [
+        evidence_status("summary_exists", resolved_summary.exists(), f"summary: {display_path(resolved_summary)}"),
+        evidence_status("summary_schema", summary.get("schema_version") == SCHEMA_VERSION, f"schema_version={summary.get('schema_version')}"),
+        evidence_status("requests_present", int(summary.get("request_count") or 0) > 0, f"request_count={summary.get('request_count')}"),
+        evidence_status("all_requests_succeeded", int(summary.get("failed_requests") or 0) == 0, f"failed_requests={summary.get('failed_requests')}"),
+        evidence_status("success_rate_complete", float(summary.get("success_rate") or 0.0) >= 1.0, f"success_rate={summary.get('success_rate')}"),
+        evidence_status("serving_card_exists", card_path.exists(), f"serving_card: {display_path(card_path)}"),
+        evidence_status("manifest_exists", resolved_manifest.exists(), f"manifest: {display_path(resolved_manifest)}"),
+        evidence_status("manifest_completed", manifest.get("run_type") == "serving" and manifest.get("status") == "completed", f"run_type={manifest.get('run_type')} status={manifest.get('status')}"),
+        evidence_status(
+            "sampled_quality_behavior_attached",
+            bool(eval_ctx.get("exists") and eval_ctx.get("manifest_exists") and eval_ctx.get("card_exists")),
+            f"serving_eval={eval_ctx.get('path')}",
+            required=require_serving_eval,
+        ),
+    ]
+    if eval_ctx.get("manifest"):
+        serving_context = eval_ctx["manifest"].get("serving_context") or {}
+        target = serving_context.get("target") or {}
+        checks.append(
+            evidence_status(
+                "serving_eval_same_endpoint",
+                target.get("model") in {None, summary.get("model")} and target.get("base_url") in {None, summary.get("base_url")},
+                f"eval target model={target.get('model')} base_url={target.get('base_url')}",
+            )
+        )
+    completion_ready = all(check["status"] == "pass" for check in checks if check["required"])
+    return redact_value(
+        {
+            "schema_version": EVIDENCE_SCHEMA_VERSION,
+            "created_at": utc_now().isoformat(),
+            "summary_path": display_path(resolved_summary),
+            "manifest_path": display_path(resolved_manifest),
+            "serving_eval": {key: value for key, value in eval_ctx.items() if key not in {"manifest", "context"}},
+            "model": summary.get("model"),
+            "family": summary.get("family"),
+            "variant": summary.get("variant"),
+            "base_url": summary.get("base_url"),
+            "request_count": summary.get("request_count"),
+            "success_rate": summary.get("success_rate"),
+            "checks": checks,
+            "completion_ready": completion_ready,
+            "notes": [
+                "Serving completion requires successful endpoint benchmark evidence.",
+                "Promotion claims additionally require sampled quality/behavior evidence under the same endpoint.",
+                "This gate does not start a server or run new benchmarks.",
+            ],
+        }
+    )
+
+
+def write_evidence_gate_report(report: Mapping[str, Any], output_path: Path | None = None) -> Path:
+    path = resolve_repo_path(output_path) if output_path else resolve_repo_path(str(report["summary_path"])).with_name("serving_evidence_gate.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    markdown = path.with_suffix(".md")
+    rows = [
+        "| {status} | {required} | {name} | {message} |".format(
+            status=str(check.get("status")).upper(),
+            required="yes" if check.get("required") else "no",
+            name=check.get("name"),
+            message=check.get("message"),
+        )
+        for check in report.get("checks") or []
+    ]
+    markdown.write_text(
+        "\n".join(
+            [
+                f"# Serving Evidence Gate: {report.get('family') or 'generic'} / {report.get('variant') or 'model'}",
+                "",
+                f"- Completion ready: `{str(report.get('completion_ready')).lower()}`",
+                f"- Model: `{report.get('model')}`",
+                f"- Base URL: `{report.get('base_url')}`",
+                f"- Summary: `{report.get('summary_path')}`",
+                "",
+                "| Status | Required | Check | Message |",
+                "|---|---|---|---|",
+                *rows,
+                "",
+                "## Notes",
+                "",
+                *[f"- {note}" for note in report.get("notes") or []],
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 def build_plan(config: ServeBenchConfig, config_path: Path) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
@@ -1128,6 +1308,18 @@ def render_summary(summary: Mapping[str, Any], output_dir: Path) -> None:
     console.print(f"Output: {display_path(output_dir)}")
 
 
+def render_evidence_gate(report: Mapping[str, Any]) -> None:
+    table = Table(title="Serving Evidence Gate")
+    table.add_column("Check")
+    table.add_column("Required")
+    table.add_column("Status")
+    table.add_column("Message")
+    for check in report.get("checks") or []:
+        table.add_row(str(check.get("name")), str(check.get("required")), str(check.get("status")), str(check.get("message")))
+    console.print(table)
+    console.print(f"Completion ready: {report.get('completion_ready')}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Benchmark an already-running OpenAI-compatible serving endpoint")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
@@ -1141,8 +1333,33 @@ def main() -> None:
     parser.add_argument("--limit", type=int, help="Use only the first N configured requests")
     parser.add_argument("--no-stream", action="store_true", help="Disable streaming and TTFT measurement")
     parser.add_argument("--dry-run", action="store_true", help="Print the resolved benchmark plan without sending requests")
+    parser.add_argument("--evidence-gate", action="store_true", help="Evaluate existing serving artifacts for completion readiness")
+    parser.add_argument("--summary", type=Path, help="Existing serving summary.json for --evidence-gate")
+    parser.add_argument("--manifest", type=Path, help="Existing serving manifest.json for --evidence-gate")
+    parser.add_argument("--serving-eval", type=Path, help="Existing serving-eval output dir or manifest for --evidence-gate")
+    parser.add_argument("--allow-missing-serving-eval", action="store_true", help="Do not fail the evidence gate when sampled serving eval evidence is absent")
+    parser.add_argument("--write-gate", action="store_true", help="Write serving_evidence_gate.json/.md beside summary or at --gate-output")
+    parser.add_argument("--gate-output", type=Path, help="Output path for --write-gate JSON")
     parser.add_argument("--json", action="store_true", help="Print JSON output")
     args = parser.parse_args()
+
+    if args.evidence_gate:
+        if not args.summary:
+            raise SystemExit("--summary is required with --evidence-gate")
+        report = evaluate_serving_evidence(
+            summary_path=args.summary,
+            manifest_path=args.manifest,
+            serving_eval=args.serving_eval,
+            require_serving_eval=not args.allow_missing_serving_eval,
+        )
+        if args.write_gate:
+            output_path = write_evidence_gate_report(report, args.gate_output)
+            report = {**report, "outputs": {"json": display_path(output_path), "markdown": display_path(output_path.with_suffix(".md"))}}
+        if args.json:
+            print(json.dumps(redact_value(report), indent=2, sort_keys=True) + "\n")
+        else:
+            render_evidence_gate(report)
+        raise SystemExit(0 if report.get("completion_ready") else 1)
 
     config_path = resolve_repo_path(args.config)
     config = load_config(
