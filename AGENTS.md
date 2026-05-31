@@ -414,7 +414,9 @@ it catches missing safetensor shards, missing index files, missing config or
 tokenizer markers, and active Hugging Face `.incomplete` downloads.
 Use `wait-checkpoint` in unattended scripts after `./forge download` or
 `huggingface_hub.snapshot_download` so the next step starts only after the
-strict audit passes.
+strict audit passes. During long downloads, use the checkpoint-audit `Partial
+Bytes` and `Partial Updated` columns to tell an actively growing resumable
+download from a stalled one before restarting anything.
 
 Validate or plan cluster usage:
 

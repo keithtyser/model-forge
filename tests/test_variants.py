@@ -308,6 +308,8 @@ class VariantGraphTests(unittest.TestCase):
         self.assertIn("weights", checks)
         self.assertIn("download", checks)
         self.assertEqual(audit["records"][0]["incomplete_download_bytes"], 7)
+        self.assertIn("incomplete_download_latest_mtime", audit["records"][0])
+        self.assertEqual(audit["records"][0]["largest_incomplete_download"]["bytes"], 7)
         self.assertAlmostEqual(audit["records"][0]["download_progress_fraction"], 0.07)
 
     def test_checkpoint_audit_accepts_indexed_safetensor_checkpoint(self) -> None:

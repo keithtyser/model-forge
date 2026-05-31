@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -78,8 +79,17 @@ def audit_full_checkpoint(
     record["safetensors"] = safetensor_record(path)
     download_cache = path / ".cache" / "huggingface" / "download"
     if download_cache.exists():
-        record["incomplete_download_files"] = sorted(item.name for item in download_cache.glob("*.incomplete"))
-        record["incomplete_download_bytes"] = sum(item.stat().st_size for item in download_cache.glob("*.incomplete"))
+        incomplete_files = sorted(download_cache.glob("*.incomplete"))
+        record["incomplete_download_files"] = sorted(item.name for item in incomplete_files)
+        record["incomplete_download_bytes"] = sum(item.stat().st_size for item in incomplete_files)
+        if incomplete_files:
+            latest = max(item.stat().st_mtime for item in incomplete_files)
+            largest = max(incomplete_files, key=lambda item: item.stat().st_size)
+            record["incomplete_download_latest_mtime"] = datetime.fromtimestamp(latest, tz=timezone.utc).isoformat()
+            record["largest_incomplete_download"] = {
+                "name": largest.name,
+                "bytes": largest.stat().st_size,
+            }
         record["lock_files"] = sorted(item.name for item in download_cache.glob("*.lock"))
     expected_total = int(record["safetensors"].get("expected_total_bytes") or 0)
     observed_total = int(record["safetensors"].get("total_shard_bytes") or 0) + int(record.get("incomplete_download_bytes") or 0)
