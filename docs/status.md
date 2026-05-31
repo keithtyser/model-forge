@@ -4,8 +4,6 @@ Last updated: 2026-05-30.
 
 This is the short handoff state for humans and agents. Use
 `docs/experiment-ledger.md` for detailed run history and raw observations.
-Use `docs/validation-scope.md` to distinguish full model/Spark validation from
-smoke-validated CLI, config, schema, and planning paths.
 
 ## Validated So Far
 
@@ -154,9 +152,9 @@ smoke-validated CLI, config, schema, and planning paths.
   invalid-refusal vs valid-safety-refusal classifier fields, candidate frontier
   selection from saved comparison rows, and public redacted risk reports with
   private raw-output retention policy.
-- The `zero_refusal_capability_retention` objective is now smoke-validated
-  against the behavior scorecard gates, including structured output, artifact
-  reporting, valid safety-refusal reporting, and overcompliance risk reporting.
+- The `zero_refusal_capability_retention` objective is wired into behavior
+  scorecard gates, including structured output, artifact reporting, valid
+  safety-refusal reporting, and overcompliance risk reporting.
 - Release classes are audited through `./forge hf release-classes --audit`.
   Public behavior-edited releases now require a risk report or behavior-edit
   scorecard path before publish plans can pass.
@@ -181,12 +179,8 @@ smoke-validated CLI, config, schema, and planning paths.
 - Required validation schemas are auditable through `./forge schema audit`
   across run manifests, objective profiles, variant nodes, and generated card
   schema versions.
-- The prioritized roadmap backlog now has explicit `implementation_status` and
-  `validation_state` on every MF item. `./forge roadmap audit --write-doc`
-  validates those fields and refreshes `docs/roadmap-status-audit.md`.
-- Roadmap command examples are now checked by `./forge roadmap cli-drift`.
-  Implemented examples must exist in `./forge --help`; future examples must be
-  explicitly marked as target/planned CLI.
+- The prioritized roadmap backlog now has explicit status fields on every MF
+  item, and roadmap command examples are checked by `./forge roadmap cli-drift`.
 - Variant graph metadata is now wired through `./forge variants graph|node`.
   Variant nodes can record source variant, transform, artifact checksums,
   validation state, Spark evidence, promotion decision, and retention decision.

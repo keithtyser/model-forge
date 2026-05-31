@@ -24,11 +24,9 @@ orientation path.
 - [Spark Optimizations](spark-optimizations.md)
 - [Serving Benchmarks](serving-benchmarks.md)
 
-## Evidence And Claims
+## Project History
 
-- [Validation Scope](validation-scope.md)
 - [Current Status](status.md)
-- [Roadmap Status Audit](roadmap-status-audit.md)
 - [Experiment Ledger](experiment-ledger.md)
 - [Artifact Validation](artifact-validation.md)
 - [Artifact Retention](artifact-retention.md)

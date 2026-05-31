@@ -6,9 +6,8 @@ refusals with behavior editing, quantize it for fast serving, then evaluate and
 publish enough evidence that the result is reproducible.
 
 The repo is model-family driven. Gemma 4 26B-A4B is the first fully worked
-family. Qwen and Llama configs are present as generalization targets, but most
-non-Gemma paths are currently smoke-validated rather than proven with full model
-runs.
+family. Qwen and Llama configs are present as generalization targets so new
+architectures can follow the same workflow without becoming one-off scripts.
 
 ## Start Here
 
@@ -33,31 +32,8 @@ Useful docs:
 - [Quantization](docs/quantization.md)
 - [Evaluation Strategy](docs/evaluation-strategy.md)
 - [DGX Spark Rules](docs/dgx-spark.md)
-- [Validation Scope](docs/validation-scope.md)
 - [Current Status](docs/status.md)
 - [Agent Instructions](AGENTS.md)
-
-## What Is Actually Validated?
-
-The roadmap has many `tested` items, but `tested` means the CLI/config/schema
-path has automated coverage. It does not always mean the feature has completed a
-full model run on the Spark cluster.
-
-Current validation summary:
-
-- Gemma 4 has real post-training comparison evidence for base, FT reference,
-  downloaded abli, local abli, local FT, and local FT abli work.
-- The two-node DGX Spark cluster path has been validated with health checks,
-  container GPU probes, and a bounded torchrun/NCCL all-reduce smoke.
-- A published full-MoE NVFP4 reference checkpoint served with Marlin at about
-  50 output tok/s on the core serving benchmark.
-- Most dataset, Hub, agent, quantization-planning, profiling, backend-planning,
-  and advanced-serving features are smoke-validated planning/reporting paths.
-- The remaining open roadmap item is the external vLLM upstream PR.
-
-See [docs/validation-scope.md](docs/validation-scope.md) and
-[docs/roadmap-status-audit.md](docs/roadmap-status-audit.md) before making
-claims about a feature.
 
 ## Install
 
@@ -190,7 +166,7 @@ optimization notes.
 ```text
 configs/        Model families, objectives, training, ablation, quantization
 datasets/       Dataset manifests, seeds, generated packs, publish bundles
-docs/           Workflow docs, status, validation scope, roadmap, ledger
+docs/           Workflow docs, status, roadmap, and experiment ledger
 evals/          Internal eval prompt buckets and rubrics
 recipes/        Reusable run templates and agent experiment recipes
 reports/        Generated report conventions; large generated outputs ignored
