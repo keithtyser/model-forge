@@ -106,6 +106,42 @@ cluster probes. Treat this as the preflight gate before distributed fine-tuning,
 distributed quantization, or any benchmark claim that says a workload used both
 Spark nodes.
 
+## Serving On Spark
+
+Model serving is model-family driven. `./forge serve <family> <variant>` loads
+the serving script from `configs/model_families/<family>.yaml`.
+
+For Qwen-family models on DGX Spark, the generic launcher is:
+
+```text
+scripts/dgx_spark_serve_qwen.sh
+```
+
+It runs solo by default. To use a two-node Spark cluster, set env-backed values
+outside Git:
+
+```bash
+export MODEL_FORGE_SPARK_CLUSTER=1
+export MODEL_FORGE_SPARK_CLUSTER_NODES=<coordinator-ip>,<worker-ip>
+export MODEL_FORGE_SPARK_ETH_IF=<direct-link-interface>
+export MODEL_FORGE_TENSOR_PARALLEL_SIZE=2
+export MODEL_FORGE_MODELS_DIR=<same-model-root-on-each-node>
+```
+
+Then start the configured variant:
+
+```bash
+./forge serve qwen36_27b base
+```
+
+The launcher passes `--tensor-parallel-size 2` and
+`--distributed-executor-backend ray` when cluster mode is enabled. It also
+mounts `MODEL_FORGE_MODELS_DIR` into the vLLM container, supports LoRA adapter
+serving, and keeps private node identities in environment variables. If a
+worker has no Hugging Face egress, download on the coordinator first, then
+`rsync` the completed checkpoint directory to the same model root on the worker
+before serving.
+
 ## Plan
 
 Plans are dry-run only. They show node inventory, total declared GPU/RAM,
@@ -144,29 +180,10 @@ are explicitly available for non-interactive workload launchers.
 For DGX Spark x2, the public example declares two 128 GB nodes for roughly 256 GB
 total RAM. It does not assume hostnames or network layout.
 
-## Spark x2 Evidence
+## Handoff
 
-On 2026-05-24, the local private Spark x2 cluster passed:
-
-```text
-./forge cluster sync --config configs/clusters/dgx_spark_x2.example.yaml --execute
-./forge cluster health --config configs/clusters/dgx_spark_x2.example.yaml
-./forge cluster runtime --config configs/clusters/dgx_spark_x2.example.yaml --image nemotron-runner:latest
-./forge cluster torchrun-smoke --config configs/clusters/dgx_spark_x2.example.yaml --image nemotron-runner:latest --nccl-socket-ifname <distributed-network-interface>
-```
-
-The torchrun smoke observed `world_size=2`, one `NVIDIA GB10` per node, and a
-matching NCCL all-reduce sum across both ranks. Generated JSON evidence lives
-under `reports/generated/cluster/` and stays out of Git.
-
-## Next Integrations
-
-The current cluster layer is a safe planning and validation layer. Real
-distributed serving/training execution should be added behind explicit launcher
-backends only after:
-
-- single-node smoke serving passes
-- `./forge cluster doctor --strict` passes
-- `./forge cluster torchrun-smoke` passes for multi-node torch workloads
-- run manifests include the cluster config and launcher plan
-- the workload has checkpointing, cleanup, and failure handling
+Generated JSON evidence lives under `reports/generated/cluster/` and stays out
+of Git. If a run depends on a private inventory, record the public config path,
+private env variable names, command shape, and artifact locations in the
+experiment ledger without committing private hostnames, IPs, tokens, or model
+weights.

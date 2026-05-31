@@ -376,6 +376,17 @@ resource guardrails. Before claiming that a training, quantization, or benchmark
 job used both Spark nodes, run `./forge cluster torchrun-smoke` and cite the
 generated evidence path.
 
+For Qwen-family serving on Spark, `configs/model_families/qwen35_9b.yaml` and
+`configs/model_families/qwen36_27b.yaml` use the generic
+`scripts/dgx_spark_serve_qwen.sh` launcher. It is solo by default. To use both
+Spark nodes, set `MODEL_FORGE_SPARK_CLUSTER=1`,
+`MODEL_FORGE_SPARK_CLUSTER_NODES=<coordinator-ip>,<worker-ip>`,
+`MODEL_FORGE_SPARK_ETH_IF=<direct-link-interface>`, and
+`MODEL_FORGE_TENSOR_PARALLEL_SIZE=2` outside Git, then run
+`./forge serve <family> <variant>`. The same model directory must exist on both
+nodes under `MODEL_FORGE_MODELS_DIR`; if only the coordinator has HF egress,
+download once there and `rsync` the completed checkpoint to workers.
+
 Benchmark serving only after an endpoint is already running:
 
 ```bash
