@@ -273,6 +273,7 @@ Kernel microbenchmarks:
 ./forge bench kernel rmsnorm --dry-run --json
 ./forge bench kernel rope --dry-run --json
 ./forge bench kernel dequant --dry-run --json
+./forge bench kernel kv-layout --dry-run --json
 ./forge bench kernel rmsnorm --device auto --dtype bfloat16 --write
 ```
 

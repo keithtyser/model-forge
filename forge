@@ -79,6 +79,7 @@ Examples:
   ./forge bench kernel rmsnorm --dry-run
   ./forge bench kernel rope --dry-run
   ./forge bench kernel dequant --dry-run
+  ./forge bench kernel kv-layout --dry-run
   ./forge profile nsight plan --config configs/profiling/nsight_serving_smoke.yaml
   ./forge profile nsight summarize --plan reports/generated/profiles/nsight/<run>/nsight_profile_plan.json
   ./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan

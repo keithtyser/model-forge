@@ -9,6 +9,7 @@ Run an RMSNorm dry run without importing Torch:
 ./forge bench kernel rmsnorm --dry-run --json
 ./forge bench kernel rope --dry-run --json
 ./forge bench kernel dequant --dry-run --json
+./forge bench kernel kv-layout --dry-run --json
 ```
 
 Run a small benchmark and write artifacts:
@@ -48,6 +49,20 @@ Run a small NVFP4 E2M1 dequantization proxy and write artifacts:
   --write
 ```
 
+Run a small KV-cache layout benchmark and write artifacts:
+
+```bash
+./forge bench kernel kv-layout \
+  --device auto \
+  --dtype bfloat16 \
+  --batch 1 \
+  --seq-len 4096 \
+  --heads 16 \
+  --head-dim 128 \
+  --page-size 16 \
+  --write
+```
+
 Outputs are written under `reports/generated/kernel_benchmarks/<run>/`:
 
 - `summary.json`
@@ -67,6 +82,11 @@ local scale per 16 values, and a global scale. NVIDIA documents NVFP4 as using
 E2M1 values with a local E4M3 scaling factor every 16 values plus a global FP32
 scale. This benchmark keeps the scales as FP32 for portability and explicitly
 does not claim native Blackwell Tensor Core behavior.
+
+The initial KV-layout benchmark compares contiguous KV-cache reads with a
+paged/gathered proxy layout. It is intended to quantify layout and gather/copy
+overhead before testing a real serving backend's PagedAttention or KV-cache
+implementation.
 
 Promotion rules:
 

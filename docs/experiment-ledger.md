@@ -796,6 +796,43 @@ Result:
 - the tiny CPU execution path passed correctness
 - MF-0805 is marked tested / smoke-validated
 
+## Kernel/Perf: KV-Cache Layout Microbenchmark
+
+Status: implemented as a local kernel benchmark harness. No model server,
+training run, quantization run, or eval job was started.
+
+Hypothesis: DGX Spark decode performance can be sensitive to KV-cache memory
+layout and gather/copy overhead. A contiguous-versus-paged proxy benchmark gives
+the repo a small, reproducible way to measure layout overhead before tying it to
+vLLM/SGLang/TensorRT-LLM serving traces.
+
+Changes:
+
+- added `./forge bench kernel kv-layout`
+- reused `model_forge.kernel_benchmark.v1`
+- added dry-run planning that does not import Torch
+- added Torch-backed contiguous KV read versus paged/gathered KV read
+- recorded correctness between the two layouts
+- recorded p50/p95 latency and approximate effective bandwidth
+- wrote `summary.json` and `kernel_card.md`
+- updated kernel benchmark docs, README, AGENTS, status, and roadmap state
+
+Validation:
+
+```bash
+./forge bench kernel kv-layout --dry-run --json
+./forge bench kernel kv-layout --dry-run --write --run-id unit_kv_layout_cli --output-dir /tmp/model_forge_kv_layout
+./forge bench kernel kv-layout --device cpu --dtype float32 --batch 1 --seq-len 16 --heads 2 --head-dim 8 --page-size 4 --warmup 1 --repeats 2 --write --run-id unit_kv_layout_cpu --output-dir /tmp/model_forge_kv_layout_cpu --json
+.venv/bin/python -m unittest tests.test_kernel_benchmark -v
+```
+
+Result:
+
+- KV-layout benchmark plans are portable and smoke-testable without GPU/Torch
+- kernel card artifacts can be generated from a dry-run summary
+- the tiny CPU execution path passed correctness
+- MF-0806 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

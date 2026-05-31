@@ -111,6 +111,9 @@ This is the short handoff state for humans and agents. Use
 - Dequantization microbenchmarking is now present through `./forge bench kernel
   dequant`; it uses a packed NVFP4 E2M1 proxy with local/global scales and the
   same kernel-card artifact pattern.
+- KV-cache layout microbenchmarking is now present through `./forge bench
+  kernel kv-layout`; it compares contiguous cache reads with a paged/gathered
+  proxy layout.
 - Serving Card generation now writes a structured `serving_card.md` for each
   `bench serve` run with identity, hardware/config, overall metrics,
   per-workload metrics, artifacts, and promotion gates.

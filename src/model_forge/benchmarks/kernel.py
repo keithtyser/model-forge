@@ -154,6 +154,44 @@ def dequant_plan(args: argparse.Namespace) -> dict[str, Any]:
     )
 
 
+def kv_layout_plan(args: argparse.Namespace) -> dict[str, Any]:
+    run_id = sanitize_run_id(
+        args.run_id
+        or f"kv_layout_{args.device}_{args.dtype}_b{args.batch}_s{args.seq_len}_h{args.heads}_d{args.head_dim}_p{args.page_size}"
+    )
+    output_dir = resolve_repo_path(args.output_dir or DEFAULT_OUTPUT_ROOT / run_id)
+    return redact_value(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "created_at": utc_timestamp(),
+            "benchmark": "kv-layout",
+            "run_id": run_id,
+            "output_dir": display_path(output_dir),
+            "parameters": {
+                "batch": args.batch,
+                "seq_len": args.seq_len,
+                "heads": args.heads,
+                "head_dim": args.head_dim,
+                "page_size": args.page_size,
+                "dtype": args.dtype,
+                "device": args.device,
+                "warmup": args.warmup,
+                "repeats": args.repeats,
+                "seed": args.seed,
+            },
+            "purpose": "Measure contiguous versus paged/gathered KV-cache layout access for decode-path memory work.",
+            "limitations": [
+                "This is a Torch microbenchmark/proxy, not a vLLM PagedAttention kernel.",
+                "Promotion requires backend-specific serving profiles and memory evidence.",
+            ],
+            "outputs": {
+                "summary": display_path(output_dir / "summary.json"),
+                "card": display_path(output_dir / "kernel_card.md"),
+            },
+        }
+    )
+
+
 def import_torch() -> Any:
     try:
         import torch
@@ -243,6 +281,30 @@ def dequant_unpack_plus_lut(torch: Any, packed: Any, scales: Any, global_scale: 
 def dequant_python_reference(raw_codes: list[int], raw_scales: list[float], global_scale: float, block_size: int) -> list[float]:
     codebook = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, -0.0, -0.5, -1.0, -1.5, -2.0, -3.0, -4.0, -6.0]
     return [codebook[int(code)] * raw_scales[index // block_size] * global_scale for index, code in enumerate(raw_codes)]
+
+
+def build_paged_kv(torch: Any, contiguous: Any, page_size: int, permutation: Any) -> tuple[Any, Any]:
+    batch, seq_len, heads, head_dim = contiguous.shape
+    page_count = (seq_len + page_size - 1) // page_size
+    padded_len = page_count * page_size
+    if padded_len != seq_len:
+        pad = torch.zeros((batch, padded_len - seq_len, heads, head_dim), device=contiguous.device, dtype=contiguous.dtype)
+        contiguous = torch.cat((contiguous, pad), dim=1)
+    logical_pages = contiguous.reshape(batch, page_count, page_size, heads, head_dim)
+    physical_pages = logical_pages[:, permutation].contiguous()
+    inverse = torch.empty_like(permutation)
+    inverse[permutation] = torch.arange(page_count, device=permutation.device)
+    return physical_pages, inverse
+
+
+def kv_contiguous_read(torch: Any, key: Any, value: Any, seq_len: int) -> Any:
+    return key[:, :seq_len].float().sum(dim=(1, 2, 3)) + value[:, :seq_len].float().sum(dim=(1, 2, 3))
+
+
+def kv_paged_gather_read(torch: Any, key_pages: Any, value_pages: Any, page_table: Any, seq_len: int) -> Any:
+    gathered_key = key_pages.index_select(1, page_table).flatten(1, 2)[:, :seq_len]
+    gathered_value = value_pages.index_select(1, page_table).flatten(1, 2)[:, :seq_len]
+    return gathered_key.float().sum(dim=(1, 2, 3)) + gathered_value.float().sum(dim=(1, 2, 3))
 
 
 def synchronize(torch: Any, device: str) -> None:
@@ -501,6 +563,87 @@ def run_dequant(plan: Mapping[str, Any]) -> dict[str, Any]:
     )
 
 
+def run_kv_layout(plan: Mapping[str, Any]) -> dict[str, Any]:
+    torch = import_torch()
+    params = dict(plan["parameters"])
+    device = resolve_device(torch, str(params["device"]))
+    dtype = torch_dtype(torch, str(params["dtype"]))
+    torch.manual_seed(int(params["seed"]))
+    batch = int(params["batch"])
+    seq_len = int(params["seq_len"])
+    heads = int(params["heads"])
+    head_dim = int(params["head_dim"])
+    page_size = int(params["page_size"])
+    if page_size <= 0:
+        raise ValueError("page_size must be positive")
+    shape = (batch, seq_len, heads, head_dim)
+    key = torch.randn(shape, device=device, dtype=dtype)
+    value = torch.randn(shape, device=device, dtype=dtype)
+    page_count = (seq_len + page_size - 1) // page_size
+    permutation = torch.randperm(page_count, device=device)
+    key_pages, page_table = build_paged_kv(torch, key, page_size, permutation)
+    value_pages, _ = build_paged_kv(torch, value, page_size, permutation)
+
+    with torch.no_grad():
+        contiguous_output = kv_contiguous_read(torch, key, value, seq_len)
+        paged_output = kv_paged_gather_read(torch, key_pages, value_pages, page_table, seq_len)
+        max_abs_error = float((contiguous_output.float() - paged_output.float()).abs().max().item())
+        contiguous_times = benchmark_impl(
+            torch,
+            lambda: kv_contiguous_read(torch, key, value, seq_len),
+            device=device,
+            warmup=int(params["warmup"]),
+            repeats=int(params["repeats"]),
+        )
+        paged_times = benchmark_impl(
+            torch,
+            lambda: kv_paged_gather_read(torch, key_pages, value_pages, page_table, seq_len),
+            device=device,
+            warmup=int(params["warmup"]),
+            repeats=int(params["repeats"]),
+        )
+
+    element_size = key.element_size()
+    bytes_processed = key.numel() * element_size * 2
+    contiguous_summary = timing_summary(contiguous_times)
+    paged_summary = timing_summary(paged_times)
+    tolerance = 1e-2 if str(params["dtype"]) in {"float16", "fp16", "bfloat16", "bf16"} else 1e-4
+    return redact_value(
+        {
+            **dict(plan),
+            "created_at": utc_timestamp(),
+            "dry_run_only": False,
+            "runtime": {
+                "torch_version": torch.__version__,
+                "device": device,
+                "device_name": torch.cuda.get_device_name(0) if device == "cuda" else "cpu",
+                "dtype": str(dtype).replace("torch.", ""),
+                "shape": list(shape),
+                "page_count": page_count,
+                "bytes_processed_per_call": bytes_processed,
+                "system": system_snapshot(resolve_repo_path(str(plan["output_dir"]))),
+            },
+            "correctness": {
+                "reference": "contiguous_kv_read",
+                "candidate": "paged_gather_kv_read",
+                "max_abs_error": max_abs_error,
+                "tolerance": tolerance,
+                "passed": max_abs_error <= tolerance,
+            },
+            "results": {
+                "contiguous_read": {
+                    **contiguous_summary,
+                    "effective_bandwidth_gbps_p50": effective_bandwidth_gbps(bytes_processed, contiguous_summary["p50_ms"]),
+                },
+                "paged_gather_read": {
+                    **paged_summary,
+                    "effective_bandwidth_gbps_p50": effective_bandwidth_gbps(bytes_processed, paged_summary["p50_ms"]),
+                },
+            },
+        }
+    )
+
+
 def render_card(summary: Mapping[str, Any]) -> str:
     params = summary.get("parameters") or {}
     runtime = summary.get("runtime") or {}
@@ -522,6 +665,17 @@ def render_card(summary: Mapping[str, Any]) -> str:
         candidate = results.get("dequant_from_unpacked") or {}
         scope = "packed low-bit weight/activation path; use alongside quantized serving profiles before optimization claims."
         shape = f"num_elements={params.get('num_elements')}, block_size={params.get('block_size')}, format={params.get('format')}"
+    elif summary.get("benchmark") == "kv-layout":
+        benchmark_label = "KV Layout"
+        baseline_name = "contiguous_read"
+        candidate_name = "paged_gather_read"
+        baseline = results.get("contiguous_read") or {}
+        candidate = results.get("paged_gather_read") or {}
+        scope = "KV-cache layout and gather/copy path; use alongside serving memory and decode profiles before optimization claims."
+        shape = (
+            f"batch={params.get('batch')}, seq_len={params.get('seq_len')}, heads={params.get('heads')}, "
+            f"head_dim={params.get('head_dim')}, page_size={params.get('page_size')}"
+        )
     else:
         benchmark_label = "RMSNorm"
         baseline_name = "torch.nn.functional.rms_norm"
@@ -592,6 +746,8 @@ def render_table(summary: Mapping[str, Any]) -> None:
             baseline = results.get("interleaved_reference") or {}
         elif summary.get("benchmark") == "dequant":
             baseline = results.get("unpack_plus_dequant") or {}
+        elif summary.get("benchmark") == "kv-layout":
+            baseline = results.get("contiguous_read") or {}
         else:
             baseline = results.get("torch_native") or {}
         table.add_row("baseline p50 ms", str(baseline.get("p50_ms")))
@@ -648,6 +804,22 @@ def build_parser() -> argparse.ArgumentParser:
     dequant.add_argument("--dry-run", action="store_true")
     dequant.add_argument("--write", action="store_true")
     dequant.add_argument("--json", action="store_true")
+    kv = sub.add_parser("kv-layout", help="Run or plan a KV-cache layout/copy microbenchmark")
+    kv.add_argument("--batch", type=int, default=1)
+    kv.add_argument("--seq-len", type=int, default=4096)
+    kv.add_argument("--heads", type=int, default=16)
+    kv.add_argument("--head-dim", type=int, default=128)
+    kv.add_argument("--page-size", type=int, default=16)
+    kv.add_argument("--dtype", choices=["float32", "fp32", "float16", "fp16", "bfloat16", "bf16"], default="bfloat16")
+    kv.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
+    kv.add_argument("--warmup", type=int, default=5)
+    kv.add_argument("--repeats", type=int, default=20)
+    kv.add_argument("--seed", type=int, default=17)
+    kv.add_argument("--run-id")
+    kv.add_argument("--output-dir", type=Path)
+    kv.add_argument("--dry-run", action="store_true")
+    kv.add_argument("--write", action="store_true")
+    kv.add_argument("--json", action="store_true")
     return parser
 
 
@@ -665,6 +837,12 @@ def main() -> None:
         if args.block_size <= 0:
             raise SystemExit("--block-size must be positive")
         summary = dequant_plan(args)
+    elif args.benchmark == "kv-layout":
+        if args.seq_len <= 0:
+            raise SystemExit("--seq-len must be positive")
+        if args.page_size <= 0:
+            raise SystemExit("--page-size must be positive")
+        summary = kv_layout_plan(args)
     else:
         raise SystemExit(f"unknown kernel benchmark: {args.benchmark}")
     if args.dry_run:
@@ -675,6 +853,8 @@ def main() -> None:
         summary = run_rope(summary)
     elif args.benchmark == "dequant":
         summary = run_dequant(summary)
+    elif args.benchmark == "kv-layout":
+        summary = run_kv_layout(summary)
     if args.write:
         write_outputs(summary)
     if args.json:

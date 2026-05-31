@@ -13,17 +13,17 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| not_started | 14 |
+| not_started | 13 |
 | scaffolded | 13 |
-| tested | 67 |
+| tested | 68 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 35 |
-| smoke_validated | 59 |
+| planned | 34 |
+| smoke_validated | 60 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -124,7 +124,7 @@ No status audit findings.
 | MF-0803 | P2: Kernel/perf | tested | smoke_validated | Add bench kernel rmsnorm |
 | MF-0804 | P2: Kernel/perf | tested | smoke_validated | Add bench kernel rope |
 | MF-0805 | P2: Kernel/perf | tested | smoke_validated | Add bench kernel dequant |
-| MF-0806 | P2: Kernel/perf | not_started | planned | Add bench kernel kv-layout |
+| MF-0806 | P2: Kernel/perf | tested | smoke_validated | Add bench kernel kv-layout |
 | MF-0807 | P2: Kernel/perf | not_started | planned | Add Kernel Card |
 | MF-0808 | P2: Kernel/perf | not_started | planned | Open first upstream PR |
 | MF-0901 | P3: Advanced serving | not_started | planned | Add SGLang backend |
