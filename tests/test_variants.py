@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from model_forge.variants.architecture_audit import audit_architecture_metadata, build_architecture_audit
 from model_forge.variants.checkpoint_audit import build_checkpoint_audit
+from model_forge.variants.cli import checkpoint_progress
 from model_forge.variants.graph import ancestry, variant_graph
 from model_forge.variants.manifest import default_variant_node, load_family, node_output_path, validate_family_config, validate_variant_node, write_variant_node
 from model_forge.variants.tokenizer_audit import build_tokenizer_audit
@@ -361,6 +362,15 @@ class VariantGraphTests(unittest.TestCase):
         self.assertTrue(audit["passed"], audit["findings"])
         self.assertEqual(audit["records"][0]["path"], str(adapter))
         self.assertEqual(audit["records"][0]["merged_checkpoint"]["safetensors"]["shard_count"], 1)
+
+    def test_checkpoint_progress_uses_lowest_variant_progress(self) -> None:
+        audit = {
+            "records": [
+                {"download_progress_fraction": 0.8},
+                {"merged_checkpoint": {"download_progress_fraction": 0.45}},
+            ]
+        }
+        self.assertEqual(checkpoint_progress(audit), 0.45)
 
 
 if __name__ == "__main__":

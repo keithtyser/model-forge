@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -84,6 +85,46 @@ def render_node(node: dict[str, Any]) -> None:
     console.print(table)
 
 
+def checkpoint_progress(audit: dict[str, Any]) -> float | None:
+    progress_values: list[float] = []
+    for record in audit.get("records") or []:
+        progress = record.get("download_progress_fraction")
+        if progress is None and record.get("merged_checkpoint"):
+            progress = record["merged_checkpoint"].get("download_progress_fraction")
+        if progress is not None:
+            progress_values.append(float(progress))
+    if not progress_values:
+        return None
+    return min(progress_values)
+
+
+def render_checkpoint_audit(audit: dict[str, Any]) -> None:
+    table = Table(title=f"Checkpoint Audit: {audit['family']}")
+    table.add_column("Variant")
+    table.add_column("Exists")
+    table.add_column("Shards")
+    table.add_column("Bytes")
+    table.add_column("Incomplete")
+    table.add_column("Progress")
+    for record in audit["records"]:
+        safetensors = record.get("safetensors") or {}
+        progress = record.get("download_progress_fraction")
+        if progress is None and record.get("merged_checkpoint"):
+            progress = record["merged_checkpoint"].get("download_progress_fraction")
+        table.add_row(
+            str(record["variant"]),
+            str(record.get("exists")),
+            str(safetensors.get("shard_count") or 0),
+            str(safetensors.get("total_shard_bytes") or 0),
+            str(len(record.get("incomplete_download_files") or [])),
+            f"{float(progress) * 100:.1f}%" if progress is not None else "",
+        )
+    console.print(table)
+    for finding in audit["findings"]:
+        style = "red" if finding["level"] == "error" else "yellow"
+        console.print(f"[{style}]{finding['level']} {finding['variant']} {finding['check']}: {finding['message']}[/{style}]")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Inspect and write Model Forge variant graph metadata")
     subparsers = parser.add_subparsers(dest="action", required=True)
@@ -140,6 +181,14 @@ def main() -> None:
     checkpoint_parser.add_argument("--models-dir", help="Override the family models directory")
     checkpoint_parser.add_argument("--strict", action="store_true", help="treat missing local dirs or incomplete downloads as errors")
     checkpoint_parser.add_argument("--json", action="store_true")
+
+    wait_checkpoint_parser = subparsers.add_parser("wait-checkpoint", help="Poll checkpoint-audit until a local checkpoint is complete")
+    wait_checkpoint_parser.add_argument("family")
+    wait_checkpoint_parser.add_argument("--variant", required=True, help="Variant local checkpoint to wait for")
+    wait_checkpoint_parser.add_argument("--models-dir", help="Override the family models directory")
+    wait_checkpoint_parser.add_argument("--interval-seconds", type=float, default=60.0)
+    wait_checkpoint_parser.add_argument("--timeout-seconds", type=float, default=0.0, help="0 means wait forever")
+    wait_checkpoint_parser.add_argument("--json", action="store_true")
 
     args = parser.parse_args()
 
@@ -258,31 +307,49 @@ def main() -> None:
         if args.json:
             print(json.dumps(audit, indent=2, sort_keys=True))
         else:
-            table = Table(title=f"Checkpoint Audit: {audit['family']}")
-            table.add_column("Variant")
-            table.add_column("Exists")
-            table.add_column("Shards")
-            table.add_column("Bytes")
-            table.add_column("Incomplete")
-            table.add_column("Progress")
-            for record in audit["records"]:
-                safetensors = record.get("safetensors") or {}
-                progress = record.get("download_progress_fraction")
-                if progress is None and record.get("merged_checkpoint"):
-                    progress = record["merged_checkpoint"].get("download_progress_fraction")
-                table.add_row(
-                    str(record["variant"]),
-                    str(record.get("exists")),
-                    str(safetensors.get("shard_count") or 0),
-                    str(safetensors.get("total_shard_bytes") or 0),
-                    str(len(record.get("incomplete_download_files") or [])),
-                    f"{float(progress) * 100:.1f}%" if progress is not None else "",
-                )
-            console.print(table)
-            for finding in audit["findings"]:
-                style = "red" if finding["level"] == "error" else "yellow"
-                console.print(f"[{style}]{finding['level']} {finding['variant']} {finding['check']}: {finding['message']}[/{style}]")
+            render_checkpoint_audit(audit)
         raise SystemExit(0 if audit["passed"] else 1)
+
+    if args.action == "wait-checkpoint":
+        if args.interval_seconds <= 0:
+            parser.error("--interval-seconds must be > 0")
+        if args.timeout_seconds < 0:
+            parser.error("--timeout-seconds must be >= 0")
+        start = time.monotonic()
+        attempts = 0
+        last_audit: dict[str, Any] | None = None
+        while True:
+            attempts += 1
+            last_audit = build_checkpoint_audit(
+                args.family,
+                variant=args.variant,
+                models_dir_override=args.models_dir,
+                strict=True,
+            )
+            progress = checkpoint_progress(last_audit)
+            if args.json:
+                print(json.dumps({"attempt": attempts, "passed": last_audit["passed"], "progress": progress}, sort_keys=True), flush=True)
+            else:
+                progress_text = f" progress={progress * 100:.1f}%" if progress is not None else ""
+                console.print(f"checkpoint wait attempt {attempts}: passed={last_audit['passed']}{progress_text}")
+            if last_audit["passed"]:
+                break
+            elapsed = time.monotonic() - start
+            if args.timeout_seconds and elapsed >= args.timeout_seconds:
+                if not args.json:
+                    render_checkpoint_audit(last_audit)
+                raise SystemExit(1)
+            sleep_for = args.interval_seconds
+            if args.timeout_seconds:
+                sleep_for = min(sleep_for, max(0.0, args.timeout_seconds - elapsed))
+                if sleep_for == 0:
+                    if not args.json and last_audit:
+                        render_checkpoint_audit(last_audit)
+                    raise SystemExit(1)
+            time.sleep(sleep_for)
+        if not args.json and last_audit:
+            render_checkpoint_audit(last_audit)
+        raise SystemExit(0)
 
     data = yaml.safe_load(args.path.read_text(encoding="utf-8")) if args.path.suffix in {".yaml", ".yml"} else json.loads(args.path.read_text(encoding="utf-8"))
     errors = validate_variant_node(data)

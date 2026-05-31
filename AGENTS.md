@@ -106,6 +106,10 @@ git. In unattended runs set `MODEL_FORGE_HF_ALLOW_PROMPT=0`; the download comman
 will use cached auth when present and fail fast if no token is available. If the
 default Xet path stalls on a checkpoint, retry with `HF_HUB_DISABLE_XET=1` and
 keep the job bounded with CPU, memory, and disk guardrails.
+After starting or resuming a large download, use
+`./forge variants wait-checkpoint <family> --variant <variant>` before model
+sync, serving, training, ablation, or quantization. It polls the strict
+checkpoint audit and prevents agents from racing partially downloaded HF shards.
 
 ## Useful Commands
 
@@ -385,6 +389,7 @@ Inspect or write variant graph nodes:
 ./forge variants architecture-audit gemma4_26b_a4b --variant base
 ./forge variants tokenizer-audit gemma4_26b_a4b --variant local_abli
 ./forge variants checkpoint-audit gemma4_26b_a4b --variant base --strict
+./forge variants wait-checkpoint gemma4_26b_a4b --variant base --timeout-seconds 0
 ```
 
 Variant nodes record the source variant, transform, checkpoint reference,
@@ -397,6 +402,9 @@ chat-template or special-token behavior.
 Run `checkpoint-audit --strict` before serving or training a downloaded model;
 it catches missing safetensor shards, missing index files, missing config or
 tokenizer markers, and active Hugging Face `.incomplete` downloads.
+Use `wait-checkpoint` in unattended scripts after `./forge download` or
+`huggingface_hub.snapshot_download` so the next step starts only after the
+strict audit passes.
 
 Validate or plan cluster usage:
 
@@ -433,6 +441,8 @@ download once there and run `./forge cluster model-sync --source <model-dir>
 --execute` to copy the completed checkpoint to workers. Use `model-sync` instead
 of hand-written `rsync` where possible so generated evidence captures what was
 copied.
+Do not run `model-sync` on an active or incomplete HF download; first run
+`./forge variants wait-checkpoint qwen36_27b --variant base`.
 
 Before launching a large Qwen server, dry-run the exact command and inspect the
 vLLM image, chat-template JSON, tensor parallel size, GPU memory utilization,

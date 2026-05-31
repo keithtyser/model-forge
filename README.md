@@ -94,6 +94,7 @@ Serve one model at a time:
 
 ```bash
 ./forge download my_model base
+./forge variants wait-checkpoint my_model --variant base --timeout-seconds 0
 ./forge serve my_model base
 ```
 
@@ -102,6 +103,8 @@ from `./forge hf login`. For unattended agent runs, set
 `MODEL_FORGE_HF_ALLOW_PROMPT=0` so missing auth fails fast. If Xet is slow or
 unstable for a specific network/model, set `HF_HUB_DISABLE_XET=1` and retry;
 always run `checkpoint-audit --strict` before serving or training.
+`wait-checkpoint` is the script-friendly form of that gate: it polls the same
+strict audit and exits only after the local checkpoint is complete.
 
 Run evals from another terminal:
 
