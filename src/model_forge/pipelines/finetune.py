@@ -88,6 +88,7 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "group_by_length": bool(trainer.get("group_by_length", False)),
             "pad_to_multiple_of": int(trainer.get("pad_to_multiple_of", 0) or 0),
             "torch_dynamo_recompile_limit": int(trainer.get("torch_dynamo_recompile_limit", 0) or 0),
+            "ddp_find_unused_parameters": bool(trainer.get("ddp_find_unused_parameters", True)),
             "per_device_train_batch_size": int(trainer.get("per_device_train_batch_size", 1)),
             "gradient_accumulation_steps": int(trainer.get("gradient_accumulation_steps", 16)),
             "learning_rate": float(trainer.get("learning_rate", 2e-4)),
@@ -789,6 +790,8 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
         save_strategy="steps",
         remove_unused_columns=False,
     )
+    if "ddp_find_unused_parameters" in inspect.signature(TrainingArguments.__init__).parameters:
+        training_kwargs["ddp_find_unused_parameters"] = bool(plan["trainer"].get("ddp_find_unused_parameters", True))
     if bool(plan["trainer"].get("group_by_length", False)):
         training_kwargs["group_by_length"] = True
     worker_offset = int(plan.get("resource_policy", {}).get("dataloader_num_workers_max_offset", 2))

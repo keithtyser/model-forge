@@ -9,7 +9,7 @@ model:
   output_dir: ~/models/Qwen3.6-27B-local-ft-v1
   served_model_name: local/qwen36-27b-local-ft-v1
   trust_remote_code: true
-  max_seq_length: 8192
+  max_seq_length: 4096
 
 trainer:
   backend: hf_causal_lm
@@ -22,18 +22,19 @@ trainer:
   group_by_length: true
   pad_to_multiple_of: 256
   torch_dynamo_recompile_limit: 128
+  ddp_find_unused_parameters: false
   per_device_train_batch_size: 1
-  gradient_accumulation_steps: 8
+  gradient_accumulation_steps: 2
   learning_rate: 0.00006
   num_train_epochs: 1
-  max_steps: 800
+  max_steps: 120
   warmup_ratio: 0.03
   lr_scheduler_type: cosine
   optim: paged_adamw_8bit
   weight_decay: 0.001
   logging_steps: 5
-  save_steps: 100
-  save_total_limit: 3
+  save_steps: 40
+  save_total_limit: 2
   seed: 3407
   report_to: none
   dataloader_num_workers: 2
@@ -64,8 +65,8 @@ cluster:
   sync_model_to_workers: true
 
 lora:
-  r: 64
-  alpha: 128
+  r: 32
+  alpha: 64
   dropout: 0.0
   target_modules:
     - q_proj
