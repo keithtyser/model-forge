@@ -147,6 +147,12 @@ Fine-tuning:
 ./forge finetune --config configs/finetuning/gemma4_26b_a4b_local_ft_v1_dryrun.yaml plan
 ```
 
+`prepare` writes `plan.json`, guarded `run.sh`, `train_trl_sft.py`,
+`eval_after_training.sh`, and `training_method_card.md`. The method card records
+the model, data blend, trainer settings, LoRA recipe, distributed-correctness
+expectations, and Spark resource guardrails; it is planning evidence, not proof
+that training completed.
+
 On DGX Spark, use the guarded CUDA container launcher for full FT runs:
 
 ```bash

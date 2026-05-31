@@ -138,6 +138,9 @@ This is the short handoff state for humans and agents. Use
   `./forge serving architecture-doctor` and
   `configs/serving/architectures/distributed_kv_placeholder.yaml`; it documents
   roles, gates, and blockers only.
+- Fine-tune `prepare` now writes `training_method_card.md` beside generated run
+  artifacts. The card records recipe, data, LoRA, eval commands, and Spark
+  resource guardrails, but does not claim training completed.
 - Serving Card generation now writes a structured `serving_card.md` for each
   `bench serve` run with identity, hardware/config, overall metrics,
   per-workload metrics, artifacts, and promotion gates.

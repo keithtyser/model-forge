@@ -187,6 +187,73 @@ def render_plan(plan: dict[str, Any]) -> None:
         console.print(Panel("\n".join(plan["hardware"]["notes"]), title="Hardware Notes", border_style="yellow"))
 
 
+def render_training_method_card(plan: dict[str, Any]) -> str:
+    trainer = plan["trainer"]
+    resource_policy = plan["resource_policy"]
+    data = plan["data"]
+    hardware = plan["hardware"]
+    source_lines = [
+        f"- {source.get('name') or source.get('id')}: {source.get('target_samples', '')} rows, role `{source.get('role', '')}`"
+        for source in data.get("sources", [])
+    ]
+    eval_lines = [f"- `{command}`" for command in plan.get("eval", {}).get("commands", [])] or ["- No eval command configured."]
+    return "\n".join(
+        [
+            f"# Training Method Card: {plan['name']}",
+            "",
+            "## Identity",
+            "",
+            f"- Family: `{plan['family']}`",
+            f"- Source model: `{plan['model']['source']}`",
+            f"- Output model: `{plan['model']['output_dir']}`",
+            f"- Config: `{plan['config_path']}`",
+            "",
+            "## Method",
+            "",
+            f"- Backend: `{trainer['backend']}`",
+            f"- Method: `{trainer['method']}`",
+            f"- Max sequence length: `{plan['model']['max_seq_length']}`",
+            f"- LoRA rank/alpha/dropout: `{plan['lora']['r']}` / `{plan['lora']['alpha']}` / `{plan['lora']['dropout']}`",
+            f"- Target modules: `{', '.join(plan['lora']['target_modules'])}`",
+            f"- Excluded modules: `{', '.join(plan['lora']['exclude_modules'])}`",
+            f"- Learning rate: `{trainer['learning_rate']}`",
+            f"- Max steps: `{trainer['max_steps']}`",
+            f"- Optimizer: `{trainer['optim']}`",
+            "",
+            "## Data",
+            "",
+            f"- Manifest: `{data['manifest']}`",
+            f"- Format: `{data['format']}`",
+            f"- Target samples: `{data['target_samples']}`",
+            "",
+            *source_lines,
+            "",
+            "## Distributed Correctness And Resource Guardrails",
+            "",
+            f"- Hardware profile: `{hardware['profile']}`",
+            f"- Detected GPUs: `{len(hardware['gpus'])}`",
+            f"- CPU quota: `{resource_policy['cpu_quota']}`",
+            f"- Memory max: `{resource_policy['memory_max']}`",
+            f"- Reserved cores: `{resource_policy['reserve_cores']}`",
+            f"- Start RAM floor: `{resource_policy['min_memory_available_start']}`",
+            f"- Runtime RAM floor: `{resource_policy['min_memory_available_runtime']}`",
+            f"- Disk free floor: `{resource_policy['min_disk_free']}`",
+            f"- Checkpoint on memory pressure: `{resource_policy['checkpoint_on_memory_pressure']}`",
+            "",
+            "## Evaluation",
+            "",
+            *eval_lines,
+            "",
+            "## Limitations",
+            "",
+            "- This card is generated from the planned recipe; it is not proof that training completed.",
+            "- Distributed training correctness requires attached cluster preflight or torchrun evidence when more than one node is used.",
+            "- Promotion requires source-relative eval results and comparison against the configured baseline.",
+            "",
+        ]
+    )
+
+
 TRAINER_SCRIPT = r'''#!/usr/bin/env python3
 from __future__ import annotations
 
@@ -746,6 +813,7 @@ def write_artifacts(plan: dict[str, Any], *, overwrite: bool = False) -> dict[st
         "trainer": run_dir / "train_trl_sft.py",
         "shell": run_dir / "run.sh",
         "eval": run_dir / "eval_after_training.sh",
+        "method_card": run_dir / "training_method_card.md",
     }
     for path in outputs.values():
         if path.exists() and not overwrite:
@@ -811,6 +879,7 @@ run_limited "$PYTHON" {shlex.quote(str(outputs["trainer"]))} --plan {shlex.quote
     eval_lines.extend(plan.get("eval", {}).get("commands", []))
     outputs["eval"].write_text("\n".join(eval_lines) + "\n")
     outputs["eval"].chmod(0o755)
+    outputs["method_card"].write_text(render_training_method_card(plan) + "\n")
     return {key: str(path) for key, path in outputs.items()}
 
 

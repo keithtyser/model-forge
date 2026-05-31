@@ -128,6 +128,10 @@ Plan fine-tuning without loading a model:
 ./forge finetune gemma4_26b_a4b prepare
 ```
 
+`prepare` writes `training_method_card.md` beside the generated plan, trainer,
+runner, and eval scripts. Treat it as method and guardrail documentation; it is
+not proof that training ran or that distributed correctness was validated.
+
 Run fine-tuning on DGX Spark only through the guarded CUDA container launcher
 when host Python is CPU-only:
 

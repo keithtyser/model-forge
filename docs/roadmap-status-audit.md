@@ -13,17 +13,17 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| not_started | 7 |
+| not_started | 6 |
 | scaffolded | 13 |
-| tested | 74 |
+| tested | 75 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 28 |
-| smoke_validated | 66 |
+| planned | 27 |
+| smoke_validated | 67 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -48,7 +48,7 @@ No status audit findings.
 | MF-0010 | P0: Foundation | tested | smoke_validated | Add golden baseline create/check hardening |
 | MF-0011 | P0: Foundation | tested | smoke_validated | Add CLI/doc drift check for roadmap command examples |
 | MF-0012 | P0: Foundation | implemented | spark_single_node_validated | Finish Gemma local FT evaluation or failure-card it |
-| MF-0013 | P0: Foundation | not_started | planned | Publish Training Method Card with distributed training correctness |
+| MF-0013 | P0: Foundation | tested | smoke_validated | Publish Training Method Card with distributed training correctness |
 | MF-0101 | P0: Behavior editing | scaffolded | planned | Add noncompliance taxonomy |
 | MF-0102 | P0: Behavior editing | scaffolded | planned | Add invalid-refusal vs valid-safety-refusal classifier fields |
 | MF-0103 | P0: Behavior editing | implemented | smoke_validated | Add harmful-overcompliance and behavior-drift scoring |

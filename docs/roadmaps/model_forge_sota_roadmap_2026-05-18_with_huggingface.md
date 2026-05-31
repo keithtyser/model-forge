@@ -3722,7 +3722,7 @@ MF-0009 Add eval provenance card. implementation_status=tested validation_state=
 MF-0010 Add golden baseline create/check hardening. implementation_status=tested validation_state=smoke_validated
 MF-0011 Add CLI/doc drift check for roadmap command examples. implementation_status=tested validation_state=smoke_validated
 MF-0012 Finish Gemma local FT evaluation or failure-card it. implementation_status=implemented validation_state=spark_single_node_validated
-MF-0013 Publish Training Method Card with distributed training correctness. implementation_status=not_started validation_state=planned
+MF-0013 Publish Training Method Card with distributed training correctness. implementation_status=tested validation_state=smoke_validated
 ```
 
 ### P0: Behavior editing

@@ -91,6 +91,10 @@ class FinetunePlanTests(unittest.TestCase):
             self.assertIn("torch._dynamo.config.recompile_limit", trainer_script)
             self.assertIn("pad_to_multiple_of", trainer_script)
             self.assertIn("dataloader_num_workers", trainer_script)
+            method_card = Path(outputs["method_card"]).read_text()
+            self.assertIn("# Training Method Card: gemma4_26b_a4b_local_ft_v0", method_card)
+            self.assertIn("Distributed Correctness And Resource Guardrails", method_card)
+            self.assertIn("systemd-run", run_script)
 
 
 if __name__ == "__main__":

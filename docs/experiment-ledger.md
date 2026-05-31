@@ -1091,6 +1091,38 @@ Result:
 - the repo still makes no claim that distributed KV is implemented or validated
 - MF-0905 is marked tested / smoke-validated
 
+## Foundation: Training Method Card
+
+Status: implemented as generated planning artifact only. No training run,
+benchmark run, quantization run, serving run, or eval job was started.
+
+Hypothesis: Every fine-tune recipe should produce a durable method card before
+training starts so agents can inspect the model source, data blend, trainer
+settings, LoRA targets, eval commands, and Spark resource guardrails without
+digging through generated scripts.
+
+Changes:
+
+- added `training_method_card.md` generation to `./forge finetune ... prepare`
+- recorded model identity, data sources, trainer method, LoRA config, eval
+  commands, and resource guardrails
+- made the card explicit that it is not training-completion evidence
+- updated README, AGENTS, status, and roadmap state
+
+Validation:
+
+```bash
+.venv/bin/python -m unittest tests.test_finetune_pipeline -v
+./forge finetune --config configs/finetuning/gemma4_26b_a4b_local_ft_v1_dryrun.yaml prepare --overwrite
+```
+
+Result:
+
+- generated fine-tune artifacts now include `training_method_card.md`
+- distributed training correctness remains evidence-gated by cluster preflight
+  and run manifests for actual multi-node training
+- MF-0013 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,
