@@ -57,7 +57,7 @@ cluster:
   enabled: true
   config: /tmp/model_forge_dgx_spark_x2_runtime.yaml
   launcher: torchrun
-  image: nemotron-runner:latest
+  image: model-forge-posttrain-tf5:latest
   nccl_socket_ifname: enp1s0f0np0
   require_torchrun_smoke: true
   sync_run_dir_to_workers: true

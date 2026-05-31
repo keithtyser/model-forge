@@ -174,6 +174,22 @@ worker nodes, and launches Docker-backed `torch.distributed.run` on every node.
 If it falls back to host Python or a single node, fix the repo or config before
 starting the long run.
 
+For newer architectures that require Transformers 5 model classes, build and
+copy the generic post-training image before launching the cluster run:
+
+```bash
+docker build \
+  --cpuset-cpus 0-3 \
+  --memory 24g \
+  -f docker/posttrain-transformers5.Dockerfile \
+  -t model-forge-posttrain-tf5:latest .
+```
+
+The image starts from a Spark/vLLM Transformers-5 base and adds PEFT, TRL,
+bitsandbytes, datasets, accelerate, and ModelOpt. Use it only when the target
+family needs the newer model registry; keep the selected image in the
+fine-tune YAML instead of hard-coding it in pipeline code.
+
 For Gemma 4 26B on Spark, the validated FT path currently uses
 `trainer.backend=unsloth` with `unsloth_compile_disable=true`,
 `max_seq_length=2048`, and `max_steps=500` for the first full attempt. The HF
