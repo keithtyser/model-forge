@@ -1,0 +1,53 @@
+schema_version: model_forge.agent_experiment.v1
+experiment_id: template_agent_experiment
+title: Template agent experiment plan
+hypothesis: >
+  State the concrete claim this experiment is trying to validate or falsify.
+owner_agent: codex
+experiment_type: repo_maintenance
+status: planned
+
+family: gemma4_26b_a4b
+variant: base
+objective_profile: capability_sft
+
+planned_commands:
+  - command: ./forge doctor --json
+    purpose: Verify repository hygiene before and after the change.
+    starts_heavy_job: false
+    requires_execute: false
+    expected_artifacts:
+      - terminal_output
+
+resource_policy:
+  max_concurrent_large_jobs: 1
+  start_if_memory_available_above_fraction: 0.05
+  stop_if_memory_available_below_fraction: 0.05
+  require_disk_free_fraction: 0.15
+  use_cluster_when_heavy: true
+  checkpoint_or_write_plan_before_execute: true
+
+evidence_plan:
+  manifest_required: false
+  ledger_update_required: true
+  expected_reports:
+    - docs/experiment-ledger.md
+  required_validation_commands:
+    - ./forge doctor --json
+
+success_criteria:
+  - The planned change is committed and pushed to GitHub.
+  - Required validation commands pass.
+  - No secrets, private paths, or heavyweight artifacts are committed.
+
+rollback_plan:
+  - Stop any running workload through its guarded launcher.
+  - Revert only the files touched by this experiment if validation fails.
+
+handoff:
+  push_to_github: true
+  update_status_docs: true
+  hf_upload_policy: not_applicable
+  raw_artifact_policy: keep_large_outputs_untracked
+  notes: >
+    Replace template values before running a real experiment.

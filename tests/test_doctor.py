@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 
 from model_forge.doctor import (
     Finding,
+    check_agent_experiments,
     check_generalization_assumptions,
     check_generated_dataset_policy,
     check_machine_paths,
@@ -79,6 +80,9 @@ class DoctorTests(unittest.TestCase):
 
     def test_generalization_assumption_audit_passes_current_common_code(self) -> None:
         self.assertEqual(check_generalization_assumptions(), [])
+
+    def test_agent_experiment_audit_passes_current_templates(self) -> None:
+        self.assertEqual(check_agent_experiments(), [])
 
 
 if __name__ == "__main__":

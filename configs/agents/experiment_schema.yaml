@@ -1,0 +1,73 @@
+schema_version: model_forge.agent_experiment_schema.v1
+experiment_schema_version: model_forge.agent_experiment.v1
+
+required_fields:
+  - schema_version
+  - experiment_id
+  - title
+  - hypothesis
+  - owner_agent
+  - experiment_type
+  - status
+  - family
+  - variant
+  - objective_profile
+  - planned_commands
+  - resource_policy
+  - evidence_plan
+  - success_criteria
+  - rollback_plan
+  - handoff
+
+allowed_statuses:
+  - planned
+  - running
+  - completed
+  - failed
+  - skipped
+
+allowed_experiment_types:
+  - eval
+  - finetune
+  - ablation
+  - quantization
+  - serving
+  - dataset
+  - publish
+  - compare
+  - repo_maintenance
+
+required_resource_policy_fields:
+  - max_concurrent_large_jobs
+  - start_if_memory_available_above_fraction
+  - stop_if_memory_available_below_fraction
+  - require_disk_free_fraction
+  - use_cluster_when_heavy
+  - checkpoint_or_write_plan_before_execute
+
+required_evidence_plan_fields:
+  - manifest_required
+  - ledger_update_required
+  - expected_reports
+  - required_validation_commands
+
+required_handoff_fields:
+  - push_to_github
+  - update_status_docs
+  - hf_upload_policy
+  - raw_artifact_policy
+
+planned_command_required_fields:
+  - command
+  - purpose
+  - starts_heavy_job
+  - requires_execute
+
+secret_patterns:
+  - hf_[A-Za-z0-9]{20,}
+  - sk-[A-Za-z0-9]{20,}
+
+notes:
+  - Agent experiment plans are lightweight pre-run contracts.
+  - Use canonical run manifests for actual run provenance.
+  - Heavy jobs must still go through guarded pipeline launchers.

@@ -98,6 +98,7 @@ Run evals from another terminal:
 ./forge roadmap audit --write-doc
 ./forge roadmap cli-drift
 ./forge generalization audit
+./forge agent audit
 ./forge research audit
 ./forge manifest write --run-type eval --family gemma4_26b_a4b --variant base --command './forge eval gemma4_26b_a4b base --internal'
 ./forge hf status --offline
@@ -213,6 +214,17 @@ Variant graph:
 See [docs/variant-graph.md](docs/variant-graph.md). Variant nodes connect source
 models, transforms, evidence, artifact checksums, validation state, promotion
 decisions, and retention decisions.
+
+Agent experiment plans:
+
+```bash
+./forge agent schema
+./forge agent audit
+./forge agent init --experiment-id next_step --title "Next step" --family gemma4_26b_a4b --variant base --objective-profile capability_sft --output recipes/agents/next_step.yaml
+```
+
+See [docs/agent-experiments.md](docs/agent-experiments.md). Agent plans define
+hypothesis, resource policy, evidence, rollback, and handoff before a run starts.
 
 Cluster planning:
 

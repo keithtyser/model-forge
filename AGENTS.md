@@ -35,6 +35,7 @@ Gemma-specific.
 - `docs/experiment-ledger.md`: handoff ledger for hypotheses, experiments,
   artifacts, validation, and publish status
 - `docs/run-manifests.md`: canonical run manifest schema and handoff rules
+- `docs/agent-experiments.md`: pre-run experiment schema for agent work
 - `docs/variant-graph.md`: variant node schema, graph inspection, evidence,
   checksums, promotion, and retention rules
 - `docs/cluster.md`: generic cluster inventory, doctor, and dry-run planning
@@ -234,6 +235,23 @@ Use manifests for planned, running, completed, and failed work. They preserve
 git state, config hashes, command lines, hardware, safe environment variables,
 outputs, artifacts, metrics, and notes. Never pass secrets through manifest
 metadata or notes.
+
+Write or validate an agent experiment plan before starting material work:
+
+```bash
+./forge agent schema
+./forge agent audit
+./forge agent init \
+  --experiment-id next_agent_step \
+  --title "Next agent step" \
+  --family gemma4_26b_a4b \
+  --variant base \
+  --objective-profile capability_sft \
+  --output recipes/agents/next_agent_step.yaml
+```
+
+Agent plans are pre-run contracts. They should state the hypothesis, resource
+policy, validation commands, evidence, rollback plan, and handoff requirements.
 
 Validate generated artifacts before making artifact-quality claims:
 

@@ -24,6 +24,8 @@ This is the short handoff state for humans and agents. Use
   audit`, which is also part of `./forge doctor`. The top-level `./forge`
   finetune, ablate, promote, and golden commands discover family configs by
   convention instead of branching on Gemma.
+- Agent experiment plans are now schema-backed through `./forge agent
+  schema|audit|init`; `./forge doctor` validates tracked agent templates.
 - Gemma 4 A4B is the first worked family for base, downloaded FT, downloaded
   abli, local base abli, local FT, and local FT abli comparisons.
 - Internal evals now cover refusal suppression, benign paired quality,

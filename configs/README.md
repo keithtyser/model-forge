@@ -37,6 +37,8 @@ and experiment constants here instead of hard-coding them in scripts.
 - `promotion/`: saved comparison gates for deciding whether a candidate should
   be promoted, held, or investigated.
 - `abliteration/`: refusal-direction and behavior-edit recipes.
+- `agents/`: schema for AI-agent experiment plans. Validate tracked templates
+  with `./forge agent audit`.
 - `artifact_validation/`: optional fixture configs for standalone HTML/Python
   artifact execution validation.
 

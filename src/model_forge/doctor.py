@@ -11,6 +11,7 @@ from typing import Iterable
 
 import yaml
 
+from model_forge.agents import audit_agent_experiments
 from model_forge.generalization import run_audit as run_generalization_audit
 from model_forge.objectives import audit_profiles
 from model_forge.roadmap import (
@@ -37,12 +38,15 @@ REQUIRED_FILES = (
     "docs/status.md",
     "docs/artifact-retention.md",
     "docs/adding-model-family.md",
+    "docs/agent-experiments.md",
     "docs/experiment-ledger.md",
     "docs/roadmap-status-audit.md",
     "docs/roadmaps/README.md",
     "configs/README.md",
+    "configs/agents/experiment_schema.yaml",
     "scripts/README.md",
     "recipes/README.md",
+    "recipes/agents/agent_experiment_template.yaml",
 )
 SECRET_PATTERNS = (
     ("huggingface_token", re.compile(r"hf_[A-Za-z0-9]{20,}")),
@@ -275,6 +279,13 @@ def check_generalization_assumptions(repo_dir: Path = REPO_DIR) -> list[Finding]
     ]
 
 
+def check_agent_experiments(repo_dir: Path = REPO_DIR) -> list[Finding]:
+    return [
+        Finding("agent_experiment", finding.message, finding.path, None)
+        for finding in audit_agent_experiments(repo_dir)
+    ]
+
+
 def run_checks(repo_dir: Path = REPO_DIR) -> list[Finding]:
     files = tracked_files(repo_dir)
     findings: list[Finding] = []
@@ -289,6 +300,7 @@ def run_checks(repo_dir: Path = REPO_DIR) -> list[Finding]:
     findings.extend(check_roadmap_cli_drift())
     findings.extend(check_model_family_configs(repo_dir))
     findings.extend(check_generalization_assumptions(repo_dir))
+    findings.extend(check_agent_experiments(repo_dir))
     findings.extend(check_tracked_variant_nodes(files, repo_dir))
     return findings
 

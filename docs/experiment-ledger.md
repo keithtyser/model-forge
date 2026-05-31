@@ -351,6 +351,47 @@ Result:
   new convention-based config discovery
 - MF-0606 is marked tested / smoke-validated
 
+## Agents: Experiment Schema
+
+Status: implemented and pushed as CLI/schema work. No model server, training
+run, quantization run, or eval job was started.
+
+Hypothesis: future agents need a pre-run contract before they start material
+work, especially for heavy Spark jobs. Canonical run manifests preserve what
+happened during a run; agent experiment plans should state the hypothesis,
+resource policy, commands, evidence plan, rollback path, and handoff rules
+before a run starts.
+
+Changes:
+
+- added `configs/agents/experiment_schema.yaml`
+- added `recipes/agents/agent_experiment_template.yaml`
+- added `docs/agent-experiments.md`
+- added `./forge agent schema`
+- added `./forge agent audit`
+- added `./forge agent init`
+- added `src/model_forge/agents.py`
+- wired tracked agent plan validation into `./forge doctor`
+- updated README, AGENTS, config docs, status, and roadmap state
+
+Validation:
+
+```bash
+./forge agent schema --json
+./forge agent audit --json
+.venv/bin/python -m unittest tests.test_agents tests.test_doctor -v
+bash -n forge
+.venv/bin/python -m py_compile src/model_forge/agents.py src/model_forge/doctor.py
+```
+
+Result:
+
+- tracked agent experiment template passes the schema audit
+- schema validation catches missing required fields, unknown variants, and
+  secret-like command values
+- `./forge doctor` now validates tracked agent templates
+- MF-0701 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

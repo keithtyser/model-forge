@@ -1,0 +1,69 @@
+# Agent Experiments
+
+Agent experiment plans are lightweight pre-run contracts for AI agents. They do
+not replace canonical run manifests. They define the hypothesis, commands,
+resource policy, evidence plan, success criteria, rollback path, and handoff
+rules before an agent starts work.
+
+## Commands
+
+Print the schema:
+
+```bash
+./forge agent schema
+```
+
+Validate tracked agent recipes:
+
+```bash
+./forge agent audit
+```
+
+Create a new plan from the template:
+
+```bash
+./forge agent init \
+  --experiment-id qwen35_local_abli_plan \
+  --title "Qwen 3.5 local ablation plan" \
+  --family qwen35_9b \
+  --variant base \
+  --objective-profile zero_refusal_capability_retention \
+  --experiment-type ablation \
+  --output recipes/agents/qwen35_local_abli_plan.yaml
+```
+
+## Required Shape
+
+Every plan uses `schema_version: model_forge.agent_experiment.v1` and must
+include:
+
+- identity: `experiment_id`, `title`, `owner_agent`, `family`, `variant`,
+  `objective_profile`, `experiment_type`, and `status`
+- hypothesis: the concrete claim to validate or falsify
+- `planned_commands`: commands, purpose, whether they start heavy jobs, and
+  whether they require explicit execution
+- `resource_policy`: memory/disk floors, one-heavy-job-at-a-time policy,
+  cluster usage, and checkpoint-or-plan-before-execute requirements
+- `evidence_plan`: expected reports, required validation commands, manifest
+  requirements, and ledger update requirements
+- `success_criteria`, `rollback_plan`, and `handoff`
+
+The validator rejects secret-like command text, unknown families, unknown
+variants, missing resource guardrails, and incomplete handoff fields.
+
+## Relationship To Manifests
+
+Use agent experiment plans before work starts. Use run manifests during and
+after actual runs:
+
+```bash
+./forge manifest write \
+  --run-type eval \
+  --status planned \
+  --family gemma4_26b_a4b \
+  --variant base \
+  --command './forge eval gemma4_26b_a4b base --internal'
+```
+
+For heavy model work, the plan should require a manifest, a guarded launcher,
+and evidence in `docs/experiment-ledger.md` before handoff.

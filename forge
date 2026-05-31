@@ -27,6 +27,7 @@ Usage:
   ./forge objectives [list|show|audit]
   ./forge roadmap [audit|cli-drift]
   ./forge generalization [audit]
+  ./forge agent [schema|audit|init]
   ./forge research [list|show|audit]
   ./forge hf [status|login|whoami|plan-model|publish-model]
   ./forge variants [graph|node|audit-node|tokenizer-audit|architecture-audit]
@@ -57,6 +58,7 @@ Examples:
   ./forge roadmap audit --write-doc
   ./forge roadmap cli-drift
   ./forge generalization audit
+  ./forge agent audit
   ./forge research audit
   ./forge hf status
   ./forge hf plan-model gemma4_26b_a4b local_ft --release-class report_only
@@ -256,6 +258,9 @@ PY
     ;;
   generalization)
     "$PYTHON" -m model_forge.generalization "$@"
+    ;;
+  agent)
+    "$PYTHON" -m model_forge.agents "$@"
     ;;
   manifest)
     "$PYTHON" -m model_forge.runs.manifest "$@"
