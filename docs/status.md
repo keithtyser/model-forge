@@ -36,6 +36,9 @@ This is the short handoff state for humans and agents. Use
 - `./forge agent optimize-behavior-edit` now writes a validated pre-run agent
   plan for refusal-ablation behavior edits, SOTA backend prep/run commands,
   source-vs-edited eval evidence, comparison refreshes, and promotion gates.
+- `./forge agent card` now writes Agent Run Cards from experiment plans,
+  summarizing plan identity, heavy commands, resource policy, evidence
+  requirements, schema findings, and Git state for handoff.
 - Gemma 4 A4B is the first worked family for base, downloaded FT, downloaded
   abli, local base abli, local FT, and local FT abli comparisons.
 - Internal evals now cover refusal suppression, benign paired quality,

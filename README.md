@@ -222,6 +222,7 @@ Agent experiment plans:
 ```bash
 ./forge agent schema
 ./forge agent audit
+./forge agent card recipes/agents/agent_experiment_template.yaml --write-card
 ./forge agent optimize-serving --family gemma4_26b_a4b --variant base
 ./forge agent optimize-quantization --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --variants base,local_ft
 ./forge agent optimize-behavior-edit --family gemma4_26b_a4b --config configs/abliteration/gemma4_26b_a4b_ft_local_abli.yaml --source-variant local_ft --target-variant ft_local_abli_sota_internal_r7_selected_t34_transfer --backend heretic

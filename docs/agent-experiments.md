@@ -19,6 +19,14 @@ Validate tracked agent recipes:
 ./forge agent audit
 ```
 
+Write an Agent Run Card for a planned or completed agent plan:
+
+```bash
+./forge agent card recipes/agents/gemma4_ft_behavior_edit.yaml \
+  --status planned \
+  --write-card
+```
+
 Create a serving optimization plan without starting a server:
 
 ```bash
@@ -98,3 +106,15 @@ after actual runs:
 
 For heavy model work, the plan should require a manifest, a guarded launcher,
 and evidence in `docs/experiment-ledger.md` before handoff.
+
+## Agent Run Cards
+
+Agent Run Cards summarize a specific agent experiment plan into
+`agent_run_card.json` and `agent_run_card.md`. They include the plan identity,
+hypothesis, command counts, heavy commands, resource policy, expected evidence,
+required validation commands, handoff policy, schema validation findings, and
+current Git metadata.
+
+By default, `--write-card` writes under
+`reports/generated/agent_runs/<experiment_id>/`. Use `--output-dir` when the
+card belongs next to generated run artifacts.

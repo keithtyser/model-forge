@@ -520,6 +520,46 @@ Result:
   prep commands stay lightweight
 - MF-0704 is marked tested / smoke-validated
 
+## Agents: Agent Run Card
+
+Status: implemented and pushed as planning/reporting CLI work. No model server,
+training run, behavior-edit run, quantization run, or eval job was started.
+
+Hypothesis: agent experiment plans are useful before work starts, but handoff
+also needs a compact run-card artifact that another agent can inspect without
+reading the full YAML or chat history. `./forge agent card` should convert any
+schema-valid plan into JSON and Markdown with identity, hypothesis, command
+counts, heavy commands, resource policy, expected evidence, required validation,
+schema findings, handoff policy, and Git state.
+
+Changes:
+
+- added `./forge agent card <plan>`
+- added `model_forge.agent_run_card.v1` JSON and Markdown card generation
+- defaulted written cards to `reports/generated/agent_runs/<experiment_id>/`
+- included schema validation findings in the card and returned a nonzero exit
+  code if the source plan is invalid
+- redacted secret-like values in card payloads before writing or printing
+- added Agent Run Card coverage to `tests/test_agents.py`
+- updated README, AGENTS, agent experiment docs, status, and roadmap state
+
+Validation:
+
+```bash
+./forge agent card recipes/agents/agent_experiment_template.yaml --write-card --output-dir /tmp/model_forge_agent_card --json
+.venv/bin/python -m unittest tests.test_agents -v
+bash -n forge
+.venv/bin/python -m py_compile src/model_forge/agents.py
+```
+
+Result:
+
+- `./forge agent card` writes `agent_run_card.json` and `agent_run_card.md`
+- the card records command counts, heavy commands, required validation, expected
+  reports, schema validation status, and Git metadata
+- invalid source plans are reported in-card and fail the CLI command
+- MF-0705 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

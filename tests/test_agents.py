@@ -8,11 +8,13 @@ from argparse import Namespace
 
 from model_forge.agents import (
     audit_agent_experiments,
+    build_agent_run_card,
     load_yaml,
     optimize_behavior_edit_plan,
     optimize_quantization_plan,
     optimize_serving_plan,
     validate_agent_experiment,
+    write_agent_run_card,
 )
 
 
@@ -155,6 +157,28 @@ class AgentExperimentTests(unittest.TestCase):
         self.assertTrue(any("forge eval" in command["command"] and "--internal" in command["command"] for command in commands))
         self.assertTrue(plan["evidence_plan"]["manifest_required"])
         self.assertTrue(plan["resource_policy"]["use_cluster_when_heavy"])
+
+    def test_agent_run_card_summarizes_plan_and_writes_outputs(self) -> None:
+        plan = load_yaml(Path("recipes/agents/agent_experiment_template.yaml"))
+        card = build_agent_run_card(plan, plan_path=Path("recipes/agents/agent_experiment_template.yaml"), status="planned")
+
+        self.assertEqual(card["schema_version"], "model_forge.agent_run_card.v1")
+        self.assertTrue(card["validation"]["passed"])
+        self.assertEqual(card["identity"]["experiment_id"], "template_agent_experiment")
+        self.assertEqual(card["command_summary"]["total"], 1)
+        self.assertEqual(card["command_summary"]["heavy"], 0)
+        self.assertIn("./forge doctor --json", card["evidence_plan"]["required_validation_commands"])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = write_agent_run_card(card, Path(tmp))
+            self.assertTrue((Path(tmp) / "agent_run_card.json").exists())
+            written = load_yaml(Path(tmp) / "agent_run_card.json")
+            markdown = (Path(tmp) / "agent_run_card.md").read_text(encoding="utf-8")
+
+        self.assertTrue(paths["json"].endswith("agent_run_card.json"))
+        self.assertEqual(written["outputs"]["json"], paths["json"])
+        self.assertIn("# Agent Run Card: template_agent_experiment", markdown)
+        self.assertIn("## Required Validation", markdown)
 
 
 if __name__ == "__main__":

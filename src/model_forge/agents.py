@@ -15,12 +15,14 @@ from model_forge.benchmarks.sweep import build_sweep_plan, load_sweep_config
 from model_forge.pipelines.abliterate import build_plan as build_abliteration_plan
 from model_forge.quantization.cli import DEFAULT_CONFIG as DEFAULT_QUANTIZATION_CONFIG
 from model_forge.quantization.cli import filter_matrix_entries, load_quantization_config, matrix_entries
-from model_forge.runs.manifest import REPO_DIR, display_path, sanitize_run_id
+from model_forge.runs.manifest import REPO_DIR, display_path, git_metadata, redact_value, sanitize_run_id, utc_now
 
 
 SCHEMA_CONFIG = REPO_DIR / "configs" / "agents" / "experiment_schema.yaml"
 DEFAULT_TEMPLATE = REPO_DIR / "recipes" / "agents" / "agent_experiment_template.yaml"
+DEFAULT_AGENT_RUNS_DIR = REPO_DIR / "reports" / "generated" / "agent_runs"
 AGENT_EXPERIMENT_VERSION = "model_forge.agent_experiment.v1"
+AGENT_RUN_CARD_VERSION = "model_forge.agent_run_card.v1"
 
 
 @dataclass(frozen=True)
@@ -742,6 +744,135 @@ def optimize_behavior_edit_plan(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def build_agent_run_card(
+    plan: Mapping[str, Any],
+    *,
+    plan_path: Path | None = None,
+    status: str | None = None,
+    notes: str | None = None,
+) -> dict[str, Any]:
+    findings = validate_agent_experiment(plan, path=display_path(plan_path) if plan_path else None)
+    commands = [command for command in plan.get("planned_commands") or [] if isinstance(command, Mapping)]
+    heavy_commands = [command for command in commands if command.get("starts_heavy_job")]
+    execute_commands = [command for command in commands if command.get("requires_execute")]
+    expected_reports = list((plan.get("evidence_plan") or {}).get("expected_reports") or [])
+    required_validation = list((plan.get("evidence_plan") or {}).get("required_validation_commands") or [])
+    card_status = status or str(plan.get("status") or "planned")
+    return redact_value(
+        {
+            "schema_version": AGENT_RUN_CARD_VERSION,
+            "created_at": utc_now().isoformat(),
+            "source_plan": display_path(plan_path) if plan_path else None,
+            "validation": {
+                "passed": not findings,
+                "findings": [asdict(finding) for finding in findings],
+            },
+            "identity": {
+                "experiment_id": plan.get("experiment_id"),
+                "title": plan.get("title"),
+                "owner_agent": plan.get("owner_agent"),
+                "experiment_type": plan.get("experiment_type"),
+                "status": card_status,
+                "family": plan.get("family"),
+                "variant": plan.get("variant"),
+                "objective_profile": plan.get("objective_profile"),
+            },
+            "goal": {
+                "hypothesis": plan.get("hypothesis"),
+                "success_criteria": list(plan.get("success_criteria") or []),
+                "rollback_plan": list(plan.get("rollback_plan") or []),
+            },
+            "command_summary": {
+                "total": len(commands),
+                "heavy": len(heavy_commands),
+                "requires_execute": len(execute_commands),
+                "heavy_commands": [command.get("command") for command in heavy_commands],
+                "execute_commands": [command.get("command") for command in execute_commands],
+            },
+            "resource_policy": dict(plan.get("resource_policy") or {}),
+            "evidence_plan": {
+                "manifest_required": bool((plan.get("evidence_plan") or {}).get("manifest_required")),
+                "ledger_update_required": bool((plan.get("evidence_plan") or {}).get("ledger_update_required")),
+                "expected_reports": expected_reports,
+                "required_validation_commands": required_validation,
+            },
+            "handoff": dict(plan.get("handoff") or {}),
+            "metadata": dict(plan.get("metadata") or {}),
+            "notes": notes,
+            "git": git_metadata(),
+        }
+    )
+
+
+def render_agent_run_card_markdown(card: Mapping[str, Any]) -> str:
+    identity = card.get("identity") or {}
+    goal = card.get("goal") or {}
+    command_summary = card.get("command_summary") or {}
+    evidence = card.get("evidence_plan") or {}
+    validation = card.get("validation") or {}
+    lines = [
+        f"# Agent Run Card: {identity.get('experiment_id')}",
+        "",
+        "## Identity",
+        "",
+        f"- Title: {identity.get('title')}",
+        f"- Status: {identity.get('status')}",
+        f"- Type: {identity.get('experiment_type')}",
+        f"- Family: {identity.get('family')}",
+        f"- Variant: {identity.get('variant')}",
+        f"- Objective profile: {identity.get('objective_profile')}",
+        f"- Owner agent: {identity.get('owner_agent')}",
+        "",
+        "## Goal",
+        "",
+        str(goal.get("hypothesis") or ""),
+        "",
+        "## Command Summary",
+        "",
+        f"- Planned commands: {command_summary.get('total', 0)}",
+        f"- Heavy commands: {command_summary.get('heavy', 0)}",
+        f"- Execute-required commands: {command_summary.get('requires_execute', 0)}",
+        "",
+        "## Evidence",
+        "",
+        f"- Manifest required: {evidence.get('manifest_required')}",
+        f"- Ledger update required: {evidence.get('ledger_update_required')}",
+        "- Expected reports:",
+    ]
+    lines.extend(f"  - {item}" for item in evidence.get("expected_reports") or [])
+    lines.extend(["", "## Required Validation", ""])
+    lines.extend(f"- `{item}`" for item in evidence.get("required_validation_commands") or [])
+    lines.extend(["", "## Success Criteria", ""])
+    lines.extend(f"- {item}" for item in goal.get("success_criteria") or [])
+    lines.extend(["", "## Rollback Plan", ""])
+    lines.extend(f"- {item}" for item in goal.get("rollback_plan") or [])
+    lines.extend(["", "## Heavy Commands", ""])
+    lines.extend(f"- `{item}`" for item in command_summary.get("heavy_commands") or [])
+    lines.extend(["", "## Validation", ""])
+    lines.append(f"- Agent plan schema passed: {validation.get('passed')}")
+    for finding in validation.get("findings") or []:
+        location = finding.get("path") or "<plan>"
+        if finding.get("field"):
+            location = f"{location}:{finding['field']}"
+        lines.append(f"- {location}: {finding.get('message')}")
+    if card.get("notes"):
+        lines.extend(["", "## Notes", "", str(card["notes"])])
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_agent_run_card(card: Mapping[str, Any], output_dir: Path) -> dict[str, str]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    json_path = output_dir / "agent_run_card.json"
+    md_path = output_dir / "agent_run_card.md"
+    paths = {"json": display_path(json_path), "markdown": display_path(md_path)}
+    payload = dict(card)
+    payload["outputs"] = paths
+    json_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    md_path.write_text(render_agent_run_card_markdown(payload), encoding="utf-8")
+    return paths
+
+
 def render_findings(findings: list[Finding]) -> None:
     if not findings:
         print("model-forge agent audit: OK")
@@ -764,6 +895,14 @@ def main() -> None:
     audit = sub.add_parser("audit", help="Validate tracked or supplied agent experiment plans")
     audit.add_argument("paths", nargs="*", type=Path)
     audit.add_argument("--json", action="store_true")
+
+    card = sub.add_parser("card", help="Write an Agent Run Card from an experiment plan")
+    card.add_argument("plan", type=Path)
+    card.add_argument("--status", choices=["planned", "running", "completed", "failed", "skipped"])
+    card.add_argument("--notes")
+    card.add_argument("--output-dir", type=Path)
+    card.add_argument("--write-card", action="store_true")
+    card.add_argument("--json", action="store_true")
 
     init = sub.add_parser("init", help="Create an agent experiment plan from the template")
     init.add_argument("--experiment-id", required=True)
@@ -846,6 +985,20 @@ def main() -> None:
         else:
             render_findings(findings)
         raise SystemExit(1 if findings else 0)
+
+    if args.command == "card":
+        plan = load_yaml(args.plan)
+        card_data = build_agent_run_card(plan, plan_path=args.plan, status=args.status, notes=args.notes)
+        if args.write_card:
+            experiment_id = sanitize_run_id(str(plan.get("experiment_id") or args.plan.stem))
+            output_dir = args.output_dir or DEFAULT_AGENT_RUNS_DIR / experiment_id
+            paths = write_agent_run_card(card_data, output_dir)
+            card_data["outputs"] = paths
+        if args.json:
+            print(json.dumps(card_data, indent=2, sort_keys=True) + "\n")
+        else:
+            print(render_agent_run_card_markdown(card_data))
+        raise SystemExit(0 if (card_data.get("validation") or {}).get("passed") else 1)
 
     if args.command == "init":
         plan = init_agent_experiment(args)
