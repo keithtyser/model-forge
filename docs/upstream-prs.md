@@ -4,6 +4,11 @@ Model Forge should not open random upstream pull requests just to satisfy a
 roadmap line. Upstream work needs a concrete target, local evidence, and a
 small patch that maintainers can reasonably review.
 
+The current first candidate is `dgx_spark_vllm_serving_recipe`, targeting
+`https://github.com/vllm-project/vllm`. It is grounded in tracked DGX Spark
+BF16 and NVFP4 serving benchmark summaries/cards. It is still a candidate until
+an external PR is opened and verified.
+
 Audit candidate plans:
 
 ```bash
@@ -21,7 +26,7 @@ Write an upstream PR plan:
 ```bash
 ./forge upstream plan \
   --config configs/upstream/pr_candidates.yaml \
-  --candidate kernel_card_docs_or_example \
+  --candidate dgx_spark_vllm_serving_recipe \
   --write-plan
 ```
 
@@ -30,7 +35,7 @@ Verify a recorded PR and evidence paths:
 ```bash
 ./forge upstream verify-pr \
   --config configs/upstream/pr_candidates.yaml \
-  --candidate kernel_card_docs_or_example \
+  --candidate dgx_spark_vllm_serving_recipe \
   --write-report
 ```
 

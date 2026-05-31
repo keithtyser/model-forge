@@ -9,22 +9,25 @@ policy:
   require_no_private_paths: true
   require_sensitive_literal_scan: true
 candidates:
-  - id: kernel_card_docs_or_example
-    target_project: model-forge-adjacent
-    target_url: https://github.com/<owner>/<repo>
+  - id: dgx_spark_vllm_serving_recipe
+    target_project: vLLM
+    target_url: https://github.com/vllm-project/vllm
     status: candidate
     hypothesis: >
-      A profiler-backed kernel benchmark card or example can be upstreamed once
-      we have an external repo with matching benchmark/report conventions.
+      A small documentation or benchmark-recipe contribution for DGX Spark GB10
+      serving can be useful upstream because Model Forge has measured BF16 and
+      NVFP4 OpenAI-compatible vLLM endpoint evidence on a repeatable workload.
     contribution_type: docs_or_example
     local_evidence:
-      - reports/generated/kernel_benchmarks/<run>/summary.json
-      - reports/generated/kernel_benchmarks/<run>/kernel_card.json
-      - reports/generated/profiles/nsight/<run>/profile_summary.json
+      - reports/generated/serve_bench/gemma4_base_bf16_core_r3_20260530/summary.json
+      - reports/generated/serve_bench/gemma4_base_bf16_core_r3_20260530/serving_card.md
+      - reports/generated/serve_bench/gemma4_base_nvfp4_mlp_fullram_smoke16_core_r3_metrics_20260530/summary.json
+      - reports/generated/serve_bench/gemma4_base_nvfp4_mlp_fullram_smoke16_core_r3_metrics_20260530/serving_card.md
     required_validation:
-      - ./forge bench kernel <benchmark> --write
-      - ./forge profile nsight summarize --plan <plan> --write-summary
-      - ./forge upstream plan --config configs/upstream/pr_candidates.yaml --candidate kernel_card_docs_or_example --write-plan
+      - ./forge upstream audit --config configs/upstream/pr_candidates.yaml --strict
+      - ./forge upstream plan --config configs/upstream/pr_candidates.yaml --candidate dgx_spark_vllm_serving_recipe --write-plan
+      - ./forge upstream verify-pr --config configs/upstream/pr_candidates.yaml --candidate dgx_spark_vllm_serving_recipe --offline --write-report
     next_action: >
-      Replace target_url with a real upstream repository after selecting a
-      project whose maintainers accept benchmark examples or profiling docs.
+      Draft the smallest upstreamable docs or benchmark recipe patch, open it
+      against vllm-project/vllm, then record external_pr_url and run non-offline
+      verify-pr before marking MF-0808 complete.

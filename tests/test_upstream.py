@@ -25,7 +25,7 @@ class UpstreamPlanTests(unittest.TestCase):
         config, path = load_yaml(DEFAULT_CONFIG)
         findings = audit_config(config, path)
         self.assertFalse([finding for finding in findings if finding.severity == "error"])
-        plan = build_plan(config, path, candidate_id="kernel_card_docs_or_example", run_id="unit_upstream")
+        plan = build_plan(config, path, candidate_id="dgx_spark_vllm_serving_recipe", run_id="unit_upstream")
         self.assertEqual(plan["schema_version"], PLAN_SCHEMA_VERSION)
         self.assertTrue(plan["evidence_requirements"]["external_pr_url_required_for_completion"])
         self.assertIn("external_pr_url", plan["completion_rule"])
@@ -57,12 +57,10 @@ class UpstreamPlanTests(unittest.TestCase):
 
         self.assertIn("evidence", {finding.check for finding in findings})
 
-    def test_strict_audit_rejects_placeholder_target(self) -> None:
+    def test_strict_audit_accepts_current_concrete_candidate_target(self) -> None:
         config, path = load_yaml(DEFAULT_CONFIG)
         findings = audit_config(config, path, strict=True)
-        target_findings = [finding for finding in findings if finding.check == "target"]
-        self.assertTrue(target_findings)
-        self.assertTrue(all(finding.severity == "error" for finding in target_findings))
+        self.assertFalse([finding for finding in findings if finding.severity == "error"])
 
     def test_audit_rejects_malformed_external_pr_url(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -142,7 +140,7 @@ class UpstreamPlanTests(unittest.TestCase):
     def test_write_plan_creates_json_and_markdown(self) -> None:
         config, path = load_yaml(DEFAULT_CONFIG)
         with tempfile.TemporaryDirectory() as tmp:
-            plan = build_plan(config, path, candidate_id="kernel_card_docs_or_example", run_id="unit_upstream_write")
+            plan = build_plan(config, path, candidate_id="dgx_spark_vllm_serving_recipe", run_id="unit_upstream_write")
             plan = {**plan, "output_dir": tmp}
             plan_path = write_plan(plan)
             markdown = plan_path.with_suffix(".md").read_text(encoding="utf-8")
@@ -191,15 +189,16 @@ class UpstreamPlanTests(unittest.TestCase):
         self.assertEqual(checks["github_pr_remote_verified"]["status"], "skip")
         self.assertIn("offline mode skipped", checks["github_pr_remote_verified"]["message"])
 
-    def test_verification_blocks_placeholder_target_and_missing_evidence(self) -> None:
+    def test_verification_blocks_candidate_until_external_pr_is_recorded(self) -> None:
         config, path = load_yaml(DEFAULT_CONFIG)
-        verification = build_verification(config, path, candidate_id="kernel_card_docs_or_example", offline=True)
+        verification = build_verification(config, path, candidate_id="dgx_spark_vllm_serving_recipe", offline=True)
 
         self.assertFalse(verification["verified"])
         failures = {check["name"] for check in verification["checks"] if check["status"] == "fail"}
         self.assertIn("candidate_status_opened_or_merged", failures)
-        self.assertIn("target_url_concrete", failures)
         self.assertIn("external_pr_url_present", failures)
+        self.assertNotIn("target_url_concrete", failures)
+        self.assertFalse(any(name.endswith("_exists") for name in failures))
 
     def test_write_verification_creates_report(self) -> None:
         config, path = load_yaml(DEFAULT_CONFIG)
@@ -207,7 +206,7 @@ class UpstreamPlanTests(unittest.TestCase):
             verification = build_verification(
                 config,
                 path,
-                candidate_id="kernel_card_docs_or_example",
+                candidate_id="dgx_spark_vllm_serving_recipe",
                 offline=True,
                 run_id="unit_upstream_verify",
             )

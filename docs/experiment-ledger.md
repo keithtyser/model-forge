@@ -896,7 +896,7 @@ Validation:
 
 ```bash
 ./forge upstream audit --config configs/upstream/pr_candidates.yaml
-./forge upstream plan --config configs/upstream/pr_candidates.yaml --candidate kernel_card_docs_or_example --write-plan --json
+./forge upstream plan --config configs/upstream/pr_candidates.yaml --candidate dgx_spark_vllm_serving_recipe --write-plan --json
 .venv/bin/python -m unittest tests.test_upstream -v
 ```
 
@@ -926,6 +926,15 @@ Verification hardening:
   GitHub API PR metadata
 - `--offline` is allowed for drafting but cannot complete MF-0808; completion
   requires a non-offline report with `verified=true`
+
+Target-selection follow-up:
+
+- replaced the placeholder upstream target with `vllm-project/vllm`
+- renamed the first candidate to `dgx_spark_vllm_serving_recipe`
+- grounded the candidate in existing DGX Spark BF16 and NVFP4 serving benchmark
+  summaries/cards instead of unresolved kernel/profile placeholders
+- strict audit now passes for the candidate, and offline verification is blocked
+  only on the missing external PR status and URL
 
 ## Advanced Serving: SGLang Backend Planner
 

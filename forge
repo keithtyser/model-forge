@@ -78,8 +78,8 @@ Examples:
   ./forge agent optimize-serving --family gemma4_26b_a4b --variant base
   ./forge agent optimize-quantization --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --variants base
   ./forge agent optimize-behavior-edit --family gemma4_26b_a4b
-  ./forge upstream plan --config configs/upstream/pr_candidates.yaml --candidate kernel_card_docs_or_example --write-plan
-  ./forge upstream verify-pr --config configs/upstream/pr_candidates.yaml --candidate kernel_card_docs_or_example --offline --write-report
+  ./forge upstream plan --config configs/upstream/pr_candidates.yaml --candidate dgx_spark_vllm_serving_recipe --write-plan
+  ./forge upstream verify-pr --config configs/upstream/pr_candidates.yaml --candidate dgx_spark_vllm_serving_recipe --offline --write-report
   ./forge research audit
   ./forge research watch
   ./forge hf release-classes --audit

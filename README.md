@@ -330,8 +330,8 @@ Upstream PR planning:
 
 ```bash
 ./forge upstream audit --config configs/upstream/pr_candidates.yaml
-./forge upstream plan --config configs/upstream/pr_candidates.yaml --candidate kernel_card_docs_or_example --write-plan
-./forge upstream verify-pr --config configs/upstream/pr_candidates.yaml --candidate kernel_card_docs_or_example --offline --write-report
+./forge upstream plan --config configs/upstream/pr_candidates.yaml --candidate dgx_spark_vllm_serving_recipe --write-plan
+./forge upstream verify-pr --config configs/upstream/pr_candidates.yaml --candidate dgx_spark_vllm_serving_recipe --offline --write-report
 ```
 
 See [docs/upstream-prs.md](docs/upstream-prs.md). Upstream PR planning is an
