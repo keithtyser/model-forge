@@ -426,6 +426,13 @@ Plan and report quantization without loading a model:
   --candidate-tokenizer-dir <quantized_or_gguf_dir> \
   --run-id source_vs_quantized_tokenizer \
   --write-report
+./forge quantize sensitivity-report \
+  --config configs/quantization/sensitivity_scan.yaml \
+  --baseline-serving-summary <source>/summary.json \
+  --baseline-serving-eval <source_eval_dir> \
+  --candidate name=mlp_only,component=mlp,summary=<candidate>/summary.json,eval=<candidate_eval_dir> \
+  --run-id quant_sensitivity \
+  --write-report
 ```
 
 NVFP4 is the priority Blackwell path. `nvfp4_runtime` means Model Forge is
@@ -452,6 +459,9 @@ does not compensate for failing the required behavior-retention checks.
 For quantized or GGUF export directories that are not yet configured variants,
 use `./forge quantize tokenizer-report` to compare tokenizer files, special
 tokens, and chat-template metadata directly against the source model directory.
+Use `./forge quantize sensitivity-report` after candidate runs exist to rank
+component policies such as all-linear, MLP-only, attention-only, or experts-only.
+Do not infer component sensitivity from a single candidate.
 
 For self-quantization, use the ModelOpt export runner and the matrix config:
 

@@ -34,6 +34,7 @@ CALIBRATION_MANIFEST_SCHEMA_VERSION = "model_forge.quantization_calibration_mani
 FP8_KV_REPORT_SCHEMA_VERSION = "model_forge.fp8_kv_behavior_report.v1"
 BEHAVIOR_REPORT_SCHEMA_VERSION = "model_forge.quantization_behavior_preservation_report.v1"
 TOKENIZER_REPORT_SCHEMA_VERSION = "model_forge.quantization_tokenizer_preservation_report.v1"
+SENSITIVITY_REPORT_SCHEMA_VERSION = "model_forge.quantization_sensitivity_report.v1"
 
 console = Console(stderr=True)
 
@@ -1436,6 +1437,165 @@ def write_tokenizer_report_outputs(report: Mapping[str, Any]) -> Path:
     return output_dir
 
 
+def candidate_arg(raw: str) -> dict[str, str]:
+    values = {}
+    for item in raw.split(","):
+        if "=" not in item:
+            raise ValueError(f"candidate entries must be key=value pairs, got {item!r}")
+        key, value = item.split("=", 1)
+        values[key.strip()] = value.strip()
+    required = {"name", "component", "summary", "eval"}
+    missing = sorted(required - set(values))
+    if missing:
+        raise ValueError(f"candidate entry missing keys: {', '.join(missing)}")
+    return values
+
+
+def sensitivity_candidate_summary(
+    config: QuantizationConfig,
+    *,
+    config_path: Path,
+    baseline_summary: Path,
+    baseline_eval: Path,
+    candidate: Mapping[str, str],
+    output_dir: Path,
+    run_id: str,
+) -> dict[str, Any]:
+    card = build_card(
+        config,
+        config_path=config_path,
+        source_serving_summary=baseline_summary,
+        candidate_serving_summary=resolve_repo_path(candidate["summary"]),
+        source_serving_eval=baseline_eval,
+        candidate_serving_eval=resolve_repo_path(candidate["eval"]),
+        output_dir=output_dir,
+        run_id=run_id,
+    )
+    checks = [behavior_metric_check(metric, values) for metric, values in card["sampled_eval_deltas"].items()]
+    behavior_preserved = all(check["status"] == "pass" for check in checks if check["required"])
+    throughput = card["serving_deltas"].get("output_tokens_per_second_p50") or {}
+    decode_heavy = card["serving_deltas"].get("decode_heavy_output_tokens_per_second_p50") or {}
+    latency = card["serving_deltas"].get("total_latency_p50") or {}
+    return {
+        "name": candidate["name"],
+        "component": candidate["component"],
+        "policy": candidate.get("policy"),
+        "precision": candidate.get("precision"),
+        "serving_summary": display_path(resolve_repo_path(candidate["summary"])),
+        "serving_eval": display_path(resolve_repo_path(candidate["eval"])),
+        "behavior_preserved": behavior_preserved,
+        "required_behavior_checks": checks,
+        "throughput_delta": throughput.get("delta"),
+        "decode_heavy_throughput_delta": decode_heavy.get("delta"),
+        "latency_delta": latency.get("delta"),
+        "serving_deltas": card["serving_deltas"],
+        "sampled_eval_deltas": card["sampled_eval_deltas"],
+    }
+
+
+def sensitivity_sort_key(item: Mapping[str, Any]) -> tuple[int, float, float]:
+    preserved = 1 if item.get("behavior_preserved") else 0
+    decode_delta = item.get("decode_heavy_throughput_delta")
+    throughput_delta = item.get("throughput_delta")
+    return (
+        preserved,
+        float(decode_delta) if isinstance(decode_delta, (int, float)) else float("-inf"),
+        float(throughput_delta) if isinstance(throughput_delta, (int, float)) else float("-inf"),
+    )
+
+
+def build_sensitivity_report(
+    config: QuantizationConfig,
+    *,
+    config_path: Path,
+    baseline_serving_summary: Path,
+    baseline_serving_eval: Path,
+    candidates: list[Mapping[str, str]],
+    output_dir: Path,
+    run_id: str,
+) -> dict[str, Any]:
+    baseline_summary = resolve_repo_path(baseline_serving_summary)
+    baseline_eval = resolve_repo_path(baseline_serving_eval)
+    candidate_reports = [
+        sensitivity_candidate_summary(
+            config,
+            config_path=config_path,
+            baseline_summary=baseline_summary,
+            baseline_eval=baseline_eval,
+            candidate=candidate,
+            output_dir=output_dir,
+            run_id=f"{run_id}_{candidate['name']}",
+        )
+        for candidate in candidates
+    ]
+    ranked = sorted(candidate_reports, key=sensitivity_sort_key, reverse=True)
+    return redact_value(
+        {
+            "schema_version": SENSITIVITY_REPORT_SCHEMA_VERSION,
+            "created_at": utc_now().isoformat(),
+            "run_id": run_id,
+            "config": display_path(config_path),
+            "objective": config.objective,
+            "method": config.method,
+            "backend": config.backend,
+            "baseline": {
+                "serving_summary": display_path(baseline_summary),
+                "serving_eval": display_path(baseline_eval),
+            },
+            "candidate_count": len(candidate_reports),
+            "candidates": candidate_reports,
+            "ranking": [
+                {
+                    "rank": index + 1,
+                    "name": item["name"],
+                    "component": item["component"],
+                    "behavior_preserved": item["behavior_preserved"],
+                    "decode_heavy_throughput_delta": item["decode_heavy_throughput_delta"],
+                    "throughput_delta": item["throughput_delta"],
+                    "latency_delta": item["latency_delta"],
+                }
+                for index, item in enumerate(ranked)
+            ],
+            "recommended_candidate": ranked[0]["name"] if ranked else None,
+            "output_dir": display_path(output_dir),
+            "notes": [
+                "Sensitivity reports rank completed candidate runs; they do not run quantization or serving jobs.",
+                "A candidate must preserve required behavior checks before throughput deltas are considered promotion evidence.",
+                "Use this to compare policies such as all-linear, MLP-only, attention-only, experts-only, or keep-router-BF16.",
+            ],
+        }
+    )
+
+
+def write_sensitivity_report_outputs(report: Mapping[str, Any]) -> Path:
+    output_dir = resolve_repo_path(str(report["output_dir"]))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "sensitivity_report.json").write_text(
+        json.dumps(redact_value(report), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    lines = [
+        f"# Quantization Sensitivity Report: {report.get('run_id')}",
+        "",
+        f"- Candidate count: `{report.get('candidate_count')}`",
+        f"- Recommended candidate: `{report.get('recommended_candidate')}`",
+        "",
+        "## Ranking",
+        "",
+        "| Rank | Name | Component | Behavior preserved | Decode-heavy tok/s delta | Output tok/s delta | Latency delta |",
+        "|---:|---|---|---|---:|---:|---:|",
+    ]
+    for item in report.get("ranking") or []:
+        lines.append(
+            f"| {item.get('rank')} | {item.get('name')} | {item.get('component')} | {item.get('behavior_preserved')} | "
+            f"{item.get('decode_heavy_throughput_delta')} | {item.get('throughput_delta')} | {item.get('latency_delta')} |"
+        )
+    lines.extend(["", "## Notes", ""])
+    lines.extend(f"- {note}" for note in report.get("notes") or [])
+    (output_dir / "sensitivity_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return output_dir
+
+
 def write_fp8_kv_report_outputs(report: Mapping[str, Any]) -> Path:
     output_dir = resolve_repo_path(str(report["output_dir"]))
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1702,6 +1862,21 @@ def main() -> None:
     tokenizer_parser.add_argument("--write-report", action="store_true", help="Write tokenizer_preservation_report.json and .md")
     tokenizer_parser.add_argument("--json", action="store_true", help="Print JSON report")
 
+    sensitivity_parser = subparsers.add_parser("sensitivity-report", help="Rank layer/component quantization candidates from completed evidence")
+    sensitivity_parser.add_argument("--config", type=Path, required=True)
+    sensitivity_parser.add_argument("--baseline-serving-summary", type=Path, required=True)
+    sensitivity_parser.add_argument("--baseline-serving-eval", type=Path, required=True)
+    sensitivity_parser.add_argument(
+        "--candidate",
+        action="append",
+        default=[],
+        help="Candidate key-value list: name=<id>,component=<component>,summary=<summary.json>,eval=<eval-dir>[,policy=<text>,precision=<text>]",
+    )
+    sensitivity_parser.add_argument("--output-dir", type=Path, default=REPO_DIR / "reports" / "generated" / "quantization")
+    sensitivity_parser.add_argument("--run-id", required=True)
+    sensitivity_parser.add_argument("--write-report", action="store_true", help="Write sensitivity_report.json and .md")
+    sensitivity_parser.add_argument("--json", action="store_true", help="Print JSON report")
+
     args = parser.parse_args()
     config_path = resolve_repo_path(args.config) if hasattr(args, "config") else DEFAULT_CONFIG
     config = load_quantization_config(config_path) if hasattr(args, "config") else None
@@ -1730,6 +1905,41 @@ def main() -> None:
             table.add_row("passed", str(report["passed"]))
             table.add_row("findings", str(len(report.get("findings") or [])))
             table.add_row("metadata_only", str(report["metadata_only"]))
+            console.print(table)
+        return
+
+    if args.command == "sensitivity-report":
+        if not args.candidate:
+            raise SystemExit("--candidate is required at least once")
+        output_dir = resolve_repo_path(args.output_dir) / sanitize_run_id(args.run_id)
+        report = build_sensitivity_report(
+            config,
+            config_path=config_path,
+            baseline_serving_summary=resolve_repo_path(args.baseline_serving_summary),
+            baseline_serving_eval=resolve_repo_path(args.baseline_serving_eval),
+            candidates=[candidate_arg(raw) for raw in args.candidate],
+            output_dir=output_dir,
+            run_id=sanitize_run_id(args.run_id),
+        )
+        if args.write_report:
+            write_sensitivity_report_outputs(report)
+        if args.json:
+            print(json.dumps(redact_value(report), indent=2, sort_keys=True) + "\n")
+        else:
+            table = Table(title="Quantization Sensitivity Report")
+            table.add_column("Rank")
+            table.add_column("Name")
+            table.add_column("Component")
+            table.add_column("Behavior")
+            table.add_column("Decode-heavy delta")
+            for item in report.get("ranking") or []:
+                table.add_row(
+                    str(item.get("rank")),
+                    str(item.get("name")),
+                    str(item.get("component")),
+                    str(item.get("behavior_preserved")),
+                    str(item.get("decode_heavy_throughput_delta")),
+                )
             console.print(table)
         return
 

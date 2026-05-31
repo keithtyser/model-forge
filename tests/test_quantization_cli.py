@@ -10,12 +10,14 @@ from model_forge.quantization.cli import (
     BEHAVIOR_REPORT_SCHEMA_VERSION,
     CALIBRATION_MANIFEST_SCHEMA_VERSION,
     FP8_KV_REPORT_SCHEMA_VERSION,
+    SENSITIVITY_REPORT_SCHEMA_VERSION,
     TOKENIZER_REPORT_SCHEMA_VERSION,
     build_card,
     build_behavior_report,
     build_calibration_manifest,
     build_fp8_kv_report,
     build_modelopt_export_command,
+    build_sensitivity_report,
     build_tokenizer_report,
     build_plan,
     filter_matrix_entries,
@@ -41,6 +43,42 @@ def write_tokenizer_fixture(path: Path, *, chat_template: str = "{{ messages }}"
         encoding="utf-8",
     )
     (path / "special_tokens_map.json").write_text(json.dumps({"eos_token": eos_token}), encoding="utf-8")
+
+
+def write_serving_summary(path: Path, *, model: str, success_rate: float = 1.0, output_tps: float = 10.0, decode_heavy_tps: float = 10.0, latency: float = 5.0) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "model": model,
+                "success_rate": success_rate,
+                "metrics": {
+                    "output_tokens_per_second": {"p50": output_tps},
+                    "total_latency_seconds": {"p50": latency},
+                },
+                "by_category": {
+                    "decode_heavy": {
+                        "metrics": {
+                            "output_tokens_per_second": {"p50": decode_heavy_tps},
+                        }
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def write_behavior_scores(path: Path, *, normal: float = 1.0, challenge: float = 0.9, schema: float = 1.0, workflow: float = 1.0, benign_quality: float = 0.9) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    header = "bucket,metric,value,count,pass_count,fail_count,ci_low,ci_high,stddev\n"
+    rows = (
+        f"normal_use_regression,normal_use_regression_pass_rate,{normal},4,4,0,0.6,1.0,0\n"
+        f"capability_preservation_challenge,normal_use_regression_pass_rate,{challenge},4,4,0,0.5,1.0,0\n"
+        f"agentic_tool_use_json,schema_adherence,{schema},4,4,0,0.6,1.0,0\n"
+        f"agentic_tool_use_json,workflow_success,{workflow},4,4,0,0.6,1.0,0\n"
+        f"refusal_paired_boundary,benign_answer_quality_rate,{benign_quality},4,4,0,0.5,1.0,0\n"
+    )
+    (path / "scores.csv").write_text(header + rows, encoding="utf-8")
 
 
 class QuantizationCliTests(unittest.TestCase):
@@ -377,6 +415,42 @@ class QuantizationCliTests(unittest.TestCase):
 
         self.assertFalse(report["passed"])
         self.assertTrue(any(finding["check"] == "tokenizer_preservation" for finding in report["findings"]))
+
+    def test_sensitivity_report_ranks_behavior_preserving_component_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            baseline_summary = root / "baseline_summary.json"
+            mlp_summary = root / "mlp_summary.json"
+            all_summary = root / "all_summary.json"
+            baseline_eval = root / "baseline_eval"
+            mlp_eval = root / "mlp_eval"
+            all_eval = root / "all_eval"
+            write_serving_summary(baseline_summary, model="source", output_tps=20.0, decode_heavy_tps=20.0)
+            write_serving_summary(mlp_summary, model="mlp", output_tps=24.0, decode_heavy_tps=25.0, latency=4.0)
+            write_serving_summary(all_summary, model="all", output_tps=30.0, decode_heavy_tps=31.0, latency=3.5)
+            write_behavior_scores(baseline_eval)
+            write_behavior_scores(mlp_eval, normal=0.99, challenge=0.87, schema=0.99, workflow=0.99, benign_quality=0.89)
+            write_behavior_scores(all_eval, normal=0.80, challenge=0.70, schema=0.80, workflow=0.80, benign_quality=0.70)
+            config_path = Path("configs/quantization/sensitivity_scan.yaml")
+            config = load_quantization_config(config_path)
+            report = build_sensitivity_report(
+                config,
+                config_path=config_path,
+                baseline_serving_summary=baseline_summary,
+                baseline_serving_eval=baseline_eval,
+                candidates=[
+                    {"name": "mlp_only", "component": "mlp", "summary": str(mlp_summary), "eval": str(mlp_eval), "precision": "fp8"},
+                    {"name": "all_linear", "component": "all_linear", "summary": str(all_summary), "eval": str(all_eval), "precision": "fp8"},
+                ],
+                output_dir=root / "sensitivity",
+                run_id="unit_sensitivity",
+            )
+
+        self.assertEqual(report["schema_version"], SENSITIVITY_REPORT_SCHEMA_VERSION)
+        self.assertEqual(report["candidate_count"], 2)
+        self.assertEqual(report["recommended_candidate"], "mlp_only")
+        self.assertTrue(report["ranking"][0]["behavior_preserved"])
+        self.assertFalse(next(item for item in report["candidates"] if item["name"] == "all_linear")["behavior_preserved"])
 
     def test_modelopt_export_command_quantizes_local_gemma_variant(self) -> None:
         config_path = Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml")

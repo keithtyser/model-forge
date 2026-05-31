@@ -1,0 +1,43 @@
+schema_version: model_forge.quantization.v1
+name: sensitivity_scan
+description: >
+  Generic report profile for comparing completed layer/component quantization
+  candidates against the same source baseline. Use it after running candidate
+  exports and serving/eval jobs; it does not launch model work.
+method: sensitivity_report
+backend: evidence_report
+objective: quantized_quality_retention
+hardware_profile: portable
+
+calibration:
+  required: false
+  reason: Sensitivity reports consume completed evidence from candidate runs.
+
+exclusions:
+  apply_recommended_keep_patterns: true
+  candidate_components:
+    - all_linear
+    - attention_only
+    - mlp_only
+    - experts_only
+    - keep_router_bf16
+    - keep_embeddings_norms_bf16
+
+runtime: {}
+export: {}
+matrix:
+  variants: []
+
+outputs:
+  reports_dir: reports/generated/quantization
+
+evals:
+  required:
+    - ./forge quantize sensitivity-report --config configs/quantization/sensitivity_scan.yaml --baseline-serving-summary <source>/summary.json --baseline-serving-eval <source_eval> --candidate name=<id>,component=<component>,summary=<candidate>/summary.json,eval=<candidate_eval> --run-id <run_id> --write-report
+  card_metrics:
+    - normal_use_regression.normal_use_regression_pass_rate
+    - capability_preservation_challenge.normal_use_regression_pass_rate
+    - agentic_tool_use_json.schema_adherence
+    - agentic_tool_use_json.workflow_success
+    - refusal_paired_boundary.benign_answer_quality_rate
+    - unsafe_overcompliance.unsafe_overcompliance_rate

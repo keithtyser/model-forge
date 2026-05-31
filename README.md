@@ -371,6 +371,13 @@ Quantization:
   --candidate-tokenizer-dir <quantized_or_gguf_dir> \
   --run-id source_vs_quantized_tokenizer \
   --write-report
+./forge quantize sensitivity-report \
+  --config configs/quantization/sensitivity_scan.yaml \
+  --baseline-serving-summary <source>/summary.json \
+  --baseline-serving-eval <source_eval_dir> \
+  --candidate name=mlp_only,component=mlp,summary=<candidate>/summary.json,eval=<candidate_eval_dir> \
+  --run-id quant_sensitivity \
+  --write-report
 ```
 
 See [docs/quantization.md](docs/quantization.md). NVFP4 is the priority

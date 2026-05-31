@@ -249,6 +249,25 @@ locally. Configured family variants can still use
 `./forge variants tokenizer-audit`; `quantize tokenizer-report` exists for
 new export directories before they are added to a family config.
 
+After multiple component-policy candidates have completed serving and sampled
+evals, rank them with a sensitivity report:
+
+```bash
+./forge quantize sensitivity-report \
+  --config configs/quantization/sensitivity_scan.yaml \
+  --baseline-serving-summary reports/generated/source/serve_bench/summary.json \
+  --baseline-serving-eval reports/generated/source/serve_eval \
+  --candidate name=mlp_only,component=mlp,summary=reports/generated/mlp/serve_bench/summary.json,eval=reports/generated/mlp/serve_eval \
+  --candidate name=attention_only,component=attention,summary=reports/generated/attention/serve_bench/summary.json,eval=reports/generated/attention/serve_eval \
+  --run-id quant_sensitivity \
+  --write-report
+```
+
+The ranking only considers throughput deltas after required behavior-retention
+checks pass. Use it to compare all-linear, MLP-only, attention-only,
+experts-only, keep-router-BF16, or similar policies without baking
+architecture-specific constants into the common pipeline.
+
 ## FP8 W8A8 Checkpoint Pipeline
 
 FP8 W8A8 is a checkpoint-creation path, unlike runtime FP8 KV cache. Use the

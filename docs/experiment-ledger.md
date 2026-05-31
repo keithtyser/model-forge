@@ -1556,6 +1556,50 @@ Result:
   before promotion
 - MF-0310 is marked tested / smoke-validated
 
+## Quantization: Layer And Component Sensitivity Report
+
+Status: implemented as report code/docs only. No model server, export job,
+quantization run, eval, or benchmark was started.
+
+Hypothesis: Component-aware quantization should be selected from completed
+candidate evidence, not guessed from a single model. A sensitivity report should
+rank policies such as all-linear, MLP-only, attention-only, experts-only, and
+keep-router-BF16 against the same source baseline, while requiring behavior
+retention before throughput is considered.
+
+Implemented command:
+
+```bash
+./forge quantize sensitivity-report \
+  --config configs/quantization/sensitivity_scan.yaml \
+  --baseline-serving-summary <source>/summary.json \
+  --baseline-serving-eval <source_eval> \
+  --candidate name=mlp_only,component=mlp,summary=<candidate>/summary.json,eval=<candidate_eval> \
+  --run-id quant_sensitivity \
+  --write-report
+```
+
+Changes:
+
+- added `model_forge.quantization_sensitivity_report.v1`
+- added generic `configs/quantization/sensitivity_scan.yaml`
+- ranks candidates by behavior preservation first, then decode-heavy and
+  overall output token/sec deltas
+- writes `sensitivity_report.json` and `.md`
+- updated README, AGENTS, quantization docs, and roadmap state
+
+Validation:
+
+```bash
+.venv/bin/python -m unittest tests.test_quantization_cli -v
+```
+
+Result:
+
+- layer/component quantization candidates now have a reproducible comparison
+  report
+- MF-0308 is marked tested / smoke_validated
+
 ## Quantization: ModelOpt NVFP4 Self-Export Guardrail Incident
 
 Status: stopped before a completed NVFP4 checkpoint. Code and docs now enforce
