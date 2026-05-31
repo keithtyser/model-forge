@@ -181,14 +181,136 @@ class ModelForgeDgxServeTests(unittest.TestCase):
 
             with mock.patch.object(model_forge_dgx, "recommended_vllm_env", return_value={"GPU_MEMORY_UTILIZATION": "0.95", "MAX_NUM_BATCHED_TOKENS": "32768"}):
                 with mock.patch.object(model_forge_dgx, "detect_hardware_profile", None):
-                    with mock.patch.object(model_forge_dgx, "run", side_effect=fake_run):
-                        model_forge_dgx.action_serve(family, "test_family", "base")
+                    with mock.patch.object(model_forge_dgx, "run_or_exit", return_value=None):
+                        with mock.patch.object(model_forge_dgx, "run", side_effect=fake_run):
+                            model_forge_dgx.action_serve(family, "test_family", "base")
 
+        self.assertEqual(
+            captured_env["MODEL_FORGE_MODEL"],
+            str(root / "base-model"),
+        )
         self.assertEqual(captured_env["GPU_MEMORY_UTILIZATION"], "0.78")
         self.assertEqual(captured_env["MAX_MODEL_LEN"], "32768")
         self.assertEqual(captured_env["MAX_NUM_BATCHED_TOKENS"], "16384")
         self.assertEqual(captured_env["VLLM_MAX_NUM_SEQS"], "4")
         self.assertEqual(captured_env["MODEL_FORGE_SPARK_VLLM_IMAGE"], "vllm-node-tf5")
+
+    def test_full_checkpoint_serve_runs_checkpoint_audit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "base-model").mkdir()
+            family = {
+                "models_dir_env": "MODEL_FORGE_TEST_MODELS_DIR",
+                "default_models_dir": str(root),
+                "architecture": {},
+                "variants": {
+                    "base": {
+                        "repo_id": "org/base",
+                        "local_dir": "base-model",
+                        "served_model_name": "org/base",
+                    },
+                },
+                "serve": {"script": "scripts/dgx_spark_serve_qwen.sh"},
+            }
+            captured: list[list[str]] = []
+            with mock.patch.object(model_forge_dgx, "recommended_vllm_env", None):
+                with mock.patch.object(model_forge_dgx, "detect_hardware_profile", None):
+                    with mock.patch.object(model_forge_dgx, "run_or_exit", side_effect=lambda cmd, env=None, error="": captured.append(cmd)):
+                        with mock.patch.object(model_forge_dgx, "run", side_effect=lambda cmd, env=None: captured.append(cmd)):
+                            model_forge_dgx.action_serve(family, "test_family", "base")
+
+        self.assertEqual(
+            captured[0],
+            [str(REPO_DIR / "forge"), "variants", "checkpoint-audit", "test_family", "--variant", "base", "--strict"],
+        )
+
+    def test_full_checkpoint_serve_audit_failure_exits_without_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "base-model").mkdir()
+            family = {
+                "models_dir_env": "MODEL_FORGE_TEST_MODELS_DIR",
+                "default_models_dir": str(root),
+                "architecture": {},
+                "variants": {
+                    "base": {
+                        "repo_id": "org/base",
+                        "local_dir": "base-model",
+                        "served_model_name": "org/base",
+                    },
+                },
+                "serve": {"script": "scripts/dgx_spark_serve_qwen.sh"},
+            }
+            with mock.patch.object(model_forge_dgx, "recommended_vllm_env", None):
+                with mock.patch.object(model_forge_dgx, "detect_hardware_profile", None):
+                    with mock.patch.object(model_forge_dgx, "run_or_exit", side_effect=SystemExit("audit failed")):
+                        with self.assertRaises(SystemExit) as raised:
+                            model_forge_dgx.action_serve(family, "test_family", "base")
+                    self.assertEqual(str(raised.exception), "audit failed")
+
+    def test_full_checkpoint_serve_runs_launcher_after_audit_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "base-model").mkdir()
+            family = {
+                "models_dir_env": "MODEL_FORGE_TEST_MODELS_DIR",
+                "default_models_dir": str(root),
+                "architecture": {},
+                "variants": {
+                    "base": {
+                        "repo_id": "org/base",
+                        "local_dir": "base-model",
+                        "served_model_name": "org/base",
+                    },
+                },
+                "serve": {"script": "scripts/dgx_spark_serve_qwen.sh"},
+            }
+            captured: list[list[str]] = []
+            with mock.patch.object(model_forge_dgx, "recommended_vllm_env", None):
+                with mock.patch.object(model_forge_dgx, "detect_hardware_profile", None):
+                    with mock.patch.object(model_forge_dgx, "run_or_exit", return_value=None):
+                        with mock.patch.object(model_forge_dgx, "run", side_effect=lambda cmd, env=None: captured.append(cmd)):
+                            model_forge_dgx.action_serve(family, "test_family", "base")
+
+        self.assertEqual(
+            captured[0],
+            [str(REPO_DIR / "scripts/dgx_spark_serve_qwen.sh")],
+        )
+
+    def test_live_lora_serve_does_not_require_optional_merged_checkpoint_audit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "base-model").mkdir()
+            (root / "adapter-model").mkdir()
+            family = {
+                "models_dir_env": "MODEL_FORGE_TEST_MODELS_DIR",
+                "default_models_dir": str(root),
+                "architecture": {},
+                "variants": {
+                    "base": {
+                        "repo_id": "org/base",
+                        "local_dir": "base-model",
+                        "served_model_name": "org/base",
+                    },
+                    "local_ft": {
+                        "repo_id": "org/base",
+                        "local_dir": "adapter-model",
+                        "merged_local_dir": "merged-model",
+                        "served_model_name": "local/ft",
+                        "adapter": True,
+                        "base_variant": "base",
+                    },
+                },
+                "serve": {"script": "scripts/dgx_spark_serve_qwen.sh"},
+            }
+            captured: list[list[str]] = []
+            with mock.patch.object(model_forge_dgx, "recommended_vllm_env", None):
+                with mock.patch.object(model_forge_dgx, "detect_hardware_profile", None):
+                    with mock.patch.object(model_forge_dgx, "run", side_effect=lambda cmd, env=None: captured.append(cmd)):
+                        model_forge_dgx.action_serve(family, "test_family", "local_ft")
+
+        self.assertEqual(len(captured), 1)
+        self.assertEqual(captured[0], [str(REPO_DIR / "scripts/dgx_spark_serve_qwen.sh")])
 
     def test_compare_uses_generic_variant_arguments(self) -> None:
         with tempfile.TemporaryDirectory(dir=REPO_DIR) as tmp:

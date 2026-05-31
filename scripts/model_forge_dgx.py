@@ -90,6 +90,12 @@ def run(cmd: list[str], env: dict[str, str] | None = None) -> None:
     subprocess.run(cmd, cwd=REPO_DIR, env=env, check=True)
 
 
+def run_or_exit(cmd: list[str], env: dict[str, str] | None = None, *, error: str) -> None:
+    completed = subprocess.run(cmd, cwd=REPO_DIR, env=env, check=False)
+    if completed.returncode != 0:
+        raise SystemExit(error)
+
+
 def resolve_hf_token(env: dict[str, str]) -> str:
     token = env.get("HF_TOKEN") or env.get("HUGGINGFACE_HUB_TOKEN")
     if token:
@@ -245,6 +251,17 @@ def configure_serving_variant(family: dict[str, Any], variant: str, env: dict[st
 def action_serve(family: dict[str, Any], family_name: str, variant: str) -> None:
     serve = family["serve"]
     env = os.environ.copy()
+    variant_data = variant_config(family, variant)
+    if os.environ.get("MODEL_FORGE_SKIP_SERVE_AUDIT") != "1" and not (variant_data.get("adapter") and variant_data.get("serve_strategy", "lora") != "merged"):
+        run_or_exit([
+            str(REPO_DIR / "forge"),
+            "variants",
+            "checkpoint-audit",
+            family_name,
+            "--variant",
+            variant,
+            "--strict",
+        ], env=env, error=f"checkpoint audit failed for {family_name}:{variant}; refusing to start server")
     serve_details = configure_serving_variant(family, variant, env)
     env.setdefault("MODEL_FORGE_MODELS_DIR", str(models_dir(family)))
     if serve.get("default_gpu_memory_utilization"):
