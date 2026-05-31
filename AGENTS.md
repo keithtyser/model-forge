@@ -100,6 +100,13 @@ For a full new-model run, do not stop at planning:
 6. Record every pain point as either a config fix, code fix, or explicit
    follow-up in the ledger before moving on.
 
+For Hugging Face downloads, use `./forge hf login` once or set `HF_TOKEN` in the
+runtime environment. Do not put tokens in commands, configs, docs, reports, or
+git. In unattended runs set `MODEL_FORGE_HF_ALLOW_PROMPT=0`; the download command
+will use cached auth when present and fail fast if no token is available. If the
+default Xet path stalls on a checkpoint, retry with `HF_HUB_DISABLE_XET=1` and
+keep the job bounded with CPU, memory, and disk guardrails.
+
 ## Useful Commands
 
 Install/setup:

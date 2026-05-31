@@ -97,6 +97,12 @@ Serve one model at a time:
 ./forge serve my_model base
 ```
 
+`./forge download` uses `HF_TOKEN`, `HUGGINGFACE_HUB_TOKEN`, or the cached token
+from `./forge hf login`. For unattended agent runs, set
+`MODEL_FORGE_HF_ALLOW_PROMPT=0` so missing auth fails fast. If Xet is slow or
+unstable for a specific network/model, set `HF_HUB_DISABLE_XET=1` and retry;
+always run `checkpoint-audit --strict` before serving or training.
+
 Run evals from another terminal:
 
 ```bash

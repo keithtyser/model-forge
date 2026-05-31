@@ -142,6 +142,12 @@ worker has no Hugging Face egress, download on the coordinator first, then
 sync the completed checkpoint directory to the same model root on the worker
 before serving:
 
+For unattended downloads, authenticate with `./forge hf login` or export
+`HF_TOKEN` outside Git and set `MODEL_FORGE_HF_ALLOW_PROMPT=0`. If Xet transfer
+is slow on the coordinator network, retry with `HF_HUB_DISABLE_XET=1`; do not
+start cluster serving until `./forge variants checkpoint-audit <family>
+--variant base --strict` passes.
+
 ```bash
 ./forge cluster model-sync \
   --config configs/clusters/my_cluster.yaml \

@@ -90,6 +90,35 @@ def run(cmd: list[str], env: dict[str, str] | None = None) -> None:
     subprocess.run(cmd, cwd=REPO_DIR, env=env, check=True)
 
 
+def resolve_hf_token(env: dict[str, str]) -> str:
+    token = env.get("HF_TOKEN") or env.get("HUGGINGFACE_HUB_TOKEN")
+    if token:
+        env["HF_TOKEN"] = token
+        env["HUGGINGFACE_HUB_TOKEN"] = token
+        return token
+
+    try:
+        from huggingface_hub import HfFolder
+
+        token = HfFolder.get_token()
+    except Exception:
+        token = None
+    if token:
+        env["HF_TOKEN"] = token
+        env["HUGGINGFACE_HUB_TOKEN"] = token
+        return token
+
+    if env.get("MODEL_FORGE_HF_ALLOW_PROMPT", "1") != "0" and sys.stdin.isatty():
+        import getpass
+
+        token = getpass.getpass("HF token: ")
+        env["HF_TOKEN"] = token
+        env["HUGGINGFACE_HUB_TOKEN"] = token
+        return token
+
+    raise SystemExit("HF token not found. Run './forge hf login' or set HF_TOKEN before unattended downloads.")
+
+
 def color(code: str, text: str) -> str:
     if os.getenv("NO_COLOR") or not sys.stdout.isatty():
         return text
@@ -445,7 +474,8 @@ def action_download(family: dict[str, Any], variant: str) -> None:
     env["HF_XET_HIGH_PERFORMANCE"] = os.environ.get("HF_XET_HIGH_PERFORMANCE", "1")
     env["HF_XET_NUM_CONCURRENT_RANGE_GETS"] = os.environ.get("HF_XET_NUM_CONCURRENT_RANGE_GETS", "64")
     env["HF_HUB_DOWNLOAD_TIMEOUT"] = os.environ.get("HF_HUB_DOWNLOAD_TIMEOUT", "60")
-    env.pop("HF_HUB_ENABLE_HF_TRANSFER", None)
+    if os.environ.get("HF_HUB_DISABLE_XET"):
+        env["HF_HUB_DISABLE_XET"] = os.environ["HF_HUB_DISABLE_XET"]
     model_dir.mkdir(parents=True, exist_ok=True)
     hf_home.mkdir(parents=True, exist_ok=True)
 
@@ -456,11 +486,7 @@ def action_download(family: dict[str, Any], variant: str) -> None:
         else:
             run([py, "-m", "pip", "install", "-U", "huggingface_hub[hf_xet]"], env=env)
 
-    token = env.get("HF_TOKEN")
-    if not token:
-        import getpass
-        token = getpass.getpass("HF token: ")
-        env["HF_TOKEN"] = token
+    resolve_hf_token(env)
 
     hf = str(REPO_DIR / ".venv" / "bin" / "hf")
     if not Path(hf).exists():
@@ -470,8 +496,8 @@ def action_download(family: dict[str, Any], variant: str) -> None:
     print(f"[model-forge] models: {model_dir}")
     print(f"[model-forge] workers: {os.environ.get('HF_MAX_WORKERS', '32')}")
     print(f"[model-forge] xet range gets: {env['HF_XET_NUM_CONCURRENT_RANGE_GETS']}")
+    print(f"[model-forge] xet disabled: {env.get('HF_HUB_DISABLE_XET', '0')}")
     print(f"[model-forge] hf: {hf}")
-    run([hf, "auth", "login", "--token", token, "--force"], env=env)
     run([hf, "auth", "whoami"], env=env)
 
     workers = os.environ.get("HF_MAX_WORKERS", "32")
@@ -491,8 +517,6 @@ def action_download(family: dict[str, Any], variant: str) -> None:
             str(target),
             "--max-workers",
             workers,
-            "--token",
-            token,
         ], env=env)
 
 
