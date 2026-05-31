@@ -446,7 +446,7 @@ def action_suite(family: dict[str, Any], family_name: str, variant: str, tasks: 
     ))
 
 
-def action_download(family: dict[str, Any], variant: str) -> None:
+def action_download(family: dict[str, Any], family_name: str, variant: str) -> None:
     variants: list[str]
     if variant == "all":
         variants = list(family.get("variants", {}).keys())
@@ -507,6 +507,16 @@ def action_download(family: dict[str, Any], variant: str) -> None:
             "--max-workers",
             workers,
         ], env=env)
+        if os.environ.get("MODEL_FORGE_SKIP_DOWNLOAD_AUDIT") != "1":
+            run([
+                str(REPO_DIR / "forge"),
+                "variants",
+                "checkpoint-audit",
+                family_name,
+                "--variant",
+                item,
+                "--strict",
+            ], env=env)
 
 
 def install_external() -> None:
@@ -560,7 +570,7 @@ def main() -> None:
     elif args.action == "external-install":
         install_external()
     elif args.action == "download":
-        action_download(family, args.variant)
+        action_download(family, args.family, args.variant)
 
 
 if __name__ == "__main__":

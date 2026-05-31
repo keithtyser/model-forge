@@ -180,6 +180,39 @@ class ModelForgeDgxServeTests(unittest.TestCase):
         self.assertIn("--external-run", command)
         self.assertIn(f"local_ft_abli={external_root / 'local_ft_abli'}", command)
 
+    def test_download_audits_completed_variant(self) -> None:
+        family = {
+            "models_dir_env": "MODEL_FORGE_TEST_MODELS_DIR",
+            "default_models_dir": "/tmp/model-forge-test-models",
+            "variants": {
+                "base": {
+                    "repo_id": "org/base",
+                    "local_dir": "base-model",
+                    "served_model_name": "org/base",
+                }
+            },
+        }
+        captured: list[list[str]] = []
+        with mock.patch.dict(
+            model_forge_dgx.os.environ,
+            {
+                "MODEL_FORGE_SKIP_HF_INSTALL": "1",
+                "MODEL_FORGE_HF_ALLOW_PROMPT": "0",
+                "HF_TOKEN": "test-token",
+            },
+            clear=False,
+        ):
+            with mock.patch.object(model_forge_dgx, "shutil_which", return_value="hf"):
+                with mock.patch.object(model_forge_dgx, "run", side_effect=lambda cmd, env=None: captured.append(cmd)):
+                    model_forge_dgx.action_download(family, "test_family", "base")
+
+        self.assertTrue(any(cmd[-2:] == ["auth", "whoami"] for cmd in captured))
+        self.assertTrue(any(cmd[1:2] == ["download"] for cmd in captured))
+        self.assertIn(
+            [str(REPO_DIR / "forge"), "variants", "checkpoint-audit", "test_family", "--variant", "base", "--strict"],
+            captured,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
