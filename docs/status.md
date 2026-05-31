@@ -102,6 +102,9 @@ This is the short handoff state for humans and agents. Use
 - Profile summarization is now present through `./forge profile nsight
   summarize`; it inventories expected and present profiler artifacts and writes
   `profile_summary.json` plus `profile_summary.md`.
+- RMSNorm kernel microbenchmarking is now present through `./forge bench kernel
+  rmsnorm`; it supports dry-run planning plus Torch-backed runs that emit
+  `summary.json` and `kernel_card.md`.
 - Serving Card generation now writes a structured `serving_card.md` for each
   `bench serve` run with identity, hardware/config, overall metrics,
   per-workload metrics, artifacts, and promotion gates.

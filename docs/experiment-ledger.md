@@ -683,6 +683,43 @@ Result:
 - extra artifact paths can be attached to the summary for later exported stats
 - MF-0802 is marked tested / smoke-validated
 
+## Kernel/Perf: RMSNorm Microbenchmark
+
+Status: implemented as a local kernel benchmark harness. No model server,
+training run, quantization run, or eval job was started.
+
+Hypothesis: kernel work should begin with a small, reproducible correctness and
+latency harness before attempting Triton/CUDA optimization. RMSNorm is narrow
+enough to validate the benchmark/card pattern while still being relevant to
+transformer inference bottleneck analysis.
+
+Changes:
+
+- added `./forge bench kernel rmsnorm`
+- added `model_forge.kernel_benchmark.v1`
+- added dry-run planning that does not import Torch
+- added Torch-backed RMSNorm benchmarking when `--dry-run` is not set
+- recorded correctness against `torch.nn.functional.rms_norm`
+- recorded p50/p95 latency and approximate effective bandwidth
+- wrote `summary.json` and `kernel_card.md`
+- documented kernel benchmark promotion rules
+
+Validation:
+
+```bash
+./forge bench kernel rmsnorm --dry-run --json
+./forge bench kernel rmsnorm --dry-run --write --run-id unit_rmsnorm_cli --output-dir /tmp/model_forge_rmsnorm
+./forge bench kernel rmsnorm --device cpu --dtype float32 --batch 1 --seq-len 16 --hidden-size 32 --warmup 1 --repeats 2 --write --run-id unit_rmsnorm_cpu --output-dir /tmp/model_forge_rmsnorm_cpu --json
+.venv/bin/python -m unittest tests.test_kernel_benchmark -v
+```
+
+Result:
+
+- RMSNorm benchmark plans are portable and smoke-testable without GPU/Torch
+- kernel card artifacts can be generated from a dry-run summary
+- the tiny CPU execution path passed correctness with max absolute error 0.0
+- MF-0803 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

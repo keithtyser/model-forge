@@ -267,6 +267,19 @@ expects a running OpenAI-compatible endpoint and writes `requests.jsonl`,
 `configs/serving/workloads/`. Sweep plans expand startup-time server env cases
 and the matching `bench serve` commands, but they do not launch vLLM.
 
+Kernel microbenchmarks:
+
+```bash
+./forge bench kernel rmsnorm --dry-run --json
+./forge bench kernel rmsnorm --device auto --dtype bfloat16 --write
+```
+
+See [docs/kernel-benchmarks.md](docs/kernel-benchmarks.md). Kernel benchmarks
+write `summary.json` and `kernel_card.md` under
+`reports/generated/kernel_benchmarks/`. They are diagnostics for profiler-led
+optimization and must be paired with end-to-end serving evidence before making
+performance claims.
+
 Profiling:
 
 ```bash
