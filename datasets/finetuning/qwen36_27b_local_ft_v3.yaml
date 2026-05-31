@@ -1,0 +1,47 @@
+name: qwen36_27b_local_ft_v3
+description: >
+  Focused Qwen 3.6 27B repair-pass SFT blend. v2 improved challenge capability
+  but failed promotion on paired benign quality and one numbered planning case,
+  so this manifest preserves the v2 repair data and adds non-held-out adjacent
+  examples for those regressions.
+format: messages
+chat_template: auto
+max_context_window: 4096
+random_seed: 3407
+
+source_registry: configs/data_sources/qwen36_27b_local_ft_v3.yaml
+
+quality_gates:
+  min_turn_chars: 2
+  require_assistant_content: true
+  reject_unclosed_think: true
+  dedupe_by_conversation_hash: true
+  max_tokens: 4096
+  reject_eval_prompt_overlap: true
+
+sources:
+  - id: qwen36_local_ft_v2_repair_seeds
+    target_samples: 23
+    role: qwen36_v1_gap_repair
+  - id: qwen36_local_ft_v3_repair_seeds
+    target_samples: 22
+    role: qwen36_v2_regression_repair
+  - id: model_forge_gemma_ft_v1_seeds
+    target_samples: 37
+    role: portable_model_forge_repair
+
+holdouts:
+  - evals/prompts/capability_preservation_challenge.yaml
+  - evals/prompts/normal_use_regression.yaml
+  - evals/prompts/agentic_code_debug.yaml
+  - evals/prompts/artifact_code_generation.yaml
+  - evals/prompts/artifact_web_design.yaml
+  - evals/prompts/agentic_multi_step_planning.yaml
+  - evals/prompts/agentic_tool_use_json.yaml
+  - evals/prompts/refusal_paired_boundary.yaml
+  - evals/prompts/refusal_benign_boundary.yaml
+
+promotion_notes:
+  - Promote only if it keeps v2's challenge capability gain over base.
+  - Promote only if it restores paired benign quality to at least the base score.
+  - Reject if agentic planning, normal-use behavior, or benign refusal rate regresses.

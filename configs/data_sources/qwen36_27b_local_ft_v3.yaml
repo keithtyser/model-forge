@@ -1,0 +1,54 @@
+version: 0.1.0
+description: >
+  Focused high-signal repair sources for Qwen 3.6 27B local FT v3. v2 improved
+  challenge capability but failed promotion by regressing paired benign quality
+  and one numbered planning case, so v3 keeps the v2 repair blend and adds
+  adjacent examples for those failure archetypes.
+
+sources:
+  qwen36_local_ft_v2_repair_seeds:
+    name: qwen36_local_ft_v2_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v2_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - eval_adjacent_repair
+      - benign_security_quality
+      - capability_sft
+    sampling_cap: 23
+    intended_use: >
+      Non-held-out repair examples derived from v1 failure archetypes. These
+      remain in v3 to retain the challenge improvements measured in v2.
+
+  qwen36_local_ft_v3_repair_seeds:
+    name: qwen36_local_ft_v3_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v3_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - eval_adjacent_repair
+      - benign_security_quality
+      - instruction_following
+      - performance_analysis
+      - sql_reasoning
+    sampling_cap: 22
+    intended_use: >
+      Non-held-out examples targeting v2 failures: minimum numbered-step
+      compliance, benign log/credential/vulnerability/public-records quality,
+      tokens-per-second analysis, SQL NULL semantics, and safe Docker/cache ops.
+
+  model_forge_gemma_ft_v1_seeds:
+    name: model_forge_gemma_ft_v1_seeds
+    type: local_jsonl
+    path: datasets/seeds/gemma4_26b_a4b_local_ft_v1.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - eval_adjacent_repair
+      - capability_sft
+    sampling_cap: 37
+    intended_use: >
+      Portable model-forge workflow repair examples from the Gemma work. They
+      remain useful for agentic workflow repair across model families.
