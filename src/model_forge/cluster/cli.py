@@ -127,6 +127,13 @@ def node_work_dir(node: Mapping[str, Any], cluster: Mapping[str, Any], env: Mapp
     return resolve_env_backed_value(cluster.get("paths", {}), "work_dir", env)
 
 
+def node_models_dir(node: Mapping[str, Any], cluster: Mapping[str, Any], env: Mapping[str, str]) -> tuple[str | None, str | None]:
+    value, env_key = resolve_env_backed_value(node, "models_dir", env)
+    if value or env_key:
+        return value, env_key
+    return resolve_env_backed_value(cluster.get("paths", {}), "models_dir", env)
+
+
 def total_declared_memory_gb(cluster: Mapping[str, Any], hardware: Mapping[str, Any]) -> int | float:
     hardware_default = (hardware.get("node_defaults") or {}).get("memory_total_gb", 0)
     total: int | float = 0
@@ -282,10 +289,12 @@ def node_plan(node: Mapping[str, Any], cluster: Mapping[str, Any], env: Mapping[
     user, user_env = node_user(node, env)
     ssh_port, ssh_port_env = node_ssh_port(node, env)
     work_dir, work_dir_env = node_work_dir(node, cluster, env)
+    models_dir, models_dir_env = node_models_dir(node, cluster, env)
     launcher = node.get("launcher") or (cluster.get("launchers") or {}).get("default") or "local"
     display_host = host if host is not None else f"${host_env}" if host_env else None
     display_user = user if user is not None else f"${user_env}" if user_env else None
     display_work_dir = work_dir if work_dir is not None else f"${work_dir_env}" if work_dir_env else None
+    display_models_dir = models_dir if models_dir is not None else f"${models_dir_env}" if models_dir_env else None
     return {
         "name": node.get("name"),
         "role": node.get("role"),
@@ -298,6 +307,8 @@ def node_plan(node: Mapping[str, Any], cluster: Mapping[str, Any], env: Mapping[
         "ssh_port_env": ssh_port_env,
         "work_dir": display_work_dir,
         "work_dir_env": work_dir_env,
+        "models_dir": display_models_dir,
+        "models_dir_env": models_dir_env,
         "gpu_count": node.get("gpu_count"),
         "memory_total_gb": node.get("memory_total_gb"),
         "cpu_quota": node.get("cpu_quota") or (cluster.get("resource_policy", {}).get("per_node") or {}).get("cpu_quota"),
@@ -818,6 +829,67 @@ def build_sync_plan(
     }
 
 
+def build_model_sync_plan(
+    cluster: Mapping[str, Any],
+    hardware: Mapping[str, Any],
+    config_path: Path,
+    source: Path,
+    env: Mapping[str, str] | None = None,
+    target_name: str | None = None,
+    delete: bool = False,
+) -> dict[str, Any]:
+    env = env or os.environ
+    source = source.expanduser()
+    nodes = [node_plan(node, cluster, env) for node in cluster.get("nodes", []) if isinstance(node, dict)]
+    actions: list[dict[str, Any]] = []
+    model_name = target_name or source.name
+    if not source.exists() or not source.is_dir():
+        actions.append({"node": "coordinator", "skip": False, "error": f"source model dir does not exist: {source}"})
+    for node in nodes:
+        host = str(node.get("host") or "")
+        models_dir = str(node.get("models_dir") or "")
+        if not models_dir or models_dir.startswith("$"):
+            actions.append({"node": node.get("name"), "skip": False, "error": "models_dir is not resolved"})
+            continue
+        if is_local_host(host):
+            actions.append({"node": node.get("name"), "skip": True, "reason": "local coordinator"})
+            continue
+        target_dir = str(Path(models_dir) / model_name)
+        target = f"{ssh_target(node)}:{target_dir.rstrip('/')}/"
+        mkdir_command = [*ssh_prefix(node), shell_join(["mkdir", "-p", target_dir])]
+        rsync_command = ["rsync", "-az", "--partial"]
+        if delete:
+            rsync_command.append("--delete")
+        rsync_command.extend([f"{str(source).rstrip('/')}/", target])
+        actions.append(
+            {
+                "node": node.get("name"),
+                "host": host,
+                "models_dir": models_dir,
+                "source": str(source),
+                "target_dir": target_dir,
+                "skip": False,
+                "mkdir_command": shell_join(mkdir_command),
+                "rsync_command": shell_join(rsync_command),
+            }
+        )
+    return {
+        "created_at": utc_timestamp(),
+        "cluster": {
+            "id": cluster.get("id"),
+            "config": display_path(config_path),
+            "hardware_profile": cluster.get("hardware_profile"),
+            "node_count": len(nodes),
+            "total_declared_gpus": total_declared_gpus(cluster, hardware),
+            "total_declared_memory_gb": total_declared_memory_gb(cluster, hardware),
+        },
+        "delete": delete,
+        "source": str(source),
+        "target_name": model_name,
+        "actions": actions,
+    }
+
+
 def execute_sync_plan(plan: dict[str, Any], timeout: int) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     for action in plan["actions"]:
@@ -1010,6 +1082,16 @@ def main() -> None:
     sync_parser.add_argument("--output", type=Path, help="Write JSON sync evidence")
     sync_parser.add_argument("--json", action="store_true")
 
+    model_sync_parser = subparsers.add_parser("model-sync", help="Plan or execute model directory sync to worker nodes")
+    model_sync_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    model_sync_parser.add_argument("--source", type=Path, required=True, help="Local coordinator model directory to copy")
+    model_sync_parser.add_argument("--target-name", help="Directory name under each worker models_dir; defaults to source basename")
+    model_sync_parser.add_argument("--execute", action="store_true", help="Run mkdir/rsync commands")
+    model_sync_parser.add_argument("--delete", action="store_true", help="Pass --delete to rsync")
+    model_sync_parser.add_argument("--timeout", type=int, default=3600)
+    model_sync_parser.add_argument("--output", type=Path, help="Write JSON sync evidence")
+    model_sync_parser.add_argument("--json", action="store_true")
+
     args = parser.parse_args()
     cluster, config_path = load_cluster_config(args.config)
     hardware = load_hardware_profile(cluster)
@@ -1145,6 +1227,53 @@ def main() -> None:
             print(json.dumps(sync, indent=2, sort_keys=True) + "\n")
         else:
             console.print(f"cluster sync: {'OK' if sync['ok'] else 'FAILED'} ({'executed' if args.execute else 'plan only'})")
+            console.print(f"evidence: {display_path(output_path)}")
+            for action in sync["actions"]:
+                if action.get("skip"):
+                    console.print(f"  {action['node']}: skipped ({action.get('reason')})")
+                elif action.get("error"):
+                    console.print(f"  {action['node']}: ERROR {action['error']}")
+                else:
+                    console.print(f"  {action['node']}: {action.get('rsync_command')}")
+        raise SystemExit(0 if sync["ok"] else 1)
+
+    if args.action == "model-sync":
+        findings = audit_cluster(cluster, config_path, hardware=hardware, strict=True)
+        if findings:
+            data = {
+                "created_at": utc_timestamp(),
+                "cluster": {"id": cluster.get("id"), "config": display_path(config_path)},
+                "ok": False,
+                "doctor_findings": [asdict(finding) for finding in findings],
+            }
+            if args.output:
+                write_json(args.output if args.output.is_absolute() else REPO_DIR / args.output, data)
+            if args.json:
+                print(json.dumps(data, indent=2, sort_keys=True) + "\n")
+            else:
+                render_findings(findings)
+            raise SystemExit(1)
+        sync = build_model_sync_plan(
+            cluster,
+            hardware,
+            config_path,
+            source=args.source,
+            target_name=args.target_name,
+            delete=args.delete,
+        )
+        if args.execute:
+            sync = execute_sync_plan(sync, timeout=args.timeout)
+        else:
+            sync["executed"] = False
+            sync["ok"] = all(action.get("skip") or not action.get("error") for action in sync["actions"])
+        output = args.output if args.output else default_cluster_output("model_sync")
+        output_path = output if output.is_absolute() else REPO_DIR / output
+        write_json(output_path, sync)
+        sync["output"] = display_path(output_path)
+        if args.json:
+            print(json.dumps(sync, indent=2, sort_keys=True) + "\n")
+        else:
+            console.print(f"cluster model-sync: {'OK' if sync['ok'] else 'FAILED'} ({'executed' if args.execute else 'plan only'})")
             console.print(f"evidence: {display_path(output_path)}")
             for action in sync["actions"]:
                 if action.get("skip"):

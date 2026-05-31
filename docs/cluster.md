@@ -139,8 +139,19 @@ The launcher passes `--tensor-parallel-size 2` and
 mounts `MODEL_FORGE_MODELS_DIR` into the vLLM container, supports LoRA adapter
 serving, and keeps private node identities in environment variables. If a
 worker has no Hugging Face egress, download on the coordinator first, then
-`rsync` the completed checkpoint directory to the same model root on the worker
-before serving.
+sync the completed checkpoint directory to the same model root on the worker
+before serving:
+
+```bash
+./forge cluster model-sync \
+  --config configs/clusters/my_cluster.yaml \
+  --source <coordinator-models-dir>/<model-dir> \
+  --execute
+```
+
+`model-sync` resolves each worker's `models_dir` from the cluster config or
+environment, skips the local coordinator, and copies the model directory with
+`rsync --partial` so interrupted transfers can resume.
 
 ## Plan
 

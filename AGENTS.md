@@ -401,7 +401,10 @@ Spark nodes, set `MODEL_FORGE_SPARK_CLUSTER=1`,
 `MODEL_FORGE_TENSOR_PARALLEL_SIZE=2` outside Git, then run
 `./forge serve <family> <variant>`. The same model directory must exist on both
 nodes under `MODEL_FORGE_MODELS_DIR`; if only the coordinator has HF egress,
-download once there and `rsync` the completed checkpoint to workers.
+download once there and run `./forge cluster model-sync --source <model-dir>
+--execute` to copy the completed checkpoint to workers. Use `model-sync` instead
+of hand-written `rsync` where possible so generated evidence captures what was
+copied.
 
 Benchmark serving only after an endpoint is already running:
 

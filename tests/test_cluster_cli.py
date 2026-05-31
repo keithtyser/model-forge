@@ -7,6 +7,7 @@ from model_forge.cluster.cli import (
     REPO_DIR,
     audit_cluster,
     build_sync_plan,
+    build_model_sync_plan,
     build_launcher_plan,
     docker_gpu_runtime_command,
     docker_torchrun_smoke_command,
@@ -86,6 +87,28 @@ class ClusterCliTests(unittest.TestCase):
         self.assertIn("runner@spark-b:" + "/" + "home/private/model-forge/", plan["actions"][1]["rsync_command"])
         self.assertIn("--exclude /.venv/", plan["actions"][1]["rsync_command"])
         self.assertIn("--exclude /runs/", plan["actions"][1]["rsync_command"])
+
+    def test_model_sync_plan_uses_worker_models_dir(self) -> None:
+        config, path = load_cluster_config(REPO_DIR / "configs" / "clusters" / "dgx_spark_x2.example.yaml")
+        hardware = load_hardware_profile(config)
+        env = {
+            "MODEL_FORGE_NODE0_HOST": "localhost",
+            "MODEL_FORGE_NODE1_HOST": "spark-b",
+            "MODEL_FORGE_NODE0_USER": "runner",
+            "MODEL_FORGE_NODE1_USER": "runner",
+            "MODEL_FORGE_CLUSTER_WORK_DIR": "/" + "home/private/model-forge",
+            "MODEL_FORGE_NODE0_MODELS_DIR": "/" + "models-a",
+            "MODEL_FORGE_NODE1_MODELS_DIR": "/" + "models-b",
+            "MODEL_FORGE_RDZV_ENDPOINT": "localhost:29500",
+        }
+        source = REPO_DIR / "configs"
+        plan = build_model_sync_plan(config, hardware, path, source=source, env=env, target_name="Qwen3.6-27B")
+
+        self.assertTrue(plan["actions"][0]["skip"])
+        self.assertFalse(plan["actions"][1]["skip"])
+        self.assertEqual(plan["actions"][1]["target_dir"], "/" + "models-b/Qwen3.6-27B")
+        self.assertIn("runner@spark-b:" + "/" + "models-b/Qwen3.6-27B/", plan["actions"][1]["rsync_command"])
+        self.assertIn("--partial", plan["actions"][1]["rsync_command"])
 
     def test_runtime_command_is_bounded_docker_gpu_probe(self) -> None:
         command = docker_gpu_runtime_command("nemotron-runner:latest")
