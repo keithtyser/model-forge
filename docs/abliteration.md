@@ -27,7 +27,9 @@ For each new model family:
    separate.
 3. Compute fresh refusal directions on the exact source checkpoint you intend to
    ablate. A fine-tuned model should get its own directions; do not blindly reuse
-   base activations.
+   base activations. Executable stages preflight the local source checkpoint
+   before model load; PEFT fine-tunes must be merged into a full checkpoint
+   first.
 4. Pick architecture-specific target modules. Attention output and MLP
    down-projection layers are common starting points, but exact names and safe
    target sets differ by family. Qwen, Llama, Gemma, Mixtral, and other MoE or

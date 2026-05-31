@@ -691,6 +691,9 @@ pull request metadata.
 - The reusable recipe is the structure, not fixed constants.
 - Always compute fresh refusal directions on the source checkpoint being
   ablated.
+- Executable ablation stages run a strict local source checkpoint preflight
+  before loading a model. If the source is a PEFT fine-tune, merge it first and
+  point `model.local_dir` at the merged full checkpoint.
 - Direct parameter transfer is only a warm start for nearby checkpoints in the
   same architecture family.
 - For new architectures, inspect target module names, layer counts, hidden

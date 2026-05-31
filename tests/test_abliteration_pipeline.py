@@ -18,6 +18,7 @@ from model_forge.pipelines.abliterate import (
     build_plan,
     build_sota_plan,
     configured_target_layers,
+    guard_source_checkpoint,
     intervention_direction,
     is_projection_target,
     load_prompts,
@@ -144,6 +145,12 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(direct["derived_from"]["selected_trial"], "[Trial  34] Refusals:  1/27, KL divergence: 0.0183")
         self.assertIn("attn.o_proj", direct["parameters"])
         self.assertIn("mlp.down_proj", direct["parameters"])
+
+    def test_source_checkpoint_guard_fails_missing_qwen_merged_ft(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli.yaml"
+        plan = build_plan(load_yaml(config_path), config_path)
+        with self.assertRaisesRegex(SystemExit, "ablation source checkpoint is not present"):
+            guard_source_checkpoint(plan)
 
     def test_strict_export_would_catch_missing_last_layer_direction(self) -> None:
         edit = {"layer_start": 5, "layer_end": 29}

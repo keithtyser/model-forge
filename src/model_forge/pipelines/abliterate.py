@@ -18,6 +18,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from model_forge.hardware import detect_hardware_profile, recommended_training_env
+from model_forge.variants.checkpoint_audit import CheckpointFinding, audit_full_checkpoint
 
 console = Console()
 
@@ -218,6 +219,31 @@ def guard_execute(plan: dict[str, Any], execute: bool) -> None:
             f"free CUDA memory is {free:.1f} GB, below configured guard {required:.1f} GB; "
             "stop other jobs, lower the plan size, or set MODEL_FORGE_SKIP_MEMORY_GUARD=1"
         )
+
+
+def guard_source_checkpoint(plan: dict[str, Any]) -> None:
+    model_cfg = plan["model"]
+    raw_source = model_cfg.get("local_dir") or model_cfg.get("source")
+    if not raw_source:
+        raise SystemExit("ablation source checkpoint is required")
+    source = Path(resolve_model_source(raw_source)).expanduser()
+    if not source.is_absolute() and not source.exists():
+        return
+    if not source.exists() or not source.is_dir():
+        raise SystemExit(f"ablation source checkpoint is not present: {source}")
+    record: dict[str, Any] = {"variant": "source", "path": str(source), "exists": True}
+    findings: list[CheckpointFinding] = []
+    audit_full_checkpoint(
+        variant_name="source",
+        path=source,
+        record=record,
+        findings=findings,
+        strict=True,
+    )
+    errors = [finding for finding in findings if finding.level == "error"]
+    if errors:
+        summary = "; ".join(f"{finding.check}: {finding.message}" for finding in errors[:5])
+        raise SystemExit(f"ablation source checkpoint audit failed: {summary}")
 
 
 def _torch_dtype(torch: Any, dtype_name: str) -> Any:
@@ -1220,6 +1246,8 @@ def command_sota_prepare(args: argparse.Namespace) -> None:
 def command_sota_run(args: argparse.Namespace) -> None:
     config_path = resolve_repo_path(args.config)
     config = load_yaml(config_path)
+    if args.execute:
+        guard_source_checkpoint(build_plan(config, config_path))
     result = write_sota_artifacts(config, config_path, args.backend)
     plan = result["plan"]
     print_sota_plan(plan)
@@ -1496,6 +1524,7 @@ def command_collect(args: argparse.Namespace) -> None:
         console.print("[yellow]Dry run only; pass --execute to load the model and collect directions.[/yellow]")
         return
     guard_execute(plan, args.execute)
+    guard_source_checkpoint(plan)
     output_dir = resolve_repo_path(args.output_dir or config.get("artifacts_dir", "artifacts/abliteration/refusal_directions"))
     collect_directions(config, config_path, output_dir)
 
@@ -1508,6 +1537,7 @@ def command_export(args: argparse.Namespace) -> None:
     if not args.execute:
         console.print("[yellow]Dry run only; export is blocked until collected directions are reviewed.[/yellow]")
         return
+    guard_source_checkpoint(plan)
     artifacts_dir = Path(config.get("artifacts_dir", "artifacts/abliteration/refusal_directions"))
     default_directions = artifacts_dir / "direction_artifact.pt"
     if not resolve_repo_path(default_directions).exists():
