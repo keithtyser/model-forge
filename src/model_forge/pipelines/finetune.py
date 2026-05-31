@@ -89,6 +89,8 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "pad_to_multiple_of": int(trainer.get("pad_to_multiple_of", 0) or 0),
             "torch_dynamo_recompile_limit": int(trainer.get("torch_dynamo_recompile_limit", 0) or 0),
             "ddp_find_unused_parameters": bool(trainer.get("ddp_find_unused_parameters", True)),
+            "tensor_parallel_size": int(trainer.get("tensor_parallel_size", 1) or 1),
+            "tensor_parallel_plan": trainer.get("tensor_parallel_plan", "auto"),
             "per_device_train_batch_size": int(trainer.get("per_device_train_batch_size", 1)),
             "gradient_accumulation_steps": int(trainer.get("gradient_accumulation_steps", 16)),
             "learning_rate": float(trainer.get("learning_rate", 2e-4)),
@@ -619,6 +621,7 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
     import torch
     from datasets import load_dataset, load_from_disk
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+    from accelerate.parallelism_config import ParallelismConfig
     from transformers import TrainerCallback
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
     from transformers import DataCollatorForLanguageModeling, Trainer, TrainingArguments
@@ -700,7 +703,11 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
             bnb_4bit_use_double_quant=True,
         )
     dtype = torch.bfloat16 if plan["trainer"].get("bf16", True) else torch.float16
+    tensor_parallel_size = int(os.environ.get("MODEL_FORGE_TRAIN_TP_SIZE") or plan["trainer"].get("tensor_parallel_size", 1) or 1)
+    tensor_parallel_plan = os.environ.get("MODEL_FORGE_TRAIN_TP_PLAN") or plan["trainer"].get("tensor_parallel_plan", "auto")
     if backend == "unsloth":
+        if tensor_parallel_size > 1:
+            raise RuntimeError("tensor_parallel_size > 1 is not supported with the unsloth backend")
         model, _processor = FastLanguageModel.from_pretrained(
             model_name=model_id,
             max_seq_length=max_seq_length,
@@ -715,6 +722,10 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
         )
     else:
         device_map = {"": 0} if plan["trainer"].get("device_map") == "single_gpu" else plan["trainer"].get("device_map", "auto")
+        model_kwargs = {}
+        if tensor_parallel_size > 1:
+            device_map = None
+            model_kwargs.update({"tp_plan": tensor_parallel_plan, "tp_size": tensor_parallel_size})
         model = AutoModelForCausalLM.from_pretrained(
             model_id,
             trust_remote_code=plan["model"].get("trust_remote_code", False),
@@ -724,6 +735,7 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
             low_cpu_mem_usage=True,
             offload_state_dict=True,
             use_safetensors=True,
+            **model_kwargs,
         )
         if quantization_config is not None:
             model = prepare_model_for_kbit_training(model)
@@ -792,6 +804,8 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
     )
     if "ddp_find_unused_parameters" in inspect.signature(TrainingArguments.__init__).parameters:
         training_kwargs["ddp_find_unused_parameters"] = bool(plan["trainer"].get("ddp_find_unused_parameters", True))
+    if tensor_parallel_size > 1:
+        training_kwargs["parallelism_config"] = ParallelismConfig(tp_size=tensor_parallel_size)
     if bool(plan["trainer"].get("group_by_length", False)):
         training_kwargs["group_by_length"] = True
     worker_offset = int(plan.get("resource_policy", {}).get("dataloader_num_workers_max_offset", 2))
