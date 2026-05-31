@@ -9,6 +9,9 @@ The current first candidate is `dgx_spark_vllm_serving_recipe`, targeting
 BF16 and NVFP4 serving benchmark summaries/cards. It is still a candidate until
 an external PR is opened and verified.
 
+A draft patch and PR body live under
+`docs/upstream/dgx_spark_vllm_serving_recipe/`.
+
 Audit candidate plans:
 
 ```bash

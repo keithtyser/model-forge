@@ -2423,8 +2423,9 @@ A small merged PR beats a large private benchmark that nobody can inspect.
 
 Current first upstream candidate: `dgx_spark_vllm_serving_recipe`, targeting
 `https://github.com/vllm-project/vllm` with tracked BF16/NVFP4 DGX Spark serving
-benchmark summaries and serving cards. This remains preparation work until an
-external PR URL is recorded and verified.
+benchmark summaries and serving cards. A prepared docs patch and PR body live
+under `docs/upstream/dgx_spark_vllm_serving_recipe/`. This remains preparation
+work until an external PR URL is recorded and verified.
 
 Upstream PR completion gate:
 

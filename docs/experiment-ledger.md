@@ -933,6 +933,8 @@ Target-selection follow-up:
 - renamed the first candidate to `dgx_spark_vllm_serving_recipe`
 - grounded the candidate in existing DGX Spark BF16 and NVFP4 serving benchmark
   summaries/cards instead of unresolved kernel/profile placeholders
+- added a prepared vLLM docs patch and PR body under
+  `docs/upstream/dgx_spark_vllm_serving_recipe/`
 - strict audit now passes for the candidate, and offline verification is blocked
   only on the missing external PR status and URL
 

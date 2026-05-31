@@ -1,0 +1,135 @@
+diff --git a/docs/.nav.yml b/docs/.nav.yml
+index 7d985fd..9d32886 100644
+--- a/docs/.nav.yml
++++ b/docs/.nav.yml
+@@ -52,6 +52,7 @@ nav:
+       - benchmarking/README.md
+       - benchmarking/cli.md
+       - benchmarking/sweeps.md
++      - benchmarking/dgx_spark_gb10.md
+       - benchmarking/dashboard.md
+   - API Reference:
+     - api/README.md
+diff --git a/docs/benchmarking/README.md b/docs/benchmarking/README.md
+index 238290d..dbf8130 100644
+--- a/docs/benchmarking/README.md
++++ b/docs/benchmarking/README.md
+@@ -4,4 +4,5 @@ vLLM provides comprehensive benchmarking tools for performance testing and evalu
+ 
+ - **[Benchmark CLI](./cli.md)**: `vllm bench` CLI tools and specialized benchmark scripts for interactive performance testing.
+ - **[Parameter Sweeps](./sweeps.md)**: Automate `vllm bench` runs for multiple configurations, useful for [optimization and tuning](../configuration/optimization.md).
++- **[DGX Spark GB10 serving recipe](./dgx_spark_gb10.md)**: A compact serving benchmark recipe for single-node NVIDIA DGX Spark / GB10 systems.
+ - **[Performance Dashboard](./dashboard.md)**: Automated CI that publishes benchmarks on each commit.
+diff --git a/docs/benchmarking/dgx_spark_gb10.md b/docs/benchmarking/dgx_spark_gb10.md
+new file mode 100644
+index 0000000..7bcb5bf
+--- /dev/null
++++ b/docs/benchmarking/dgx_spark_gb10.md
+@@ -0,0 +1,107 @@
++# DGX Spark GB10 Serving Benchmark Recipe
++
++This recipe shows a compact way to benchmark an already-running OpenAI-compatible
++vLLM server on an NVIDIA DGX Spark / GB10 workstation. It is intended as a
++starting point for local validation and regression checks, not as an official
++throughput claim for every model or configuration.
++
++## When to use this recipe
++
++Use this recipe when you want to compare two serving configurations on the same
++DGX Spark node, for example:
++
++- BF16 versus a quantized checkpoint
++- FP8 KV cache enabled versus disabled
++- different `--max-num-seqs` or `--max-num-batched-tokens` values
++- different OpenAI-compatible server startup flags
++
++Keep all other variables fixed when comparing results: model family, prompt
++set, sampling options, output length, vLLM commit, driver version, and hardware.
++
++## Start the server
++
++Start one vLLM server and leave headroom for the system. The exact model and
++serving flags depend on the checkpoint being tested.
++
++```bash
++vllm serve <model> \
++  --host 0.0.0.0 \
++  --port 8000 \
++  --gpu-memory-utilization 0.85 \
++  --max-num-seqs 4 \
++  --max-num-batched-tokens 32768
++```
++
++For quantized checkpoints, also record the quantization and KV-cache settings
++used to start the server. For example:
++
++```bash
++vllm serve <model> \
++  --host 0.0.0.0 \
++  --port 8000 \
++  --gpu-memory-utilization 0.85 \
++  --max-num-seqs 4 \
++  --max-num-batched-tokens 32768 \
++  --kv-cache-dtype fp8
++```
++
++Only run one large local server at a time on a single DGX Spark node unless you
++have separately validated multi-process memory pressure.
++
++## Run `vllm bench serve`
++
++Use the `random` dataset for a quick repeatable smoke benchmark:
++
++```bash
++vllm bench serve \
++  --backend vllm \
++  --model <model> \
++  --base-url http://127.0.0.1:8000 \
++  --endpoint /v1/completions \
++  --dataset-name random \
++  --random-input-len 128 \
++  --random-output-len 128 \
++  --num-prompts 27 \
++  --max-concurrency 1 \
++  --save-result \
++  --result-dir ./bench-results/dgx-spark-gb10
++```
++
++Increase `--max-concurrency`, input length, and output length after the smoke
++run is stable. For comparisons, keep the benchmark command identical across
++variants.
++
++## Report the result
++
++At minimum, include:
++
++- vLLM commit
++- model id and checkpoint format
++- GPU and driver version
++- server startup command
++- benchmark command
++- successful request count and error count
++- median and p95 TTFT
++- median ITL or TPOT
++- median output tokens/sec
++- memory headroom or OOM notes
++
++For example, a local single-node DGX Spark smoke run comparing the same workload
++across BF16 and a quantized checkpoint reported:
++
++| Variant | Requests | Success | Median TTFT | Median ITL | Median output tok/s |
++|---|---:|---:|---:|---:|---:|
++| BF16 | 27 | 100% | 0.128 s | 0.043 s | 22.76 |
++| Quantized | 27 | 100% | 0.126 s | 0.039 s | 25.10 |
++
++These numbers are workload-specific. Treat them as an example of the reporting
++shape, not as a guaranteed DGX Spark result.
++
++## Guardrails
++
++- Keep the machine responsive while benchmarking. Reserve CPU and memory
++  headroom for SSH, the kernel, and monitoring.
++- Do not compare runs that changed both the model and the serving flags.
++- Record failed requests and finish reasons; token/sec alone is not enough.
++- Run quality or behavior checks separately if the benchmark is used to support
++  a model-release claim.
