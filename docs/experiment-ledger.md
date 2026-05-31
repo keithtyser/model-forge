@@ -720,6 +720,43 @@ Result:
 - the tiny CPU execution path passed correctness with max absolute error 0.0
 - MF-0803 is marked tested / smoke-validated
 
+## Kernel/Perf: RoPE Microbenchmark
+
+Status: implemented as a local kernel benchmark harness. No model server,
+training run, quantization run, or eval job was started.
+
+Hypothesis: RoPE is common across prefill/decode paths, and a small correctness
+plus latency harness gives future Triton/CUDA work a reproducible baseline
+before attaching it to serving profiles.
+
+Changes:
+
+- added `./forge bench kernel rope`
+- reused `model_forge.kernel_benchmark.v1`
+- added dry-run planning that does not import Torch
+- added Torch-backed RoPE benchmarking when `--dry-run` is not set
+- recorded correctness between an interleaved reference and complex-number
+  candidate
+- recorded p50/p95 latency and approximate effective bandwidth
+- wrote `summary.json` and `kernel_card.md`
+- updated kernel benchmark docs, README, AGENTS, status, and roadmap state
+
+Validation:
+
+```bash
+./forge bench kernel rope --dry-run --json
+./forge bench kernel rope --dry-run --write --run-id unit_rope_cli --output-dir /tmp/model_forge_rope
+./forge bench kernel rope --device cpu --dtype float32 --batch 1 --seq-len 16 --heads 2 --head-dim 8 --warmup 1 --repeats 2 --write --run-id unit_rope_cpu --output-dir /tmp/model_forge_rope_cpu --json
+.venv/bin/python -m unittest tests.test_kernel_benchmark -v
+```
+
+Result:
+
+- RoPE benchmark plans are portable and smoke-testable without GPU/Torch
+- kernel card artifacts can be generated from a dry-run summary
+- the tiny CPU execution path passed correctness
+- MF-0804 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

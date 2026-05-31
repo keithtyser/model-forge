@@ -82,6 +82,41 @@ def rmsnorm_plan(args: argparse.Namespace) -> dict[str, Any]:
     )
 
 
+def rope_plan(args: argparse.Namespace) -> dict[str, Any]:
+    run_id = sanitize_run_id(args.run_id or f"rope_{args.device}_{args.dtype}_b{args.batch}_s{args.seq_len}_h{args.heads}_d{args.head_dim}")
+    output_dir = resolve_repo_path(args.output_dir or DEFAULT_OUTPUT_ROOT / run_id)
+    return redact_value(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "created_at": utc_timestamp(),
+            "benchmark": "rope",
+            "run_id": run_id,
+            "output_dir": display_path(output_dir),
+            "parameters": {
+                "batch": args.batch,
+                "seq_len": args.seq_len,
+                "heads": args.heads,
+                "head_dim": args.head_dim,
+                "theta": args.theta,
+                "dtype": args.dtype,
+                "device": args.device,
+                "warmup": args.warmup,
+                "repeats": args.repeats,
+                "seed": args.seed,
+            },
+            "purpose": "Measure rotary position embedding latency and bandwidth for transformer inference kernel work.",
+            "limitations": [
+                "This is a microbenchmark; promotion requires end-to-end serving evidence.",
+                "The initial implementation compares an interleaved Torch reference with a complex-number Torch candidate.",
+            ],
+            "outputs": {
+                "summary": display_path(output_dir / "summary.json"),
+                "card": display_path(output_dir / "kernel_card.md"),
+            },
+        }
+    )
+
+
 def import_torch() -> Any:
     try:
         import torch
@@ -118,6 +153,29 @@ def rmsnorm_manual(torch: Any, x: Any, weight: Any, eps: float) -> Any:
 
 def rmsnorm_native(torch: Any, x: Any, weight: Any, eps: float) -> Any:
     return torch.nn.functional.rms_norm(x, (x.shape[-1],), weight=weight, eps=eps)
+
+
+def build_rope_angles(torch: Any, seq_len: int, head_dim: int, theta: float, *, device: str) -> Any:
+    inv_freq = 1.0 / (theta ** (torch.arange(0, head_dim, 2, device=device, dtype=torch.float32) / head_dim))
+    positions = torch.arange(seq_len, device=device, dtype=torch.float32)
+    return torch.outer(positions, inv_freq)
+
+
+def rope_interleaved_reference(torch: Any, x: Any, angles: Any) -> Any:
+    cos = angles.cos()[None, :, None, :]
+    sin = angles.sin()[None, :, None, :]
+    even = x[..., 0::2].float()
+    odd = x[..., 1::2].float()
+    out = torch.empty_like(x.float())
+    out[..., 0::2] = even * cos - odd * sin
+    out[..., 1::2] = even * sin + odd * cos
+    return out.to(dtype=x.dtype)
+
+
+def rope_complex_candidate(torch: Any, x: Any, angles: Any) -> Any:
+    x_complex = torch.view_as_complex(x.float().reshape(*x.shape[:-1], x.shape[-1] // 2, 2))
+    rotation = torch.polar(torch.ones_like(angles), angles)[None, :, None, :]
+    return torch.view_as_real(x_complex * rotation).flatten(-2).to(dtype=x.dtype)
 
 
 def synchronize(torch: Any, device: str) -> None:
@@ -214,26 +272,112 @@ def run_rmsnorm(plan: Mapping[str, Any]) -> dict[str, Any]:
     )
 
 
+def run_rope(plan: Mapping[str, Any]) -> dict[str, Any]:
+    torch = import_torch()
+    params = dict(plan["parameters"])
+    device = resolve_device(torch, str(params["device"]))
+    dtype = torch_dtype(torch, str(params["dtype"]))
+    torch.manual_seed(int(params["seed"]))
+    head_dim = int(params["head_dim"])
+    if head_dim % 2 != 0:
+        raise ValueError("head_dim must be even for interleaved RoPE")
+    shape = (int(params["batch"]), int(params["seq_len"]), int(params["heads"]), head_dim)
+    x = torch.randn(shape, device=device, dtype=dtype)
+    angles = build_rope_angles(torch, int(params["seq_len"]), head_dim, float(params["theta"]), device=device)
+
+    with torch.no_grad():
+        reference = rope_interleaved_reference(torch, x, angles)
+        candidate = rope_complex_candidate(torch, x, angles)
+        max_abs_error = float((reference.float() - candidate.float()).abs().max().item())
+        reference_times = benchmark_impl(
+            torch,
+            lambda: rope_interleaved_reference(torch, x, angles),
+            device=device,
+            warmup=int(params["warmup"]),
+            repeats=int(params["repeats"]),
+        )
+        candidate_times = benchmark_impl(
+            torch,
+            lambda: rope_complex_candidate(torch, x, angles),
+            device=device,
+            warmup=int(params["warmup"]),
+            repeats=int(params["repeats"]),
+        )
+
+    element_size = x.element_size()
+    bytes_processed = x.numel() * element_size * 2
+    reference_summary = timing_summary(reference_times)
+    candidate_summary = timing_summary(candidate_times)
+    tolerance = 2e-3 if str(params["dtype"]) in {"float16", "fp16", "bfloat16", "bf16"} else 1e-5
+    return redact_value(
+        {
+            **dict(plan),
+            "created_at": utc_timestamp(),
+            "dry_run_only": False,
+            "runtime": {
+                "torch_version": torch.__version__,
+                "device": device,
+                "device_name": torch.cuda.get_device_name(0) if device == "cuda" else "cpu",
+                "dtype": str(dtype).replace("torch.", ""),
+                "shape": list(shape),
+                "bytes_processed_per_call": bytes_processed,
+                "system": system_snapshot(resolve_repo_path(str(plan["output_dir"]))),
+            },
+            "correctness": {
+                "reference": "interleaved_rope_reference",
+                "candidate": "complex_rope",
+                "max_abs_error": max_abs_error,
+                "tolerance": tolerance,
+                "passed": max_abs_error <= tolerance,
+            },
+            "results": {
+                "interleaved_reference": {
+                    **reference_summary,
+                    "effective_bandwidth_gbps_p50": effective_bandwidth_gbps(bytes_processed, reference_summary["p50_ms"]),
+                },
+                "complex_candidate": {
+                    **candidate_summary,
+                    "effective_bandwidth_gbps_p50": effective_bandwidth_gbps(bytes_processed, candidate_summary["p50_ms"]),
+                },
+            },
+        }
+    )
+
+
 def render_card(summary: Mapping[str, Any]) -> str:
     params = summary.get("parameters") or {}
     runtime = summary.get("runtime") or {}
     correctness = summary.get("correctness") or {}
     results = summary.get("results") or {}
-    native = results.get("torch_native") or {}
-    manual = results.get("manual_reference") or {}
+    if summary.get("benchmark") == "rope":
+        benchmark_label = "RoPE"
+        baseline_name = "interleaved_rope_reference"
+        candidate_name = "complex_rope"
+        baseline = results.get("interleaved_reference") or {}
+        candidate = results.get("complex_candidate") or {}
+        scope = "rotary position embedding path; use alongside Nsight serving profiles before optimization claims."
+        shape = f"batch={params.get('batch')}, seq_len={params.get('seq_len')}, heads={params.get('heads')}, head_dim={params.get('head_dim')}"
+    else:
+        benchmark_label = "RMSNorm"
+        baseline_name = "torch.nn.functional.rms_norm"
+        candidate_name = "manual_rmsnorm"
+        baseline = results.get("torch_native") or {}
+        candidate = results.get("manual_reference") or {}
+        scope = "transformer norm path; use alongside Nsight serving profiles before optimization claims."
+        shape = f"batch={params.get('batch')}, seq_len={params.get('seq_len')}, hidden_size={params.get('hidden_size')}"
     lines = [
         f"# Kernel Card: {summary.get('run_id')}",
         "",
         "## Scope",
         "",
-        "- Benchmark: RMSNorm",
-        "- End-to-end relevance: transformer norm path; use alongside Nsight serving profiles before optimization claims.",
-        "- Baseline: `torch.nn.functional.rms_norm`",
-        "- Candidate: `manual_rmsnorm` reference path",
+        f"- Benchmark: {benchmark_label}",
+        f"- End-to-end relevance: {scope}",
+        f"- Baseline: `{baseline_name}`",
+        f"- Candidate: `{candidate_name}`",
         "",
         "## Parameters",
         "",
-        f"- Shape: batch={params.get('batch')}, seq_len={params.get('seq_len')}, hidden_size={params.get('hidden_size')}",
+        f"- Shape: {shape}",
         f"- Device: {runtime.get('device', params.get('device'))}",
         f"- DType: {runtime.get('dtype', params.get('dtype'))}",
         f"- Repeats: warmup={params.get('warmup')}, measured={params.get('repeats')}",
@@ -246,11 +390,12 @@ def render_card(summary: Mapping[str, Any]) -> str:
         "",
         "## Microbenchmark",
         "",
-        f"- Torch/native p50 ms: {native.get('p50_ms')}",
-        f"- Torch/native p95 ms: {native.get('p95_ms')}",
-        f"- Torch/native effective GB/s p50: {native.get('effective_bandwidth_gbps_p50')}",
-        f"- Manual/reference p50 ms: {manual.get('p50_ms')}",
-        f"- Manual/reference p95 ms: {manual.get('p95_ms')}",
+        f"- Baseline p50 ms: {baseline.get('p50_ms')}",
+        f"- Baseline p95 ms: {baseline.get('p95_ms')}",
+        f"- Baseline effective GB/s p50: {baseline.get('effective_bandwidth_gbps_p50')}",
+        f"- Candidate p50 ms: {candidate.get('p50_ms')}",
+        f"- Candidate p95 ms: {candidate.get('p95_ms')}",
+        f"- Candidate effective GB/s p50: {candidate.get('effective_bandwidth_gbps_p50')}",
         "",
         "## Limitations",
         "",
@@ -278,8 +423,12 @@ def render_table(summary: Mapping[str, Any]) -> None:
     table.add_row("output", str(summary.get("output_dir")))
     results = summary.get("results") or {}
     if results:
-        table.add_row("native p50 ms", str((results.get("torch_native") or {}).get("p50_ms")))
-        table.add_row("native GB/s p50", str((results.get("torch_native") or {}).get("effective_bandwidth_gbps_p50")))
+        if summary.get("benchmark") == "rope":
+            baseline = results.get("interleaved_reference") or {}
+        else:
+            baseline = results.get("torch_native") or {}
+        table.add_row("baseline p50 ms", str(baseline.get("p50_ms")))
+        table.add_row("baseline GB/s p50", str(baseline.get("effective_bandwidth_gbps_p50")))
         table.add_row("correctness", str((summary.get("correctness") or {}).get("passed")))
     console.print(table)
 
@@ -302,6 +451,22 @@ def build_parser() -> argparse.ArgumentParser:
     rms.add_argument("--dry-run", action="store_true")
     rms.add_argument("--write", action="store_true")
     rms.add_argument("--json", action="store_true")
+    rope = sub.add_parser("rope", help="Run or plan a RoPE microbenchmark")
+    rope.add_argument("--batch", type=int, default=1)
+    rope.add_argument("--seq-len", type=int, default=1024)
+    rope.add_argument("--heads", type=int, default=16)
+    rope.add_argument("--head-dim", type=int, default=128)
+    rope.add_argument("--theta", type=float, default=10_000.0)
+    rope.add_argument("--dtype", choices=["float32", "fp32", "float16", "fp16", "bfloat16", "bf16"], default="bfloat16")
+    rope.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
+    rope.add_argument("--warmup", type=int, default=5)
+    rope.add_argument("--repeats", type=int, default=20)
+    rope.add_argument("--seed", type=int, default=17)
+    rope.add_argument("--run-id")
+    rope.add_argument("--output-dir", type=Path)
+    rope.add_argument("--dry-run", action="store_true")
+    rope.add_argument("--write", action="store_true")
+    rope.add_argument("--json", action="store_true")
     return parser
 
 
@@ -309,16 +474,24 @@ def main() -> None:
     args = build_parser().parse_args()
     if args.benchmark == "rmsnorm":
         summary = rmsnorm_plan(args)
-        if args.dry_run:
-            summary = {**summary, "dry_run_only": True}
-        else:
-            summary = run_rmsnorm(summary)
-        if args.write:
-            write_outputs(summary)
-        if args.json:
-            print(json.dumps(summary, indent=2, sort_keys=True) + "\n")
-        else:
-            render_table(summary)
+    elif args.benchmark == "rope":
+        if args.head_dim % 2 != 0:
+            raise SystemExit("--head-dim must be even")
+        summary = rope_plan(args)
+    else:
+        raise SystemExit(f"unknown kernel benchmark: {args.benchmark}")
+    if args.dry_run:
+        summary = {**summary, "dry_run_only": True}
+    elif args.benchmark == "rmsnorm":
+        summary = run_rmsnorm(summary)
+    elif args.benchmark == "rope":
+        summary = run_rope(summary)
+    if args.write:
+        write_outputs(summary)
+    if args.json:
+        print(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    else:
+        render_table(summary)
 
 
 if __name__ == "__main__":

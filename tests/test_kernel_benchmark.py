@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from model_forge.benchmarks.kernel import render_card, rmsnorm_plan, write_outputs
+from model_forge.benchmarks.kernel import render_card, rmsnorm_plan, rope_plan, write_outputs
 
 
 class KernelBenchmarkTests(unittest.TestCase):
@@ -59,6 +59,27 @@ class KernelBenchmarkTests(unittest.TestCase):
         self.assertEqual(saved["run_id"], "unit_rmsnorm_card")
         self.assertIn("# Kernel Card: unit_rmsnorm_card", card)
         self.assertIn("RMSNorm", render_card(summary))
+
+    def test_rope_dry_run_plan_is_portable(self) -> None:
+        args = argparse.Namespace(
+            batch=1,
+            seq_len=128,
+            heads=8,
+            head_dim=64,
+            theta=10_000.0,
+            dtype="bfloat16",
+            device="auto",
+            warmup=1,
+            repeats=2,
+            seed=17,
+            run_id="unit_rope",
+            output_dir=None,
+        )
+        plan = rope_plan(args)
+        self.assertEqual(plan["schema_version"], "model_forge.kernel_benchmark.v1")
+        self.assertEqual(plan["benchmark"], "rope")
+        self.assertEqual(plan["parameters"]["head_dim"], 64)
+        self.assertIn("kernel_card.md", plan["outputs"]["card"])
 
 
 if __name__ == "__main__":

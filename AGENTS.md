@@ -320,22 +320,23 @@ Benchmark serving only after an endpoint is already running:
 ./forge bench sweep doctor --config configs/sweeps/dgx_spark_vllm_baseline.yaml --strict
 ./forge bench sweep plan --family gemma4_26b_a4b --variant base
 ./forge bench kernel rmsnorm --dry-run --json
+./forge bench kernel rope --dry-run --json
 ./forge profile nsight plan --config configs/profiling/nsight_serving_smoke.yaml --write-plan
 ./forge profile nsight summarize --plan reports/generated/profiles/nsight/<run>/nsight_profile_plan.json --write-summary
 ```
 
 `bench serve` is for OpenAI-compatible endpoint mechanics only. `bench sweep`
 expands startup-time server env cases plus matching benchmark commands. Neither
-command starts a vLLM server. `bench kernel rmsnorm` is a microbenchmark
-harness; use it to produce `summary.json` and `kernel_card.md`, then connect the
-result to profile evidence before making optimization claims. `profile nsight`
-writes profiler command plans around existing benchmark commands; it does not
-start servers or profilers by default. `profile nsight summarize` inventories
-expected and present profiler artifacts; it is not a kernel interpretation by
-itself. A good latency result is not a quality or behavior pass. Use the
-generated `manifest.json`, `summary.json`, `requests.jsonl`,
-`serving_card.md`, kernel card, profile plan, and profile summary with eval
-results before making serving claims.
+command starts a vLLM server. `bench kernel rmsnorm` and `bench kernel rope`
+are microbenchmark harnesses; use them to produce `summary.json` and
+`kernel_card.md`, then connect the result to profile evidence before making
+optimization claims. `profile nsight` writes profiler command plans around
+existing benchmark commands; it does not start servers or profilers by default.
+`profile nsight summarize` inventories expected and present profiler artifacts;
+it is not a kernel interpretation by itself. A good latency result is not a
+quality or behavior pass. Use the generated `manifest.json`, `summary.json`,
+`requests.jsonl`, `serving_card.md`, kernel card, profile plan, and profile
+summary with eval results before making serving claims.
 
 Plan and report quantization without loading a model:
 

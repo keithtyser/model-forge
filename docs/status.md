@@ -105,6 +105,9 @@ This is the short handoff state for humans and agents. Use
 - RMSNorm kernel microbenchmarking is now present through `./forge bench kernel
   rmsnorm`; it supports dry-run planning plus Torch-backed runs that emit
   `summary.json` and `kernel_card.md`.
+- RoPE kernel microbenchmarking is now present through `./forge bench kernel
+  rope`; it follows the same dry-run, correctness, latency, and kernel-card
+  pattern as RMSNorm.
 - Serving Card generation now writes a structured `serving_card.md` for each
   `bench serve` run with identity, hardware/config, overall metrics,
   per-workload metrics, artifacts, and promotion gates.
