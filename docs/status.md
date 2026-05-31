@@ -121,6 +121,9 @@ This is the short handoff state for humans and agents. Use
 - Upstream PR planning is scaffolded through `./forge upstream`; it audits
   candidate contribution plans and writes `upstream_pr_plan.json`/`.md`, but
   MF-0808 is not complete until a real external PR URL is recorded.
+- SGLang backend planning is present through `./forge serving`; it audits
+  `configs/serving/backends/sglang_openai.yaml` and writes SGLang launch plus
+  matching `bench serve` commands without starting a server.
 - Serving Card generation now writes a structured `serving_card.md` for each
   `bench serve` run with identity, hardware/config, overall metrics,
   per-workload metrics, artifacts, and promotion gates.

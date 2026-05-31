@@ -1,0 +1,45 @@
+schema_version: model_forge.serving_backend.v1
+name: sglang_openai
+description: >
+  SGLang OpenAI-compatible serving backend plan. This config writes launch and
+  benchmark commands only; it does not start a server.
+engine: sglang
+entrypoint:
+  command:
+    - python
+    - -m
+    - sglang.launch_server
+  alternative_command:
+    - sglang
+    - serve
+network:
+  host: 0.0.0.0
+  port: 8000
+  base_url_env: MODEL_FORGE_BASE_URL
+model:
+  model_path_env: MODEL_FORGE_MODEL_PATH
+  served_model_name_env: MODEL_FORGE_MODEL
+runtime:
+  dtype: bfloat16
+  context_length: 32768
+  tensor_parallel_size_env: MODEL_FORGE_TENSOR_PARALLEL_SIZE
+  data_parallel_size_env: MODEL_FORGE_DATA_PARALLEL_SIZE
+  extra_args_env: MODEL_FORGE_SGLANG_EXTRA_ARGS
+resource_policy:
+  require_existing_job_lock: true
+  job_lock: runs/locks/model-forge-sglang.lock
+  max_concurrent_servers: 1
+  prefer_systemd_scope: true
+  cpu_quota_percent: 80
+  memory_max_percent: 85
+  minimum_available_ram_fraction: 0.05
+benchmarks:
+  smoke_config: configs/serving/serve_bench_smoke.yaml
+  core_config: configs/serving/serve_bench_core.yaml
+research_basis:
+  - id: sglang_openai_server
+    url: https://docs.sglang.ai/backend/openai_api_completions.html
+    note: SGLang exposes OpenAI-compatible chat/completions endpoints.
+  - id: sglang_launch_server
+    url: https://docs.sglang.ai/backend/server_arguments.html
+    note: SGLang server arguments cover model path, host, port, dtype, and parallelism.

@@ -15,6 +15,7 @@ Usage:
   ./forge setup [base|external|artifacts|all]
   ./forge download <family> [base|ft|abli|all]
   ./forge serve <family> [variant]
+  ./forge serving [doctor|plan]
   ./forge serve-teacher [qwen35_9b]
   ./forge eval <family> [variant] [--smoke|--internal|--artifact|--external] [tasks]
   ./forge external <family> [variant] [tasks]
@@ -48,6 +49,7 @@ Examples:
   ./forge setup all
   ./forge download gemma4_26b_a4b all
   ./forge serve gemma4_26b_a4b base
+  ./forge serving plan --config configs/serving/backends/sglang_openai.yaml --family gemma4_26b_a4b --variant base --write-plan
   ./forge serve-teacher qwen35_9b
   ./forge eval gemma4_26b_a4b base
   ./forge finetune gemma4_26b_a4b plan
@@ -124,6 +126,9 @@ case "$ACTION" in
     FAMILY=${1:?family is required}
     VARIANT=${2:-base}
     "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" serve "$VARIANT"
+    ;;
+  serving)
+    "$PYTHON" -m model_forge.serving.backends "$@"
     ;;
   serve-teacher)
     TEACHER=${1:-${MODEL_FORGE_TEACHER_FAMILY:-qwen35_9b}}

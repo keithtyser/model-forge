@@ -315,6 +315,8 @@ generated evidence path.
 Benchmark serving only after an endpoint is already running:
 
 ```bash
+./forge serving doctor --config configs/serving/backends/sglang_openai.yaml
+./forge serving plan --config configs/serving/backends/sglang_openai.yaml --family gemma4_26b_a4b --variant base --write-plan
 ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
 ./forge bench serve --family gemma4_26b_a4b --variant base
 ./forge bench sweep doctor --config configs/sweeps/dgx_spark_vllm_baseline.yaml --strict
@@ -343,6 +345,11 @@ itself. A good latency result is not a quality or behavior pass. Use the
 generated `manifest.json`, `summary.json`, `requests.jsonl`,
 `serving_card.md`, kernel card, profile plan, and profile summary with eval
 results before making serving claims.
+
+`./forge serving plan` currently supports SGLang planning. It writes launch and
+benchmark commands but does not start SGLang. Start at most one serving backend
+at a time and benchmark it through the same `bench serve` configs used for vLLM
+before claiming engine comparisons.
 
 Plan and report quantization without loading a model:
 

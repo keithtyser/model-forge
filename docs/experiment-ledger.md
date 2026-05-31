@@ -907,6 +907,44 @@ Result:
   real external PR
 - MF-0808 is marked scaffolded / planned, not smoke-validated
 
+## Advanced Serving: SGLang Backend Planner
+
+Status: implemented as planning code only. No SGLang server, vLLM server,
+benchmark run, training run, quantization run, or eval job was started.
+
+Hypothesis: SGLang should enter Model Forge as a second OpenAI-compatible
+serving backend with the same benchmark/evidence path as vLLM, but launch
+commands should be planned and reviewed before any heavy server starts.
+
+Changes:
+
+- added `configs/serving/backends/sglang_openai.yaml`
+- added `./forge serving doctor`
+- added `./forge serving plan`
+- added `model_forge.serving_backend_plan.v1`
+- resolved model path and served model name from model-family configs or manual
+  CLI arguments
+- wrote `serving_backend_plan.json` and `serving_backend_plan.md`
+- recorded SGLang launch command, OpenAI-compatible base URL, smoke benchmark
+  command, resource policy, and research-basis links
+- updated README, AGENTS, serving benchmark docs, status, and roadmap state
+
+Validation:
+
+```bash
+./forge serving doctor --config configs/serving/backends/sglang_openai.yaml --strict
+./forge serving plan --config configs/serving/backends/sglang_openai.yaml --family gemma4_26b_a4b --variant base --write-plan --json
+.venv/bin/python -m unittest tests.test_serving_backends -v
+```
+
+Result:
+
+- SGLang launch and smoke-benchmark commands can be planned without starting a
+  server
+- the backend plan is portable and uses env-backed overrides for model, base
+  URL, and parallelism
+- MF-0901 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

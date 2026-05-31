@@ -27,6 +27,23 @@ MODEL_FORGE_BASE_URL=http://127.0.0.1:8000/v1 \
 ./forge bench serve --model served/model-name
 ```
 
+Plan a SGLang OpenAI-compatible backend without starting it:
+
+```bash
+./forge serving doctor --config configs/serving/backends/sglang_openai.yaml
+./forge serving plan \
+  --config configs/serving/backends/sglang_openai.yaml \
+  --family gemma4_26b_a4b \
+  --variant base \
+  --write-plan
+```
+
+The SGLang plan writes `serving_backend_plan.json` and
+`serving_backend_plan.md` under `reports/generated/serving_backends/<run>/`.
+It records the launch command, matching OpenAI-compatible base URL, smoke
+benchmark command, resource policy, and source config. It does not start a
+server.
+
 Before treating a serving config as better, attach a sampled quality/behavior
 check to the same endpoint and served model:
 
