@@ -524,11 +524,12 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
             else:
                 target = limit or configured_target
                 if target:
+                    print(f"[model-forge] streaming source {name}: target={target}", flush=True)
                     if source.get("subset"):
                         ds_iter = load_dataset(source["dataset"], source["subset"], split=split, streaming=True)
                     else:
                         ds_iter = load_dataset(source["dataset"], split=split, streaming=True)
-                    buffer_size = int(os.getenv("MODEL_FORGE_DATA_STREAM_BUFFER", str(min(max(target * 2, 1000), 20000))))
+                    buffer_size = int(os.getenv("MODEL_FORGE_DATA_STREAM_BUFFER", "1024"))
                     if hasattr(ds_iter, "shuffle"):
                         ds_iter = ds_iter.shuffle(seed=int(plan["trainer"]["seed"]), buffer_size=buffer_size)
                     ds = list(ds_iter.take(target))
