@@ -189,6 +189,7 @@ Research registry:
 ./forge research list
 ./forge research show arditi_2024_refusal_direction
 ./forge research audit
+./forge research watch
 ```
 
 Run manifests:

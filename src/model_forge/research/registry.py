@@ -14,6 +14,7 @@ from rich.table import Table
 REPO_DIR = Path(__file__).resolve().parents[3]
 DEFAULT_REGISTRY = REPO_DIR / "configs" / "research_registry.yaml"
 DEFAULT_SOTA_DOC = REPO_DIR / "docs" / "research" / "sota-2026-05-18.md"
+DEFAULT_WATCH_CONFIG = REPO_DIR / "configs" / "research_watch" / "advanced_serving.yaml"
 OBJECTIVES_DIR = REPO_DIR / "configs" / "objectives"
 
 REQUIRED_ENTRY_FIELDS = (
@@ -237,6 +238,50 @@ def audit_registry(
     return findings
 
 
+def audit_watch_config(path: str | Path = DEFAULT_WATCH_CONFIG, registry_path: str | Path = DEFAULT_REGISTRY) -> list[AuditFinding]:
+    findings: list[AuditFinding] = []
+    watch_path = resolve_repo_path(path)
+    registry = load_registry(registry_path)
+    known_ids = set(registry.get("entries", {}))
+    try:
+        config = load_yaml(watch_path)
+    except Exception as exc:
+        return [AuditFinding("error", "watch_load", str(exc), display_path(watch_path))]
+
+    if config.get("schema_version") != "model_forge.research_watch.v1":
+        findings.append(AuditFinding("error", "watch_schema", "schema_version must be model_forge.research_watch.v1", display_path(watch_path)))
+    entries = config.get("entries")
+    if not isinstance(entries, list) or not entries:
+        findings.append(AuditFinding("error", "watch_schema", "entries must be a non-empty list", display_path(watch_path)))
+        return findings
+    ids: list[str] = []
+    for raw in entries:
+        if not isinstance(raw, dict):
+            findings.append(AuditFinding("error", "watch_entry", "watch entries must be mappings", display_path(watch_path)))
+            continue
+        entry_id = str(raw.get("id") or "")
+        ids.append(entry_id)
+        registry_entry = str(raw.get("registry_entry") or "")
+        if not entry_id:
+            findings.append(AuditFinding("error", "watch_entry", "watch entry id is required", display_path(watch_path)))
+        if registry_entry not in known_ids:
+            findings.append(AuditFinding("error", "watch_registry", f"unknown registry_entry {registry_entry!r}", display_path(watch_path), entry_id))
+        watch_urls = raw.get("watch_urls")
+        if not isinstance(watch_urls, list) or not watch_urls:
+            findings.append(AuditFinding("error", "watch_urls", "watch_urls must be a non-empty list", display_path(watch_path), entry_id))
+        else:
+            for url in watch_urls:
+                if not isinstance(url, str) or not url.startswith(("https://", "http://")):
+                    findings.append(AuditFinding("error", "watch_urls", "watch_urls must contain http(s) URLs", display_path(watch_path), entry_id))
+        for field in ("adoption_hooks", "promotion_blockers"):
+            value = raw.get(field)
+            if not isinstance(value, list) or not value or not all(isinstance(item, str) and item for item in value):
+                findings.append(AuditFinding("error", "watch_schema", f"{field} must be a non-empty list of strings", display_path(watch_path), entry_id))
+    if len(ids) != len(set(ids)):
+        findings.append(AuditFinding("error", "watch_entry", "watch entry ids must be unique", display_path(watch_path)))
+    return findings
+
+
 def render_entry(entry: dict[str, Any]) -> None:
     console.print(f"[bold]{entry['id']}[/bold]")
     console.print(f"Title: {entry.get('title')}")
@@ -290,6 +335,13 @@ def render_audit(findings: list[AuditFinding]) -> None:
     console.print(table)
 
 
+def render_watch(findings: list[AuditFinding]) -> None:
+    if not findings:
+        console.print("research watch audit: OK")
+        return
+    render_audit(findings)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Inspect and audit the model-forge research registry")
     parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY)
@@ -307,6 +359,10 @@ def main() -> None:
     audit_parser = subparsers.add_parser("audit", help="Validate registry consistency")
     audit_parser.add_argument("--json", action="store_true", help="Emit JSON")
     audit_parser.add_argument("--sota-doc", type=Path, default=DEFAULT_SOTA_DOC)
+
+    watch_parser = subparsers.add_parser("watch", help="Validate research-watch hooks")
+    watch_parser.add_argument("--config", type=Path, default=DEFAULT_WATCH_CONFIG)
+    watch_parser.add_argument("--json", action="store_true", help="Emit JSON")
 
     args = parser.parse_args()
     registry = load_registry(args.registry)
@@ -336,6 +392,14 @@ def main() -> None:
             print(json.dumps([asdict(finding) for finding in findings], indent=2, sort_keys=True) + "\n")
         else:
             render_audit(findings)
+        raise SystemExit(1 if any(finding.severity == "error" for finding in findings) else 0)
+
+    if args.command == "watch":
+        findings = audit_watch_config(args.config, args.registry)
+        if args.json:
+            print(json.dumps([asdict(finding) for finding in findings], indent=2, sort_keys=True) + "\n")
+        else:
+            render_watch(findings)
         raise SystemExit(1 if any(finding.severity == "error" for finding in findings) else 0)
 
 

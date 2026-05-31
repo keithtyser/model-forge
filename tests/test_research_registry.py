@@ -4,6 +4,7 @@ import unittest
 
 from model_forge.research.registry import (
     DEFAULT_REGISTRY,
+    audit_watch_config,
     audit_registry,
     filter_entries,
     load_registry,
@@ -21,6 +22,9 @@ class ResearchRegistryTests(unittest.TestCase):
         behavior_ids = {entry["id"] for entry in behavior_entries}
         self.assertIn("arditi_2024_refusal_direction", behavior_ids)
         self.assertIn("som_multidirectional_refusal_2026", behavior_ids)
+        serving_ids = {entry["id"] for entry in filter_entries(entries, area="distributed_inference")}
+        self.assertIn("nvidia_nixl", serving_ids)
+        self.assertIn("nvidia_dynamo_disaggregated_serving", serving_ids)
 
     def test_objective_research_basis_resolves_to_registry(self) -> None:
         registry = load_registry(DEFAULT_REGISTRY)
@@ -32,6 +36,11 @@ class ResearchRegistryTests(unittest.TestCase):
 
     def test_registry_audit_has_no_errors(self) -> None:
         findings = audit_registry()
+        errors = [finding for finding in findings if finding.severity == "error"]
+        self.assertEqual(errors, [])
+
+    def test_advanced_serving_watch_config_has_no_errors(self) -> None:
+        findings = audit_watch_config()
         errors = [finding for finding in findings if finding.severity == "error"]
         self.assertEqual(errors, [])
 

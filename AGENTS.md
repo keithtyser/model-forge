@@ -214,6 +214,7 @@ Inspect or validate the research basis:
 ./forge research list
 ./forge research show arditi_2024_refusal_direction
 ./forge research audit
+./forge research watch
 ```
 
 When adding a new method, benchmark adapter, objective profile, or public report,

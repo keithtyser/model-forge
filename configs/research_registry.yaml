@@ -535,3 +535,78 @@ entries:
     limitations:
       - ModelOpt workflows can change quickly and must be version-pinned in manifests.
       - PTQ simulation does not guarantee end-to-end runtime speedup without deployment-engine validation.
+
+  lmcache_kv_reuse:
+    title: "LMCache KV Cache Reuse for LLM Serving"
+    kind: documentation
+    year: 2026
+    status: tracked_sota
+    url: https://docs.lmcache.ai/
+    areas:
+      - serving
+      - kv_cache
+      - latency
+    claims:
+      - KV-cache reuse can reduce repeated-prefill cost for workloads with shared or reusable prefixes.
+      - Cache-aware serving must be evaluated with prompt-reuse workloads, not only single-turn random prompts.
+    implementation_hooks:
+      - configs/serving/workloads/reused_prefix.yaml
+      - configs/research_watch/advanced_serving.yaml
+      - future:configs/serving/backends/lmcache_*.yaml
+    eval_hooks:
+      - ./forge bench serve --config configs/serving/serve_bench_core.yaml
+      - reports/generated/serve_bench/*/serving_card.md
+      - configs/serving/serve_eval_quality_behavior.yaml
+    limitations:
+      - Cache hit rates are workload-dependent and can hide regressions if controls are weak.
+      - Integration details change quickly across vLLM, SGLang, TensorRT-LLM, and cache backends.
+
+  nvidia_nixl:
+    title: "NVIDIA NIXL for Inference Data Movement"
+    kind: documentation
+    year: 2026
+    status: tracked_sota
+    url: https://github.com/ai-dynamo/nixl
+    areas:
+      - serving
+      - distributed_inference
+      - kv_cache
+    claims:
+      - NIXL provides an inference-oriented communication layer for moving KV-cache and related runtime data.
+      - Disaggregated serving experiments should track transfer overhead separately from model compute.
+    implementation_hooks:
+      - configs/sweeps/dgx_spark_vllm_disagg_prefill_decode.yaml
+      - configs/research_watch/advanced_serving.yaml
+      - future:configs/serving/backends/nixl_*.yaml
+    eval_hooks:
+      - ./forge bench sweep plan --config configs/sweeps/dgx_spark_vllm_disagg_prefill_decode.yaml
+      - reports/generated/serve_sweeps/*/sweep_plan.json
+      - configs/serving/serve_eval_quality_behavior.yaml
+    limitations:
+      - NIXL adoption should be gated on installed-version compatibility with the serving engine.
+      - Faster transfer paths do not guarantee end-to-end speedup without TTFT, ITL, and tok/s evidence.
+
+  nvidia_dynamo_disaggregated_serving:
+    title: "NVIDIA Dynamo Disaggregated Serving"
+    kind: documentation
+    year: 2026
+    status: tracked_sota
+    url: https://github.com/ai-dynamo/dynamo
+    areas:
+      - serving
+      - distributed_inference
+      - dgx_spark
+    claims:
+      - Dynamo targets disaggregated inference serving and integrates with components such as NIXL.
+      - Model Forge should treat Dynamo as a watch path until Spark-cluster evidence exists.
+    implementation_hooks:
+      - configs/sweeps/dgx_spark_vllm_disagg_prefill_decode.yaml
+      - configs/research_watch/advanced_serving.yaml
+      - future:configs/serving/backends/dynamo_*.yaml
+    eval_hooks:
+      - ./forge bench sweep plan --config configs/sweeps/dgx_spark_vllm_disagg_prefill_decode.yaml
+      - reports/generated/serve_sweeps/*/sweep_plan.json
+      - reports/generated/serve_bench/*/serving_card.md
+    limitations:
+      - Dynamo is not a validated backend in this repo until a real endpoint run and quality sample are attached.
+      - Cluster setup, transport choice, and cache routing are expected to be hardware and version sensitive.

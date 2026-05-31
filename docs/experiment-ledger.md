@@ -1021,6 +1021,42 @@ Result:
   artifacts
 - MF-0903 is marked tested / smoke-validated
 
+## Advanced Serving: LMCache/NIXL Research Watch Hooks
+
+Status: implemented as registry and watch-config validation only. No LMCache,
+NIXL, Dynamo, vLLM, SGLang, TensorRT-LLM server, benchmark run, training run,
+quantization run, or eval job was started.
+
+Hypothesis: LMCache, NIXL, and Dynamo are relevant advanced-serving paths, but
+they are moving targets. Model Forge should track them with explicit adoption
+hooks and promotion blockers before implementing or promoting them as serving
+backends.
+
+Changes:
+
+- added `lmcache_kv_reuse`, `nvidia_nixl`, and
+  `nvidia_dynamo_disaggregated_serving` research registry entries
+- added `configs/research_watch/advanced_serving.yaml`
+- added `./forge research watch`
+- validated watch entries against registry entries, watch URLs, adoption hooks,
+  and promotion blockers
+- updated README, AGENTS, SOTA snapshot, status, and roadmap state
+
+Validation:
+
+```bash
+./forge research audit
+./forge research watch
+.venv/bin/python -m unittest tests.test_research_registry -v
+```
+
+Result:
+
+- advanced serving dependencies can be tracked without claiming backend support
+- watch hooks make required evidence explicit before LMCache/NIXL/Dynamo
+  adoption
+- MF-0904 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

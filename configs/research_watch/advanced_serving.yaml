@@ -1,0 +1,53 @@
+schema_version: model_forge.research_watch.v1
+name: advanced_serving_watch
+description: >
+  Watch hooks for fast-moving advanced serving dependencies. These entries are
+  not validated backends; they are tracked so agents know what to inspect before
+  adding or promoting cache/disaggregated-serving support.
+snapshot_date: 2026-05-31
+
+entries:
+  - id: lmcache_kv_reuse
+    registry_entry: lmcache_kv_reuse
+    status: watch
+    watch_urls:
+      - https://docs.lmcache.ai/
+      - https://github.com/LMCache/LMCache
+    adoption_hooks:
+      - Track vLLM/SGLang compatibility and cache connector setup.
+      - Add a backend config only after an OpenAI-compatible endpoint can be benchmarked through `./forge bench serve`.
+      - Compare `reused_prefix` workload gains against no-cache controls.
+    promotion_blockers:
+      - No real serving endpoint evidence in `reports/generated/serve_bench/`.
+      - No sampled quality/behavior eval under the cache-enabled serving config.
+      - No cache hit-rate or prompt-reuse evidence attached to the Serving Card.
+
+  - id: nvidia_nixl_transfer
+    registry_entry: nvidia_nixl
+    status: watch
+    watch_urls:
+      - https://github.com/ai-dynamo/nixl
+      - https://github.com/ai-dynamo/dynamo
+    adoption_hooks:
+      - Track installed NIXL and serving-engine compatibility.
+      - Add transfer-overhead fields to disaggregated serving cards before promotion.
+      - Use the DGX Spark x2 cluster profile for any real NIXL validation.
+    promotion_blockers:
+      - No two-node Spark endpoint evidence.
+      - No TTFT/ITL/tok-s comparison against the single-endpoint control.
+      - No transfer-overhead or routing metadata in the run manifest.
+
+  - id: nvidia_dynamo_disaggregated
+    registry_entry: nvidia_dynamo_disaggregated_serving
+    status: watch
+    watch_urls:
+      - https://github.com/ai-dynamo/dynamo
+      - https://docs.vllm.ai/en/latest/features/disagg_prefill/
+    adoption_hooks:
+      - Treat Dynamo as an advanced serving candidate, not a default path.
+      - Reuse `configs/sweeps/dgx_spark_vllm_disagg_prefill_decode.yaml` for apples-to-apples controls.
+      - Require model, precision, cluster topology, and transport metadata in every run card.
+    promotion_blockers:
+      - No cluster-backed Serving Card.
+      - No quality/behavior sample attached to the same served model and base URL.
+      - No clear win on the intended latency or throughput bottleneck.

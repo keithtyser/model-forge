@@ -131,6 +131,9 @@ This is the short handoff state for humans and agents. Use
   sweep` with `configs/sweeps/dgx_spark_vllm_disagg_prefill_decode.yaml`; it
   expands a single-endpoint control and two Spark split cases without starting
   servers.
+- LMCache/NIXL/Dynamo are tracked through `./forge research watch` and
+  `configs/research_watch/advanced_serving.yaml`; these are watch hooks, not
+  validated backends.
 - Serving Card generation now writes a structured `serving_card.md` for each
   `bench serve` run with identity, hardware/config, overall metrics,
   per-workload metrics, artifacts, and promotion gates.
