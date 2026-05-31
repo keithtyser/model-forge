@@ -117,6 +117,43 @@ def rope_plan(args: argparse.Namespace) -> dict[str, Any]:
     )
 
 
+def dequant_plan(args: argparse.Namespace) -> dict[str, Any]:
+    run_id = sanitize_run_id(args.run_id or f"dequant_{args.format}_{args.device}_{args.output_dtype}_n{args.num_elements}_b{args.block_size}")
+    output_dir = resolve_repo_path(args.output_dir or DEFAULT_OUTPUT_ROOT / run_id)
+    return redact_value(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "created_at": utc_timestamp(),
+            "benchmark": "dequant",
+            "run_id": run_id,
+            "output_dir": display_path(output_dir),
+            "parameters": {
+                "format": args.format,
+                "num_elements": args.num_elements,
+                "block_size": args.block_size,
+                "output_dtype": args.output_dtype,
+                "device": args.device,
+                "warmup": args.warmup,
+                "repeats": args.repeats,
+                "seed": args.seed,
+            },
+            "purpose": "Measure packed 4-bit dequantization latency and bandwidth for quantized inference kernel work.",
+            "limitations": [
+                "This is a Torch microbenchmark/proxy, not a native Blackwell Tensor Core NVFP4 path.",
+                "NVFP4 scale encoding is represented as FP32 scales for benchmark portability.",
+                "Promotion requires real quantized serving evidence.",
+            ],
+            "source_notes": [
+                "NVIDIA documents NVFP4 as E2M1 values with local E4M3 scale per 16 values and a global FP32 scale.",
+            ],
+            "outputs": {
+                "summary": display_path(output_dir / "summary.json"),
+                "card": display_path(output_dir / "kernel_card.md"),
+            },
+        }
+    )
+
+
 def import_torch() -> Any:
     try:
         import torch
@@ -176,6 +213,36 @@ def rope_complex_candidate(torch: Any, x: Any, angles: Any) -> Any:
     x_complex = torch.view_as_complex(x.float().reshape(*x.shape[:-1], x.shape[-1] // 2, 2))
     rotation = torch.polar(torch.ones_like(angles), angles)[None, :, None, :]
     return torch.view_as_real(x_complex * rotation).flatten(-2).to(dtype=x.dtype)
+
+
+def nvfp4_e2m1_codebook(torch: Any, *, device: str) -> Any:
+    # Positive E2M1 magnitudes documented for NVFP4 are approximately
+    # 0, 0.5, 1, 1.5, 2, 3, 4, and 6, mirrored by the sign bit.
+    values = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, -0.0, -0.5, -1.0, -1.5, -2.0, -3.0, -4.0, -6.0]
+    return torch.tensor(values, device=device, dtype=torch.float32)
+
+
+def unpack_low_high_nibbles(torch: Any, packed: Any, total_values: int) -> Any:
+    low = packed & 0x0F
+    high = (packed >> 4) & 0x0F
+    stacked = torch.stack((low, high), dim=-1).flatten()
+    return stacked[:total_values].to(dtype=torch.long)
+
+
+def dequant_from_unpacked(torch: Any, codes: Any, scales: Any, global_scale: float, codebook: Any, block_size: int, output_dtype: Any) -> Any:
+    values = codebook[codes]
+    block_ids = torch.div(torch.arange(codes.numel(), device=codes.device), block_size, rounding_mode="floor")
+    return (values * scales[block_ids] * global_scale).to(dtype=output_dtype)
+
+
+def dequant_unpack_plus_lut(torch: Any, packed: Any, scales: Any, global_scale: float, codebook: Any, block_size: int, total_values: int, output_dtype: Any) -> Any:
+    codes = unpack_low_high_nibbles(torch, packed, total_values)
+    return dequant_from_unpacked(torch, codes, scales, global_scale, codebook, block_size, output_dtype)
+
+
+def dequant_python_reference(raw_codes: list[int], raw_scales: list[float], global_scale: float, block_size: int) -> list[float]:
+    codebook = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, -0.0, -0.5, -1.0, -1.5, -2.0, -3.0, -4.0, -6.0]
+    return [codebook[int(code)] * raw_scales[index // block_size] * global_scale for index, code in enumerate(raw_codes)]
 
 
 def synchronize(torch: Any, device: str) -> None:
@@ -344,6 +411,96 @@ def run_rope(plan: Mapping[str, Any]) -> dict[str, Any]:
     )
 
 
+def run_dequant(plan: Mapping[str, Any]) -> dict[str, Any]:
+    torch = import_torch()
+    params = dict(plan["parameters"])
+    if params["format"] != "nvfp4-e2m1":
+        raise ValueError(f"unsupported dequant format: {params['format']}")
+    device = resolve_device(torch, str(params["device"]))
+    output_dtype = torch_dtype(torch, str(params["output_dtype"]))
+    torch.manual_seed(int(params["seed"]))
+    total_values = int(params["num_elements"])
+    block_size = int(params["block_size"])
+    if block_size <= 0:
+        raise ValueError("block_size must be positive")
+    packed_count = (total_values + 1) // 2
+    block_count = (total_values + block_size - 1) // block_size
+    low = torch.randint(0, 16, (packed_count,), device=device, dtype=torch.uint8)
+    high = torch.randint(0, 16, (packed_count,), device=device, dtype=torch.uint8)
+    packed = low | (high << 4)
+    scales = torch.rand((block_count,), device=device, dtype=torch.float32) + 0.5
+    global_scale = 0.75
+    codebook = nvfp4_e2m1_codebook(torch, device=device)
+    unpacked = unpack_low_high_nibbles(torch, packed, total_values)
+
+    with torch.no_grad():
+        sample_count = min(total_values, 256)
+        sample_codes = unpacked[:sample_count].detach().cpu().tolist()
+        sample_scales = scales[: (sample_count + block_size - 1) // block_size].detach().cpu().tolist()
+        reference = torch.tensor(
+            dequant_python_reference(sample_codes, sample_scales, global_scale, block_size),
+            device=device,
+            dtype=torch.float32,
+        )
+        candidate_sample = dequant_from_unpacked(torch, unpacked[:sample_count], scales, global_scale, codebook, block_size, torch.float32)
+        max_abs_error = float((reference - candidate_sample).abs().max().item())
+        unpack_times = benchmark_impl(
+            torch,
+            lambda: dequant_unpack_plus_lut(torch, packed, scales, global_scale, codebook, block_size, total_values, output_dtype),
+            device=device,
+            warmup=int(params["warmup"]),
+            repeats=int(params["repeats"]),
+        )
+        dequant_only_times = benchmark_impl(
+            torch,
+            lambda: dequant_from_unpacked(torch, unpacked, scales, global_scale, codebook, block_size, output_dtype),
+            device=device,
+            warmup=int(params["warmup"]),
+            repeats=int(params["repeats"]),
+        )
+
+    output_bytes = total_values * torch.tensor([], dtype=output_dtype).element_size()
+    input_bytes = packed.numel() * packed.element_size() + scales.numel() * scales.element_size()
+    bytes_processed = input_bytes + output_bytes
+    unpack_summary = timing_summary(unpack_times)
+    dequant_summary = timing_summary(dequant_only_times)
+    return redact_value(
+        {
+            **dict(plan),
+            "created_at": utc_timestamp(),
+            "dry_run_only": False,
+            "runtime": {
+                "torch_version": torch.__version__,
+                "device": device,
+                "device_name": torch.cuda.get_device_name(0) if device == "cuda" else "cpu",
+                "output_dtype": str(output_dtype).replace("torch.", ""),
+                "packed_values": int(packed.numel()),
+                "block_count": block_count,
+                "bytes_processed_per_call": bytes_processed,
+                "system": system_snapshot(resolve_repo_path(str(plan["output_dir"]))),
+            },
+            "correctness": {
+                "reference": "python_nvfp4_e2m1_sample",
+                "candidate": "torch_vectorized_lut",
+                "sample_values": sample_count,
+                "max_abs_error": max_abs_error,
+                "tolerance": 1e-6,
+                "passed": max_abs_error <= 1e-6,
+            },
+            "results": {
+                "unpack_plus_dequant": {
+                    **unpack_summary,
+                    "effective_bandwidth_gbps_p50": effective_bandwidth_gbps(bytes_processed, unpack_summary["p50_ms"]),
+                },
+                "dequant_from_unpacked": {
+                    **dequant_summary,
+                    "effective_bandwidth_gbps_p50": effective_bandwidth_gbps(bytes_processed, dequant_summary["p50_ms"]),
+                },
+            },
+        }
+    )
+
+
 def render_card(summary: Mapping[str, Any]) -> str:
     params = summary.get("parameters") or {}
     runtime = summary.get("runtime") or {}
@@ -357,6 +514,14 @@ def render_card(summary: Mapping[str, Any]) -> str:
         candidate = results.get("complex_candidate") or {}
         scope = "rotary position embedding path; use alongside Nsight serving profiles before optimization claims."
         shape = f"batch={params.get('batch')}, seq_len={params.get('seq_len')}, heads={params.get('heads')}, head_dim={params.get('head_dim')}"
+    elif summary.get("benchmark") == "dequant":
+        benchmark_label = "Dequant"
+        baseline_name = "unpack_plus_dequant"
+        candidate_name = "dequant_from_unpacked"
+        baseline = results.get("unpack_plus_dequant") or {}
+        candidate = results.get("dequant_from_unpacked") or {}
+        scope = "packed low-bit weight/activation path; use alongside quantized serving profiles before optimization claims."
+        shape = f"num_elements={params.get('num_elements')}, block_size={params.get('block_size')}, format={params.get('format')}"
     else:
         benchmark_label = "RMSNorm"
         baseline_name = "torch.nn.functional.rms_norm"
@@ -425,6 +590,8 @@ def render_table(summary: Mapping[str, Any]) -> None:
     if results:
         if summary.get("benchmark") == "rope":
             baseline = results.get("interleaved_reference") or {}
+        elif summary.get("benchmark") == "dequant":
+            baseline = results.get("unpack_plus_dequant") or {}
         else:
             baseline = results.get("torch_native") or {}
         table.add_row("baseline p50 ms", str(baseline.get("p50_ms")))
@@ -467,6 +634,20 @@ def build_parser() -> argparse.ArgumentParser:
     rope.add_argument("--dry-run", action="store_true")
     rope.add_argument("--write", action="store_true")
     rope.add_argument("--json", action="store_true")
+    dequant = sub.add_parser("dequant", help="Run or plan a packed 4-bit dequantization microbenchmark")
+    dequant.add_argument("--format", choices=["nvfp4-e2m1"], default="nvfp4-e2m1")
+    dequant.add_argument("--num-elements", type=int, default=1_048_576)
+    dequant.add_argument("--block-size", type=int, default=16)
+    dequant.add_argument("--output-dtype", choices=["float32", "fp32", "float16", "fp16", "bfloat16", "bf16"], default="bfloat16")
+    dequant.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
+    dequant.add_argument("--warmup", type=int, default=5)
+    dequant.add_argument("--repeats", type=int, default=20)
+    dequant.add_argument("--seed", type=int, default=17)
+    dequant.add_argument("--run-id")
+    dequant.add_argument("--output-dir", type=Path)
+    dequant.add_argument("--dry-run", action="store_true")
+    dequant.add_argument("--write", action="store_true")
+    dequant.add_argument("--json", action="store_true")
     return parser
 
 
@@ -478,6 +659,12 @@ def main() -> None:
         if args.head_dim % 2 != 0:
             raise SystemExit("--head-dim must be even")
         summary = rope_plan(args)
+    elif args.benchmark == "dequant":
+        if args.num_elements <= 0:
+            raise SystemExit("--num-elements must be positive")
+        if args.block_size <= 0:
+            raise SystemExit("--block-size must be positive")
+        summary = dequant_plan(args)
     else:
         raise SystemExit(f"unknown kernel benchmark: {args.benchmark}")
     if args.dry_run:
@@ -486,6 +673,8 @@ def main() -> None:
         summary = run_rmsnorm(summary)
     elif args.benchmark == "rope":
         summary = run_rope(summary)
+    elif args.benchmark == "dequant":
+        summary = run_dequant(summary)
     if args.write:
         write_outputs(summary)
     if args.json:

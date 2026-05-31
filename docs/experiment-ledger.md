@@ -757,6 +757,45 @@ Result:
 - the tiny CPU execution path passed correctness
 - MF-0804 is marked tested / smoke-validated
 
+## Kernel/Perf: Dequantization Microbenchmark
+
+Status: implemented as a local kernel benchmark harness. No model server,
+training run, quantization run, or eval job was started.
+
+Hypothesis: the quantized serving path needs a reproducible dequantization
+microbenchmark before native Blackwell/NVFP4 tuning. A packed E2M1 proxy with
+16-value scale blocks gives the repo a lightweight way to track dequant shape,
+latency, and correctness while still requiring real quantized serving evidence
+for promotion.
+
+Changes:
+
+- added `./forge bench kernel dequant`
+- reused `model_forge.kernel_benchmark.v1`
+- added dry-run planning that does not import Torch
+- added Torch-backed packed 4-bit unpack plus dequant benchmarking
+- modeled NVFP4 E2M1 values with local scale blocks and a global scale
+- recorded correctness against a Python sample reference
+- recorded p50/p95 latency and approximate effective bandwidth
+- wrote `summary.json` and `kernel_card.md`
+- updated kernel benchmark docs, README, AGENTS, status, and roadmap state
+
+Validation:
+
+```bash
+./forge bench kernel dequant --dry-run --json
+./forge bench kernel dequant --dry-run --write --run-id unit_dequant_cli --output-dir /tmp/model_forge_dequant
+./forge bench kernel dequant --device cpu --output-dtype float32 --num-elements 256 --block-size 16 --warmup 1 --repeats 2 --write --run-id unit_dequant_cpu --output-dir /tmp/model_forge_dequant_cpu --json
+.venv/bin/python -m unittest tests.test_kernel_benchmark -v
+```
+
+Result:
+
+- dequant benchmark plans are portable and smoke-testable without GPU/Torch
+- kernel card artifacts can be generated from a dry-run summary
+- the tiny CPU execution path passed correctness
+- MF-0805 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

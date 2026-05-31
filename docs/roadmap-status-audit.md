@@ -13,17 +13,17 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| not_started | 15 |
+| not_started | 14 |
 | scaffolded | 13 |
-| tested | 66 |
+| tested | 67 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 36 |
-| smoke_validated | 58 |
+| planned | 35 |
+| smoke_validated | 59 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -123,7 +123,7 @@ No status audit findings.
 | MF-0802 | P2: Kernel/perf | tested | smoke_validated | Add profile summarizer |
 | MF-0803 | P2: Kernel/perf | tested | smoke_validated | Add bench kernel rmsnorm |
 | MF-0804 | P2: Kernel/perf | tested | smoke_validated | Add bench kernel rope |
-| MF-0805 | P2: Kernel/perf | not_started | planned | Add bench kernel dequant |
+| MF-0805 | P2: Kernel/perf | tested | smoke_validated | Add bench kernel dequant |
 | MF-0806 | P2: Kernel/perf | not_started | planned | Add bench kernel kv-layout |
 | MF-0807 | P2: Kernel/perf | not_started | planned | Add Kernel Card |
 | MF-0808 | P2: Kernel/perf | not_started | planned | Open first upstream PR |

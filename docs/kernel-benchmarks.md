@@ -8,6 +8,7 @@ Run an RMSNorm dry run without importing Torch:
 ```bash
 ./forge bench kernel rmsnorm --dry-run --json
 ./forge bench kernel rope --dry-run --json
+./forge bench kernel dequant --dry-run --json
 ```
 
 Run a small benchmark and write artifacts:
@@ -35,6 +36,18 @@ Run a small RoPE benchmark and write artifacts:
   --write
 ```
 
+Run a small NVFP4 E2M1 dequantization proxy and write artifacts:
+
+```bash
+./forge bench kernel dequant \
+  --format nvfp4-e2m1 \
+  --device auto \
+  --output-dtype bfloat16 \
+  --num-elements 1048576 \
+  --block-size 16 \
+  --write
+```
+
 Outputs are written under `reports/generated/kernel_benchmarks/<run>/`:
 
 - `summary.json`
@@ -48,6 +61,12 @@ Triton/CUDA work, not as an optimized kernel claim.
 The initial RoPE benchmark compares an interleaved Torch reference against a
 complex-number Torch candidate and records the same correctness and latency
 fields. It is meant to anchor future fused or backend-specific RoPE work.
+
+The initial dequant benchmark uses an NVFP4 E2M1 proxy with packed nibbles, a
+local scale per 16 values, and a global scale. NVIDIA documents NVFP4 as using
+E2M1 values with a local E4M3 scaling factor every 16 values plus a global FP32
+scale. This benchmark keeps the scales as FP32 for portability and explicitly
+does not claim native Blackwell Tensor Core behavior.
 
 Promotion rules:
 

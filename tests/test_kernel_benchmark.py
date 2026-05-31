@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from model_forge.benchmarks.kernel import render_card, rmsnorm_plan, rope_plan, write_outputs
+from model_forge.benchmarks.kernel import dequant_plan, render_card, rmsnorm_plan, rope_plan, write_outputs
 
 
 class KernelBenchmarkTests(unittest.TestCase):
@@ -80,6 +80,25 @@ class KernelBenchmarkTests(unittest.TestCase):
         self.assertEqual(plan["benchmark"], "rope")
         self.assertEqual(plan["parameters"]["head_dim"], 64)
         self.assertIn("kernel_card.md", plan["outputs"]["card"])
+
+    def test_dequant_dry_run_plan_is_portable(self) -> None:
+        args = argparse.Namespace(
+            format="nvfp4-e2m1",
+            num_elements=1024,
+            block_size=16,
+            output_dtype="bfloat16",
+            device="auto",
+            warmup=1,
+            repeats=2,
+            seed=17,
+            run_id="unit_dequant",
+            output_dir=None,
+        )
+        plan = dequant_plan(args)
+        self.assertEqual(plan["schema_version"], "model_forge.kernel_benchmark.v1")
+        self.assertEqual(plan["benchmark"], "dequant")
+        self.assertEqual(plan["parameters"]["format"], "nvfp4-e2m1")
+        self.assertIn("summary.json", plan["outputs"]["summary"])
 
 
 if __name__ == "__main__":
