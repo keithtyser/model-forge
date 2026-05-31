@@ -443,6 +443,62 @@ def write_json(path: Path, data: Mapping[str, Any]) -> None:
     path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def command_stdout(payload: Mapping[str, Any], key: str) -> str | None:
+    command = payload.get(key)
+    if not isinstance(command, Mapping) or not command.get("ok"):
+        return None
+    value = command.get("stdout")
+    return str(value).strip() if value is not None else None
+
+
+def git_status_is_clean(status: str | None) -> bool:
+    if not status:
+        return False
+    return len([line for line in status.splitlines() if line.strip()]) == 1
+
+
+def apply_health_consistency(results: list[dict[str, Any]]) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    expected_branch: str | None = None
+    expected_head: str | None = None
+
+    for node in results:
+        payload = node.get("payload") if isinstance(node.get("payload"), Mapping) else {}
+        branch = command_stdout(payload, "git_branch")
+        head = command_stdout(payload, "git_head")
+        status = command_stdout(payload, "git_status")
+        node_findings: list[str] = []
+
+        if branch is None:
+            node_findings.append("git branch could not be read")
+        elif expected_branch is None:
+            expected_branch = branch
+        elif branch != expected_branch:
+            node_findings.append(f"git branch {branch!r} does not match expected {expected_branch!r}")
+
+        if head is None:
+            node_findings.append("git head could not be read")
+        elif expected_head is None:
+            expected_head = head
+        elif head != expected_head:
+            node_findings.append(f"git head {head!r} does not match expected {expected_head!r}")
+
+        if not git_status_is_clean(status):
+            node_findings.append("git worktree is dirty or status could not be read")
+
+        if node_findings:
+            node["ok"] = False
+            for message in node_findings:
+                findings.append({"node": str(node.get("name") or ""), "message": message})
+
+    return {
+        "ok": not findings,
+        "expected_branch": expected_branch,
+        "expected_head": expected_head,
+        "findings": findings,
+    }
+
+
 def collect_cluster_health(
     cluster: Mapping[str, Any],
     hardware: Mapping[str, Any],
@@ -473,6 +529,7 @@ def collect_cluster_health(
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(nodes))) as executor:
         results = list(executor.map(probe, nodes))
 
+    consistency = apply_health_consistency(results)
     return {
         "created_at": utc_timestamp(),
         "cluster": {
@@ -483,8 +540,9 @@ def collect_cluster_health(
             "total_declared_gpus": total_declared_gpus(cluster, hardware),
             "total_declared_memory_gb": total_declared_memory_gb(cluster, hardware),
         },
+        "consistency": consistency,
         "nodes": results,
-        "ok": all(node["ok"] for node in results),
+        "ok": all(node["ok"] for node in results) and consistency["ok"],
     }
 
 

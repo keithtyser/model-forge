@@ -5,6 +5,7 @@ from pathlib import Path
 
 from model_forge.cluster.cli import (
     REPO_DIR,
+    apply_health_consistency,
     audit_cluster,
     checkpoint_gate_payload,
     build_sync_plan,
@@ -160,6 +161,53 @@ class ClusterCliTests(unittest.TestCase):
     def test_json_lines_extracts_smoke_records(self) -> None:
         records = json_lines('warning\n{"ok": true, "rank": 0}\nnot-json\n{"ok": true, "rank": 1}\n')
         self.assertEqual([record["rank"] for record in records], [0, 1])
+
+    def test_health_consistency_fails_stale_worker_head(self) -> None:
+        nodes = [
+            {
+                "name": "coordinator",
+                "ok": True,
+                "payload": {
+                    "git_branch": {"ok": True, "stdout": "main"},
+                    "git_head": {"ok": True, "stdout": "new1234"},
+                    "git_status": {"ok": True, "stdout": "## main...origin/main"},
+                },
+            },
+            {
+                "name": "worker",
+                "ok": True,
+                "payload": {
+                    "git_branch": {"ok": True, "stdout": "main"},
+                    "git_head": {"ok": True, "stdout": "old1234"},
+                    "git_status": {"ok": True, "stdout": "## main...origin/main"},
+                },
+            },
+        ]
+
+        consistency = apply_health_consistency(nodes)
+
+        self.assertFalse(consistency["ok"])
+        self.assertFalse(nodes[1]["ok"])
+        self.assertTrue(any("git head" in finding["message"] for finding in consistency["findings"]))
+
+    def test_health_consistency_fails_dirty_worker(self) -> None:
+        nodes = [
+            {
+                "name": "worker",
+                "ok": True,
+                "payload": {
+                    "git_branch": {"ok": True, "stdout": "main"},
+                    "git_head": {"ok": True, "stdout": "new1234"},
+                    "git_status": {"ok": True, "stdout": "## main...origin/main\n M AGENTS.md"},
+                },
+            },
+        ]
+
+        consistency = apply_health_consistency(nodes)
+
+        self.assertFalse(consistency["ok"])
+        self.assertFalse(nodes[0]["ok"])
+        self.assertTrue(any("dirty" in finding["message"] for finding in consistency["findings"]))
 
     def test_example_configs_do_not_contain_private_literals(self) -> None:
         private_home = "/" + "home/ktyser"

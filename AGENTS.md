@@ -433,10 +433,13 @@ Validate or plan cluster usage:
 Cluster configs must remain generic. Do not commit private hostnames, IPs,
 usernames, tokens, or absolute machine-specific paths. Put those values in
 environment variables or untracked local copies. Real distributed execution
-requires `./forge cluster doctor --strict` and a workload-specific launcher with
-resource guardrails. Before claiming that a training, quantization, or benchmark
-job used both Spark nodes, run `./forge cluster torchrun-smoke` and cite the
-generated evidence path.
+requires `./forge cluster doctor --strict`, `./forge cluster health`, and a
+workload-specific launcher with resource guardrails. `cluster health` must show
+matching clean git branch/head values on every node. If it fails with a stale
+worker head or dirty worktree, commit the coordinator changes, run
+`./forge cluster sync --config <cluster.yaml> --execute`, then run health again.
+Before claiming that a training, quantization, or benchmark job used both Spark
+nodes, run `./forge cluster torchrun-smoke` and cite the generated evidence path.
 
 For Qwen-family serving on Spark, `configs/model_families/qwen35_9b.yaml` and
 `configs/model_families/qwen36_27b.yaml` use the generic
