@@ -1,0 +1,199 @@
+schema_version: model_forge.agent_experiment.v1
+experiment_id: qwen36_27b_full_post_training
+title: Qwen 3.6 27B full post-training workflow
+hypothesis: >
+  Model Forge can run the same model-family workflow on Qwen 3.6 27B that it
+  used for Gemma: establish a base baseline, fine-tune the base to improve
+  capability, ablate the fine-tuned checkpoint to remove refusals while
+  preserving capability, and self-quantize the final candidate to Blackwell
+  NVFP4 with higher serving throughput and close quality retention.
+owner_agent: codex
+experiment_type: finetune
+status: planned
+
+family: qwen36_27b
+variant: base
+objective_profile: capability_sft
+
+planned_commands:
+  - command: MODEL_FORGE_MODELS_DIR=<models-dir> ./forge variants wait-checkpoint qwen36_27b --variant base --timeout-seconds 0
+    purpose: Wait until the downloaded base checkpoint is complete before sync, serving, training, or quantization.
+    starts_heavy_job: false
+    requires_execute: true
+    expected_artifacts:
+      - terminal_output
+  - command: ./forge cluster health --config <private-cluster.yaml>
+    purpose: Verify both DGX Spark nodes are reachable with RAM, disk, GPU, and repo readiness.
+    starts_heavy_job: false
+    requires_execute: true
+    expected_artifacts:
+      - reports/generated/cluster/health_<timestamp>.json
+  - command: ./forge cluster torchrun-smoke --config <private-cluster.yaml> --image model-forge-posttrain-tf5:latest --nccl-socket-ifname <direct-link-interface>
+    purpose: Prove the two Spark nodes can join one CUDA/NCCL distributed job before claiming cluster execution.
+    starts_heavy_job: false
+    requires_execute: true
+    expected_artifacts:
+      - reports/generated/cluster/torchrun_smoke_<timestamp>.json
+  - command: MODEL_FORGE_MODELS_DIR=<models-dir> ./forge cluster model-sync --config <private-cluster.yaml> --source <models-dir>/Qwen3.6-27B --family qwen36_27b --variant base --models-dir <models-dir> --execute
+    purpose: Copy the completed base checkpoint to worker nodes through the checkpoint-gated model sync path.
+    starts_heavy_job: false
+    requires_execute: true
+    expected_artifacts:
+      - reports/generated/cluster/model_sync_<timestamp>.json
+  - command: MODEL_FORGE_DRY_RUN=1 MODEL_FORGE_MODELS_DIR=<models-dir> MODEL_FORGE_SPARK_CLUSTER=1 MODEL_FORGE_SPARK_CLUSTER_NODES=<coordinator-host>,<worker-host> MODEL_FORGE_SPARK_ETH_IF=<direct-link-interface> MODEL_FORGE_TENSOR_PARALLEL_SIZE=2 ./forge serve qwen36_27b base
+    purpose: Inspect the two-node Qwen vLLM launch command and serving defaults before starting the base server.
+    starts_heavy_job: false
+    requires_execute: true
+    expected_artifacts:
+      - terminal_output
+  - command: MODEL_FORGE_MODELS_DIR=<models-dir> MODEL_FORGE_SPARK_CLUSTER=1 MODEL_FORGE_SPARK_CLUSTER_NODES=<coordinator-host>,<worker-host> MODEL_FORGE_SPARK_ETH_IF=<direct-link-interface> MODEL_FORGE_TENSOR_PARALLEL_SIZE=2 ./forge serve qwen36_27b base
+    purpose: Start exactly one two-node base model server for baseline eval and serving benchmarks.
+    starts_heavy_job: true
+    requires_execute: true
+    expected_artifacts:
+      - running_openai_compatible_endpoint
+  - command: ./forge eval qwen36_27b base --smoke
+    purpose: Verify endpoint/model identity and eval mechanics before full baseline eval.
+    starts_heavy_job: false
+    requires_execute: true
+    expected_artifacts:
+      - results/qwen36_27b_v0/base/qwen36_27b_base_smoke
+  - command: MODEL_FORGE_TRIALS=3 ./forge eval qwen36_27b base --internal
+    purpose: Save the full internal base baseline for source-relative FT, ablation, and quantization comparisons.
+    starts_heavy_job: false
+    requires_execute: true
+    expected_artifacts:
+      - results/qwen36_27b_v0/base/qwen36_27b_base_dgx_spark
+  - command: ./forge bench serve --family qwen36_27b --variant base
+    purpose: Save base BF16 serving throughput evidence before later NVFP4 comparison.
+    starts_heavy_job: false
+    requires_execute: true
+    expected_artifacts:
+      - reports/generated/serve_bench/<run>/summary.json
+      - reports/generated/serve_bench/<run>/serving_card.md
+  - command: ./forge finetune --config configs/finetuning/qwen36_27b_local_ft_v1.yaml prepare --overwrite
+    purpose: Generate the guarded Qwen fine-tune run artifacts and method card.
+    starts_heavy_job: false
+    requires_execute: true
+    expected_artifacts:
+      - runs/finetune/qwen36_27b_local_ft_v1/plan.json
+      - runs/finetune/qwen36_27b_local_ft_v1/training_method_card.md
+  - command: MODEL_FORGE_CLUSTER_CONFIG=<private-cluster.yaml> MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 runs/finetune/qwen36_27b_local_ft_v1/run_cluster_torchrun.sh
+    purpose: Fine-tune Qwen on the two-node Spark cluster through the generated checkpoint-gated trainer.
+    starts_heavy_job: true
+    requires_execute: true
+    expected_artifacts:
+      - <models-dir>/Qwen3.6-27B-local-ft-v1
+      - runs/finetune/qwen36_27b_local_ft_v1/logs
+  - command: ./forge eval qwen36_27b local_ft --internal
+    purpose: Verify the fine-tuned model outperforms the base on source-relative internal objectives.
+    starts_heavy_job: false
+    requires_execute: true
+    expected_artifacts:
+      - results/qwen36_27b_v0/base/qwen36_27b_local_ft_dgx_spark
+  - command: nice -n 10 .venv/bin/python scripts/merge_peft_adapter.py --base-model <models-dir>/Qwen3.6-27B --adapter <models-dir>/Qwen3.6-27B-local-ft-v1 --output-dir <models-dir>/Qwen3.6-27B-local-ft-v1-merged --dtype bf16 --trust-remote-code
+    purpose: Merge the PEFT fine-tune into a full checkpoint for behavior editing and full-checkpoint quantization.
+    starts_heavy_job: true
+    requires_execute: true
+    expected_artifacts:
+      - <models-dir>/Qwen3.6-27B-local-ft-v1-merged
+  - command: ./forge ablate --config configs/abliteration/qwen36_27b_ft_local_abli.yaml sota-run --execute
+    purpose: Ablate the merged fine-tuned checkpoint to remove refusals while preserving FT capability.
+    starts_heavy_job: true
+    requires_execute: true
+    expected_artifacts:
+      - <models-dir>/Qwen3.6-27B-local-ft-abliterated-v1
+      - artifacts/abliteration/qwen36_27b_ft_local_abli
+  - command: MODEL_FORGE_TRIALS=3 ./forge eval qwen36_27b local_ft_abli --internal
+    purpose: Verify refusal removal and capability retention against the local_ft source.
+    starts_heavy_job: false
+    requires_execute: true
+    expected_artifacts:
+      - results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_dgx_spark
+  - command: ./forge compare qwen36_27b
+    purpose: Refresh source-relative comparison reports for base, local_ft, and local_ft_abli.
+    starts_heavy_job: false
+    requires_execute: true
+    expected_artifacts:
+      - reports/generated/qwen36_27b_comparison
+  - command: ./forge quantize calibration-manifest qwen36_27b local_ft_abli --config configs/quantization/qwen36_27b_nvfp4_modelopt.yaml --write-manifest
+    purpose: Write the calibration contract before self-quantizing the final FT-ablated source.
+    starts_heavy_job: false
+    requires_execute: true
+    expected_artifacts:
+      - reports/generated/quantization/<run>/calibration_manifest.json
+  - command: ./forge quantize export qwen36_27b local_ft_abli --config configs/quantization/qwen36_27b_nvfp4_modelopt.yaml --target-variant local_ft_abli_nvfp4_modelopt --execute
+    purpose: Self-quantize the FT-ablated Qwen checkpoint to Blackwell NVFP4 through the guarded export path.
+    starts_heavy_job: true
+    requires_execute: true
+    expected_artifacts:
+      - <models-dir>/model-forge-quantized/qwen36_27b/local_ft_abli_nvfp4_modelopt
+  - command: MODEL_FORGE_TRIALS=3 ./forge eval qwen36_27b local_ft_abli_nvfp4_modelopt --internal
+    purpose: Measure quality retention of the NVFP4 candidate against the unquantized FT-ablated source.
+    starts_heavy_job: false
+    requires_execute: true
+    expected_artifacts:
+      - results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_nvfp4_modelopt_dgx_spark
+  - command: ./forge bench serve --family qwen36_27b --variant local_ft_abli_nvfp4_modelopt
+    purpose: Prove NVFP4 improves output tokens per second over the matching unquantized FT-ablated endpoint.
+    starts_heavy_job: false
+    requires_execute: true
+    expected_artifacts:
+      - reports/generated/serve_bench/<run>/summary.json
+      - reports/generated/serve_bench/<run>/serving_card.md
+  - command: ./forge quantize nvfp4-gate --export-plan <export_plan.json> --serving-summary <nvfp4_serve_summary.json> --serving-eval <nvfp4_eval_dir> --quantization-card <quantization_card.json> --behavior-report <behavior_report.json> --tokenizer-report <tokenizer_report.json> --run-id qwen36_27b_local_ft_abli_nvfp4_gate --write-gate
+    purpose: Gate the final NVFP4 candidate on export, speed, behavior, tokenizer, and quality-retention evidence.
+    starts_heavy_job: false
+    requires_execute: true
+    expected_artifacts:
+      - reports/generated/quantization/qwen36_27b_local_ft_abli_nvfp4_gate
+
+resource_policy:
+  max_concurrent_large_jobs: 1
+  start_if_memory_available_above_fraction: 0.05
+  stop_if_memory_available_below_fraction: 0.05
+  require_disk_free_fraction: 0.15
+  use_cluster_when_heavy: true
+  checkpoint_or_write_plan_before_execute: true
+
+evidence_plan:
+  manifest_required: true
+  ledger_update_required: true
+  expected_reports:
+    - reports/generated/cluster
+    - results/qwen36_27b_v0/base
+    - reports/generated/qwen36_27b_comparison
+    - reports/generated/serve_bench
+    - reports/generated/quantization
+    - docs/experiment-ledger.md
+  required_validation_commands:
+    - ./forge doctor
+    - ./forge agent audit
+    - ./forge variants checkpoint-audit qwen36_27b --variant base --strict
+    - ./forge variants tokenizer-audit qwen36_27b --variant local_ft_abli_nvfp4_modelopt --load-tokenizer --strict
+    - ./forge compare qwen36_27b
+
+success_criteria:
+  - The base, local_ft, local_ft_abli, and local_ft_abli_nvfp4_modelopt variants have saved internal evals.
+  - The local_ft variant beats the base variant on the configured capability_sft objective metrics.
+  - The local_ft_abli variant has zero harmful refusal while preserving local_ft capability and benign quality within expected variance.
+  - The NVFP4 candidate keeps quality close to local_ft_abli and has a clear output tok/s improvement on Blackwell serving benchmarks.
+  - Every heavy step cites cluster evidence proving the two-node Spark cluster was used when applicable.
+  - Pain points found during the run are fixed in code/config/docs or recorded as explicit follow-ups.
+
+rollback_plan:
+  - Stop the active vLLM server or training/export launcher before changing stages.
+  - Keep partial checkpoints outside Git and delete only generated artifacts from the failed stage.
+  - Revert only the repo files changed by this experiment if validation fails.
+  - Re-run checkpoint and tokenizer audits before restarting from the last good variant.
+
+handoff:
+  push_to_github: true
+  update_status_docs: true
+  hf_upload_policy: upload_completed_models_datasets_and_release_artifacts_after_gates
+  raw_artifact_policy: keep_large_outputs_untracked_or_upload_to_huggingface
+  notes: >
+    Replace placeholders with private runtime values outside Git. Do not commit
+    cluster hostnames, IPs, HF tokens, raw model weights, or bulky generated
+    eval outputs. This plan is the Qwen worked example of the general
+    post-training workflow; keep fixes model-family driven.
