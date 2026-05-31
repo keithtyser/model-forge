@@ -262,6 +262,7 @@ Serving benchmark:
 ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
 MODEL_FORGE_BASE_URL=http://127.0.0.1:8000/v1 ./forge bench serve --model served/model-name
 ./forge bench sweep plan --family gemma4_26b_a4b --variant base
+./forge bench sweep plan --config configs/sweeps/dgx_spark_vllm_disagg_prefill_decode.yaml --family gemma4_26b_a4b --variant base --cluster-config configs/clusters/dgx_spark_x2.example.yaml
 ```
 
 See [docs/serving-benchmarks.md](docs/serving-benchmarks.md). The benchmark
@@ -271,7 +272,9 @@ expects a running OpenAI-compatible endpoint and writes `requests.jsonl`,
 `configs/serving/workloads/`. Sweep plans expand startup-time server env cases
 and the matching `bench serve` commands, but they do not launch vLLM. SGLang and
 TensorRT-LLM backend planning write launch and benchmark plans without starting
-a server.
+a server. The disaggregated prefill/decode sweep profile expands baseline and
+two-node split cases, but it still requires a separately started backend before
+benchmarking.
 
 Kernel microbenchmarks:
 

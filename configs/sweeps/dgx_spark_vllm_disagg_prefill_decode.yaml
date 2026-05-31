@@ -1,0 +1,109 @@
+schema_version: model_forge.serving_sweep.v1
+name: dgx_spark_vllm_disagg_prefill_decode
+description: >
+  Experimental DGX Spark x2 profile for evaluating disaggregated prefill/decode
+  serving. This is a planning config only; it records the cases, server env, and
+  benchmark commands needed to compare against the normal single-endpoint path.
+
+hardware_profile: configs/hardware/dgx_spark.yaml
+benchmark_config: configs/serving/serve_bench_core.yaml
+output_dir: reports/generated/serve_sweeps/dgx_spark_vllm_disagg_prefill_decode
+
+backend:
+  kind: vllm_disaggregated_prefill_decode
+  base_url_env: MODEL_FORGE_BASE_URL
+  model_env: MODEL_FORGE_MODEL
+  default_base_url: http://127.0.0.1:8000/v1
+  launcher_note: >
+    Use the vLLM disaggregated prefill/decode launcher for the installed vLLM
+    version. Keep the OpenAI-compatible frontend URL stable so Model Forge
+    benchmark artifacts remain comparable across backends.
+
+resource_policy:
+  max_concurrent_servers: 1
+  max_concurrent_benchmarks: 1
+  require_job_lock: true
+  job_lock: runs/locks/model-forge-disagg-prefill-decode.lock
+  start_if_memory_available_above_fraction: 0.05
+  require_disk_free_fraction: 0.15
+  stop_if_memory_available_below_fraction: 0.05
+  cluster_required_for_promotion: true
+
+workload:
+  benchmark_command:
+    - ./forge
+    - bench
+    - serve
+  repetitions: 1
+  limit: null
+  stream: true
+  notes:
+    - Run the baseline case first with the same model, precision, and workload mix.
+    - Keep the frontend base URL stable across cases.
+    - Record TTFT, ITL, prefill tokens/sec, decode tokens/sec, output tok/s, and quality/behavior sample results.
+
+fixed_env:
+  MODEL_FORGE_HARDWARE_PROFILE: dgx_spark_x2
+  MODEL_FORGE_SERVING_MODE: disaggregated_prefill_decode
+  GPU_MEMORY_UTILIZATION: "0.85"
+  MAX_MODEL_LEN: "32768"
+  MAX_NUM_BATCHED_TOKENS: "32768"
+  VLLM_MAX_NUM_SEQS: "4"
+  VLLM_ENABLE_CHUNKED_PREFILL: "1"
+  VLLM_ENABLE_PREFIX_CACHING: "1"
+  VLLM_KV_CACHE_DTYPE: fp8_e4m3
+  VLLM_DTYPE: auto
+  VLLM_ALLOW_LONG_MAX_MODEL_LEN: "1"
+  PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+  TORCH_MATMUL_PRECISION: high
+  NVIDIA_FORWARD_COMPAT: "1"
+  NVIDIA_DISABLE_REQUIRE: "1"
+
+cases:
+  - id: single_endpoint_chunked_prefill_control
+    description: Normal single-endpoint control using chunked prefill and FP8 KV.
+    hypothesis: >
+      The control establishes TTFT, ITL, output throughput, memory, and quality
+      behavior for the same model before introducing disaggregated serving.
+    env:
+      MODEL_FORGE_DISAGG_ROLE: control
+      VLLM_DISAGG_PREFILL: "0"
+
+  - id: two_spark_prefill_decode_split
+    description: One Spark node dedicated to prefill and one Spark node dedicated to decode.
+    hypothesis: >
+      Splitting long-prefill and decode work across the two Spark nodes should
+      reduce TTFT on long prompts while preserving decode throughput for mixed
+      workloads if transfer overhead stays below the prefill bottleneck.
+    env:
+      MODEL_FORGE_DISAGG_ROLE: split_prefill_decode
+      VLLM_DISAGG_PREFILL: "1"
+      MODEL_FORGE_PREFILL_NODES: "1"
+      MODEL_FORGE_DECODE_NODES: "1"
+
+  - id: two_spark_high_parallelism_split
+    description: Split prefill/decode with higher scheduler parallelism for Spark bandwidth pressure.
+    hypothesis: >
+      Higher request/transfer parallelism may better hide Spark memory-bandwidth
+      limits on long prompts, but should only be promoted if TTFT improves
+      without ITL, output tok/s, or quality regression.
+    env:
+      MODEL_FORGE_DISAGG_ROLE: split_prefill_decode
+      VLLM_DISAGG_PREFILL: "1"
+      MODEL_FORGE_PREFILL_NODES: "1"
+      MODEL_FORGE_DECODE_NODES: "1"
+      MODEL_FORGE_PREFILL_PARALLELISM: "192"
+
+research_basis:
+  - id: vllm_disaggregated_prefill
+    url: https://docs.vllm.ai/en/latest/features/disagg_prefill/
+    note: vLLM documents disaggregated prefilling as experimental and aimed at separating prefill from decode work.
+
+quality_gate:
+  required_after_sweep:
+    - ./forge bench serve-eval --config configs/serving/serve_eval_quality_behavior.yaml
+    - ./forge eval <family> <variant> --smoke
+  promotion_rule: >
+    Treat disaggregated serving as successful only if it improves the intended
+    latency/throughput bottleneck while sampled quality and behavior metrics
+    remain comparable to the matching single-endpoint control.

@@ -11,6 +11,7 @@ from model_forge.benchmarks.sweep import (
     load_sweep_config,
     write_plan,
 )
+from model_forge.runs.manifest import REPO_DIR
 
 
 class ServingSweepTests(unittest.TestCase):
@@ -65,6 +66,33 @@ class ServingSweepTests(unittest.TestCase):
             saved = json.loads(plan_path.read_text(encoding="utf-8"))
             self.assertEqual(saved["target"]["model"], "served/test-model")
             self.assertIn("server env GPU_MEMORY_UTILIZATION", commands_path.read_text(encoding="utf-8"))
+
+    def test_disaggregated_prefill_decode_profile_passes_doctor_and_plans(self) -> None:
+        profile = REPO_DIR / "configs" / "sweeps" / "dgx_spark_vllm_disagg_prefill_decode.yaml"
+        config, path = load_sweep_config(profile)
+        findings = audit_sweep_config(config, path, strict=True)
+        self.assertEqual([finding for finding in findings if finding.severity == "error"], [])
+        plan = build_sweep_plan(
+            config,
+            path,
+            family="gemma4_26b_a4b",
+            variant="base",
+            base_url="http://127.0.0.1:8000/v1",
+            cluster_config="configs/clusters/dgx_spark_x2.example.yaml",
+            env={
+                "MODEL_FORGE_NODE0_HOST": "spark-a",
+                "MODEL_FORGE_NODE1_HOST": "spark-b",
+                "MODEL_FORGE_NODE0_USER": "runner",
+                "MODEL_FORGE_NODE1_USER": "runner",
+                "MODEL_FORGE_CLUSTER_WORK_DIR": "/" + "home/private/model-forge",
+                "MODEL_FORGE_RDZV_ENDPOINT": "spark-a:29500",
+            },
+        )
+        self.assertEqual(plan["sweep"]["name"], "dgx_spark_vllm_disagg_prefill_decode")
+        self.assertEqual(plan["cluster"]["node_count"], 2)
+        self.assertEqual(len(plan["cases"]), 3)
+        self.assertIn("MODEL_FORGE_PREFILL_PARALLELISM", plan["cases"][2]["server_env"])
+        self.assertIn("--config configs/serving/serve_bench_core.yaml", plan["cases"][0]["bench_command"])
 
 
 if __name__ == "__main__":

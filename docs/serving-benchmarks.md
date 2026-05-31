@@ -60,6 +60,24 @@ TensorRT-LLM plans use the same `serving_backend_plan.json` and
 pipeline, and expert parallel sizes plus extra `trtllm-serve` args, so Spark
 cluster experiments can vary parallelism without changing repo files.
 
+Plan a disaggregated prefill/decode serving sweep without starting servers:
+
+```bash
+./forge bench sweep doctor --config configs/sweeps/dgx_spark_vllm_disagg_prefill_decode.yaml --strict
+./forge bench sweep plan \
+  --config configs/sweeps/dgx_spark_vllm_disagg_prefill_decode.yaml \
+  --family gemma4_26b_a4b \
+  --variant base \
+  --cluster-config configs/clusters/dgx_spark_x2.example.yaml \
+  --write-plan
+```
+
+This advanced profile is for the two-Spark cluster. It includes a normal
+single-endpoint control, a one-prefill-node/one-decode-node split, and a
+higher-parallelism split case. It must be benchmarked with the same model,
+precision, workloads, and quality/behavior sample before making latency or
+throughput claims.
+
 Before treating a serving config as better, attach a sampled quality/behavior
 check to the same endpoint and served model:
 

@@ -984,6 +984,43 @@ Result:
   artifacts
 - MF-0902 is marked tested / smoke-validated
 
+## Advanced Serving: Disaggregated Prefill/Decode Profile
+
+Status: implemented as a planning profile only. No vLLM server,
+disaggregated-serving launcher, benchmark run, training run, quantization run,
+or eval job was started.
+
+Hypothesis: On a two-Spark cluster, separating prefill-heavy and decode-heavy
+work may improve long-prompt TTFT or mixed-workload stability, but the only
+valid comparison is against a single-endpoint control with the same model,
+precision, benchmark config, and sampled quality/behavior check.
+
+Changes:
+
+- added `configs/sweeps/dgx_spark_vllm_disagg_prefill_decode.yaml`
+- reused `./forge bench sweep doctor`
+- reused `./forge bench sweep plan`
+- added a single-endpoint chunked-prefill control case
+- added a one-prefill-node/one-decode-node split case
+- added a higher-parallelism split case for Spark bandwidth pressure
+- recorded vLLM disaggregated-prefill research basis and promotion gate
+- updated README, AGENTS, serving benchmark docs, status, and roadmap state
+
+Validation:
+
+```bash
+./forge bench sweep doctor --config configs/sweeps/dgx_spark_vllm_disagg_prefill_decode.yaml --strict
+./forge bench sweep plan --config configs/sweeps/dgx_spark_vllm_disagg_prefill_decode.yaml --family gemma4_26b_a4b --variant base --cluster-config configs/clusters/dgx_spark_x2.example.yaml --json
+.venv/bin/python -m unittest tests.test_serving_sweep -v
+```
+
+Result:
+
+- the disaggregated profile expands into a reviewable, cluster-aware sweep plan
+- promotion still requires real endpoint evidence and sampled quality/behavior
+  artifacts
+- MF-0903 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

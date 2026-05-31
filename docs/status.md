@@ -127,6 +127,10 @@ This is the short handoff state for humans and agents. Use
 - TensorRT-LLM backend planning is present through `./forge serving`; it audits
   `configs/serving/backends/tensorrt_llm_openai.yaml` and writes `trtllm-serve`
   launch plus matching `bench serve` commands without starting a server.
+- Disaggregated prefill/decode planning is present through `./forge bench
+  sweep` with `configs/sweeps/dgx_spark_vllm_disagg_prefill_decode.yaml`; it
+  expands a single-endpoint control and two Spark split cases without starting
+  servers.
 - Serving Card generation now writes a structured `serving_card.md` for each
   `bench serve` run with identity, hardware/config, overall metrics,
   per-workload metrics, artifacts, and promotion gates.
