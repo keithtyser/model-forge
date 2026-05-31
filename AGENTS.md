@@ -184,6 +184,10 @@ The cluster script prepares data once, syncs the generated run directory to
 worker nodes, and launches Docker-backed `torch.distributed.run` on every node.
 If it falls back to host Python or a single node, fix the repo or config before
 starting the long run.
+For large local checkpoints, set `cluster.sync_model_to_workers: true` in the
+fine-tune YAML so the generated launcher runs checkpoint-gated
+`./forge cluster model-sync` before distributed training. This avoids a common
+two-node failure mode where the coordinator has the model but workers do not.
 
 For newer architectures that require Transformers 5 model classes, build and
 copy the generic post-training image before launching the cluster run:

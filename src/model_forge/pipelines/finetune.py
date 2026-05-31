@@ -159,6 +159,7 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "nccl_socket_ifname": str(cluster.get("nccl_socket_ifname", "")),
             "require_torchrun_smoke": bool(cluster.get("require_torchrun_smoke", True)),
             "sync_run_dir_to_workers": bool(cluster.get("sync_run_dir_to_workers", True)),
+            "sync_model_to_workers": bool(cluster.get("sync_model_to_workers", False)),
         },
         "baseline": config.get("baseline", {}),
         "dry_run_only": bool(config.get("dry_run_only", False)),
@@ -909,6 +910,8 @@ TRAINER={shlex.quote(str(outputs["trainer"]))}
 JOB_LOCK="${{MODEL_FORGE_CLUSTER_JOB_LOCK:-runs/locks/model-forge-cluster.lock}}"
 FAMILY={shlex.quote(str(plan["family"]))}
 SOURCE_VARIANT={shlex.quote(str(plan.get("eval", {}).get("source_variant") or "base"))}
+SOURCE_MODEL_DIR={shlex.quote(str(plan["model"].get("local_dir") or ""))}
+SYNC_MODEL_TO_WORKERS={shlex.quote("1" if cluster.get("sync_model_to_workers") else "0")}
 
 mkdir -p "$(dirname "$JOB_LOCK")"
 
@@ -918,6 +921,20 @@ echo "[model-forge] train image: $TRAIN_IMAGE"
 ./forge cluster health --config "$CLUSTER_CONFIG" --timeout "${{MODEL_FORGE_CLUSTER_HEALTH_TIMEOUT:-30}}"
 ./forge cluster runtime --config "$CLUSTER_CONFIG" --image "$TRAIN_IMAGE" --timeout "${{MODEL_FORGE_CLUSTER_RUNTIME_TIMEOUT:-120}}"
 ./forge variants checkpoint-audit "$FAMILY" --variant "$SOURCE_VARIANT" --strict
+if [[ "$SYNC_MODEL_TO_WORKERS" == "1" ]]; then
+  if [[ -z "$SOURCE_MODEL_DIR" ]]; then
+    echo "[model-forge] ERROR: cluster.sync_model_to_workers is enabled but model.local_dir is empty" >&2
+    exit 1
+  fi
+  ./forge cluster model-sync \
+    --config "$CLUSTER_CONFIG" \
+    --source "$SOURCE_MODEL_DIR" \
+    --family "$FAMILY" \
+    --variant "$SOURCE_VARIANT" \
+    --models-dir "$(dirname "$SOURCE_MODEL_DIR")" \
+    --execute \
+    --timeout "${{MODEL_FORGE_CLUSTER_MODEL_SYNC_TIMEOUT:-7200}}"
+fi
 if [[ "${{MODEL_FORGE_SKIP_TORCHRUN_SMOKE:-0}}" != "1" ]]; then
   SMOKE_ARGS=(--config "$CLUSTER_CONFIG" --image "$TRAIN_IMAGE" --timeout "${{MODEL_FORGE_CLUSTER_SMOKE_TIMEOUT:-180}}")
   if [[ -n "$NCCL_SOCKET_IFNAME" ]]; then

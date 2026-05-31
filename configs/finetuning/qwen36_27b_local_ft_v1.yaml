@@ -61,6 +61,7 @@ cluster:
   nccl_socket_ifname: enp1s0f0np0
   require_torchrun_smoke: true
   sync_run_dir_to_workers: true
+  sync_model_to_workers: true
 
 lora:
   r: 64

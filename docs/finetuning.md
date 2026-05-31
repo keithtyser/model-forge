@@ -100,6 +100,12 @@ The Spark container launcher uses `nemotron-runner:latest`, mounts the repo and
 `~/models` at the same paths, runs as the current user, and applies Docker CPU
 and memory limits before the generated guarded `run.sh` starts.
 
+For two-node Spark fine-tunes where the source checkpoint lives under the
+coordinator models directory, set `cluster.sync_model_to_workers: true` in the
+fine-tune YAML. The generated `run_cluster_torchrun.sh` then runs
+checkpoint-gated `./forge cluster model-sync` before training so workers do not
+fail later from missing model weights.
+
 ## Resource Contract
 
 Training jobs must be tenants on the host, not owners of the host. The generated
