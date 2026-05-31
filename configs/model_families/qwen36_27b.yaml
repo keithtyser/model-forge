@@ -65,7 +65,7 @@ variants:
     downloadable: false
 
 serve:
-  script: scripts/dgx_spark_serve_qwen35_9b.sh
+  script: scripts/dgx_spark_serve_qwen.sh
   default_gpu_memory_utilization: "0.78"
   default_max_model_len: "32768"
 

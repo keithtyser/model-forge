@@ -32,7 +32,6 @@ Useful docs:
 - [Quantization](docs/quantization.md)
 - [Evaluation Strategy](docs/evaluation-strategy.md)
 - [DGX Spark Rules](docs/dgx-spark.md)
-- [Current Status](docs/status.md)
 - [Agent Instructions](AGENTS.md)
 
 ## Install

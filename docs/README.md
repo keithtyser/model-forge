@@ -24,12 +24,11 @@ orientation path.
 - [Spark Optimizations](spark-optimizations.md)
 - [Serving Benchmarks](serving-benchmarks.md)
 
-## Project History
+## Artifact Hygiene
 
-- [Current Status](status.md)
-- [Experiment Ledger](experiment-ledger.md)
 - [Artifact Validation](artifact-validation.md)
 - [Artifact Retention](artifact-retention.md)
+- [Experiment Ledger](experiment-ledger.md)
 
 ## Performance Work
 
