@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from model_forge.runs.manifest import REPO_DIR, display_path, redact_value, sanitize_run_id, system_snapshot
+from model_forge.reports.kernel_card import build_kernel_card, load_json, render_kernel_card_markdown, write_kernel_card
 
 
 SCHEMA_VERSION = "model_forge.kernel_benchmark.v1"
@@ -77,6 +78,8 @@ def rmsnorm_plan(args: argparse.Namespace) -> dict[str, Any]:
             "outputs": {
                 "summary": display_path(output_dir / "summary.json"),
                 "card": display_path(output_dir / "kernel_card.md"),
+                "card_json": display_path(output_dir / "kernel_card.json"),
+                "card_markdown": display_path(output_dir / "kernel_card.md"),
             },
         }
     )
@@ -112,6 +115,8 @@ def rope_plan(args: argparse.Namespace) -> dict[str, Any]:
             "outputs": {
                 "summary": display_path(output_dir / "summary.json"),
                 "card": display_path(output_dir / "kernel_card.md"),
+                "card_json": display_path(output_dir / "kernel_card.json"),
+                "card_markdown": display_path(output_dir / "kernel_card.md"),
             },
         }
     )
@@ -149,6 +154,8 @@ def dequant_plan(args: argparse.Namespace) -> dict[str, Any]:
             "outputs": {
                 "summary": display_path(output_dir / "summary.json"),
                 "card": display_path(output_dir / "kernel_card.md"),
+                "card_json": display_path(output_dir / "kernel_card.json"),
+                "card_markdown": display_path(output_dir / "kernel_card.md"),
             },
         }
     )
@@ -187,6 +194,8 @@ def kv_layout_plan(args: argparse.Namespace) -> dict[str, Any]:
             "outputs": {
                 "summary": display_path(output_dir / "summary.json"),
                 "card": display_path(output_dir / "kernel_card.md"),
+                "card_json": display_path(output_dir / "kernel_card.json"),
+                "card_markdown": display_path(output_dir / "kernel_card.md"),
             },
         }
     )
@@ -645,83 +654,7 @@ def run_kv_layout(plan: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def render_card(summary: Mapping[str, Any]) -> str:
-    params = summary.get("parameters") or {}
-    runtime = summary.get("runtime") or {}
-    correctness = summary.get("correctness") or {}
-    results = summary.get("results") or {}
-    if summary.get("benchmark") == "rope":
-        benchmark_label = "RoPE"
-        baseline_name = "interleaved_rope_reference"
-        candidate_name = "complex_rope"
-        baseline = results.get("interleaved_reference") or {}
-        candidate = results.get("complex_candidate") or {}
-        scope = "rotary position embedding path; use alongside Nsight serving profiles before optimization claims."
-        shape = f"batch={params.get('batch')}, seq_len={params.get('seq_len')}, heads={params.get('heads')}, head_dim={params.get('head_dim')}"
-    elif summary.get("benchmark") == "dequant":
-        benchmark_label = "Dequant"
-        baseline_name = "unpack_plus_dequant"
-        candidate_name = "dequant_from_unpacked"
-        baseline = results.get("unpack_plus_dequant") or {}
-        candidate = results.get("dequant_from_unpacked") or {}
-        scope = "packed low-bit weight/activation path; use alongside quantized serving profiles before optimization claims."
-        shape = f"num_elements={params.get('num_elements')}, block_size={params.get('block_size')}, format={params.get('format')}"
-    elif summary.get("benchmark") == "kv-layout":
-        benchmark_label = "KV Layout"
-        baseline_name = "contiguous_read"
-        candidate_name = "paged_gather_read"
-        baseline = results.get("contiguous_read") or {}
-        candidate = results.get("paged_gather_read") or {}
-        scope = "KV-cache layout and gather/copy path; use alongside serving memory and decode profiles before optimization claims."
-        shape = (
-            f"batch={params.get('batch')}, seq_len={params.get('seq_len')}, heads={params.get('heads')}, "
-            f"head_dim={params.get('head_dim')}, page_size={params.get('page_size')}"
-        )
-    else:
-        benchmark_label = "RMSNorm"
-        baseline_name = "torch.nn.functional.rms_norm"
-        candidate_name = "manual_rmsnorm"
-        baseline = results.get("torch_native") or {}
-        candidate = results.get("manual_reference") or {}
-        scope = "transformer norm path; use alongside Nsight serving profiles before optimization claims."
-        shape = f"batch={params.get('batch')}, seq_len={params.get('seq_len')}, hidden_size={params.get('hidden_size')}"
-    lines = [
-        f"# Kernel Card: {summary.get('run_id')}",
-        "",
-        "## Scope",
-        "",
-        f"- Benchmark: {benchmark_label}",
-        f"- End-to-end relevance: {scope}",
-        f"- Baseline: `{baseline_name}`",
-        f"- Candidate: `{candidate_name}`",
-        "",
-        "## Parameters",
-        "",
-        f"- Shape: {shape}",
-        f"- Device: {runtime.get('device', params.get('device'))}",
-        f"- DType: {runtime.get('dtype', params.get('dtype'))}",
-        f"- Repeats: warmup={params.get('warmup')}, measured={params.get('repeats')}",
-        "",
-        "## Correctness",
-        "",
-        f"- Passed: {correctness.get('passed')}",
-        f"- Max abs error: {correctness.get('max_abs_error')}",
-        f"- Tolerance: {correctness.get('tolerance')}",
-        "",
-        "## Microbenchmark",
-        "",
-        f"- Baseline p50 ms: {baseline.get('p50_ms')}",
-        f"- Baseline p95 ms: {baseline.get('p95_ms')}",
-        f"- Baseline effective GB/s p50: {baseline.get('effective_bandwidth_gbps_p50')}",
-        f"- Candidate p50 ms: {candidate.get('p50_ms')}",
-        f"- Candidate p95 ms: {candidate.get('p95_ms')}",
-        f"- Candidate effective GB/s p50: {candidate.get('effective_bandwidth_gbps_p50')}",
-        "",
-        "## Limitations",
-        "",
-    ]
-    lines.extend(f"- {item}" for item in summary.get("limitations") or [])
-    lines.append("")
-    return "\n".join(lines)
+    return render_kernel_card_markdown(build_kernel_card(summary))
 
 
 def write_outputs(summary: Mapping[str, Any]) -> Path:
@@ -729,8 +662,21 @@ def write_outputs(summary: Mapping[str, Any]) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     summary_path = output_dir / "summary.json"
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    (output_dir / "kernel_card.md").write_text(render_card(summary), encoding="utf-8")
+    card = build_kernel_card(summary, summary_path=summary_path)
+    write_kernel_card(card, output_dir)
     return summary_path
+
+
+def build_card_from_summary(summary_path: str | Path, profile_summary_path: str | Path | None = None) -> dict[str, Any]:
+    summary_resolved = resolve_repo_path(summary_path)
+    summary = load_json(summary_resolved)
+    profile_summary = load_json(profile_summary_path) if profile_summary_path else None
+    return build_kernel_card(
+        summary,
+        summary_path=summary_resolved,
+        profile_summary=profile_summary,
+        profile_summary_path=profile_summary_path,
+    )
 
 
 def render_table(summary: Mapping[str, Any]) -> None:
@@ -820,11 +766,28 @@ def build_parser() -> argparse.ArgumentParser:
     kv.add_argument("--dry-run", action="store_true")
     kv.add_argument("--write", action="store_true")
     kv.add_argument("--json", action="store_true")
+    card = sub.add_parser("card", help="Generate a Kernel Card from a kernel benchmark summary")
+    card.add_argument("--summary", type=Path, required=True)
+    card.add_argument("--profile-summary", type=Path)
+    card.add_argument("--output-dir", type=Path)
+    card.add_argument("--write-card", action="store_true")
+    card.add_argument("--json", action="store_true")
     return parser
 
 
 def main() -> None:
     args = build_parser().parse_args()
+    if args.benchmark == "card":
+        card = build_card_from_summary(args.summary, args.profile_summary)
+        if args.write_card:
+            output_dir = resolve_repo_path(args.output_dir or str(load_json(args.summary)["output_dir"]))
+            write_kernel_card(card, output_dir)
+        if args.json:
+            print(json.dumps(card, indent=2, sort_keys=True) + "\n")
+        else:
+            print(render_kernel_card_markdown(card))
+        return
+
     if args.benchmark == "rmsnorm":
         summary = rmsnorm_plan(args)
     elif args.benchmark == "rope":

@@ -66,7 +66,20 @@ Run a small KV-cache layout benchmark and write artifacts:
 Outputs are written under `reports/generated/kernel_benchmarks/<run>/`:
 
 - `summary.json`
+- `kernel_card.json`
 - `kernel_card.md`
+
+Regenerate or enrich a Kernel Card from an existing summary:
+
+```bash
+./forge bench kernel card \
+  --summary reports/generated/kernel_benchmarks/<run>/summary.json \
+  --profile-summary reports/generated/profiles/nsight/<run>/profile_summary.json \
+  --write-card
+```
+
+`--profile-summary` is optional. Use it when a benchmark has matching Nsight
+artifact inventory or exported profiler evidence.
 
 The initial RMSNorm benchmark compares `torch.nn.functional.rms_norm` against a
 manual reference implementation, records correctness tolerance, p50/p95 latency,

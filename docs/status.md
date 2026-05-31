@@ -114,6 +114,10 @@ This is the short handoff state for humans and agents. Use
 - KV-cache layout microbenchmarking is now present through `./forge bench
   kernel kv-layout`; it compares contiguous cache reads with a paged/gathered
   proxy layout.
+- Kernel Cards now have a reusable structured generator in
+  `src/model_forge/reports/kernel_card.py`; benchmark writes include
+  `kernel_card.json` and `kernel_card.md`, and `./forge bench kernel card` can
+  regenerate cards from existing summaries with optional profile summaries.
 - Serving Card generation now writes a structured `serving_card.md` for each
   `bench serve` run with identity, hardware/config, overall metrics,
   per-workload metrics, artifacts, and promotion gates.

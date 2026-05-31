@@ -275,10 +275,11 @@ Kernel microbenchmarks:
 ./forge bench kernel dequant --dry-run --json
 ./forge bench kernel kv-layout --dry-run --json
 ./forge bench kernel rmsnorm --device auto --dtype bfloat16 --write
+./forge bench kernel card --summary reports/generated/kernel_benchmarks/<run>/summary.json --write-card
 ```
 
 See [docs/kernel-benchmarks.md](docs/kernel-benchmarks.md). Kernel benchmarks
-write `summary.json` and `kernel_card.md` under
+write `summary.json`, `kernel_card.json`, and `kernel_card.md` under
 `reports/generated/kernel_benchmarks/`. They are diagnostics for profiler-led
 optimization and must be paired with end-to-end serving evidence before making
 performance claims.

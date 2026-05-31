@@ -323,6 +323,7 @@ Benchmark serving only after an endpoint is already running:
 ./forge bench kernel rope --dry-run --json
 ./forge bench kernel dequant --dry-run --json
 ./forge bench kernel kv-layout --dry-run --json
+./forge bench kernel card --summary reports/generated/kernel_benchmarks/<run>/summary.json --write-card
 ./forge profile nsight plan --config configs/profiling/nsight_serving_smoke.yaml --write-plan
 ./forge profile nsight summarize --plan reports/generated/profiles/nsight/<run>/nsight_profile_plan.json --write-summary
 ```
@@ -331,13 +332,15 @@ Benchmark serving only after an endpoint is already running:
 expands startup-time server env cases plus matching benchmark commands. Neither
 command starts a vLLM server. `bench kernel rmsnorm`, `bench kernel rope`,
 `bench kernel dequant`, and `bench kernel kv-layout` are microbenchmark
-harnesses; use them to produce `summary.json` and `kernel_card.md`, then connect
-the result to profile evidence before making optimization claims. `profile
-nsight` writes profiler command plans around existing benchmark commands; it
-does not start servers or profilers by default. `profile nsight summarize`
-inventories expected and present profiler artifacts; it is not a kernel
-interpretation by itself. A good latency result is not a quality or behavior
-pass. Use the generated `manifest.json`, `summary.json`, `requests.jsonl`,
+harnesses; use them to produce `summary.json`, `kernel_card.json`, and
+`kernel_card.md`, then connect the result to profile evidence before making
+optimization claims. `bench kernel card` can regenerate a Kernel Card from an
+existing summary and optionally attach a profile summary. `profile nsight`
+writes profiler command plans around existing benchmark commands; it does not
+start servers or profilers by default. `profile nsight summarize` inventories
+expected and present profiler artifacts; it is not a kernel interpretation by
+itself. A good latency result is not a quality or behavior pass. Use the
+generated `manifest.json`, `summary.json`, `requests.jsonl`,
 `serving_card.md`, kernel card, profile plan, and profile summary with eval
 results before making serving claims.
 

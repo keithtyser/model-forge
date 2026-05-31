@@ -833,6 +833,45 @@ Result:
 - the tiny CPU execution path passed correctness
 - MF-0806 is marked tested / smoke-validated
 
+## Kernel/Perf: Kernel Card Generator
+
+Status: implemented as reusable report-card code. No model server, profiler,
+training run, quantization run, or eval job was started.
+
+Hypothesis: kernel benchmarks need a structured card artifact, not only a
+Markdown note, so future agents can attach profiler evidence, compare baseline
+and candidate paths, and avoid claiming end-to-end speedups from isolated
+microbenchmarks.
+
+Changes:
+
+- added `src/model_forge/reports/kernel_card.py`
+- added `model_forge.kernel_card.v1`
+- changed kernel benchmark writes to emit both `kernel_card.json` and
+  `kernel_card.md`
+- added `./forge bench kernel card --summary ...`
+- allowed optional `--profile-summary` attachment from Nsight summarization
+- included the roadmap-required Kernel Card fields: kernel, research basis,
+  baseline, optimized path, hardware, correctness tolerance, microbenchmark,
+  profiler summary, roofline estimate, serving relevance, result, and next
+  action
+- updated kernel benchmark docs, README, AGENTS, status, and roadmap state
+
+Validation:
+
+```bash
+./forge bench kernel rmsnorm --dry-run --write --run-id unit_kernel_card_cli --output-dir /tmp/model_forge_kernel_card
+./forge bench kernel card --summary /tmp/model_forge_kernel_card/summary.json --write-card --json
+.venv/bin/python -m unittest tests.test_kernel_benchmark -v
+```
+
+Result:
+
+- kernel benchmark outputs now include a structured Kernel Card JSON file
+- card regeneration from an existing summary works
+- profile summary attachment is covered by unit tests
+- MF-0807 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,
