@@ -3832,7 +3832,7 @@ MF-0702 Add forge agent optimize-serving. implementation_status=tested validatio
 MF-0703 Add forge agent optimize-quantization. implementation_status=tested validation_state=smoke_validated
 MF-0704 Add forge agent optimize-behavior-edit. implementation_status=tested validation_state=smoke_validated
 MF-0705 Add agent run card. implementation_status=tested validation_state=smoke_validated
-MF-0706 Add automatic ledger update. implementation_status=not_started validation_state=planned
+MF-0706 Add automatic ledger update. implementation_status=tested validation_state=smoke_validated
 ```
 
 

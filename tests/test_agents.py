@@ -13,6 +13,7 @@ from model_forge.agents import (
     optimize_behavior_edit_plan,
     optimize_quantization_plan,
     optimize_serving_plan,
+    update_experiment_ledger,
     validate_agent_experiment,
     write_agent_run_card,
 )
@@ -179,6 +180,21 @@ class AgentExperimentTests(unittest.TestCase):
         self.assertEqual(written["outputs"]["json"], paths["json"])
         self.assertIn("# Agent Run Card: template_agent_experiment", markdown)
         self.assertIn("## Required Validation", markdown)
+
+    def test_agent_ledger_update_is_idempotent(self) -> None:
+        plan = load_yaml(Path("recipes/agents/agent_experiment_template.yaml"))
+        card = build_agent_run_card(plan, plan_path=Path("recipes/agents/agent_experiment_template.yaml"), status="planned")
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "experiment-ledger.md"
+            ledger.write_text("# Experiment Ledger\n\nExisting entry.\n", encoding="utf-8")
+            update_experiment_ledger(card, ledger)
+            update_experiment_ledger({**card, "notes": "updated note"}, ledger)
+            text = ledger.read_text(encoding="utf-8")
+
+        self.assertEqual(text.count("## Agent Run: template_agent_experiment"), 1)
+        self.assertIn("updated note", text)
+        self.assertIn("model-forge-agent-run-card:template_agent_experiment:begin", text)
+        self.assertIn("Existing entry.", text)
 
 
 if __name__ == "__main__":

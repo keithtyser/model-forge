@@ -24,7 +24,8 @@ Write an Agent Run Card for a planned or completed agent plan:
 ```bash
 ./forge agent card recipes/agents/gemma4_ft_behavior_edit.yaml \
   --status planned \
-  --write-card
+  --write-card \
+  --update-ledger
 ```
 
 Create a serving optimization plan without starting a server:
@@ -118,3 +119,8 @@ current Git metadata.
 By default, `--write-card` writes under
 `reports/generated/agent_runs/<experiment_id>/`. Use `--output-dir` when the
 card belongs next to generated run artifacts.
+
+Pass `--update-ledger` to insert or replace a marked block in
+`docs/experiment-ledger.md`. Ledger updates are idempotent by
+`experiment_id`, so re-running the command refreshes the existing block instead
+of appending duplicates. Use `--ledger <path>` for tests or scratch ledgers.

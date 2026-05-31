@@ -560,6 +560,48 @@ Result:
 - invalid source plans are reported in-card and fail the CLI command
 - MF-0705 is marked tested / smoke-validated
 
+## Agents: Automatic Ledger Update
+
+Status: implemented and pushed as planning/reporting CLI work. No model server,
+training run, behavior-edit run, quantization run, or eval job was started.
+
+Hypothesis: agent handoff breaks down when ledger updates depend on a manual
+copy/paste after the card is written. `./forge agent card --update-ledger`
+should insert or replace a durable ledger block generated from the same Agent
+Run Card payload, so future agents can refresh handoff state without creating
+duplicate entries or relying on chat history.
+
+Changes:
+
+- added `--update-ledger` and `--ledger <path>` to `./forge agent card`
+- added an idempotent ledger renderer using
+  `model-forge-agent-run-card:<experiment_id>` begin/end markers
+- ledger entries include plan identity, hypothesis, scope, command counts,
+  heavy commands, evidence requirements, validation commands, run-card outputs,
+  schema validation state, and Git state
+- rerunning the same experiment id replaces the existing marked block instead
+  of appending a duplicate
+- added idempotence coverage to `tests/test_agents.py`
+- updated README, AGENTS, agent experiment docs, status, and roadmap state
+
+Validation:
+
+```bash
+./forge agent card recipes/agents/agent_experiment_template.yaml --write-card --output-dir /tmp/model_forge_agent_card --update-ledger --ledger /tmp/model_forge_agent_ledger.md --json
+.venv/bin/python -m unittest tests.test_agents -v
+bash -n forge
+.venv/bin/python -m py_compile src/model_forge/agents.py
+```
+
+Result:
+
+- `./forge agent card --update-ledger` writes card outputs and updates the
+  requested ledger path
+- ledger updates are idempotent by experiment id
+- automatic ledger entries are generated from the redacted Agent Run Card
+  payload and preserve existing ledger text
+- MF-0706 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

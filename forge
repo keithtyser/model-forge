@@ -60,7 +60,7 @@ Examples:
   ./forge roadmap cli-drift
   ./forge generalization audit
   ./forge agent audit
-  ./forge agent card recipes/agents/agent_experiment_template.yaml --write-card
+  ./forge agent card recipes/agents/agent_experiment_template.yaml --write-card --update-ledger
   ./forge agent optimize-serving --family gemma4_26b_a4b --variant base
   ./forge agent optimize-quantization --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --variants base
   ./forge agent optimize-behavior-edit --family gemma4_26b_a4b

@@ -251,13 +251,15 @@ Write or validate an agent experiment plan before starting material work:
 ./forge agent optimize-serving --family gemma4_26b_a4b --variant base
 ./forge agent optimize-quantization --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --variants base,local_ft
 ./forge agent optimize-behavior-edit --family gemma4_26b_a4b
-./forge agent card recipes/agents/next_agent_step.yaml --write-card
+./forge agent card recipes/agents/next_agent_step.yaml --write-card --update-ledger
 ```
 
 Agent plans are pre-run contracts. They should state the hypothesis, resource
 policy, validation commands, evidence, rollback plan, and handoff requirements.
 Agent Run Cards summarize the selected plan, heavy commands, required evidence,
-schema findings, and Git state for handoff.
+schema findings, and Git state for handoff. Use `--update-ledger` so the
+handoff block in `docs/experiment-ledger.md` is inserted or refreshed
+automatically instead of relying on chat history.
 
 Validate generated artifacts before making artifact-quality claims:
 

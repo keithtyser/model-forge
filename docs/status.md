@@ -39,6 +39,9 @@ This is the short handoff state for humans and agents. Use
 - `./forge agent card` now writes Agent Run Cards from experiment plans,
   summarizing plan identity, heavy commands, resource policy, evidence
   requirements, schema findings, and Git state for handoff.
+- Agent Run Cards can now update `docs/experiment-ledger.md` with
+  `--update-ledger`; updates are idempotent by experiment id and replace the
+  prior marked block instead of duplicating entries.
 - Gemma 4 A4B is the first worked family for base, downloaded FT, downloaded
   abli, local base abli, local FT, and local FT abli comparisons.
 - Internal evals now cover refusal suppression, benign paired quality,

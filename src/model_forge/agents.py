@@ -21,6 +21,7 @@ from model_forge.runs.manifest import REPO_DIR, display_path, git_metadata, reda
 SCHEMA_CONFIG = REPO_DIR / "configs" / "agents" / "experiment_schema.yaml"
 DEFAULT_TEMPLATE = REPO_DIR / "recipes" / "agents" / "agent_experiment_template.yaml"
 DEFAULT_AGENT_RUNS_DIR = REPO_DIR / "reports" / "generated" / "agent_runs"
+DEFAULT_LEDGER = REPO_DIR / "docs" / "experiment-ledger.md"
 AGENT_EXPERIMENT_VERSION = "model_forge.agent_experiment.v1"
 AGENT_RUN_CARD_VERSION = "model_forge.agent_run_card.v1"
 
@@ -873,6 +874,100 @@ def write_agent_run_card(card: Mapping[str, Any], output_dir: Path) -> dict[str,
     return paths
 
 
+def _ledger_marker(experiment_id: str, edge: str) -> str:
+    return f"<!-- model-forge-agent-run-card:{sanitize_run_id(experiment_id)}:{edge} -->"
+
+
+def render_agent_ledger_entry(card: Mapping[str, Any]) -> str:
+    identity = card.get("identity") or {}
+    goal = card.get("goal") or {}
+    command_summary = card.get("command_summary") or {}
+    evidence = card.get("evidence_plan") or {}
+    validation = card.get("validation") or {}
+    outputs = card.get("outputs") or {}
+    git = card.get("git") or {}
+    experiment_id = str(identity.get("experiment_id") or "agent_run")
+    start = _ledger_marker(experiment_id, "begin")
+    end = _ledger_marker(experiment_id, "end")
+    lines = [
+        start,
+        f"## Agent Run: {experiment_id}",
+        "",
+        f"Status: {identity.get('status')}. Generated from `{card.get('source_plan')}`.",
+        "",
+        f"Hypothesis: {str(goal.get('hypothesis') or '').strip()}",
+        "",
+        "Scope:",
+        "",
+        f"- type: `{identity.get('experiment_type')}`",
+        f"- family/variant: `{identity.get('family')}` / `{identity.get('variant')}`",
+        f"- objective profile: `{identity.get('objective_profile')}`",
+        f"- owner agent: `{identity.get('owner_agent')}`",
+        f"- planned commands: {command_summary.get('total', 0)}",
+        f"- heavy commands: {command_summary.get('heavy', 0)}",
+        f"- execute-required commands: {command_summary.get('requires_execute', 0)}",
+        "",
+        "Evidence requirements:",
+        "",
+        f"- manifest required: {evidence.get('manifest_required')}",
+        f"- ledger update required: {evidence.get('ledger_update_required')}",
+        "- expected reports:",
+    ]
+    lines.extend(f"  - `{item}`" for item in evidence.get("expected_reports") or [])
+    lines.extend(["", "Required validation:"])
+    lines.extend(f"- `{item}`" for item in evidence.get("required_validation_commands") or [])
+    heavy_commands = command_summary.get("heavy_commands") or []
+    if heavy_commands:
+        lines.extend(["", "Heavy commands:"])
+        lines.extend(f"- `{item}`" for item in heavy_commands)
+    lines.extend(
+        [
+            "",
+            "Run-card outputs:",
+            "",
+            f"- json: `{outputs.get('json')}`",
+            f"- markdown: `{outputs.get('markdown')}`",
+            "",
+            "Validation:",
+            "",
+            f"- agent plan schema passed: {validation.get('passed')}",
+            f"- git commit: `{git.get('commit')}`",
+            f"- git dirty at card generation: {git.get('dirty')}",
+        ]
+    )
+    findings = validation.get("findings") or []
+    if findings:
+        lines.append("- findings:")
+        for finding in findings:
+            location = finding.get("path") or "<plan>"
+            if finding.get("field"):
+                location = f"{location}:{finding['field']}"
+            lines.append(f"  - `{location}`: {finding.get('message')}")
+    if card.get("notes"):
+        lines.extend(["", f"Notes: {card.get('notes')}"])
+    lines.extend(["", end, ""])
+    return "\n".join(lines)
+
+
+def update_experiment_ledger(card: Mapping[str, Any], ledger_path: Path = DEFAULT_LEDGER) -> Path:
+    experiment_id = str((card.get("identity") or {}).get("experiment_id") or "agent_run")
+    start = _ledger_marker(experiment_id, "begin")
+    end = _ledger_marker(experiment_id, "end")
+    entry = render_agent_ledger_entry(card)
+    if ledger_path.exists():
+        text = ledger_path.read_text(encoding="utf-8")
+    else:
+        text = "# Experiment Ledger\n\n"
+    pattern = re.compile(rf"{re.escape(start)}.*?{re.escape(end)}\n?", re.DOTALL)
+    if pattern.search(text):
+        updated = pattern.sub(entry, text)
+    else:
+        updated = text.rstrip() + "\n\n" + entry
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    ledger_path.write_text(updated.rstrip() + "\n", encoding="utf-8")
+    return ledger_path
+
+
 def render_findings(findings: list[Finding]) -> None:
     if not findings:
         print("model-forge agent audit: OK")
@@ -902,6 +997,8 @@ def main() -> None:
     card.add_argument("--notes")
     card.add_argument("--output-dir", type=Path)
     card.add_argument("--write-card", action="store_true")
+    card.add_argument("--update-ledger", action="store_true")
+    card.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
     card.add_argument("--json", action="store_true")
 
     init = sub.add_parser("init", help="Create an agent experiment plan from the template")
@@ -994,6 +1091,9 @@ def main() -> None:
             output_dir = args.output_dir or DEFAULT_AGENT_RUNS_DIR / experiment_id
             paths = write_agent_run_card(card_data, output_dir)
             card_data["outputs"] = paths
+        if args.update_ledger:
+            ledger_path = update_experiment_ledger(card_data, args.ledger)
+            card_data["ledger"] = display_path(ledger_path)
         if args.json:
             print(json.dumps(card_data, indent=2, sort_keys=True) + "\n")
         else:
