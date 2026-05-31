@@ -139,11 +139,33 @@ def tokenizer_record(path: Path | None) -> dict[str, Any]:
 
 def live_round_trip(path: Path, trust_remote_code: bool = False) -> dict[str, Any]:
     try:
-        from transformers import AutoTokenizer
+        from transformers import AutoTokenizer, PreTrainedTokenizerFast
     except ImportError as exc:
         return {"status": "skipped", "reason": f"transformers unavailable: {exc}"}
     try:
         tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True, trust_remote_code=trust_remote_code)
+    except Exception as primary_exc:  # noqa: BLE001 - fallback handles new model classes with standard tokenizer files
+        tokenizer_json = path / "tokenizer.json"
+        tokenizer_config = read_json(path / "tokenizer_config.json")
+        if not tokenizer_json.exists():
+            return {"status": "failed", "reason": str(primary_exc)}
+        try:
+            tokenizer = PreTrainedTokenizerFast(
+                tokenizer_file=str(tokenizer_json),
+                bos_token=tokenizer_config.get("bos_token"),
+                eos_token=tokenizer_config.get("eos_token"),
+                unk_token=tokenizer_config.get("unk_token"),
+                pad_token=tokenizer_config.get("pad_token"),
+            )
+            if tokenizer_config.get("chat_template"):
+                tokenizer.chat_template = tokenizer_config["chat_template"]
+            elif (path / "chat_template.jinja").exists():
+                tokenizer.chat_template = (path / "chat_template.jinja").read_text(encoding="utf-8")
+            else:
+                return {"status": "failed", "reason": f"{primary_exc}; tokenizer-only fallback found no chat template"}
+        except Exception as fallback_exc:  # noqa: BLE001
+            return {"status": "failed", "reason": f"{primary_exc}; tokenizer-only fallback failed: {fallback_exc}"}
+    try:
         rendered = tokenizer.apply_chat_template(ROUND_TRIP_MESSAGES, tokenize=False, add_generation_prompt=True)
         encoded = tokenizer(rendered, add_special_tokens=False)
         decoded = tokenizer.decode(encoded["input_ids"], skip_special_tokens=False)

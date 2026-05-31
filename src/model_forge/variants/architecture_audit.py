@@ -64,6 +64,7 @@ def model_config_summary(config: Mapping[str, Any]) -> dict[str, Any]:
     keys = (
         "model_type",
         "architectures",
+        "language_model_only",
         "num_hidden_layers",
         "hidden_size",
         "num_attention_heads",
@@ -74,7 +75,18 @@ def model_config_summary(config: Mapping[str, Any]) -> dict[str, Any]:
         "vocab_size",
         *MOE_KEYS,
     )
-    return {key: config[key] for key in keys if key in config}
+    summary = {key: config[key] for key in keys if key in config}
+    text_config = config.get("text_config")
+    if isinstance(text_config, Mapping):
+        summary["text_config"] = {key: text_config[key] for key in keys if key in text_config}
+    vision_config = config.get("vision_config")
+    if isinstance(vision_config, Mapping):
+        summary["vision_config"] = {
+            key: vision_config[key]
+            for key in ("model_type", "depth", "hidden_size", "num_heads", "out_hidden_size", "num_position_embeddings")
+            if key in vision_config
+        }
+    return summary
 
 
 def config_indicates_moe(config: Mapping[str, Any]) -> bool:

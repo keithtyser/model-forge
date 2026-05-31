@@ -49,6 +49,46 @@ def write_model_config_fixture(path: Path, **overrides: object) -> None:
     (path / "config.json").write_text(json.dumps(config, sort_keys=True), encoding="utf-8")
 
 
+def write_fast_tokenizer_fixture(path: Path) -> None:
+    from tokenizers import Tokenizer
+    from tokenizers.models import WordLevel
+    from tokenizers.pre_tokenizers import Whitespace
+
+    path.mkdir(parents=True, exist_ok=True)
+    vocab = {
+        "<unk>": 0,
+        "deployment": 1,
+        "risk": 2,
+        "two": 3,
+        "checks": 4,
+        "You": 5,
+        "are": 6,
+        "validating": 7,
+        "tokenizer": 8,
+        "behavior": 9,
+        "Explain": 10,
+        "one": 11,
+        "and": 12,
+        "give": 13,
+        ".": 14,
+    }
+    tokenizer = Tokenizer(WordLevel(vocab, unk_token="<unk>"))
+    tokenizer.pre_tokenizer = Whitespace()
+    tokenizer.save(str(path / "tokenizer.json"))
+    (path / "tokenizer_config.json").write_text(
+        json.dumps(
+            {
+                "unk_token": "<unk>",
+                "chat_template": "{% for message in messages %}{{ message.content }} {% endfor %}",
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (path / "special_tokens_map.json").write_text(json.dumps({"unk_token": "<unk>"}, sort_keys=True), encoding="utf-8")
+    (path / "config.json").write_text(json.dumps({"model_type": "future_unknown_arch"}, sort_keys=True), encoding="utf-8")
+
+
 class VariantGraphTests(unittest.TestCase):
     def test_variant_graph_derives_edges_from_family_config(self) -> None:
         graph = variant_graph("gemma4_26b_a4b")
@@ -225,6 +265,20 @@ class VariantGraphTests(unittest.TestCase):
                 )
         self.assertFalse(audit["passed"])
         self.assertTrue(any(finding["level"] == "error" and finding["check"] == "round_trip" for finding in audit["findings"]))
+
+    def test_tokenizer_audit_falls_back_to_tokenizer_only_load_for_new_architectures(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            models = Path(tmp)
+            write_fast_tokenizer_fixture(models / "Qwen3.5-9B")
+            audit = build_tokenizer_audit(
+                "qwen35_9b",
+                variant="base",
+                models_dir_override=str(models),
+                load_tokenizer=True,
+                strict=True,
+            )
+        self.assertTrue(audit["passed"], audit["findings"])
+        self.assertEqual(audit["records"][0]["round_trip"]["status"], "passed")
 
 
 if __name__ == "__main__":
