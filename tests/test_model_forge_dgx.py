@@ -4,6 +4,7 @@ import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 REPO_DIR = Path(__file__).resolve().parents[1]
@@ -143,6 +144,41 @@ class ModelForgeDgxServeTests(unittest.TestCase):
         self.assertIn("SERVED_MODEL_NAME=${MODEL_FORGE_SERVED_MODEL_NAME:-}", script)
         self.assertIn("--served-model-name", script)
         self.assertIn("--default-chat-template-kwargs", script)
+
+    def test_compare_uses_generic_variant_arguments(self) -> None:
+        with tempfile.TemporaryDirectory(dir=REPO_DIR) as tmp:
+            root = Path(tmp)
+            output_root = root / "results"
+            (output_root / "qwen36_27b_base_dgx_spark").mkdir(parents=True)
+            (output_root / "qwen36_27b_local_ft_abli_dgx_spark").mkdir(parents=True)
+            (output_root / "qwen36_27b_local_ft_abli_artifacts_dgx_spark").mkdir(parents=True)
+            external_root = root / "external"
+            (external_root / "local_ft_abli").mkdir(parents=True)
+            family = {
+                "eval": {
+                    "output_root": str(output_root),
+                    "full_suffix": "{family}_{variant}_dgx_spark",
+                    "artifact_suffix": "{family}_{variant}_artifacts_dgx_spark",
+                },
+                "comparison": {"output_dir": str(root / "comparison")},
+                "external": {"output_root": str(external_root)},
+                "variants": {
+                    "base": {},
+                    "local_ft_abli": {},
+                    "local_ft_abli_nvfp4_modelopt": {},
+                },
+            }
+            captured: list[list[str]] = []
+            with mock.patch.object(model_forge_dgx, "run", side_effect=lambda cmd: captured.append(cmd)):
+                model_forge_dgx.action_compare(family, "qwen36_27b")
+
+        command = captured[0]
+        self.assertIn("--run", command)
+        self.assertIn(f"local_ft_abli={output_root / 'qwen36_27b_local_ft_abli_dgx_spark'}", command)
+        self.assertIn("--artifact-run", command)
+        self.assertIn(f"local_ft_abli={output_root / 'qwen36_27b_local_ft_abli_artifacts_dgx_spark'}", command)
+        self.assertIn("--external-run", command)
+        self.assertIn(f"local_ft_abli={external_root / 'local_ft_abli'}", command)
 
 
 if __name__ == "__main__":

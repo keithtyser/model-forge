@@ -327,29 +327,18 @@ def action_compare(family: dict[str, Any], family_name: str) -> None:
     external_base = external_root / "base"
     if external_base.exists():
         cmd.extend(["--external-base", str(external_base)])
-    flag_by_variant = {
-        "ft": "--ft",
-        "local_ft": "--local-ft",
-        "abli": "--abli",
-        "local_abli": "--local-abli",
-        "local_abli_sota": "--local-abli-sota",
-        "local_abli_huihui_like": "--local-abli-huihui-like",
-        "local_abli_huihui_like_s4": "--local-abli-huihui-like-s4",
-        "local_abli_huihui_shaped": "--local-abli-huihui-shaped",
-        "ft_then_abli": "--ft-then-abli",
-        "abli_then_ft": "--abli-then-ft",
-    }
-    for variant, flag in flag_by_variant.items():
-        if variant in family.get("variants", {}):
-            path = output_root / format_template(eval_cfg["full_suffix"], family_name, variant)
-            if path.exists():
-                cmd.extend([flag, str(path)])
-                artifact_path = output_root / format_template(eval_cfg["artifact_suffix"], family_name, variant)
-                if artifact_path.exists():
-                    cmd.extend([f"--artifact-{variant.replace('_', '-')}", str(artifact_path)])
-                external_path = external_root / variant
-                if external_path.exists():
-                    cmd.extend([f"--external-{variant.replace('_', '-')}", str(external_path)])
+    for variant in sorted(family.get("variants", {})):
+        if variant == "base":
+            continue
+        path = output_root / format_template(eval_cfg["full_suffix"], family_name, variant)
+        if path.exists():
+            cmd.extend(["--run", f"{variant}={path}"])
+            artifact_path = output_root / format_template(eval_cfg["artifact_suffix"], family_name, variant)
+            if artifact_path.exists():
+                cmd.extend(["--artifact-run", f"{variant}={artifact_path}"])
+            external_path = external_root / variant
+            if external_path.exists():
+                cmd.extend(["--external-run", f"{variant}={external_path}"])
     run(cmd)
 
 

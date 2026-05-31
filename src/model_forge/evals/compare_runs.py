@@ -128,6 +128,18 @@ OBJECTIVE_PROFILES = load_objective_profiles_for_compare()
 
 DEFAULT_OBJECTIVE = "general_assistant"
 
+
+def parse_named_path(raw: str) -> tuple[str, Path]:
+    if "=" not in raw:
+        raise argparse.ArgumentTypeError(f"expected VARIANT=PATH, got {raw!r}")
+    name, path = raw.split("=", 1)
+    name = name.strip()
+    if not name:
+        raise argparse.ArgumentTypeError("VARIANT must not be empty")
+    if name == "base":
+        raise argparse.ArgumentTypeError("use --base for the base run")
+    return name, Path(path)
+
 BUCKET_RESEARCH_IDS = {
     "refusal_paired_boundary": {
         "arditi_2024_refusal_direction",
@@ -1403,16 +1415,39 @@ def main() -> None:
         parser.add_argument(flag, type=Path)
     for _, flag in EXTERNAL_VARIANT_ARGS:
         parser.add_argument(flag, type=Path)
+    parser.add_argument("--run", action="append", default=[], type=parse_named_path, metavar="VARIANT=PATH", help="Add an arbitrary variant result directory")
+    parser.add_argument(
+        "--artifact-run",
+        action="append",
+        default=[],
+        type=parse_named_path,
+        metavar="VARIANT=PATH",
+        help="Attach an artifact result directory for a --run variant",
+    )
+    parser.add_argument(
+        "--external-run",
+        action="append",
+        default=[],
+        type=parse_named_path,
+        metavar="VARIANT=PATH",
+        help="Attach an external-eval result directory for a --run variant",
+    )
     parser.add_argument("--output-dir", type=Path, default=Path("reports/generated/comparison"), help="Directory for comparison outputs")
     args = parser.parse_args()
 
     runs = {}
+    artifact_runs = dict(args.artifact_run)
+    external_runs = dict(args.external_run)
     for name, _ in VARIANT_ARGS:
         run_dir = getattr(args, name)
         if run_dir:
             artifact_dir = getattr(args, f"artifact_{name}")
             external_dir = getattr(args, f"external_{name}")
             runs[name] = load_run(name, run_dir, artifact_dir=artifact_dir, external_dir=external_dir)
+    for name, run_dir in args.run:
+        if name in runs:
+            parser.error(f"duplicate run for variant {name!r}")
+        runs[name] = load_run(name, run_dir, artifact_dir=artifact_runs.get(name), external_dir=external_runs.get(name))
     if "base" not in runs:
         parser.error("--base is required")
     if len(runs) < 2:
