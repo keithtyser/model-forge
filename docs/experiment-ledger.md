@@ -301,8 +301,6 @@ Result:
   `nvidia/Llama-3.1-8B-Instruct-NVFP4`
 - MF-0605 is marked tested / smoke-validated
 
-## Roadmap Foundation: MF Backlog Status Audit
-
 ## Multi-Family: Common Code Generalization Audit
 
 Status: implemented and pushed as CLI/schema work. No model server, training
@@ -432,6 +430,47 @@ Result:
 - server commands are marked heavy and execute-only; benchmark commands are
   separate and include expected serving-card artifacts
 - MF-0702 is marked tested / smoke-validated
+
+## Agents: Optimize Quantization Plan
+
+Status: implemented and pushed as planning CLI work. No model server,
+checkpoint export, training run, quantization run, or eval job was started.
+
+Hypothesis: quantization optimization should be agent-runnable without letting
+agents jump directly into checkpoint export. `./forge agent
+optimize-quantization` should generate a validated pre-run plan that expands
+the configured quantization matrix, marks export/server commands as heavy
+execute-only work, and requires quantization cards plus sampled quality checks
+before promotion.
+
+Changes:
+
+- added `./forge agent optimize-quantization`
+- reused `configs/quantization/*` and `src/model_forge.quantization.cli`
+  matrix expansion instead of adding a separate quantization planner
+- generated agent experiment plans with plan, matrix-plan, export-plan,
+  guarded export, serving, smoke-eval, and quantization-card commands
+- marked quantization exports and vLLM server starts as `starts_heavy_job:
+  true` and `requires_execute: true`
+- added quantization optimization coverage to `tests/test_agents.py`
+- updated README, AGENTS, agent experiment docs, status, and roadmap state
+
+Validation:
+
+```bash
+./forge agent optimize-quantization --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --variants base --json
+.venv/bin/python -m unittest tests.test_agents -v
+bash -n forge
+.venv/bin/python -m py_compile src/model_forge/agents.py
+```
+
+Result:
+
+- optimize-quantization emits a valid `model_forge.agent_experiment.v1` plan
+- variant filters select the intended quantization matrix entries
+- export and serve commands are marked heavy and execute-only; plan and card
+  commands stay lightweight
+- MF-0703 is marked tested / smoke-validated
 
 ## Roadmap Foundation: MF Backlog Status Audit
 

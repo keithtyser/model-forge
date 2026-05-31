@@ -12,6 +12,8 @@ import yaml
 
 from model_forge.benchmarks.sweep import DEFAULT_CONFIG as DEFAULT_SERVING_SWEEP_CONFIG
 from model_forge.benchmarks.sweep import build_sweep_plan, load_sweep_config
+from model_forge.quantization.cli import DEFAULT_CONFIG as DEFAULT_QUANTIZATION_CONFIG
+from model_forge.quantization.cli import filter_matrix_entries, load_quantization_config, matrix_entries
 from model_forge.runs.manifest import REPO_DIR, display_path, sanitize_run_id
 
 
@@ -323,6 +325,192 @@ def optimize_serving_plan(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _quantization_variants(config: Any, variants: str | None) -> list[dict[str, Any]]:
+    entries = matrix_entries(config)
+    if entries:
+        return filter_matrix_entries(entries, variants)
+    source_variants = [
+        item.strip()
+        for item in str(variants or config.source_variant or "base").split(",")
+        if item.strip()
+    ]
+    return [
+        {
+            "source_variant": source_variant,
+            "target_variant": config.target_variant or f"{source_variant}_{config.method}_{config.backend}",
+        }
+        for source_variant in source_variants
+    ]
+
+
+def optimize_quantization_plan(args: argparse.Namespace) -> dict[str, Any]:
+    config_path = Path(args.config)
+    config = load_quantization_config(config_path)
+    family = args.family or config.family
+    if not family:
+        raise ValueError("optimize-quantization needs --family or config.family")
+    entries = _quantization_variants(config, args.variants)
+    primary_variant = str(entries[0].get("source_variant") or config.source_variant or "base")
+    experiment_id = sanitize_run_id(args.experiment_id or f"{family}_{primary_variant}_{config.method}_quantization_optimization")
+    has_checkpoint_export = bool(config.export or matrix_entries(config))
+    planned_commands: list[dict[str, Any]] = [
+        {
+            "command": f"./forge quantize plan --config {display_path(config_path)} --family {family} --variant {primary_variant} --write-plan",
+            "purpose": "Resolve the quantization runtime/export contract without loading model weights.",
+            "starts_heavy_job": False,
+            "requires_execute": False,
+            "expected_artifacts": ["quantization_plan.json", "quantization_plan.md"],
+        },
+    ]
+    if matrix_entries(config):
+        variants_arg = f" --variants {args.variants}" if args.variants else ""
+        planned_commands.append(
+            {
+                "command": f"./forge quantize matrix-plan --config {display_path(config_path)}{variants_arg} --write-plan",
+                "purpose": "Write export plans for the configured source-variant matrix.",
+                "starts_heavy_job": False,
+                "requires_execute": False,
+                "expected_artifacts": ["quantization_export_plan.json"],
+            }
+        )
+    for entry in entries:
+        source_variant = str(entry.get("source_variant") or config.source_variant or primary_variant)
+        target_variant = str(entry.get("target_variant") or config.target_variant or f"{source_variant}_{config.method}_{config.backend}")
+        if has_checkpoint_export:
+            planned_commands.append(
+                {
+                    "command": (
+                        f"./forge quantize export {family} {source_variant} "
+                        f"--config {display_path(config_path)} --target-variant {target_variant} --write-plan"
+                    ),
+                    "purpose": f"Write the guarded export plan for {family}/{source_variant} -> {target_variant}.",
+                    "starts_heavy_job": False,
+                    "requires_execute": False,
+                    "expected_artifacts": ["quantization_export_plan.json"],
+                }
+            )
+            planned_commands.append(
+                {
+                    "command": (
+                        f"./forge quantize export {family} {source_variant} "
+                        f"--config {display_path(config_path)} --target-variant {target_variant} --execute"
+                    ),
+                    "purpose": f"Run the guarded quantization export for {target_variant}.",
+                    "starts_heavy_job": True,
+                    "requires_execute": True,
+                    "expected_artifacts": ["quantized_checkpoint", "quantization_export_plan.json"],
+                }
+            )
+        planned_commands.append(
+            {
+                "command": f"./forge serve {family} {target_variant}",
+                "purpose": f"Serve the quantized candidate {target_variant} for loader and throughput validation.",
+                "starts_heavy_job": True,
+                "requires_execute": True,
+                "expected_artifacts": ["running_openai_compatible_endpoint"],
+            }
+        )
+        planned_commands.append(
+            {
+                "command": f"./forge eval {family} {target_variant} --smoke",
+                "purpose": f"Run sampled quality/behavior validation for {target_variant}.",
+                "starts_heavy_job": False,
+                "requires_execute": True,
+                "expected_artifacts": ["manifest.json", "scores.csv", "eval_provenance_card.json"],
+            }
+        )
+        source_eval = str(entry.get("baseline_eval") or "<source_eval>")
+        planned_commands.append(
+            {
+                "command": (
+                    f"./forge quantize card --config {display_path(config_path)} "
+                    "--source-serving-summary <source>/summary.json "
+                    "--candidate-serving-summary <candidate>/summary.json "
+                    f"--source-serving-eval {source_eval} "
+                    "--candidate-serving-eval <candidate_eval> "
+                    f"--run-id {sanitize_run_id(target_variant + '_quantization_card')} --write-card"
+                ),
+                "purpose": f"Write the source-vs-quantized promotion card for {target_variant}.",
+                "starts_heavy_job": False,
+                "requires_execute": False,
+                "expected_artifacts": ["quantization_card.json", "quantization_card.md"],
+            }
+        )
+    export = config.export or {}
+    return {
+        "schema_version": AGENT_EXPERIMENT_VERSION,
+        "experiment_id": experiment_id,
+        "title": args.title or f"Optimize quantization for {family}/{primary_variant}",
+        "hypothesis": args.hypothesis
+        or (
+            "A guarded quantization workflow can improve serving throughput or memory efficiency "
+            "while preserving source-variant behavior within the quantized_quality_retention gates."
+        ),
+        "owner_agent": args.owner_agent,
+        "experiment_type": "quantization",
+        "status": "planned",
+        "family": family,
+        "variant": primary_variant,
+        "objective_profile": args.objective_profile,
+        "planned_commands": planned_commands,
+        "resource_policy": {
+            "max_concurrent_large_jobs": 1,
+            "start_if_memory_available_above_fraction": float(export.get("start_if_memory_available_above_fraction") or 0.05),
+            "stop_if_memory_available_below_fraction": float(export.get("stop_if_memory_available_below_fraction") or 0.05),
+            "require_disk_free_fraction": float(export.get("require_disk_free_fraction") or 0.15),
+            "use_cluster_when_heavy": True,
+            "checkpoint_or_write_plan_before_execute": True,
+        },
+        "evidence_plan": {
+            "manifest_required": True,
+            "ledger_update_required": True,
+            "expected_reports": [
+                "quantization_plan.json",
+                *(["quantization_export_plan.json"] if has_checkpoint_export else []),
+                "serving_card.md",
+                "quantization_card.md",
+                "manifest.json",
+            ],
+            "required_validation_commands": [
+                f"./forge quantize plan --config {display_path(config_path)} --family {family} --variant {primary_variant} --json",
+                "./forge doctor --json",
+            ],
+        },
+        "success_criteria": [
+            "Quantized candidate loads and serves through the target backend.",
+            "Serving card shows the expected throughput or memory improvement versus source.",
+            "Quantization card shows no unacceptable sampled quality or behavior regression.",
+            "Tokenizer and chat-template preservation checks pass for the quantized candidate before release.",
+            "The selected command, metrics, and caveats are recorded in docs/experiment-ledger.md.",
+        ],
+        "rollback_plan": [
+            "Stop active export or serving jobs through the guarded launcher if system health degrades.",
+            "Keep the unquantized source variant as the serving fallback.",
+            "Do not publish quantized checkpoints that lack a quantization card and release-class approval.",
+        ],
+        "handoff": {
+            "push_to_github": True,
+            "update_status_docs": True,
+            "hf_upload_policy": "upload_completed_quantized_checkpoints_only_after_release_gate",
+            "raw_artifact_policy": "keep_large_outputs_untracked_or_upload_to_hf",
+            "notes": (
+                "This plan does not execute quantization. When checkpoint export is present, "
+                "run one export per node and attach cards before promotion."
+            ),
+        },
+        "metadata": {
+            "config": display_path(config_path),
+            "method": config.method,
+            "backend": config.backend,
+            "hardware_profile": config.hardware_profile,
+            "has_checkpoint_export": has_checkpoint_export,
+            "variant_count": len(entries),
+            "variants": entries,
+            "workers_env": (config.matrix or {}).get("workers_env"),
+        },
+    }
+
+
 def render_findings(findings: list[Finding]) -> None:
     if not findings:
         print("model-forge agent audit: OK")
@@ -371,6 +559,18 @@ def main() -> None:
     optimize_serving.add_argument("--output", type=Path)
     optimize_serving.add_argument("--json", action="store_true")
 
+    optimize_quantization = sub.add_parser("optimize-quantization", help="Create a quantization optimization agent experiment plan")
+    optimize_quantization.add_argument("--config", type=Path, default=DEFAULT_QUANTIZATION_CONFIG)
+    optimize_quantization.add_argument("--family")
+    optimize_quantization.add_argument("--variants", help="Comma-separated source variants from the quantization matrix")
+    optimize_quantization.add_argument("--objective-profile", default="quantized_quality_retention")
+    optimize_quantization.add_argument("--experiment-id")
+    optimize_quantization.add_argument("--title")
+    optimize_quantization.add_argument("--hypothesis")
+    optimize_quantization.add_argument("--owner-agent", default="codex")
+    optimize_quantization.add_argument("--output", type=Path)
+    optimize_quantization.add_argument("--json", action="store_true")
+
     args = parser.parse_args()
     if args.command == "schema":
         schema = load_schema()
@@ -415,6 +615,29 @@ def main() -> None:
 
     if args.command == "optimize-serving":
         plan = optimize_serving_plan(args)
+        findings = validate_agent_experiment(plan, path=str(args.output) if args.output else None)
+        if findings:
+            if args.json:
+                print(json.dumps({"findings": [asdict(finding) for finding in findings]}, indent=2, sort_keys=True) + "\n")
+            else:
+                render_findings(findings)
+            raise SystemExit(1)
+        text = yaml.safe_dump(plan, sort_keys=False)
+        if args.output:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(text, encoding="utf-8")
+        if args.json:
+            print(json.dumps(plan, indent=2, sort_keys=True) + "\n")
+        else:
+            if not args.output:
+                print(text)
+        return
+
+    if args.command == "optimize-quantization":
+        try:
+            plan = optimize_quantization_plan(args)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
         findings = validate_agent_experiment(plan, path=str(args.output) if args.output else None)
         if findings:
             if args.json:

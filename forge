@@ -27,7 +27,7 @@ Usage:
   ./forge objectives [list|show|audit]
   ./forge roadmap [audit|cli-drift]
   ./forge generalization [audit]
-  ./forge agent [schema|audit|init|optimize-serving]
+  ./forge agent [schema|audit|init|optimize-serving|optimize-quantization]
   ./forge research [list|show|audit]
   ./forge hf [status|login|whoami|plan-model|publish-model]
   ./forge variants [graph|node|audit-node|tokenizer-audit|architecture-audit]
@@ -60,6 +60,7 @@ Examples:
   ./forge generalization audit
   ./forge agent audit
   ./forge agent optimize-serving --family gemma4_26b_a4b --variant base
+  ./forge agent optimize-quantization --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --variants base
   ./forge research audit
   ./forge hf status
   ./forge hf plan-model gemma4_26b_a4b local_ft --release-class report_only

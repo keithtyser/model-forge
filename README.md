@@ -99,6 +99,7 @@ Run evals from another terminal:
 ./forge roadmap cli-drift
 ./forge generalization audit
 ./forge agent audit
+./forge agent optimize-quantization --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --variants base
 ./forge research audit
 ./forge manifest write --run-type eval --family gemma4_26b_a4b --variant base --command './forge eval gemma4_26b_a4b base --internal'
 ./forge hf status --offline
@@ -221,6 +222,7 @@ Agent experiment plans:
 ./forge agent schema
 ./forge agent audit
 ./forge agent optimize-serving --family gemma4_26b_a4b --variant base
+./forge agent optimize-quantization --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --variants base,local_ft
 ./forge agent init --experiment-id next_step --title "Next step" --family gemma4_26b_a4b --variant base --objective-profile capability_sft --output recipes/agents/next_step.yaml
 ```
 

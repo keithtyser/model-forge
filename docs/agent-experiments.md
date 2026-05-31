@@ -29,6 +29,15 @@ Create a serving optimization plan without starting a server:
   --output recipes/agents/gemma4_base_serving_optimization.yaml
 ```
 
+Create a quantization optimization plan without loading model weights:
+
+```bash
+./forge agent optimize-quantization \
+  --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml \
+  --variants base,local_ft \
+  --output recipes/agents/gemma4_nvfp4_quantization.yaml
+```
+
 Create a new plan from the template:
 
 ```bash

@@ -30,6 +30,9 @@ This is the short handoff state for humans and agents. Use
   for serving sweeps, marking server starts as heavy execute-only steps and
   requiring serving cards, manifests, and sampled quality checks before
   promotion.
+- `./forge agent optimize-quantization` now writes a validated pre-run agent
+  plan for quantization matrices, export plans, serving checks, quantization
+  cards, and release evidence while marking exports/server starts as heavy.
 - Gemma 4 A4B is the first worked family for base, downloaded FT, downloaded
   abli, local base abli, local FT, and local FT abli comparisons.
 - Internal evals now cover refusal suppression, benign paired quality,

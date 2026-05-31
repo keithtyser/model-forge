@@ -6,7 +6,13 @@ from pathlib import Path
 
 from argparse import Namespace
 
-from model_forge.agents import audit_agent_experiments, load_yaml, optimize_serving_plan, validate_agent_experiment
+from model_forge.agents import (
+    audit_agent_experiments,
+    load_yaml,
+    optimize_quantization_plan,
+    optimize_serving_plan,
+    validate_agent_experiment,
+)
 
 
 class AgentExperimentTests(unittest.TestCase):
@@ -87,6 +93,33 @@ class AgentExperimentTests(unittest.TestCase):
         self.assertTrue(any(command["starts_heavy_job"] for command in commands))
         self.assertTrue(any("bench sweep plan" in command["command"] for command in commands))
         self.assertTrue(any("bench serve" in command["command"] for command in commands))
+        self.assertTrue(plan["evidence_plan"]["manifest_required"])
+        self.assertTrue(plan["resource_policy"]["use_cluster_when_heavy"])
+
+    def test_optimize_quantization_plan_is_valid_and_marks_export_commands_heavy(self) -> None:
+        plan = optimize_quantization_plan(
+            Namespace(
+                config=Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml"),
+                family=None,
+                variants="base,local_ft",
+                objective_profile="quantized_quality_retention",
+                experiment_id="unit_optimize_quantization",
+                title=None,
+                hypothesis=None,
+                owner_agent="unit",
+                output=None,
+                json=False,
+            )
+        )
+        findings = validate_agent_experiment(plan)
+        commands = plan["planned_commands"]
+
+        self.assertEqual(findings, [])
+        self.assertEqual(plan["experiment_type"], "quantization")
+        self.assertEqual(plan["metadata"]["variant_count"], 2)
+        self.assertTrue(any("quantize matrix-plan" in command["command"] for command in commands))
+        self.assertTrue(any("quantize export" in command["command"] and command["starts_heavy_job"] for command in commands))
+        self.assertTrue(any("quantize card" in command["command"] for command in commands))
         self.assertTrue(plan["evidence_plan"]["manifest_required"])
         self.assertTrue(plan["resource_policy"]["use_cluster_when_heavy"])
 
