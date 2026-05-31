@@ -20,7 +20,10 @@ Gemma-specific.
 ## First Things To Inspect
 
 - `README.md`: project overview and model-agnostic workflow
+- `docs/README.md`: task-oriented documentation index
 - `docs/status.md`: current short handoff state and recommended next work
+- `docs/validation-scope.md`: what is actually model/Spark validated versus
+  smoke-validated scaffolding
 - `docs/roadmap-status-audit.md`: current MF backlog implementation status and
   validation state
 - `docs/artifact-retention.md`: what belongs in Git, local scratch, or Hugging

@@ -4,6 +4,8 @@ Last updated: 2026-05-30.
 
 This is the short handoff state for humans and agents. Use
 `docs/experiment-ledger.md` for detailed run history and raw observations.
+Use `docs/validation-scope.md` to distinguish full model/Spark validation from
+smoke-validated CLI, config, schema, and planning paths.
 
 ## Validated So Far
 

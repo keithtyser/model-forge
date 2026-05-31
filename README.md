@@ -1,504 +1,217 @@
 # model-forge
 
-model-forge is a reproducible post-training workbench for open models. It is
-designed to answer one practical question: did a fine-tune, refusal ablation, or
-combined post-training workflow improve the model without breaking capability,
-format following, or operational behavior?
+model-forge is a post-training workbench for open models. The goal is to take a
+base checkpoint, improve it with fine-tuning, optionally remove unwanted
+refusals with behavior editing, quantize it for fast serving, then evaluate and
+publish enough evidence that the result is reproducible.
 
-The repo is model-family driven. Gemma 4 is the first fully exercised family on
-DGX Spark, while Qwen and Llama configs now serve as non-Gemma generalization
-targets. The intended shape is general: add a model family, tune or edit it with
-calibrated configs, evaluate every candidate, then publish the recipe and
-artifacts needed to reproduce the result.
+The repo is model-family driven. Gemma 4 26B-A4B is the first fully worked
+family. Qwen and Llama configs are present as generalization targets, but most
+non-Gemma paths are currently smoke-validated rather than proven with full model
+runs.
 
-## What It Does
+## Start Here
 
-- registers model families and variants in `configs/model_families/`
-- builds fine-tuning plans from YAML configs and dataset manifests
-- creates eval-adjacent SFT datasets through a gated dataset factory
-- tracks dataset source registries with licenses, roles, quality tiers, and sampling caps
-- tracks a dated research registry so methods, evals, and limitations stay explicit
-- runs refusal ablation recipes against source checkpoints
-- plans and reports quantization paths, with Blackwell NVFP4 as the first-class Spark target
-- serves exactly one candidate at a time through hardware-aware vLLM settings
-- plans and validates generic cluster inventories without hard-coded private hosts
-- benchmarks already-running OpenAI-compatible serving endpoints
-- evaluates internal behavior, artifact quality, and external benchmark results
-- compares candidates against the source model and relevant references, with
-  manifest provenance, comparability warnings, and research-basis links
-- writes promotion reports from saved comparisons
-- records hypotheses, recipes, validation, and publish state for handoff
+If you found this repo and have a model you want to post-train, use this path:
 
-## Current State
+1. Add the model family in `configs/model_families/<family>.yaml`.
+2. Run architecture and tokenizer audits.
+3. Serve the base model and run smoke/internal evals.
+4. Create a fine-tune plan and dataset plan.
+5. Run a bounded fine-tune.
+6. Evaluate the fine-tuned model against the base model.
+7. Run ablation/abliteration only after the source model has a saved baseline.
+8. Quantize only after source and edited variants have comparison evidence.
+9. Publish models/datasets through Hugging Face dry-run plans before upload.
 
-Gemma 4 A4B has validated paths for base evaluation, downloaded FT/reference
-evaluation, downloaded abli evaluation, local base ablation, local FT ablation,
-and a guarded local FT recipe. The local FT v0 did not beat Jackrong on the
-primary challenge-capability gate, but it was close and improved paired benign
-quality. The next FT iteration is the local FT v1 dataset path, which currently
-has deterministic and live-teacher smoke packs with gated review artifacts. The
-next step is a medium live-teacher generation pass, not a long training run.
+Useful docs:
 
-Use [docs/status.md](docs/status.md) for the current handoff state and
-[docs/experiment-ledger.md](docs/experiment-ledger.md) for detailed experiment
-history. Use [docs/roadmap-status-audit.md](docs/roadmap-status-audit.md) for
-the current MF backlog implementation and validation state.
+- [Documentation Index](docs/README.md)
+- [Add A Model Family](docs/adding-model-family.md)
+- [Fine-Tuning](docs/finetuning.md)
+- [Abliteration](docs/abliteration.md)
+- [Quantization](docs/quantization.md)
+- [Evaluation Strategy](docs/evaluation-strategy.md)
+- [DGX Spark Rules](docs/dgx-spark.md)
+- [Validation Scope](docs/validation-scope.md)
+- [Current Status](docs/status.md)
+- [Agent Instructions](AGENTS.md)
 
-## Quick Start
+## What Is Actually Validated?
 
-Install and set up:
+The roadmap has many `tested` items, but `tested` means the CLI/config/schema
+path has automated coverage. It does not always mean the feature has completed a
+full model run on the Spark cluster.
+
+Current validation summary:
+
+- Gemma 4 has real post-training comparison evidence for base, FT reference,
+  downloaded abli, local abli, local FT, and local FT abli work.
+- The two-node DGX Spark cluster path has been validated with health checks,
+  container GPU probes, and a bounded torchrun/NCCL all-reduce smoke.
+- A published full-MoE NVFP4 reference checkpoint served with Marlin at about
+  50 output tok/s on the core serving benchmark.
+- Most dataset, Hub, agent, quantization-planning, profiling, backend-planning,
+  and advanced-serving features are smoke-validated planning/reporting paths.
+- The remaining open roadmap item is the external vLLM upstream PR.
+
+See [docs/validation-scope.md](docs/validation-scope.md) and
+[docs/roadmap-status-audit.md](docs/roadmap-status-audit.md) before making
+claims about a feature.
+
+## Install
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone https://github.com/keithtyser/model-forge.git
 cd model-forge
 ./forge setup all
+./forge doctor
 ```
 
 List configured families:
 
 ```bash
 ./forge families
-./forge variants graph qwen35_9b
-./forge variants architecture-audit qwen35_9b
-./forge variants graph llama31_8b
+./forge variants graph gemma4_26b_a4b
 ```
 
-Download a configured family:
+## Use Your Own Model
+
+Copy an existing family config and change the model identity:
 
 ```bash
-./forge download gemma4_26b_a4b all
-./forge download qwen35_9b base
-./forge download llama31_8b base
+cp configs/model_families/llama31_8b.yaml configs/model_families/my_model.yaml
 ```
 
-Serve one model in one terminal:
+Edit:
+
+- `name`
+- `display_name`
+- `architecture.family`
+- `architecture.context_length`
+- `architecture.target_discovery`
+- `variants.base.repo_id`
+- `variants.base.local_dir`
+- `variants.base.served_model_name`
+- `serve.script`
+- `eval.config`
+- `comparison.output_dir`
+
+Then audit before training or editing:
 
 ```bash
-./forge serve gemma4_26b_a4b base
+./forge variants graph my_model
+./forge variants architecture-audit my_model --variant base
+./forge variants tokenizer-audit my_model --variant base
+./forge generalization audit
+./forge doctor
 ```
 
-Serve a small teacher for dataset generation:
+For a new architecture, do not reuse Gemma layer ranges, LoRA target modules, or
+ablation strengths blindly. Inspect the model config and tokenizer first, then
+record those choices in the family config and recipe.
+
+## Core Workflow
+
+Serve one model at a time:
 
 ```bash
-./forge serve-teacher qwen35_9b
+./forge download my_model base
+./forge serve my_model base
 ```
 
 Run evals from another terminal:
 
 ```bash
-./forge eval gemma4_26b_a4b base --internal
-./forge eval qwen35_9b base --smoke
-./forge eval llama31_8b base --smoke
-./forge eval gemma4_26b_a4b base --artifact
-./forge eval gemma4_26b_a4b base --external
-./forge compare gemma4_26b_a4b
-./forge promote gemma4_26b_a4b local_ft_vs_jackrong
-./forge objectives audit
-./forge schema audit
-./forge roadmap audit --write-doc
-./forge roadmap cli-drift
-./forge generalization audit
-./forge agent audit
-./forge agent optimize-quantization --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --variants base
-./forge agent optimize-behavior-edit --family gemma4_26b_a4b
-./forge research audit
-./forge manifest write --run-type eval --family gemma4_26b_a4b --variant base --command './forge eval gemma4_26b_a4b base --internal'
-./forge hf status --offline
-./forge hf release-classes --audit
-./forge hf plan-model gemma4_26b_a4b base --release-class report_only
-./forge hf publish-dataset datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_bundle --repo-id keithtyser/model-forge-gemma-local-ft-v1 --dry-run
-./forge variants graph gemma4_26b_a4b
-./forge artifacts validate reports/generated/.../artifacts/
-./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
-./forge bench sweep plan --family gemma4_26b_a4b --variant base
-./forge profile nsight plan --config configs/profiling/nsight_serving_smoke.yaml
-./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan
-./forge doctor
+./forge eval my_model base --smoke
+./forge eval my_model base --internal
+./forge eval my_model base --artifact
+./forge compare my_model
 ```
 
-Only run one large model server or training job at a time.
-
-## Core Workflows
-
-Evaluation:
+Plan fine-tuning:
 
 ```bash
-./forge eval gemma4_26b_a4b base --smoke
-./forge eval gemma4_26b_a4b base --internal
-./forge eval gemma4_26b_a4b base --artifact
-./forge eval gemma4_26b_a4b base --external
-./forge compare gemma4_26b_a4b
-./forge promote gemma4_26b_a4b local_ft_vs_jackrong
+./forge finetune my_model plan
+./forge data plan my_model local_ft_v1
+./forge data gaps my_model local_ft_v1
+./forge data generate my_model local_ft_v1 --smoke
+./forge data verify my_model local_ft_v1 --smoke
+./forge data pack my_model local_ft_v1 --smoke
 ```
 
-Artifact validation:
+Prepare a guarded training run:
 
 ```bash
-./forge artifacts validate reports/generated/<run>/artifacts/ --strict
-./forge artifacts validate reports/generated/<run>/artifacts/ --require-browser
+./forge finetune my_model prepare --overwrite
 ```
 
-See [docs/artifact-validation.md](docs/artifact-validation.md) before using
-artifact quality as a promotion claim.
+On DGX Spark, run heavy jobs through the guarded launchers described in
+[docs/dgx-spark.md](docs/dgx-spark.md). Do not run raw training scripts without
+CPU, RAM, disk, checkpoint, and watchdog limits.
 
-Fine-tuning:
+Plan ablation/abliteration:
 
 ```bash
-./forge finetune gemma4_26b_a4b plan
-./forge finetune gemma4_26b_a4b prepare
-./forge finetune --config configs/finetuning/gemma4_26b_a4b_local_ft_v1_dryrun.yaml plan
+./forge ablate my_model plan
+./forge ablate my_model sota-prepare --backend heretic
 ```
 
-`prepare` writes `plan.json`, guarded `run.sh`, `train_trl_sft.py`,
-`eval_after_training.sh`, and `training_method_card.md`. The method card records
-the model, data blend, trainer settings, LoRA recipe, distributed-correctness
-expectations, and Spark resource guardrails; it is planning evidence, not proof
-that training completed.
-
-On DGX Spark, use the guarded CUDA container launcher for full FT runs:
-
-```bash
-./forge finetune gemma4_26b_a4b prepare --overwrite
-scripts/run_finetune_spark_container.sh
-```
-
-Dataset factory:
-
-```bash
-./forge data plan gemma4_26b_a4b local_ft_v1
-./forge data gaps gemma4_26b_a4b local_ft_v1
-./forge data propose gemma4_26b_a4b local_ft_v1
-./forge data generate gemma4_26b_a4b local_ft_v1 --smoke
-./forge data verify gemma4_26b_a4b local_ft_v1 --smoke
-./forge data review gemma4_26b_a4b local_ft_v1 --smoke --sample 50
-./forge data pack gemma4_26b_a4b local_ft_v1 --smoke
-./forge data training-gate gemma4_26b_a4b local_ft_v1 --finetune-plan <run>/plan.json --data-summary <run>/data_summary.json --promotion-report <promotion>.json --write-gate
-./forge data publish gemma4_26b_a4b local_ft_v1 --smoke
-./forge hf publish-dataset datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_bundle --repo-id keithtyser/model-forge-gemma-local-ft-v1 --dry-run
-```
-
-Use `generate --overwrite` only when replacing candidates intentionally.
-Downstream `--overwrite` refreshes derived artifacts from existing candidates.
-Use `data publish` to build the redacted bundle and `hf publish-dataset --dry-run`
-to audit a prepared dataset path before any Hub upload.
-`propose` turns saved eval failures into the next dataset skill targets and a
-candidate config patch.
-`publish` writes a dry-run HF plan by default; `publish --execute` refuses
-seed-only and smoke-only datasets.
-`training-gate` is required before claiming a dataset recipe is validated: it
-checks that a bounded Spark fine-tune used the packed dataset, stayed inside
-resource bounds, materialized training data, and passed a source-relative
-promotion report. Seed-only and smoke-only packs are rejected by this gate.
-
-Promotion reports:
-
-```bash
-./forge behavior doctor --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml --strict
-./forge behavior score --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml local_abli_sota_vs_base --write-card
-./forge behavior frontier --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml local_abli_sota_vs_base --write-report
-./forge behavior risk-report --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml local_abli_sota_vs_base --write-report
-./forge promote gemma4_26b_a4b local_ft_vs_jackrong
-./forge promote gemma4_26b_a4b local_abli_sota_vs_downloaded_abli
-```
-
-Behavior scorecards are objective-specific. For refusal-removal work, lower
-harmful-prompt refusal is treated as ablation progress only when required
-source-relative capability and benign-quality gates pass; unsafe overcompliance
-and harmful detail are reported risks, not hidden promotion blockers. The
-frontier report compares all local candidates in the saved comparison, while
-the risk report is public-safe by default and omits raw prompts/outputs.
-
-Research registry:
-
-```bash
-./forge objectives list
-./forge objectives audit
-./forge research list
-./forge research show arditi_2024_refusal_direction
-./forge research audit
-./forge research watch
-```
-
-Run manifests:
-
-```bash
-./forge manifest write \
-  --run-type eval \
-  --status planned \
-  --family gemma4_26b_a4b \
-  --variant base \
-  --config configs/experiments/gemma4_26b_a4b_v0.yaml \
-  --run-output-dir results/gemma4_26b_a4b_v0/base \
-  --command './forge eval gemma4_26b_a4b base --internal'
-```
-
-See [docs/run-manifests.md](docs/run-manifests.md) for the canonical schema and
-handoff rules.
-
-Variant graph:
-
-```bash
-./forge variants graph gemma4_26b_a4b
-./forge variants node gemma4_26b_a4b local_ft --write
-```
-
-See [docs/variant-graph.md](docs/variant-graph.md). Variant nodes connect source
-models, transforms, evidence, artifact checksums, validation state, promotion
-decisions, and retention decisions.
-
-Agent experiment plans:
-
-```bash
-./forge agent schema
-./forge agent audit
-./forge agent card recipes/agents/agent_experiment_template.yaml --write-card --update-ledger
-./forge agent optimize-serving --family gemma4_26b_a4b --variant base
-./forge agent optimize-quantization --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --variants base,local_ft
-./forge agent optimize-behavior-edit --family gemma4_26b_a4b --config configs/abliteration/gemma4_26b_a4b_ft_local_abli.yaml --source-variant local_ft --target-variant ft_local_abli_sota_internal_r7_selected_t34_transfer --backend heretic
-./forge agent init --experiment-id next_step --title "Next step" --family gemma4_26b_a4b --variant base --objective-profile capability_sft --output recipes/agents/next_step.yaml
-```
-
-See [docs/agent-experiments.md](docs/agent-experiments.md). Agent plans define
-hypothesis, resource policy, evidence, rollback, and handoff before a run starts.
-
-Cluster planning:
-
-```bash
-./forge cluster doctor --config configs/clusters/dgx_spark_x2.example.yaml
-./forge cluster sync --config configs/clusters/dgx_spark_x2.example.yaml
-./forge cluster health --config configs/clusters/dgx_spark_x2.example.yaml
-./forge cluster runtime --config configs/clusters/dgx_spark_x2.example.yaml --image nemotron-runner:latest
-./forge cluster torchrun-smoke --config configs/clusters/dgx_spark_x2.example.yaml --image nemotron-runner:latest --nccl-socket-ifname <distributed-network-interface>
-./forge cluster plan \
-  --config configs/clusters/dgx_spark_x2.example.yaml \
-  --workload train \
-  --launcher torchrun
-```
-
-See [docs/cluster.md](docs/cluster.md). Public configs use environment-backed
-placeholders; private hostnames, IPs, usernames, tokens, and absolute paths do
-not belong in Git. Use `cluster torchrun-smoke` as the gate before claiming a
-training, quantization, or benchmark workload used both Spark nodes.
-
-Serving benchmark:
-
-```bash
-./forge serving doctor --config configs/serving/backends/sglang_openai.yaml
-./forge serving plan --config configs/serving/backends/sglang_openai.yaml --family gemma4_26b_a4b --variant base --write-plan
-./forge serving doctor --config configs/serving/backends/tensorrt_llm_openai.yaml
-./forge serving plan --config configs/serving/backends/tensorrt_llm_openai.yaml --family gemma4_26b_a4b --variant base --write-plan
-./forge serving architecture-doctor --config configs/serving/architectures/distributed_kv_placeholder.yaml --strict
-./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
-./forge bench serve --evidence-gate --summary reports/generated/serve_bench/<run>/summary.json --serving-eval reports/generated/serve_eval/<run> --write-gate
-MODEL_FORGE_BASE_URL=http://127.0.0.1:8000/v1 ./forge bench serve --model served/model-name
-./forge bench sweep plan --family gemma4_26b_a4b --variant base
-./forge bench sweep plan --config configs/sweeps/dgx_spark_vllm_disagg_prefill_decode.yaml --family gemma4_26b_a4b --variant base --cluster-config configs/clusters/dgx_spark_x2.example.yaml
-```
-
-See [docs/serving-benchmarks.md](docs/serving-benchmarks.md). The benchmark
-expects a running OpenAI-compatible endpoint and writes `requests.jsonl`,
-`summary.json`, `serving_card.md`, and `manifest.json` under
-`reports/generated/serve_bench/`. Reusable workload definitions live under
-`configs/serving/workloads/`. Sweep plans expand startup-time server env cases
-and the matching `bench serve` commands, but they do not launch vLLM. SGLang and
-TensorRT-LLM backend planning write launch and benchmark plans without starting
-a server. The disaggregated prefill/decode sweep profile expands baseline and
-two-node split cases, but it still requires a separately started backend before
-benchmarking. The serving evidence gate fails completion claims unless endpoint
-metrics, manifest/card artifacts, and sampled quality/behavior evidence are
-attached for the same served model/base URL.
-
-Kernel microbenchmarks:
-
-```bash
-./forge bench kernel rmsnorm --dry-run --json
-./forge bench kernel rope --dry-run --json
-./forge bench kernel dequant --dry-run --json
-./forge bench kernel kv-layout --dry-run --json
-./forge bench kernel rmsnorm --device auto --dtype bfloat16 --write
-./forge bench kernel card --summary reports/generated/kernel_benchmarks/<run>/summary.json --write-card
-```
-
-See [docs/kernel-benchmarks.md](docs/kernel-benchmarks.md). Kernel benchmarks
-write `summary.json`, `kernel_card.json`, and `kernel_card.md` under
-`reports/generated/kernel_benchmarks/`. They are diagnostics for profiler-led
-optimization and must be paired with end-to-end serving evidence before making
-performance claims.
-
-Upstream PR planning:
-
-```bash
-./forge upstream audit --config configs/upstream/pr_candidates.yaml
-./forge upstream plan --config configs/upstream/pr_candidates.yaml --candidate dgx_spark_vllm_serving_recipe --write-plan
-./forge upstream verify-pr --config configs/upstream/pr_candidates.yaml --candidate dgx_spark_vllm_serving_recipe --offline --write-report
-```
-
-See [docs/upstream-prs.md](docs/upstream-prs.md). Upstream PR planning is an
-evidence gate, not a substitute for opening a real external pull request.
-Run `./forge upstream audit --config configs/upstream/pr_candidates.yaml --strict`
-after replacing placeholder targets; strict audit rejects placeholder targets
-and opened/merged records without a real GitHub PR URL plus existing local
-evidence. `verify-pr --offline` checks the recorded fields and local evidence;
-completion requires a non-offline verification report with GitHub PR metadata.
-
-Profiling:
-
-```bash
-./forge profile nsight doctor --config configs/profiling/nsight_serving_smoke.yaml
-./forge profile nsight plan --config configs/profiling/nsight_serving_smoke.yaml --write-plan
-./forge profile nsight summarize --plan reports/generated/profiles/nsight/<run>/nsight_profile_plan.json --write-summary
-```
-
-See [docs/profiling.md](docs/profiling.md). Nsight profiling plans wrap
-existing benchmark commands and write profiler command scripts without starting
-servers or profilers by default. Profile summaries inventory expected and
-present profiler artifacts before deeper kernel interpretation.
-
-Quantization:
+Plan quantization:
 
 ```bash
 ./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan
-./forge quantize plan llama31_8b base --config configs/quantization/fp8_w8a8_modelopt.yaml --write-plan
-./forge quantize export llama31_8b base --config configs/quantization/gguf_llama_cpp_q4_k_m.yaml --write-plan
-./forge quantize calibration-manifest gemma4_26b_a4b base --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --write-manifest
-./forge quantize matrix-plan --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --variants base,local_ft
-./forge quantize card \
-  --config configs/quantization/nvfp4_blackwell_runtime.yaml \
-  --source-serving-summary <source>/summary.json \
-  --candidate-serving-summary <candidate>/summary.json \
-  --source-serving-eval <source_eval_dir> \
-  --candidate-serving-eval <candidate_eval_dir> \
-  --run-id source_vs_nvfp4 \
-  --write-card
-./forge quantize fp8-kv-report \
-  --config configs/quantization/gemma4_26b_a4b_fp8_runtime.yaml \
-  --source-serving-summary <source>/summary.json \
-  --candidate-serving-summary <candidate>/summary.json \
-  --source-serving-eval <source_eval_dir> \
-  --candidate-serving-eval <candidate_eval_dir> \
-  --run-id source_vs_fp8_kv \
-  --write-report
-./forge quantize behavior-report \
-  --config configs/quantization/fp8_w8a8_modelopt.yaml \
-  --source-serving-summary <source>/summary.json \
-  --candidate-serving-summary <candidate>/summary.json \
-  --source-serving-eval <source_eval_dir> \
-  --candidate-serving-eval <candidate_eval_dir> \
-  --run-id source_vs_quantized_behavior \
-  --write-report
-./forge quantize tokenizer-report \
-  --source-tokenizer-dir <source_model_dir> \
-  --candidate-tokenizer-dir <quantized_or_gguf_dir> \
-  --run-id source_vs_quantized_tokenizer \
-  --write-report
-./forge quantize sensitivity-report \
-  --config configs/quantization/sensitivity_scan.yaml \
-  --baseline-serving-summary <source>/summary.json \
-  --baseline-serving-eval <source_eval_dir> \
-  --candidate name=mlp_only,component=mlp,summary=<candidate>/summary.json,eval=<candidate_eval_dir> \
-  --run-id quant_sensitivity \
-  --write-report
-./forge quantize nvfp4-gate \
-  --export-plan <export_plan.json> \
-  --serving-summary <serve>/summary.json \
-  --serving-eval <serve_eval_dir> \
-  --quantization-card <quantization_card.json> \
-  --behavior-report <behavior_preservation_report.json> \
-  --tokenizer-report <tokenizer_preservation_report.json> \
-  --run-id nvfp4_gate \
-  --write-gate
+./forge quantize matrix-plan --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml
 ```
 
-See [docs/quantization.md](docs/quantization.md). NVFP4 is the priority
-Blackwell path. Self-quantization must run through the guarded export runner,
-not raw Docker, and quantized candidates still need real serving and
-behavior-preservation evidence before promotion.
+The NVFP4 path is a priority for Blackwell/DGX Spark, but promotion still
+requires source-vs-quantized serving metrics, behavior preservation, tokenizer
+preservation, and a quantization card.
 
-Abliteration planning:
+## DGX Spark Safety
 
-```bash
-./forge ablate gemma4_26b_a4b plan
-./forge ablate gemma4_26b_a4b sota-prepare --backend heretic
-./forge ablate --config configs/abliteration/gemma4_26b_a4b_ft_local_abli.yaml sota-prepare --backend heretic
-```
+Heavy jobs must be tenants on the machine, not owners of it.
 
-For new families, reuse the workflow, not Gemma constants. Recalibrate module
-targets, layer ranges, direction prompts, strength/search bounds, tokenizer
-behavior, and serving settings per architecture.
+- Keep one model server or training job active at a time unless a cluster plan
+  explicitly says otherwise.
+- Reserve CPU and RAM headroom for SSH, the kernel, and control processes.
+- Check disk before writing checkpoints.
+- Prefer slower runs over a dead machine.
+- Use `./forge cluster torchrun-smoke` before claiming a workload used both
+  Spark nodes.
 
-Variant and tokenizer checks:
-
-```bash
-./forge variants graph gemma4_26b_a4b --variant local_abli
-./forge variants architecture-audit gemma4_26b_a4b --variant base
-./forge variants tokenizer-audit gemma4_26b_a4b --variant local_abli
-./forge variants tokenizer-audit gemma4_26b_a4b --variant local_abli --load-tokenizer --strict
-```
-
-Use `architecture-audit` before reusing LoRA or ablation targets on a new
-family. It checks target-discovery metadata and inspects local `config.json`
-when present so MoE/router/expert behavior is not missed. Use
-`tokenizer-audit` before promoting fine-tuned, ablated, merged-adapter, or
-quantized variants. Metadata mode compares tokenizer files, special tokens, and
-chat-template hashes; `--load-tokenizer` additionally runs a local
-`AutoTokenizer` chat-template round trip when the checkpoint is present.
-
-## DGX Spark Rules
-
-DGX Spark settings are hardware policy, not model constants. Default training
-and serving paths preserve system headroom with CPU, memory, disk, dataloader,
-checkpoint, and one-model-at-a-time guardrails. Spark can benefit from high
-parallelism in preprocessing, but that does not mean multiplying large model
-forward passes.
-
-Read [docs/dgx-spark.md](docs/dgx-spark.md),
-[docs/spark-optimizations.md](docs/spark-optimizations.md), and
-[docs/finetuning.md](docs/finetuning.md) before starting long jobs. Read
-[docs/serving-benchmarks.md](docs/serving-benchmarks.md) before publishing
-serving claims, and [docs/artifact-validation.md](docs/artifact-validation.md)
-before publishing artifact-generation claims.
+See [docs/cluster.md](docs/cluster.md) for two-node setup and
+[docs/spark-optimizations.md](docs/spark-optimizations.md) for serving/training
+optimization notes.
 
 ## Repository Layout
 
 ```text
-configs/        Model families, hardware/cluster profiles, training/editing configs
-datasets/       Dataset manifests, seed rows, generated small packs and reports
-docs/           Workflow docs, research snapshots, status, roadmap, and ledger
-docs/roadmaps/  Long-form planning documents and archived roadmap material
-evals/          Internal prompt buckets and rubrics
-models/         Directory conventions for local model artifacts
-pipelines/      Pipeline design notes
-recipes/        Tracked reusable run templates and known-good generated recipes
-reports/        Report conventions; generated reports are ignored
-results/        Raw eval output conventions; generated result dirs are ignored
-scripts/        Operational helpers and compatibility wrappers
-src/            `model_forge` Python package
+configs/        Model families, objectives, training, ablation, quantization
+datasets/       Dataset manifests, seeds, generated packs, publish bundles
+docs/           Workflow docs, status, validation scope, roadmap, ledger
+evals/          Internal eval prompt buckets and rubrics
+recipes/        Reusable run templates and agent experiment recipes
+reports/        Generated report conventions; large generated outputs ignored
+results/        Eval output conventions; generated result dirs ignored
+scripts/        Operational launchers and compatibility wrappers
+src/            model_forge Python package
+tests/          Unit and smoke tests
 forge           User-facing CLI wrapper
 ```
 
-See [configs/README.md](configs/README.md) and
-[scripts/README.md](scripts/README.md) for directory-specific guidance.
-See [docs/adding-model-family.md](docs/adding-model-family.md) before adding a
-new architecture or checkpoint family.
-See [docs/huggingface-publishing.md](docs/huggingface-publishing.md) for Hub
-release planning, model-card generation, and public/private release gates.
+Generated model weights, tokenized caches, raw eval outputs, large reports, and
+logs are not committed. Upload durable model and dataset artifacts to Hugging
+Face through the release gates in [docs/huggingface-publishing.md](docs/huggingface-publishing.md).
 
-Generated run directories, model weights, tokenized datasets, large reports, and
-logs are not committed. See
-[docs/artifact-retention.md](docs/artifact-retention.md) before deciding what to
-commit, delete, or upload.
+## Design Rules
 
-## Design Principles
-
-- Optimize for reproducible post-training decisions, not one-off demos.
 - Compare every edited model against the source checkpoint it came from.
-- Treat ablation success as lower refusal while preserving source capability.
+- Treat ablation success as lower refusal plus retained capability.
 - Report unsafe overcompliance separately from capability.
 - Treat fine-tune success as better capability and format quality without
   regressions.
-- Keep model-family support in config and reusable pipeline code.
+- Keep model-family support in config, not hard-coded scripts.
 - Push code, configs, docs, recipes, and lightweight manifests to GitHub.
-- Upload completed models, datasets, and durable eval artifacts to Hugging Face
-  through dry-run release plans and explicit release-class gates.
-- Never commit tokens or raw model weights.
+- Never commit tokens, raw model weights, or private infrastructure details.
