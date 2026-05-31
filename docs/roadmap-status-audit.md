@@ -13,16 +13,15 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| not_started | 1 |
 | scaffolded | 8 |
-| tested | 86 |
+| tested | 87 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 15 |
-| smoke_validated | 79 |
+| planned | 14 |
+| smoke_validated | 80 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -94,7 +93,7 @@ No status audit findings.
 | MF-0360 | P1: Dataset factory | tested | smoke_validated | Add eval-feedback loop that proposes next dataset skills from failures |
 | MF-0361 | P1: Dataset factory | tested | smoke_validated | Add forge data review with curation flags and scale-up gate |
 | MF-0362 | P1: Dataset factory | scaffolded | smoke_validated | Add smoke_pack, medium_pack, and training_pack promotion gates |
-| MF-0363 | P1: Dataset factory | not_started | planned | Require bounded Spark fine-tune evidence before dataset recipe is marked validated |
+| MF-0363 | P1: Dataset factory | tested | smoke_validated | Require bounded Spark fine-tune evidence before dataset recipe is marked validated |
 | MF-0501 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add forge hf status/login/whoami |
 | MF-0502 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add forge hf plan-model |
 | MF-0503 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add forge hf publish-model --dry-run |

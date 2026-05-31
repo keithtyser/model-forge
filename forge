@@ -21,7 +21,7 @@ Usage:
   ./forge external <family> [variant] [tasks]
   ./forge finetune <family> [plan|prepare|run] [--execute]
   ./forge finetune --config <path> [plan|prepare|run]
-  ./forge data [plan|gaps|propose|seed|generate|judge|verify|filter|review|pack|publish] <family> <variant> [--overwrite] [--smoke]
+  ./forge data [plan|gaps|propose|seed|generate|judge|verify|filter|review|pack|training-gate|publish] <family> <variant> [--overwrite] [--smoke]
   ./forge ablate <family> [plan|collect|analyze-reference|sweep-reference|export|sota-plan|sota-prepare|sota-run] [--execute]
   ./forge ablate --config <path> [plan|collect|analyze-reference|sweep-reference|export|sota-plan|sota-prepare|sota-run] [--execute]
   ./forge compare <family>
@@ -60,6 +60,7 @@ Examples:
   ./forge finetune --config configs/finetuning/gemma4_26b_a4b_local_ft_v1_dryrun.yaml plan
   ./forge data plan gemma4_26b_a4b local_ft_v1
   ./forge data propose gemma4_26b_a4b local_ft_v1
+  ./forge data training-gate gemma4_26b_a4b local_ft_v1 --finetune-plan <run>/plan.json --data-summary <run>/data_summary.json --promotion-report <promotion>.json --write-gate
   ./forge ablate gemma4_26b_a4b plan
   ./forge compare gemma4_26b_a4b
   ./forge behavior score --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml local_abli_sota_vs_base --write-card

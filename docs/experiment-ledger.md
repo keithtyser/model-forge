@@ -2541,6 +2541,36 @@ Publish status: already uploaded to Hugging Face before the FT handoff. No
 additional upload needed for this completed ablated checkpoint unless the model
 card or files need revision.
 
+## Dataset Factory: Bounded Fine-Tune Evidence Gate
+
+Status: smoke-validated artifact gate; no heavy training launched.
+
+Purpose: prevent static dataset-pack quality from being mistaken for a validated
+training recipe. A dataset recipe is not validated until a bounded Spark
+fine-tune uses the packed dataset, stays inside resource guardrails, materializes
+training rows, and passes a source-relative promotion report.
+
+Implemented:
+
+```text
+./forge data training-gate <family> <variant> \
+  --finetune-plan <run>/plan.json \
+  --data-summary <run>/data_summary.json \
+  --promotion-report <promotion>.json \
+  --max-steps 50 \
+  --max-train-rows 5000 \
+  --write-gate
+```
+
+Validation:
+
+```text
+.venv/bin/python -m unittest tests.test_data_factory -v
+```
+
+Result: `MF-0363` is now `tested` / `smoke_validated`. Real Spark validation
+still requires an actual bounded fine-tune run and its generated gate artifacts.
+
 ## Hugging Face Release Planning Layer
 
 Status: implemented and smoke validated.

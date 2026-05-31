@@ -178,6 +178,11 @@ another backend without hard-coding Gemma behavior.
   `ready_to_scale_generation=true` as the gate before scaling generation.
   `propose` reads saved eval failures and writes `feedback_proposal.yaml` with
   ranked skill targets, generation scale, and candidate config-patch guidance.
+- Do not mark a dataset recipe validated from static pack quality alone. Run
+  `./forge data training-gate <family> <variant> --finetune-plan <run>/plan.json --data-summary <run>/data_summary.json --promotion-report <promotion>.json --write-gate`
+  after a bounded Spark fine-tune. The gate checks dataset usage, `max_steps`,
+  row bounds, Spark evidence, resource guardrails, materialized train rows, and
+  source-relative promotion results. It rejects seed-only and smoke-only packs.
 
 ## Behavior Editing Scorecards
 

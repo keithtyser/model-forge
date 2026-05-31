@@ -17,12 +17,14 @@ from typing import Any
 import psutil
 import yaml
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
 from model_forge.data.sources import registry_summary
 
 REPO_DIR = Path(__file__).resolve().parents[3]
 console = Console()
+TRAINING_EVIDENCE_GATE_SCHEMA_VERSION = "model_forge.dataset_training_evidence_gate.v1"
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -60,6 +62,13 @@ def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8") as handle:
         for row in rows:
             handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def load_json(path: Path) -> dict[str, Any]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"expected JSON object in {path}")
+    return data
 
 
 def resolve_repo_path(value: str | Path) -> Path:
@@ -1742,6 +1751,221 @@ def command_pack(
     return outputs
 
 
+def _check(name: str, passed: bool, message: str) -> dict[str, Any]:
+    return {"name": name, "passed": bool(passed), "message": message}
+
+
+def _path_matches(candidate: str | None, expected: Path) -> bool:
+    if not candidate:
+        return False
+    path = resolve_repo_path(candidate)
+    try:
+        return path.resolve() == expected.resolve()
+    except OSError:
+        return path == expected
+
+
+def build_training_evidence_gate(
+    *,
+    config: dict[str, Any],
+    config_path: Path,
+    dataset_manifest: dict[str, Any],
+    finetune_plan: dict[str, Any],
+    data_summary: dict[str, Any],
+    promotion_report: dict[str, Any],
+    dataset_manifest_path: Path,
+    finetune_plan_path: Path,
+    data_summary_path: Path,
+    promotion_report_path: Path,
+    max_steps: int = 50,
+    max_train_rows: int = 5000,
+    require_spark: bool = True,
+) -> dict[str, Any]:
+    quality = dataset_manifest.get("quality_report") or {}
+    artifacts = dataset_manifest.get("artifacts") or {}
+    dataset_path = resolve_repo_path(str(artifacts.get("dataset") or ""))
+    sources = finetune_plan.get("data", {}).get("sources") or []
+    source_paths = [
+        str(source.get("path") or source.get("dataset") or "")
+        for source in sources
+        if isinstance(source, dict)
+    ]
+    trainer = finetune_plan.get("trainer") or {}
+    resource_policy = finetune_plan.get("resource_policy") or {}
+    hardware = finetune_plan.get("hardware") or {}
+    max_steps_value = trainer.get("max_steps")
+    if max_steps_value is None:
+        bounded_steps = False
+    else:
+        bounded_steps = int(max_steps_value) <= max_steps
+    train_rows = int(data_summary.get("rows", 0) or 0)
+    cpu_quota_text = str(resource_policy.get("cpu_quota") or "")
+    memory_max_text = str(resource_policy.get("memory_max") or "")
+    profile = str(hardware.get("profile") or "").lower()
+    label = str(hardware.get("label") or "").lower()
+    spark_like = "spark" in profile or "spark" in label or "gb10" in label
+    output_path = str(data_summary.get("output_path") or "")
+    output_exists = bool(output_path) and resolve_repo_path(output_path).exists()
+
+    checks = [
+        _check(
+            "dataset_id_matches_config",
+            dataset_manifest.get("id") == config.get("id"),
+            f"manifest id `{dataset_manifest.get('id')}` matches config id `{config.get('id')}`",
+        ),
+        _check(
+            "dataset_artifact_present",
+            bool(artifacts.get("dataset")),
+            "packed dataset manifest names a dataset artifact",
+        ),
+        _check(
+            "dataset_has_rows",
+            int(quality.get("accepted_count", 0) or 0) > 0,
+            f"accepted_count={quality.get('accepted_count', 0)}",
+        ),
+        _check(
+            "dataset_not_seed_only",
+            not bool(quality.get("seed_only", dataset_manifest.get("seed_only", False))),
+            "seed-only datasets are not valid training evidence",
+        ),
+        _check(
+            "dataset_not_smoke_only",
+            not bool(quality.get("smoke_only", dataset_manifest.get("smoke_only", False))),
+            "smoke-only datasets are not valid training evidence",
+        ),
+        _check(
+            "finetune_plan_uses_dataset",
+            any(_path_matches(path, dataset_path) for path in source_paths),
+            "fine-tune plan includes the packed dataset path as a data source",
+        ),
+        _check(
+            "bounded_max_steps",
+            bounded_steps,
+            f"trainer.max_steps={max_steps_value}; required <= {max_steps}",
+        ),
+        _check(
+            "bounded_train_rows",
+            0 < train_rows <= max_train_rows,
+            f"data_summary.rows={train_rows}; required 1..{max_train_rows}",
+        ),
+        _check(
+            "train_dataset_materialized",
+            output_exists,
+            f"data_summary.output_path exists: {output_path or '<missing>'}",
+        ),
+        _check(
+            "spark_evidence_present",
+            (not require_spark) or spark_like,
+            f"hardware profile/label `{hardware.get('profile')}` / `{hardware.get('label')}`",
+        ),
+        _check(
+            "resource_governed",
+            cpu_quota_text.endswith("%") and memory_max_text.endswith("%") and int(resource_policy.get("reserve_cores", 0) or 0) >= 1,
+            "fine-tune plan records CPU quota, memory max, and at least one reserved core",
+        ),
+        _check(
+            "ram_floor_present",
+            float(resource_policy.get("min_memory_available_start", 0.0) or 0.0) >= 0.05
+            and float(resource_policy.get("min_memory_available_runtime", 0.0) or 0.0) >= 0.05,
+            "start/runtime RAM floors are at least 5%",
+        ),
+        _check(
+            "promotion_report_passed",
+            bool(promotion_report.get("passed")),
+            f"promotion report decision `{promotion_report.get('decision')}`",
+        ),
+    ]
+    ready = all(item["passed"] for item in checks)
+    return {
+        "schema_version": TRAINING_EVIDENCE_GATE_SCHEMA_VERSION,
+        "dataset_id": config["id"],
+        "family": config["family"],
+        "variant": config["variant"],
+        "config_path": display_path(config_path),
+        "artifacts": {
+            "dataset_manifest": display_path(dataset_manifest_path),
+            "finetune_plan": display_path(finetune_plan_path),
+            "data_summary": display_path(data_summary_path),
+            "promotion_report": display_path(promotion_report_path),
+        },
+        "bounds": {
+            "max_steps": max_steps,
+            "max_train_rows": max_train_rows,
+            "require_spark": require_spark,
+        },
+        "metrics": {
+            "accepted_count": int(quality.get("accepted_count", 0) or 0),
+            "train_rows": train_rows,
+            "trainer_max_steps": max_steps_value,
+            "hardware_profile": hardware.get("profile"),
+            "promotion_decision": promotion_report.get("decision"),
+        },
+        "checks": checks,
+        "dataset_recipe_validated": ready,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def training_evidence_gate_markdown(report: dict[str, Any]) -> str:
+    rows = []
+    for check in report["checks"]:
+        status = "PASS" if check["passed"] else "FAIL"
+        rows.append(f"| {status} | `{check['name']}` | {check['message']} |")
+    return "\n".join([
+        f"# Dataset Training Evidence Gate: {report['dataset_id']}",
+        "",
+        f"- Family: `{report['family']}`",
+        f"- Variant: `{report['variant']}`",
+        f"- Validated: `{str(report['dataset_recipe_validated']).lower()}`",
+        f"- Max steps bound: `{report['bounds']['max_steps']}`",
+        f"- Max train rows bound: `{report['bounds']['max_train_rows']}`",
+        "",
+        "| Status | Check | Message |",
+        "|---|---|---|",
+        *rows,
+        "",
+    ])
+
+
+def command_training_gate(
+    *,
+    config: dict[str, Any],
+    config_path: Path,
+    dataset_manifest_path: Path,
+    finetune_plan_path: Path,
+    data_summary_path: Path,
+    promotion_report_path: Path,
+    max_steps: int,
+    max_train_rows: int,
+    require_spark: bool,
+    write_gate: bool,
+) -> dict[str, Any]:
+    report = build_training_evidence_gate(
+        config=config,
+        config_path=config_path,
+        dataset_manifest=load_yaml(dataset_manifest_path),
+        finetune_plan=load_json(finetune_plan_path),
+        data_summary=load_json(data_summary_path),
+        promotion_report=load_json(promotion_report_path),
+        dataset_manifest_path=dataset_manifest_path,
+        finetune_plan_path=finetune_plan_path,
+        data_summary_path=data_summary_path,
+        promotion_report_path=promotion_report_path,
+        max_steps=max_steps,
+        max_train_rows=max_train_rows,
+        require_spark=require_spark,
+    )
+    if write_gate:
+        output_dir = resolve_repo_path(config["output_dir"])
+        output_dir.mkdir(parents=True, exist_ok=True)
+        json_path = output_dir / "training_evidence_gate.json"
+        md_path = output_dir / "training_evidence_gate.md"
+        json_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        md_path.write_text(training_evidence_gate_markdown(report), encoding="utf-8")
+        report["written_artifacts"] = {"json": display_path(json_path), "markdown": display_path(md_path)}
+    return report
+
+
 def load_release_class(name: str) -> dict[str, Any]:
     path = REPO_DIR / "configs" / "release_classes" / f"{name}.yaml"
     if not path.exists():
@@ -2056,7 +2280,7 @@ def default_config_for(family: str, variant: str) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Plan and pack model-forge dataset-factory artifacts")
-    parser.add_argument("step", choices=["plan", "gaps", "propose", "seed", "generate", "judge", "verify", "filter", "review", "pack", "publish"])
+    parser.add_argument("step", choices=["plan", "gaps", "propose", "seed", "generate", "judge", "verify", "filter", "review", "pack", "training-gate", "publish"])
     parser.add_argument("family", nargs="?")
     parser.add_argument("variant", nargs="?")
     parser.add_argument("--config", type=Path)
@@ -2075,6 +2299,15 @@ def main() -> None:
     parser.add_argument("--execute", action="store_true", help="execute the publish step; currently valid only for non-smoke datasets")
     parser.add_argument("--private", action="store_true", help="create executed HF dataset repo as private")
     parser.add_argument("--source-license-checked", action="store_true", help="mark source license/provenance review complete for publish gates")
+    parser.add_argument("--dataset-manifest", type=Path, help="packed dataset manifest.yaml for training-gate")
+    parser.add_argument("--finetune-plan", type=Path, help="bounded fine-tune plan.json for training-gate")
+    parser.add_argument("--data-summary", type=Path, help="bounded fine-tune data_summary.json for training-gate")
+    parser.add_argument("--promotion-report", type=Path, help="source-relative promotion report JSON for training-gate")
+    parser.add_argument("--max-steps", type=int, default=50, help="maximum bounded fine-tune steps accepted by training-gate")
+    parser.add_argument("--max-train-rows", type=int, default=5000, help="maximum bounded training rows accepted by training-gate")
+    parser.add_argument("--no-require-spark", action="store_true", help="allow non-Spark training evidence in training-gate")
+    parser.add_argument("--write-gate", action="store_true", help="write training_evidence_gate artifacts")
+    parser.add_argument("--json", action="store_true", help="print JSON report for gate-style commands")
     args = parser.parse_args()
 
     config_path = args.config or default_config_for(args.family or "", args.variant or "")
@@ -2152,6 +2385,40 @@ def main() -> None:
         )
         for path in outputs.values():
             console.print(f"[green]Wrote[/green] {display_path(Path(path))}")
+    elif args.step == "training-gate":
+        output_dir = resolve_repo_path(config["output_dir"])
+        dataset_manifest = resolve_repo_path(args.dataset_manifest or output_dir / "manifest.yaml")
+        missing = [
+            name
+            for name, value in {
+                "--finetune-plan": args.finetune_plan,
+                "--data-summary": args.data_summary,
+                "--promotion-report": args.promotion_report,
+            }.items()
+            if value is None
+        ]
+        if missing:
+            raise SystemExit(f"training-gate requires {', '.join(missing)}")
+        report = command_training_gate(
+            config=config,
+            config_path=config_path,
+            dataset_manifest_path=dataset_manifest,
+            finetune_plan_path=resolve_repo_path(args.finetune_plan),
+            data_summary_path=resolve_repo_path(args.data_summary),
+            promotion_report_path=resolve_repo_path(args.promotion_report),
+            max_steps=args.max_steps,
+            max_train_rows=args.max_train_rows,
+            require_spark=not args.no_require_spark,
+            write_gate=args.write_gate,
+        )
+        if args.json:
+            print(json.dumps(report, indent=2, sort_keys=True))
+        else:
+            status = "passed" if report["dataset_recipe_validated"] else "failed"
+            border = "green" if report["dataset_recipe_validated"] else "red"
+            console.print(Panel(json.dumps(report["checks"], indent=2), title=f"Training Evidence Gate {status}", border_style=border))
+        if not report["dataset_recipe_validated"]:
+            raise SystemExit(1)
     elif args.step == "publish":
         path = command_publish(
             config,

@@ -8,16 +8,19 @@ from pathlib import Path
 
 from model_forge.data.factory import (
     REPO_DIR,
+    TRAINING_EVIDENCE_GATE_SCHEMA_VERSION,
     build_provider,
     build_feedback_proposal,
     build_gap_report,
     build_plan,
+    build_training_evidence_gate,
     command_generate,
     command_gaps,
     command_pack,
     command_propose,
     command_publish,
     command_review,
+    command_training_gate,
     command_verify,
     load_yaml,
     rejection_reasons,
@@ -305,6 +308,124 @@ class DatasetFactoryTests(unittest.TestCase):
             command_publish(config, config_path, overwrite=True)
             with self.assertRaises(SystemExit):
                 command_publish(config, config_path, overwrite=False, execute=True)
+
+    def test_training_gate_requires_bounded_spark_finetune_evidence(self) -> None:
+        config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            config["output_dir"] = str(tmp_path / "dataset")
+            config["smoke_only"] = False
+            outputs = command_pack(config, config_path, overwrite=True)
+            train_json = tmp_path / "train.jsonl"
+            train_json.write_text('{"messages":[]}\n', encoding="utf-8")
+            finetune_plan = {
+                "data": {"sources": [{"path": outputs["dataset"]}]},
+                "trainer": {"max_steps": 5},
+                "hardware": {"profile": "dgx_spark", "label": "DGX Spark GB10"},
+                "resource_policy": {
+                    "cpu_quota": "80%",
+                    "memory_max": "85%",
+                    "reserve_cores": 1,
+                    "min_memory_available_start": 0.05,
+                    "min_memory_available_runtime": 0.05,
+                },
+            }
+            report = build_training_evidence_gate(
+                config=config,
+                config_path=config_path,
+                dataset_manifest=load_yaml(Path(outputs["manifest"])),
+                finetune_plan=finetune_plan,
+                data_summary={"rows": 32, "output_path": str(train_json)},
+                promotion_report={"passed": True, "decision": "promote_bounded_dataset_recipe"},
+                dataset_manifest_path=Path(outputs["manifest"]),
+                finetune_plan_path=tmp_path / "plan.json",
+                data_summary_path=tmp_path / "data_summary.json",
+                promotion_report_path=tmp_path / "promotion.json",
+            )
+            self.assertEqual(report["schema_version"], TRAINING_EVIDENCE_GATE_SCHEMA_VERSION)
+            self.assertTrue(report["dataset_recipe_validated"])
+            self.assertTrue(all(check["passed"] for check in report["checks"]))
+
+    def test_training_gate_fails_unbounded_finetune_plan(self) -> None:
+        config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            config["output_dir"] = str(tmp_path / "dataset")
+            config["smoke_only"] = False
+            outputs = command_pack(config, config_path, overwrite=True)
+            train_json = tmp_path / "train.jsonl"
+            train_json.write_text('{"messages":[]}\n', encoding="utf-8")
+            report = build_training_evidence_gate(
+                config=config,
+                config_path=config_path,
+                dataset_manifest=load_yaml(Path(outputs["manifest"])),
+                finetune_plan={
+                    "data": {"sources": [{"path": outputs["dataset"]}]},
+                    "trainer": {"max_steps": 500},
+                    "hardware": {"profile": "dgx_spark", "label": "DGX Spark GB10"},
+                    "resource_policy": {
+                        "cpu_quota": "80%",
+                        "memory_max": "85%",
+                        "reserve_cores": 1,
+                        "min_memory_available_start": 0.05,
+                        "min_memory_available_runtime": 0.05,
+                    },
+                },
+                data_summary={"rows": 32, "output_path": str(train_json)},
+                promotion_report={"passed": True, "decision": "promote_bounded_dataset_recipe"},
+                dataset_manifest_path=Path(outputs["manifest"]),
+                finetune_plan_path=tmp_path / "plan.json",
+                data_summary_path=tmp_path / "data_summary.json",
+                promotion_report_path=tmp_path / "promotion.json",
+            )
+            self.assertFalse(report["dataset_recipe_validated"])
+            checks = {check["name"]: check for check in report["checks"]}
+            self.assertFalse(checks["bounded_max_steps"]["passed"])
+
+    def test_training_gate_command_writes_artifacts(self) -> None:
+        config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            config["output_dir"] = str(tmp_path / "dataset")
+            config["smoke_only"] = False
+            outputs = command_pack(config, config_path, overwrite=True)
+            train_json = tmp_path / "train.jsonl"
+            train_json.write_text('{"messages":[]}\n', encoding="utf-8")
+            plan_path = tmp_path / "plan.json"
+            data_summary_path = tmp_path / "data_summary.json"
+            promotion_path = tmp_path / "promotion.json"
+            plan_path.write_text(json.dumps({
+                "data": {"sources": [{"path": outputs["dataset"]}]},
+                "trainer": {"max_steps": 5},
+                "hardware": {"profile": "dgx_spark", "label": "DGX Spark GB10"},
+                "resource_policy": {
+                    "cpu_quota": "80%",
+                    "memory_max": "85%",
+                    "reserve_cores": 1,
+                    "min_memory_available_start": 0.05,
+                    "min_memory_available_runtime": 0.05,
+                },
+            }), encoding="utf-8")
+            data_summary_path.write_text(json.dumps({"rows": 32, "output_path": str(train_json)}), encoding="utf-8")
+            promotion_path.write_text(json.dumps({"passed": True, "decision": "promote_bounded_dataset_recipe"}), encoding="utf-8")
+            report = command_training_gate(
+                config=config,
+                config_path=config_path,
+                dataset_manifest_path=Path(outputs["manifest"]),
+                finetune_plan_path=plan_path,
+                data_summary_path=data_summary_path,
+                promotion_report_path=promotion_path,
+                max_steps=50,
+                max_train_rows=5000,
+                require_spark=True,
+                write_gate=True,
+            )
+            self.assertTrue(report["dataset_recipe_validated"])
+            self.assertTrue((tmp_path / "dataset" / "training_evidence_gate.json").exists())
+            self.assertTrue((tmp_path / "dataset" / "training_evidence_gate.md").exists())
 
 
 if __name__ == "__main__":

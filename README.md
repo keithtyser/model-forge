@@ -171,6 +171,7 @@ Dataset factory:
 ./forge data verify gemma4_26b_a4b local_ft_v1 --smoke
 ./forge data review gemma4_26b_a4b local_ft_v1 --smoke --sample 50
 ./forge data pack gemma4_26b_a4b local_ft_v1 --smoke
+./forge data training-gate gemma4_26b_a4b local_ft_v1 --finetune-plan <run>/plan.json --data-summary <run>/data_summary.json --promotion-report <promotion>.json --write-gate
 ./forge data publish gemma4_26b_a4b local_ft_v1 --smoke
 ```
 
@@ -180,6 +181,10 @@ Downstream `--overwrite` refreshes derived artifacts from existing candidates.
 candidate config patch.
 `publish` writes a dry-run HF plan by default; `publish --execute` refuses
 seed-only and smoke-only datasets.
+`training-gate` is required before claiming a dataset recipe is validated: it
+checks that a bounded Spark fine-tune used the packed dataset, stayed inside
+resource bounds, materialized training data, and passed a source-relative
+promotion report. Seed-only and smoke-only packs are rejected by this gate.
 
 Promotion reports:
 

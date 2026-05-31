@@ -469,6 +469,26 @@ The v1 dry-run fine-tune config validates wiring without a long run:
 It uses the v1 source registry and smoke artifacts, has `max_steps: 5`, and is
 for plan/prepare validation only. Do not promote it as a durable recipe.
 
+Before marking any dataset recipe validated, attach bounded Spark fine-tune
+evidence:
+
+```bash
+./forge data training-gate gemma4_26b_a4b local_ft_v1 \
+  --finetune-plan runs/finetune/<bounded-run>/plan.json \
+  --data-summary runs/finetune/<bounded-run>/data_summary.json \
+  --promotion-report reports/generated/promotion/<profile>.json \
+  --max-steps 50 \
+  --max-train-rows 5000 \
+  --write-gate
+```
+
+This gate is intentionally separate from dataset packaging. It requires the
+fine-tune plan to reference the packed `dataset.jsonl`, keep the run bounded,
+record DGX Spark/Spark-cluster evidence, preserve CPU/RAM guardrails, materialize
+training rows, and pass a source-relative promotion report. Seed-only and
+smoke-only packs are rejected. A smoke pack can be useful, but it is not a
+validated training recipe until a non-smoke pack clears this gate.
+
 The gap report is generated from the saved local FT v0 internal responses and
 summarizes failed buckets, missed concepts, and recommended next dataset skills:
 
