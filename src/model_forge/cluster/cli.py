@@ -840,6 +840,7 @@ def build_model_sync_plan(
 ) -> dict[str, Any]:
     env = env or os.environ
     source = source.expanduser()
+    source_bytes = directory_size_bytes(source) if source.exists() and source.is_dir() else 0
     nodes = [node_plan(node, cluster, env) for node in cluster.get("nodes", []) if isinstance(node, dict)]
     actions: list[dict[str, Any]] = []
     model_name = target_name or source.name
@@ -865,8 +866,11 @@ def build_model_sync_plan(
             {
                 "node": node.get("name"),
                 "host": host,
+                "user": node.get("user"),
+                "ssh_port": node.get("ssh_port"),
                 "models_dir": models_dir,
                 "source": str(source),
+                "source_bytes": source_bytes,
                 "target_dir": target_dir,
                 "skip": False,
                 "mkdir_command": shell_join(mkdir_command),
@@ -885,9 +889,31 @@ def build_model_sync_plan(
         },
         "delete": delete,
         "source": str(source),
+        "source_bytes": source_bytes,
         "target_name": model_name,
         "actions": actions,
     }
+
+
+def directory_size_bytes(path: Path) -> int:
+    total = 0
+    for item in path.rglob("*"):
+        try:
+            if item.is_file():
+                total += item.stat().st_size
+        except OSError:
+            continue
+    return total
+
+
+def remote_free_bytes_command(action: Mapping[str, Any]) -> list[str]:
+    target_dir = str(action["target_dir"])
+    models_dir = str(action["models_dir"])
+    script = (
+        f"mkdir -p {shlex.quote(target_dir)} && "
+        f"df -PB1 {shlex.quote(models_dir)} | awk 'NR==2 {{print $4}}'"
+    )
+    return [*ssh_prefix(action), script]
 
 
 def execute_sync_plan(plan: dict[str, Any], timeout: int) -> dict[str, Any]:
@@ -896,6 +922,36 @@ def execute_sync_plan(plan: dict[str, Any], timeout: int) -> dict[str, Any]:
         if action.get("skip") or action.get("error"):
             results.append({**action, "ok": not action.get("error")})
             continue
+        source_bytes = int(action.get("source_bytes") or plan.get("source_bytes") or 0)
+        if source_bytes > 0 and action.get("models_dir"):
+            free = subprocess.run(
+                remote_free_bytes_command(action),
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=timeout,
+                check=False,
+            )
+            if free.returncode != 0:
+                results.append({**action, "ok": False, "step": "disk_preflight", "stderr": free.stderr.strip(), "returncode": free.returncode})
+                continue
+            try:
+                free_bytes = int(free.stdout.strip().splitlines()[-1])
+            except (IndexError, ValueError):
+                results.append({**action, "ok": False, "step": "disk_preflight", "stderr": f"could not parse free bytes: {free.stdout!r}"})
+                continue
+            if free_bytes < source_bytes:
+                results.append(
+                    {
+                        **action,
+                        "ok": False,
+                        "step": "disk_preflight",
+                        "free_bytes": free_bytes,
+                        "required_bytes": source_bytes,
+                        "stderr": "worker models_dir does not have enough free space for source directory",
+                    }
+                )
+                continue
         mkdir = subprocess.run(
             shlex.split(action["mkdir_command"]),
             text=True,

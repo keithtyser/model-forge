@@ -107,6 +107,7 @@ class ClusterCliTests(unittest.TestCase):
         self.assertTrue(plan["actions"][0]["skip"])
         self.assertFalse(plan["actions"][1]["skip"])
         self.assertEqual(plan["actions"][1]["target_dir"], "/" + "models-b/Qwen3.6-27B")
+        self.assertGreater(plan["actions"][1]["source_bytes"], 0)
         self.assertIn("runner@spark-b:" + "/" + "models-b/Qwen3.6-27B/", plan["actions"][1]["rsync_command"])
         self.assertIn("--partial", plan["actions"][1]["rsync_command"])
 
