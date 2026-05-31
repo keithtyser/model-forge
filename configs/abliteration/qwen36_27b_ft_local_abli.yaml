@@ -3,7 +3,7 @@ method: contrastive_refusal_direction
 
 model:
   source: local/qwen36-27b-local-ft-v1
-  local_dir: ~/models/Qwen3.6-27B-local-ft-v1
+  local_dir: ~/models/Qwen3.6-27B-local-ft-v1-merged
   output_dir: ~/models/Qwen3.6-27B-local-ft-abliterated-v1
   dtype: bfloat16
   device_map: cuda

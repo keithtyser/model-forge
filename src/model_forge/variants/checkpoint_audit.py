@@ -7,11 +7,12 @@ from typing import Any
 
 from model_forge.runs.manifest import display_path
 from model_forge.variants.manifest import load_family, variant_config
-from model_forge.variants.tokenizer_audit import variant_local_path
+from model_forge.variants.tokenizer_audit import models_dir, variant_local_path
 
 
 REQUIRED_METADATA_FILES = ("config.json", "generation_config.json")
 TOKENIZER_MARKERS = ("tokenizer.json", "tokenizer.model", "merges.txt", "vocab.json", "tokenizer_config.json", "chat_template.jinja")
+ADAPTER_METADATA_FILES = ("adapter_config.json",)
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,56 @@ def safetensor_record(path: Path) -> dict[str, Any]:
     }
 
 
+def local_path_for_raw(family_config: dict[str, Any], raw: Any, models_dir_override: str | None) -> Path | None:
+    if not raw:
+        return None
+    raw_path = Path(str(raw)).expanduser()
+    if raw_path.is_absolute():
+        return raw_path
+    return models_dir(family_config, models_dir_override) / raw_path
+
+
+def audit_full_checkpoint(
+    *,
+    variant_name: str,
+    path: Path,
+    record: dict[str, Any],
+    findings: list[CheckpointFinding],
+    strict: bool,
+    check_prefix: str = "",
+) -> None:
+    files = {item.name: item.stat().st_size for item in path.iterdir() if item.is_file()}
+    record["files"] = files
+    record["metadata_files_present"] = sorted(name for name in REQUIRED_METADATA_FILES if name in files)
+    record["tokenizer_files_present"] = sorted(name for name in TOKENIZER_MARKERS if name in files)
+    record["safetensors"] = safetensor_record(path)
+    download_cache = path / ".cache" / "huggingface" / "download"
+    if download_cache.exists():
+        record["incomplete_download_files"] = sorted(item.name for item in download_cache.glob("*.incomplete"))
+        record["lock_files"] = sorted(item.name for item in download_cache.glob("*.lock"))
+
+    prefix = f"{check_prefix}_" if check_prefix else ""
+    for required in REQUIRED_METADATA_FILES:
+        if required not in files:
+            findings.append(CheckpointFinding("error", variant_name, f"{prefix}metadata", f"missing {required}"))
+    if not record["tokenizer_files_present"]:
+        findings.append(CheckpointFinding("error", variant_name, f"{prefix}tokenizer", "no tokenizer/chat-template marker files found"))
+
+    safetensors = record["safetensors"]
+    if not safetensors["present_shards"]:
+        findings.append(CheckpointFinding("error", variant_name, f"{prefix}weights", "no .safetensors weight shards found"))
+    elif safetensors["index_exists"]:
+        if safetensors["missing_referenced_shards"]:
+            missing = ", ".join(safetensors["missing_referenced_shards"][:5])
+            findings.append(CheckpointFinding("error", variant_name, f"{prefix}weights", f"index references missing shards: {missing}"))
+    elif len(safetensors["present_shards"]) > 1:
+        findings.append(CheckpointFinding("error", variant_name, f"{prefix}weights", "multiple safetensor shards found without model.safetensors.index.json"))
+
+    if record.get("incomplete_download_files"):
+        level = "error" if strict else "warning"
+        findings.append(CheckpointFinding(level, variant_name, f"{prefix}download", "Hugging Face incomplete download files are present"))
+
+
 def build_checkpoint_audit(
     family: str,
     *,
@@ -64,13 +115,20 @@ def build_checkpoint_audit(
 
     for variant_name in selected:
         variant_data = variant_config(family_config, variant_name)
-        path = variant_local_path(family_config, variant_data, models_dir_override)
+        adapter = bool(variant_data.get("adapter"))
+        path = (
+            local_path_for_raw(family_config, variant_data.get("local_dir"), models_dir_override)
+            if adapter
+            else variant_local_path(family_config, variant_data, models_dir_override)
+        )
+        merged_path = local_path_for_raw(family_config, variant_data.get("merged_local_dir"), models_dir_override)
         record: dict[str, Any] = {
             "variant": variant_name,
             "path": display_path(path) if path else None,
+            "merged_path": display_path(merged_path) if merged_path else None,
             "exists": bool(path and path.exists() and path.is_dir()),
             "source_variant": variant_data.get("base_variant"),
-            "adapter": bool(variant_data.get("adapter")),
+            "adapter": adapter,
             "quantization": variant_data.get("quantization"),
         }
         if not path or not path.exists() or not path.is_dir():
@@ -79,38 +137,43 @@ def build_checkpoint_audit(
             records.append(record)
             continue
 
-        files = {item.name: item.stat().st_size for item in path.iterdir() if item.is_file()}
-        record["files"] = files
-        record["metadata_files_present"] = sorted(name for name in REQUIRED_METADATA_FILES if name in files)
-        record["tokenizer_files_present"] = sorted(name for name in TOKENIZER_MARKERS if name in files)
-        record["safetensors"] = safetensor_record(path)
-        download_cache = path / ".cache" / "huggingface" / "download"
-        if download_cache.exists():
-            record["incomplete_download_files"] = sorted(item.name for item in download_cache.glob("*.incomplete"))
-            record["lock_files"] = sorted(item.name for item in download_cache.glob("*.lock"))
-
-        for required in REQUIRED_METADATA_FILES:
-            if required not in files:
-                findings.append(CheckpointFinding("error", variant_name, "metadata", f"missing {required}"))
-        if not record["tokenizer_files_present"]:
-            findings.append(CheckpointFinding("error", variant_name, "tokenizer", "no tokenizer/chat-template marker files found"))
-
-        safetensors = record["safetensors"]
-        if variant_data.get("adapter"):
+        if adapter:
+            files = {item.name: item.stat().st_size for item in path.iterdir() if item.is_file()}
+            record["files"] = files
+            record["adapter_metadata_files_present"] = sorted(name for name in ADAPTER_METADATA_FILES if name in files)
+            record["tokenizer_files_present"] = sorted(name for name in TOKENIZER_MARKERS if name in files)
             if "adapter_model.safetensors" not in files:
                 findings.append(CheckpointFinding("error", variant_name, "adapter", "adapter variant is missing adapter_model.safetensors"))
-        elif not safetensors["present_shards"]:
-            findings.append(CheckpointFinding("error", variant_name, "weights", "no .safetensors weight shards found"))
-        elif safetensors["index_exists"]:
-            if safetensors["missing_referenced_shards"]:
-                missing = ", ".join(safetensors["missing_referenced_shards"][:5])
-                findings.append(CheckpointFinding("error", variant_name, "weights", f"index references missing shards: {missing}"))
-        elif len(safetensors["present_shards"]) > 1:
-            findings.append(CheckpointFinding("error", variant_name, "weights", "multiple safetensor shards found without model.safetensors.index.json"))
-
-        if record.get("incomplete_download_files"):
-            level = "error" if strict else "warning"
-            findings.append(CheckpointFinding(level, variant_name, "download", "Hugging Face incomplete download files are present"))
+            for required in ADAPTER_METADATA_FILES:
+                if required not in files:
+                    findings.append(CheckpointFinding("error", variant_name, "adapter", f"missing {required}"))
+            if not record["tokenizer_files_present"]:
+                findings.append(CheckpointFinding("error", variant_name, "tokenizer", "no tokenizer/chat-template marker files found"))
+            if merged_path:
+                merged_record: dict[str, Any] = {
+                    "path": display_path(merged_path),
+                    "exists": merged_path.exists() and merged_path.is_dir(),
+                }
+                record["merged_checkpoint"] = merged_record
+                if not merged_path.exists() or not merged_path.is_dir():
+                    findings.append(CheckpointFinding("error", variant_name, "merged_local_dir", "configured merged_local_dir is not present"))
+                else:
+                    audit_full_checkpoint(
+                        variant_name=variant_name,
+                        path=merged_path,
+                        record=merged_record,
+                        findings=findings,
+                        strict=strict,
+                        check_prefix="merged",
+                    )
+        else:
+            audit_full_checkpoint(
+                variant_name=variant_name,
+                path=path,
+                record=record,
+                findings=findings,
+                strict=strict,
+            )
         records.append(record)
 
     errors = [finding for finding in findings if finding.level == "error"]

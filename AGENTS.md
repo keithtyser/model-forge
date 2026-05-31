@@ -197,6 +197,23 @@ bitsandbytes, datasets, accelerate, and ModelOpt. Use it only when the target
 family needs the newer model registry; keep the selected image in the
 fine-tune YAML instead of hard-coding it in pipeline code.
 
+Before ablating or quantizing a PEFT fine-tune, merge the adapter into a full
+checkpoint and point the next recipe at that merged directory:
+
+```bash
+nice -n 10 .venv/bin/python scripts/merge_peft_adapter.py \
+  --base-model ~/models/<base-model-dir> \
+  --adapter ~/models/<adapter-dir> \
+  --output-dir ~/models/<adapter-dir>-merged \
+  --dtype bf16 \
+  --trust-remote-code
+./forge variants checkpoint-audit <family> --variant local_ft --strict
+```
+
+The adapter directory remains useful for live LoRA serving. The merged directory
+is the source for behavior edits, full-checkpoint quantization, and model
+uploads that should no longer depend on separate adapter loading.
+
 For Gemma 4 26B on Spark, the validated FT path currently uses
 `trainer.backend=unsloth` with `unsloth_compile_disable=true`,
 `max_seq_length=2048`, and `max_steps=500` for the first full attempt. The HF

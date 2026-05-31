@@ -334,6 +334,28 @@ class VariantGraphTests(unittest.TestCase):
         self.assertTrue(audit["passed"], audit["findings"])
         self.assertEqual(audit["records"][0]["safetensors"]["shard_count"], 2)
 
+    def test_checkpoint_audit_accepts_adapter_plus_merged_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            models = Path(tmp)
+            adapter = models / "Qwen3.6-27B-local-ft-v1"
+            merged = models / "Qwen3.6-27B-local-ft-v1-merged"
+            write_tokenizer_fixture(adapter)
+            (adapter / "adapter_config.json").write_text(json.dumps({"r": 64}), encoding="utf-8")
+            (adapter / "adapter_model.safetensors").write_text("adapter", encoding="utf-8")
+            write_tokenizer_fixture(merged)
+            write_model_config_fixture(merged)
+            (merged / "generation_config.json").write_text(json.dumps({}), encoding="utf-8")
+            (merged / "model.safetensors").write_text("weights", encoding="utf-8")
+            audit = build_checkpoint_audit(
+                "qwen36_27b",
+                variant="local_ft",
+                models_dir_override=str(models),
+                strict=True,
+            )
+        self.assertTrue(audit["passed"], audit["findings"])
+        self.assertEqual(audit["records"][0]["path"], str(adapter))
+        self.assertEqual(audit["records"][0]["merged_checkpoint"]["safetensors"]["shard_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
