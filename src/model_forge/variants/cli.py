@@ -264,14 +264,19 @@ def main() -> None:
             table.add_column("Shards")
             table.add_column("Bytes")
             table.add_column("Incomplete")
+            table.add_column("Progress")
             for record in audit["records"]:
                 safetensors = record.get("safetensors") or {}
+                progress = record.get("download_progress_fraction")
+                if progress is None and record.get("merged_checkpoint"):
+                    progress = record["merged_checkpoint"].get("download_progress_fraction")
                 table.add_row(
                     str(record["variant"]),
                     str(record.get("exists")),
                     str(safetensors.get("shard_count") or 0),
                     str(safetensors.get("total_shard_bytes") or 0),
                     str(len(record.get("incomplete_download_files") or [])),
+                    f"{float(progress) * 100:.1f}%" if progress is not None else "",
                 )
             console.print(table)
             for finding in audit["findings"]:

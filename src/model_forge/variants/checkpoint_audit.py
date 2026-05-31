@@ -36,11 +36,14 @@ def safetensor_record(path: Path) -> dict[str, Any]:
     index_path = path / "model.safetensors.index.json"
     index = read_json(index_path)
     weight_map = index.get("weight_map") if isinstance(index.get("weight_map"), dict) else {}
+    metadata = index.get("metadata") if isinstance(index.get("metadata"), dict) else {}
+    expected_total_bytes = int(float(metadata.get("total_size") or 0))
     referenced = sorted({str(name) for name in weight_map.values()})
     present = sorted(shard.name for shard in shards)
     return {
         "index_path": display_path(index_path),
         "index_exists": index_path.exists(),
+        "expected_total_bytes": expected_total_bytes,
         "shard_count": len(shards),
         "total_shard_bytes": sum(shard.stat().st_size for shard in shards),
         "present_shards": present,
@@ -76,7 +79,12 @@ def audit_full_checkpoint(
     download_cache = path / ".cache" / "huggingface" / "download"
     if download_cache.exists():
         record["incomplete_download_files"] = sorted(item.name for item in download_cache.glob("*.incomplete"))
+        record["incomplete_download_bytes"] = sum(item.stat().st_size for item in download_cache.glob("*.incomplete"))
         record["lock_files"] = sorted(item.name for item in download_cache.glob("*.lock"))
+    expected_total = int(record["safetensors"].get("expected_total_bytes") or 0)
+    observed_total = int(record["safetensors"].get("total_shard_bytes") or 0) + int(record.get("incomplete_download_bytes") or 0)
+    if expected_total > 0:
+        record["download_progress_fraction"] = min(1.0, observed_total / expected_total)
 
     prefix = f"{check_prefix}_" if check_prefix else ""
     for required in REQUIRED_METADATA_FILES:

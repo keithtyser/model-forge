@@ -288,6 +288,10 @@ class VariantGraphTests(unittest.TestCase):
             write_tokenizer_fixture(checkpoint)
             write_model_config_fixture(checkpoint)
             (checkpoint / "generation_config.json").write_text(json.dumps({}), encoding="utf-8")
+            (checkpoint / "model.safetensors.index.json").write_text(
+                json.dumps({"metadata": {"total_size": 100}, "weight_map": {"a.weight": "model-00001-of-00002.safetensors"}}),
+                encoding="utf-8",
+            )
             cache = checkpoint / ".cache" / "huggingface" / "download"
             cache.mkdir(parents=True)
             (cache / "model-00001-of-00002.safetensors.lock").write_text("", encoding="utf-8")
@@ -302,6 +306,8 @@ class VariantGraphTests(unittest.TestCase):
         checks = {finding["check"] for finding in audit["findings"]}
         self.assertIn("weights", checks)
         self.assertIn("download", checks)
+        self.assertEqual(audit["records"][0]["incomplete_download_bytes"], 7)
+        self.assertAlmostEqual(audit["records"][0]["download_progress_fraction"], 0.07)
 
     def test_checkpoint_audit_accepts_indexed_safetensor_checkpoint(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
