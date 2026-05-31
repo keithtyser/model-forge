@@ -530,6 +530,49 @@ def call_openai_compatible(case: EvalCase, cfg: EvalConfig) -> tuple[str, float,
     return content, elapsed, usage, raw
 
 
+def assert_openai_model_advertised(cfg: EvalConfig, *, timeout_seconds: int = 15) -> None:
+    if os.getenv("MODEL_FORGE_SKIP_EVAL_ENDPOINT_PREFLIGHT"):
+        return
+
+    backend = cfg.backend
+    base_url = backend.get("base_url")
+    model_name = backend.get("model_alias") or cfg.model_id
+    if not base_url:
+        raise SystemExit("[model-forge] Eval backend is missing `base_url`; refusing to run live eval.")
+    if not model_name:
+        raise SystemExit("[model-forge] Eval backend is missing a model alias or model id; refusing to run live eval.")
+
+    headers = {
+        "Accept": "application/json",
+    }
+    api_key = backend.get("api_key")
+    api_key_env = backend.get("api_key_env")
+    if not api_key and api_key_env and os.getenv(api_key_env):
+        api_key = os.environ[api_key_env]
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    url = base_url.rstrip("/") + "/models"
+    request = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise SystemExit(f"[model-forge] Eval endpoint preflight failed: /models HTTP {exc.code}: {detail}") from exc
+    except (OSError, TimeoutError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"[model-forge] Eval endpoint preflight failed: could not read {url}: {exc}") from exc
+
+    models = data.get("data", [])
+    ids = [item.get("id") for item in models if isinstance(item, dict) and item.get("id")]
+    if model_name not in ids:
+        advertised = ", ".join(ids[:10]) if ids else "<none>"
+        raise SystemExit(
+            f"[model-forge] Eval endpoint preflight failed: requested model {model_name!r} "
+            f"is not advertised by {url}. Advertised models: {advertised}"
+        )
+
+
 def detect_gpu_info() -> dict[str, Any]:
     if not shutil.which("nvidia-smi"):
         return {"available": False}
@@ -1407,6 +1450,8 @@ def main() -> None:
     prompt_root = repo_root / "evals" / "prompts"
     cases = collect_cases(prompt_root, cfg.prompt_sets)
     cases = filter_cases(cases, buckets=args.bucket, max_cases=args.max_cases)
+    if not args.dry_run:
+        assert_openai_model_advertised(cfg)
     manifest = build_manifest(
         cfg,
         cases,

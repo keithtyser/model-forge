@@ -133,6 +133,12 @@ Serve and eval a configured variant:
 ./forge compare gemma4_26b_a4b
 ```
 
+Live eval entrypoints must verify the OpenAI-compatible `/models` response
+advertises the requested `MODEL_FORGE_MODEL` before scoring. Treat a model-alias
+mismatch as a hard stop; otherwise saved scores may belong to the wrong served
+checkpoint. Use `MODEL_FORGE_SKIP_EVAL_ENDPOINT_PREFLIGHT=1` only for deliberate
+offline harness work.
+
 Plan ablation without loading a model:
 
 ```bash

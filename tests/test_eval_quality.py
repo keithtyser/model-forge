@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from model_forge.evals.compare_runs import classify_delta, load_external_results, load_paired_boundary
@@ -11,6 +12,7 @@ from model_forge.evals.run_eval import (
     EvalCase,
     EvalConfig,
     EvalResult,
+    assert_openai_model_advertised,
     build_manifest,
     count_numbered_steps,
     score_benign_answer_quality,
@@ -256,6 +258,64 @@ class ObjectiveScoringTests(unittest.TestCase):
         self.assertTrue(card["outputs"]["scores"]["public_safe"])
         self.assertIn("responses.jsonl", card["publication"]["raw_output_paths"])
         self.assertIn("Raw `responses.jsonl`", markdown)
+
+
+class EvalEndpointPreflightTests(unittest.TestCase):
+    def test_endpoint_preflight_accepts_advertised_model(self) -> None:
+        cfg = EvalConfig(
+            experiment_name="unit_eval",
+            family="unit_family",
+            model_id="fallback-model",
+            variant="base",
+            prompt_sets=[],
+            output_dir="unused",
+            backend={"base_url": "http://127.0.0.1:8000/v1", "model_alias": "served-model"},
+            system_prompt="unit",
+            metrics=[],
+        )
+
+        class Response:
+            def __enter__(self) -> "Response":
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return json.dumps({"data": [{"id": "served-model"}]}).encode("utf-8")
+
+        with patch("urllib.request.urlopen", return_value=Response()):
+            assert_openai_model_advertised(cfg)
+
+    def test_endpoint_preflight_rejects_wrong_model(self) -> None:
+        cfg = EvalConfig(
+            experiment_name="unit_eval",
+            family="unit_family",
+            model_id="fallback-model",
+            variant="base",
+            prompt_sets=[],
+            output_dir="unused",
+            backend={"base_url": "http://127.0.0.1:8000/v1", "model_alias": "expected-model"},
+            system_prompt="unit",
+            metrics=[],
+        )
+
+        class Response:
+            def __enter__(self) -> "Response":
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return json.dumps({"data": [{"id": "other-model"}]}).encode("utf-8")
+
+        with patch("urllib.request.urlopen", return_value=Response()):
+            with self.assertRaises(SystemExit) as ctx:
+                assert_openai_model_advertised(cfg)
+
+        self.assertIn("expected-model", str(ctx.exception))
+        self.assertIn("other-model", str(ctx.exception))
 
 
 class ExternalResultTests(unittest.TestCase):
