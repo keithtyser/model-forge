@@ -2421,6 +2421,18 @@ TensorRT-LLM docs/example feedback
 
 A small merged PR beats a large private benchmark that nobody can inspect.
 
+Upstream PR completion gate:
+
+```text
+candidate target_url is a real external repository
+external_pr_url is a GitHub pull request URL
+local evidence paths exist and contain no unresolved <run> placeholders
+evidence includes benchmark, profiler, Kernel Card, or serving data relevant to the target
+```
+
+Local `forge upstream plan` output is preparation evidence only. It must not
+be used to mark the upstream PR item complete.
+
 ---
 
 ## 11. Agentic experiment runner roadmap

@@ -907,6 +907,16 @@ Result:
   real external PR
 - MF-0808 is marked scaffolded / planned, not smoke-validated
 
+Follow-up hardening:
+
+- `--strict` now upgrades placeholder target URLs to errors
+- opened/merged records must use GitHub PR URLs matching
+  `https://github.com/<owner>/<repo>/pull/<number>`
+- opened/merged records must attach existing local evidence files, and
+  unresolved `<run>` placeholders are rejected as completion evidence
+- this keeps MF-0808 auditable without allowing a local plan to masquerade as
+  an upstream contribution
+
 ## Advanced Serving: SGLang Backend Planner
 
 Status: implemented as planning code only. No SGLang server, vLLM server,

@@ -20,6 +20,8 @@ SCHEMA_VERSION = "model_forge.upstream_pr_candidates.v1"
 PLAN_SCHEMA_VERSION = "model_forge.upstream_pr_plan.v1"
 SECRET_PATTERN = re.compile(r"(hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,})")
 PRIVATE_PATH_PATTERN = re.compile(r"^/(home|Users)/[^/]+/")
+GITHUB_PR_URL_PATTERN = re.compile(r"^https://github\.com/[^/\s]+/[^/\s]+/pull/[0-9]+/?$")
+PLACEHOLDER_PATTERN = re.compile(r"<[^>]+>")
 
 console = Console(stderr=True)
 
@@ -50,6 +52,10 @@ def load_yaml(path: str | Path) -> tuple[dict[str, Any], Path]:
     if not isinstance(data, dict):
         raise ValueError(f"expected YAML mapping in {display_path(resolved)}")
     return data, resolved
+
+
+def has_placeholder(value: Any) -> bool:
+    return isinstance(value, str) and bool(PLACEHOLDER_PATTERN.search(value))
 
 
 def scan_value(value: Any, findings: list[Finding], *, path: str, candidate: str | None = None) -> None:
@@ -90,10 +96,26 @@ def audit_config(config: Mapping[str, Any], config_path: Path, strict: bool = Fa
                 findings.append(Finding(severity, "candidate", f"{key} is required", config_display, candidate_id))
         if item.get("status") not in {"candidate", "drafting", "opened", "merged", "rejected", "blocked"}:
             findings.append(Finding("error", "candidate", "status must be candidate/drafting/opened/merged/rejected/blocked", config_display, candidate_id))
-        if str(item.get("target_url", "")).startswith("https://github.com/<"):
-            findings.append(Finding("warning", "target", "target_url is still a placeholder", config_display, candidate_id))
-        if item.get("status") in {"opened", "merged"} and not item.get("external_pr_url"):
-            findings.append(Finding("error", "evidence", "opened/merged candidates must record external_pr_url", config_display, candidate_id))
+        target_url = str(item.get("target_url", ""))
+        if has_placeholder(target_url) or target_url.startswith("https://github.com/<"):
+            severity = "error" if strict else "warning"
+            findings.append(Finding(severity, "target", "target_url is still a placeholder", config_display, candidate_id))
+        external_pr_url = str(item.get("external_pr_url") or "")
+        if item.get("status") in {"opened", "merged"}:
+            if not external_pr_url:
+                findings.append(Finding("error", "evidence", "opened/merged candidates must record external_pr_url", config_display, candidate_id))
+            elif not GITHUB_PR_URL_PATTERN.match(external_pr_url):
+                findings.append(Finding("error", "evidence", "external_pr_url must be a GitHub pull request URL", config_display, candidate_id))
+            evidence_paths = item.get("local_evidence") or []
+            if not isinstance(evidence_paths, list) or not evidence_paths:
+                findings.append(Finding("error", "evidence", "opened/merged candidates must record local_evidence", config_display, candidate_id))
+            for raw_path in evidence_paths if isinstance(evidence_paths, list) else []:
+                evidence = str(raw_path)
+                if has_placeholder(evidence):
+                    findings.append(Finding("error", "evidence", f"local_evidence contains unresolved placeholder: {evidence}", config_display, candidate_id))
+                    continue
+                if not resolve_repo_path(evidence).exists():
+                    findings.append(Finding("error", "evidence", f"local_evidence path does not exist: {evidence}", config_display, candidate_id))
     if len(ids) != len(set(ids)):
         findings.append(Finding("error", "candidate", "candidate ids must be unique", config_display))
     return findings

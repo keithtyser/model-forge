@@ -536,6 +536,11 @@ Plan upstream PRs only when there is evidence:
 Do not mark `MF-0808` complete from a local plan alone. It requires a real
 external pull request URL plus benchmark, profiler, Kernel Card, or serving
 evidence suitable for the target upstream project.
+Run `./forge upstream audit --config configs/upstream/pr_candidates.yaml --strict`
+after replacing placeholder targets and before claiming completion.
+Opened or merged upstream records must use a real GitHub pull request URL and
+existing local evidence paths; unresolved `<run>` placeholders are planning
+markers, not completion evidence.
 
 ## Abliteration Rules
 

@@ -335,6 +335,10 @@ Upstream PR planning:
 
 See [docs/upstream-prs.md](docs/upstream-prs.md). Upstream PR planning is an
 evidence gate, not a substitute for opening a real external pull request.
+Run `./forge upstream audit --config configs/upstream/pr_candidates.yaml --strict`
+after replacing placeholder targets; strict audit rejects placeholder targets
+and opened/merged records without a real GitHub PR URL plus existing local
+evidence.
 
 Profiling:
 
