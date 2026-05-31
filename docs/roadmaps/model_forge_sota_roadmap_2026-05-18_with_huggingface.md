@@ -3769,7 +3769,7 @@ MF-0256 Require artifact validation before artifact-generation improvement claim
 MF-0301 Add forge quantize or mark target CLI until implemented. implementation_status=tested validation_state=smoke_validated
 MF-0302 Add calibration dataset manifests. implementation_status=tested validation_state=smoke_validated
 MF-0303 Add FP8 KV behavior report. implementation_status=tested validation_state=smoke_validated
-MF-0304 Add FP8 W8A8 pipeline. implementation_status=scaffolded validation_state=planned
+MF-0304 Add FP8 W8A8 pipeline. implementation_status=tested validation_state=smoke_validated
 MF-0305 Add Blackwell ModelOpt/NVFP4 pipeline. implementation_status=wired_to_cli validation_state=planned
 MF-0306 Add GGUF/llama.cpp conversion and quantization pipeline. implementation_status=not_started validation_state=planned
 MF-0307 Add Quantization Card. implementation_status=tested validation_state=smoke_validated

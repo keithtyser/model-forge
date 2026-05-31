@@ -1419,6 +1419,57 @@ Result:
 - FP8 KV runtime candidates now have a dedicated behavior-retention report
 - MF-0303 is marked tested / smoke-validated
 
+## Quantization: Generic FP8 W8A8 ModelOpt Pipeline
+
+Status: implemented as config/CLI planning and export-command generation. No
+model server, export job, quantization run, eval, or benchmark was started.
+
+Hypothesis: Model Forge needs a reusable FP8 W8A8 checkpoint-creation path in
+addition to runtime FP8 KV and Blackwell NVFP4. The recipe should be generic:
+agents pass an explicit family and source variant, then get a templated target
+variant, calibration manifest, guarded ModelOpt export command, and the same
+quantization-card promotion gates.
+
+Implemented commands:
+
+```bash
+./forge quantize plan llama31_8b base \
+  --config configs/quantization/fp8_w8a8_modelopt.yaml \
+  --write-plan
+
+./forge quantize calibration-manifest llama31_8b base \
+  --config configs/quantization/fp8_w8a8_modelopt.yaml \
+  --write-manifest
+
+./forge quantize export llama31_8b base \
+  --config configs/quantization/fp8_w8a8_modelopt.yaml \
+  --target-variant base_fp8_w8a8_modelopt \
+  --write-plan --execute
+```
+
+Changes:
+
+- added generic `configs/quantization/fp8_w8a8_modelopt.yaml`
+- added templated target variant support such as
+  `{source_variant}_fp8_w8a8_modelopt`
+- ModelOpt export command emits `hf_ptq.py --qformat fp8` under the existing
+  resource guardrails
+- updated README, AGENTS, quantization docs, and roadmap state
+
+Validation:
+
+```bash
+.venv/bin/python -m unittest tests.test_quantization_cli -v
+./forge quantize plan llama31_8b base --config configs/quantization/fp8_w8a8_modelopt.yaml --json
+./forge quantize export llama31_8b base --config configs/quantization/fp8_w8a8_modelopt.yaml --write-plan --json --output-dir /tmp/model_forge_fp8_w8a8 --run-id unit_fp8_w8a8_cli
+```
+
+Result:
+
+- FP8 W8A8 has a reusable ModelOpt pipeline scaffold with tested command
+  generation
+- MF-0304 is marked tested / smoke-validated
+
 ## Quantization: ModelOpt NVFP4 Self-Export Guardrail Incident
 
 Status: stopped before a completed NVFP4 checkpoint. Code and docs now enforce

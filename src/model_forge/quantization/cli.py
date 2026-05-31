@@ -193,6 +193,29 @@ def plan_run_id(config: QuantizationConfig, source: QuantizationSource, now: dat
     return sanitize_run_id(raw)
 
 
+def target_variant_label(config: QuantizationConfig, source: QuantizationSource) -> str:
+    raw = config.target_variant or f"{source.variant or 'runtime'}_{config.method}_{config.backend}"
+    return sanitize_run_id(
+        render_template(
+            raw,
+            {
+                "source_variant": source.variant or "runtime",
+                "source_family": source.family or "generic",
+                "method": config.method,
+                "backend": config.backend,
+            },
+        )
+    )
+
+
+def sanitize_relative_subpath(value: str) -> Path:
+    path = Path(value)
+    if path.is_absolute() or any(part == ".." for part in path.parts):
+        raise ValueError(f"output subdir must be a safe relative path, got {value!r}")
+    parts = [sanitize_run_id(part) for part in path.parts if part not in {"", "."}]
+    return Path(*parts) if parts else Path("output")
+
+
 def method_notes(method: str, backend: str) -> list[str]:
     notes = []
     if method == "nvfp4_runtime":
@@ -203,6 +226,9 @@ def method_notes(method: str, backend: str) -> list[str]:
         notes.append("Promotion requires comparing each quantized variant against the same unquantized source variant.")
     elif method == "fp8_runtime":
         notes.append("Runtime FP8 is a serving configuration; compare it against an otherwise identical BF16/auto endpoint.")
+    elif method == "fp8_w8a8":
+        notes.append("FP8 W8A8 checkpoint creation must record calibration data, backend versions, exported loader format, and source deltas.")
+        notes.append("Promotion requires source-vs-FP8 W8A8 serving and sampled behavior evidence for the same family/variant.")
     else:
         notes.append("Custom quantization method; treat generated commands as a reproducibility contract.")
     if "blackwell" in backend:
@@ -232,17 +258,18 @@ def container_model_path(source: QuantizationSource, env: Mapping[str, str]) -> 
 
 def modelopt_export_path(config: QuantizationConfig, source: QuantizationSource, output_dir: Path) -> Path:
     explicit = config.export.get("output_subdir")
-    target = config.target_variant or f"{source.variant or 'runtime'}_{config.method}_{config.backend}"
+    target = target_variant_label(config, source)
     subdir = render_template(
         str(explicit or target),
         {
             "source_variant": source.variant or "runtime",
+            "source_family": source.family or "generic",
             "target_variant": target,
             "method": config.method,
             "backend": config.backend,
         },
     )
-    return output_dir / sanitize_run_id(subdir)
+    return output_dir / sanitize_relative_subpath(subdir)
 
 
 def build_modelopt_export_command(
@@ -431,7 +458,7 @@ def build_modelopt_export_command(
             "container_path": container_source,
         },
         "target": {
-            "variant": config.target_variant or f"{source.variant or 'runtime'}_{config.method}_{config.backend}",
+            "variant": target_variant_label(config, source),
             "host_output_path": display_path(output_path),
             "container_output_path": container_output,
             "served_model_name": str(config.runtime.get("served_model_name") or f"{source.served_model_name}-{config.method}"),
@@ -529,7 +556,7 @@ def build_calibration_manifest(
                 "local_path_exists": source.local_path.exists() if source.local_path else None,
             },
             "target": {
-                "variant": config.target_variant or f"{source.variant or 'runtime'}_{config.method}_{config.backend}",
+                "variant": target_variant_label(config, source),
             },
             "calibration": {
                 "dataset": resolved_dataset,
@@ -775,7 +802,7 @@ def runtime_source(config: QuantizationConfig, source: QuantizationSource) -> Qu
     local_path = Path(str(runtime["local_path"])).expanduser() if runtime.get("local_path") else None
     return QuantizationSource(
         family=source.family,
-        variant=config.target_variant or source.variant,
+        variant=target_variant_label(config, source) if config.target_variant else source.variant,
         model_id=model_id,
         served_model_name=served_model_name,
         local_path=local_path,
@@ -830,7 +857,7 @@ def build_plan(
             "local_path_exists": source.local_path.exists() if source.local_path else None,
         },
         "target": {
-            "variant": config.target_variant or f"{source.variant or 'runtime'}_{config.method}",
+            "variant": target_variant_label(config, source),
             "served_model_name": str(config.runtime.get("served_model_name") or source.served_model_name),
             "checkpoint_written_by_this_plan": config.method not in {"nvfp4_runtime", "fp8_runtime"},
         },

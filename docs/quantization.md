@@ -212,6 +212,32 @@ completed all serving requests, and retained normal-use, schema, and workflow
 scores within the objective tolerance. It is not a replacement for the broader
 quantization card.
 
+## FP8 W8A8 Checkpoint Pipeline
+
+FP8 W8A8 is a checkpoint-creation path, unlike runtime FP8 KV cache. Use the
+generic ModelOpt recipe with an explicit family and source variant:
+
+```bash
+./forge quantize plan llama31_8b base \
+  --config configs/quantization/fp8_w8a8_modelopt.yaml \
+  --write-plan
+
+./forge quantize calibration-manifest llama31_8b base \
+  --config configs/quantization/fp8_w8a8_modelopt.yaml \
+  --write-manifest
+
+./forge quantize export llama31_8b base \
+  --config configs/quantization/fp8_w8a8_modelopt.yaml \
+  --target-variant base_fp8_w8a8_modelopt \
+  --write-plan --execute
+```
+
+The checked-in recipe uses ModelOpt `hf_ptq.py` with `--qformat fp8`,
+guarded Docker/systemd execution, FP8 KV casting during export, and a templated
+target variant such as `{source_variant}_fp8_w8a8_modelopt`. It is generic by
+design: add family-specific overrides in config files or model-family metadata,
+not in common quantization code.
+
 The card intentionally reports both safety/refusal behavior and utility metrics.
 For ablated models, lower harmful-prompt refusal can be the objective, but only
 if normal-use quality, instruction following, structured output, and artifact

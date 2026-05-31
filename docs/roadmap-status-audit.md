@@ -14,16 +14,16 @@ This file is generated from the prioritized backlog in
 |---|---:|
 | implemented | 2 |
 | not_started | 4 |
-| scaffolded | 10 |
-| tested | 80 |
+| scaffolded | 9 |
+| tested | 81 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 21 |
-| smoke_validated | 73 |
+| planned | 20 |
+| smoke_validated | 74 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -75,7 +75,7 @@ No status audit findings.
 | MF-0301 | P1: Quantization | tested | smoke_validated | Add forge quantize or mark target CLI until implemented |
 | MF-0302 | P1: Quantization | tested | smoke_validated | Add calibration dataset manifests |
 | MF-0303 | P1: Quantization | tested | smoke_validated | Add FP8 KV behavior report |
-| MF-0304 | P1: Quantization | scaffolded | planned | Add FP8 W8A8 pipeline |
+| MF-0304 | P1: Quantization | tested | smoke_validated | Add FP8 W8A8 pipeline |
 | MF-0305 | P1: Quantization | wired_to_cli | planned | Add Blackwell ModelOpt/NVFP4 pipeline |
 | MF-0306 | P1: Quantization | not_started | planned | Add GGUF/llama.cpp conversion and quantization pipeline |
 | MF-0307 | P1: Quantization | tested | smoke_validated | Add Quantization Card |

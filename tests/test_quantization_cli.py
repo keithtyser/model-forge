@@ -280,6 +280,47 @@ class QuantizationCliTests(unittest.TestCase):
         self.assertIsNone(export["calibration"]["recipe"])
         self.assertIn("quantization_export.lock", export["resource_policy"]["lock_path"])
 
+    def test_generic_fp8_w8a8_modelopt_pipeline_templates_target_variant(self) -> None:
+        config_path = Path("configs/quantization/fp8_w8a8_modelopt.yaml")
+        config = load_quantization_config(config_path)
+        source = resolve_source(
+            config,
+            "llama31_8b",
+            "base",
+            {"MODEL_FORGE_MODELS_DIR": "/models-host"},
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp) / "quantized"
+            export = build_modelopt_export_command(
+                config,
+                source,
+                output_dir=output_root,
+                run_id="unit_llama_fp8_w8a8",
+                env={"MODEL_FORGE_MODELS_DIR": "/models-host", "HF_HOME": "/hf-cache"},
+            )
+            plan = build_plan(
+                config,
+                config_path=config_path,
+                family="llama31_8b",
+                variant="base",
+                output_dir=Path(tmp) / "reports",
+                run_id="unit_llama_fp8_w8a8_plan",
+                env={"MODEL_FORGE_MODELS_DIR": "/models-host"},
+            )
+
+        joined = " ".join(export["command"])
+        self.assertEqual(export["method"], "fp8_w8a8")
+        self.assertEqual(export["backend"], "modelopt")
+        self.assertEqual(export["target"]["variant"], "base_fp8_w8a8_modelopt")
+        self.assertEqual(export["target"]["host_output_path"], str(output_root / "llama31_8b" / "base_fp8_w8a8_modelopt"))
+        self.assertIn("--qformat fp8", joined)
+        self.assertIn("/opt/TensorRT-Model-Optimizer/examples/llm_ptq/hf_ptq.py", joined)
+        self.assertIn("--low_memory_mode", joined)
+        self.assertIn("MemoryMax=90%", export["command"])
+        self.assertTrue(plan["target"]["checkpoint_written_by_this_plan"])
+        self.assertEqual(plan["target"]["variant"], "base_fp8_w8a8_modelopt")
+        self.assertIn("FP8 W8A8 checkpoint creation", " ".join(plan["quantization"]["notes"]))
+
     def test_calibration_manifest_resolves_exact_dataset_inputs(self) -> None:
         config_path = Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml")
         config = load_quantization_config(config_path)

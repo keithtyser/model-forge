@@ -96,6 +96,7 @@ Examples:
   ./forge profile nsight plan --config configs/profiling/nsight_serving_smoke.yaml
   ./forge profile nsight summarize --plan reports/generated/profiles/nsight/<run>/nsight_profile_plan.json
   ./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan
+  ./forge quantize plan llama31_8b base --config configs/quantization/fp8_w8a8_modelopt.yaml --write-plan
   ./forge quantize calibration-manifest gemma4_26b_a4b base --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --write-manifest
   ./forge quantize matrix-plan --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml
   ./forge quantize fp8-kv-report --config configs/quantization/gemma4_26b_a4b_fp8_runtime.yaml --source-serving-summary <source>/summary.json --candidate-serving-summary <candidate>/summary.json --source-serving-eval <source_eval> --candidate-serving-eval <candidate_eval> --run-id source_vs_fp8_kv --write-report

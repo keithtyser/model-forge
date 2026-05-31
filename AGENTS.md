@@ -395,6 +395,7 @@ Plan and report quantization without loading a model:
 
 ```bash
 ./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan
+./forge quantize plan llama31_8b base --config configs/quantization/fp8_w8a8_modelopt.yaml --write-plan
 ./forge quantize calibration-manifest gemma4_26b_a4b base --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --write-manifest
 ./forge quantize card \
   --config configs/quantization/nvfp4_blackwell_runtime.yaml \
@@ -428,6 +429,10 @@ card point at the same calibration contract.
 For FP8 KV cache experiments, write `./forge quantize fp8-kv-report` from
 completed source and candidate endpoint evidence. Treat it as a behavior report,
 not as a checkpoint quantization claim.
+For FP8 W8A8 checkpoint creation, use
+`configs/quantization/fp8_w8a8_modelopt.yaml` with an explicit family and
+variant. The config is intentionally generic; do not add Gemma-only defaults to
+common quantization code.
 
 For self-quantization, use the ModelOpt export runner and the matrix config:
 
