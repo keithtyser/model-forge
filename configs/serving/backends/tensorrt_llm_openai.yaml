@@ -1,0 +1,43 @@
+schema_version: model_forge.serving_backend.v1
+name: tensorrt_llm_openai
+description: >
+  TensorRT-LLM OpenAI-compatible serving backend plan. This config writes launch
+  and benchmark commands only; it does not start a server.
+engine: tensorrt_llm
+entrypoint:
+  command:
+    - trtllm-serve
+    - serve
+network:
+  host: 0.0.0.0
+  port: 8000
+  base_url_env: MODEL_FORGE_BASE_URL
+model:
+  model_path_env: MODEL_FORGE_MODEL_PATH
+  served_model_name_env: MODEL_FORGE_MODEL
+runtime:
+  backend: pytorch
+  max_seq_len: 32768
+  tokenizer_env: MODEL_FORGE_TOKENIZER
+  tensor_parallel_size_env: MODEL_FORGE_TENSOR_PARALLEL_SIZE
+  pipeline_parallel_size_env: MODEL_FORGE_PIPELINE_PARALLEL_SIZE
+  expert_parallel_size_env: MODEL_FORGE_EXPERT_PARALLEL_SIZE
+  extra_args_env: MODEL_FORGE_TRTLLM_EXTRA_ARGS
+resource_policy:
+  require_existing_job_lock: true
+  job_lock: runs/locks/model-forge-tensorrt-llm.lock
+  max_concurrent_servers: 1
+  prefer_systemd_scope: true
+  cpu_quota_percent: 80
+  memory_max_percent: 85
+  minimum_available_ram_fraction: 0.05
+benchmarks:
+  smoke_config: configs/serving/serve_bench_smoke.yaml
+  core_config: configs/serving/serve_bench_core.yaml
+research_basis:
+  - id: tensorrt_llm_serve
+    url: https://nvidia.github.io/TensorRT-LLM/commands/trtllm-serve.html
+    note: TensorRT-LLM provides trtllm-serve with OpenAI-compatible endpoints.
+  - id: tensorrt_llm_performance
+    url: https://nvidia.github.io/TensorRT-LLM/performance/performance-tuning-guide/tuning-max-batch-size-and-max-num-tokens.html
+    note: TensorRT-LLM performance tuning centers on batch and token capacity tradeoffs.

@@ -257,6 +257,8 @@ Serving benchmark:
 ```bash
 ./forge serving doctor --config configs/serving/backends/sglang_openai.yaml
 ./forge serving plan --config configs/serving/backends/sglang_openai.yaml --family gemma4_26b_a4b --variant base --write-plan
+./forge serving doctor --config configs/serving/backends/tensorrt_llm_openai.yaml
+./forge serving plan --config configs/serving/backends/tensorrt_llm_openai.yaml --family gemma4_26b_a4b --variant base --write-plan
 ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
 MODEL_FORGE_BASE_URL=http://127.0.0.1:8000/v1 ./forge bench serve --model served/model-name
 ./forge bench sweep plan --family gemma4_26b_a4b --variant base
@@ -267,8 +269,9 @@ expects a running OpenAI-compatible endpoint and writes `requests.jsonl`,
 `summary.json`, `serving_card.md`, and `manifest.json` under
 `reports/generated/serve_bench/`. Reusable workload definitions live under
 `configs/serving/workloads/`. Sweep plans expand startup-time server env cases
-and the matching `bench serve` commands, but they do not launch vLLM. SGLang
-backend planning writes launch and benchmark plans without starting a server.
+and the matching `bench serve` commands, but they do not launch vLLM. SGLang and
+TensorRT-LLM backend planning write launch and benchmark plans without starting
+a server.
 
 Kernel microbenchmarks:
 

@@ -945,6 +945,45 @@ Result:
   URL, and parallelism
 - MF-0901 is marked tested / smoke-validated
 
+## Advanced Serving: TensorRT-LLM Backend Planner
+
+Status: implemented as planning code only. No TensorRT-LLM server, SGLang server,
+vLLM server, benchmark run, training run, quantization run, or eval job was
+started.
+
+Hypothesis: TensorRT-LLM should be tracked as a first-class OpenAI-compatible
+serving backend because it is the likely production path for NVIDIA-optimized
+FP8/NVFP4 serving. The repo should first produce reviewable launch and
+benchmark plans with resource-policy metadata, then require the same serving
+benchmark artifacts before accepting throughput or quality claims.
+
+Changes:
+
+- added `configs/serving/backends/tensorrt_llm_openai.yaml`
+- generalized `./forge serving doctor` beyond SGLang
+- added TensorRT-LLM launch planning through `trtllm-serve serve`
+- exposed backend, max sequence length, tokenizer, tensor parallel, pipeline
+  parallel, expert parallel, and extra args through config/env fields
+- reused `model_forge.serving_backend_plan.v1` outputs and `bench serve`
+  smoke-benchmark commands
+- updated README, AGENTS, serving benchmark docs, status, and roadmap state
+
+Validation:
+
+```bash
+./forge serving doctor --config configs/serving/backends/tensorrt_llm_openai.yaml --strict
+./forge serving plan --config configs/serving/backends/tensorrt_llm_openai.yaml --family gemma4_26b_a4b --variant base --write-plan --json
+.venv/bin/python -m unittest tests.test_serving_backends -v
+```
+
+Result:
+
+- TensorRT-LLM launch and smoke-benchmark commands can be planned without
+  starting a server
+- engine comparison claims still require a running backend plus `bench serve`
+  artifacts
+- MF-0902 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

@@ -18,6 +18,7 @@ from model_forge.runs.manifest import REPO_DIR, display_path, redact_value, sani
 
 
 DEFAULT_CONFIG = REPO_DIR / "configs" / "serving" / "backends" / "sglang_openai.yaml"
+SUPPORTED_ENGINES = {"sglang", "tensorrt_llm"}
 SCHEMA_VERSION = "model_forge.serving_backend.v1"
 PLAN_SCHEMA_VERSION = "model_forge.serving_backend_plan.v1"
 SECRET_PATTERN = re.compile(r"(hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,})")
@@ -32,6 +33,11 @@ class Finding:
     check: str
     message: str
     path: str | None = None
+
+
+def engine_label(engine: Any) -> str:
+    labels = {"sglang": "SGLang", "tensorrt_llm": "TensorRT-LLM"}
+    return labels.get(str(engine), str(engine))
 
 
 def utc_timestamp() -> str:
@@ -80,8 +86,9 @@ def audit_config(config: Mapping[str, Any], config_path: Path, strict: bool = Fa
     scan_value(config, findings, path=config_display)
     if config.get("schema_version") != SCHEMA_VERSION:
         findings.append(Finding("error", "schema", f"schema_version must be {SCHEMA_VERSION}", config_display))
-    if config.get("engine") not in {"sglang"}:
-        findings.append(Finding("error", "engine", "MF-0901 backend config must use engine: sglang", config_display))
+    if config.get("engine") not in SUPPORTED_ENGINES:
+        supported = ", ".join(sorted(SUPPORTED_ENGINES))
+        findings.append(Finding("error", "engine", f"engine must be one of: {supported}", config_display))
     entrypoint = config.get("entrypoint") or {}
     if not isinstance(entrypoint.get("command"), list) or not entrypoint["command"]:
         findings.append(Finding("error", "entrypoint", "entrypoint.command must be a non-empty list", config_display))
@@ -149,7 +156,9 @@ def shell_assignments(assignments: Mapping[str, Any]) -> str:
     return " ".join(f"{key}={shlex.quote(str(value))}" for key, value in assignments.items() if value not in {None, ""})
 
 
-def build_launch_command(config: Mapping[str, Any], *, model_path: str, served_model_name: str, env: Mapping[str, str]) -> list[str]:
+def build_sglang_launch_command(
+    config: Mapping[str, Any], *, model_path: str, served_model_name: str, env: Mapping[str, str]
+) -> list[str]:
     command = [str(part) for part in (config.get("entrypoint") or {}).get("command", [])]
     network = config.get("network") or {}
     runtime = config.get("runtime") or {}
@@ -171,6 +180,43 @@ def build_launch_command(config: Mapping[str, Any], *, model_path: str, served_m
     if extra:
         command.extend(shlex.split(extra))
     return command
+
+
+def build_trtllm_launch_command(config: Mapping[str, Any], *, model_path: str, env: Mapping[str, str]) -> list[str]:
+    command = [str(part) for part in (config.get("entrypoint") or {}).get("command", [])]
+    network = config.get("network") or {}
+    runtime = config.get("runtime") or {}
+    command.extend(["--host", str(network.get("host", "0.0.0.0"))])
+    command.extend(["--port", str(network.get("port", 8000))])
+    if runtime.get("backend"):
+        command.extend(["--backend", str(runtime["backend"])])
+    if runtime.get("max_seq_len"):
+        command.extend(["--max_seq_len", str(runtime["max_seq_len"])])
+    tokenizer = env_value(env, str(runtime.get("tokenizer_env") or ""))
+    if tokenizer:
+        command.extend(["--tokenizer", tokenizer])
+    for env_key, flag in (
+        ("tensor_parallel_size_env", "--tp_size"),
+        ("pipeline_parallel_size_env", "--pp_size"),
+        ("expert_parallel_size_env", "--ep_size"),
+    ):
+        value = env_value(env, str(runtime.get(env_key) or ""))
+        if value:
+            command.extend([flag, value])
+    extra = env_value(env, str(runtime.get("extra_args_env") or ""))
+    if extra:
+        command.extend(shlex.split(extra))
+    command.append(model_path)
+    return command
+
+
+def build_launch_command(config: Mapping[str, Any], *, model_path: str, served_model_name: str, env: Mapping[str, str]) -> list[str]:
+    engine = str(config.get("engine") or "")
+    if engine == "sglang":
+        return build_sglang_launch_command(config, model_path=model_path, served_model_name=served_model_name, env=env)
+    if engine == "tensorrt_llm":
+        return build_trtllm_launch_command(config, model_path=model_path, env=env)
+    raise ValueError(f"unsupported serving engine: {engine}")
 
 
 def build_plan(
@@ -224,7 +270,7 @@ def build_plan(
             "run_id": candidate_run_id,
             "source_config": display_path(config_path),
             "output_dir": display_path(output_dir),
-            "engine": "sglang",
+            "engine": config.get("engine"),
             "model": {
                 "family": family,
                 "variant": resolved_variant or variant,
@@ -254,7 +300,7 @@ def build_plan(
                 "plan_md": display_path(output_dir / "serving_backend_plan.md"),
             },
             "notes": [
-                "This plan does not start SGLang.",
+                f"This plan does not start {engine_label(config.get('engine'))}.",
                 "Start only one large model server at a time.",
                 "Run the smoke serving benchmark before comparing engines.",
             ],

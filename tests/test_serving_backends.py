@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 
+from model_forge.runs.manifest import REPO_DIR
 from model_forge.serving.backends import DEFAULT_CONFIG, PLAN_SCHEMA_VERSION, audit_config, build_plan, load_yaml, write_plan
 
 
@@ -45,6 +46,26 @@ class ServingBackendTests(unittest.TestCase):
         self.assertEqual(plan_path.name, "serving_backend_plan.json")
         self.assertIn("# Serving Backend Plan: unit_sglang_write", markdown)
         self.assertIn("sglang.launch_server", markdown)
+
+    def test_tensorrt_llm_config_audits_and_builds_plan(self) -> None:
+        config, path = load_yaml(REPO_DIR / "configs" / "serving" / "backends" / "tensorrt_llm_openai.yaml")
+        findings = audit_config(config, path, strict=True)
+        self.assertFalse([finding for finding in findings if finding.severity == "error"])
+        plan = build_plan(
+            config,
+            path,
+            model_path="google/gemma-4-26B-A4B-it",
+            served_model_name="google/gemma-4-26B-A4B-it",
+            run_id="unit_trtllm",
+            env={"MODEL_FORGE_TENSOR_PARALLEL_SIZE": "2", "MODEL_FORGE_TRTLLM_EXTRA_ARGS": "--max_batch_size 8"},
+        )
+        command = plan["launch"]["command"]
+        self.assertEqual(plan["engine"], "tensorrt_llm")
+        self.assertEqual(command[:2], ["trtllm-serve", "serve"])
+        self.assertIn("--tp_size", command)
+        self.assertIn("--max_batch_size", command)
+        self.assertEqual(command[-1], "google/gemma-4-26B-A4B-it")
+        self.assertIn("google/gemma-4-26B-A4B-it", plan["benchmarks"]["smoke_command"])
 
 
 if __name__ == "__main__":
