@@ -392,6 +392,47 @@ Result:
 - `./forge doctor` now validates tracked agent templates
 - MF-0701 is marked tested / smoke-validated
 
+## Agents: Optimize Serving Plan
+
+Status: implemented and pushed as planning CLI work. No model server, benchmark,
+training run, quantization run, or eval job was started.
+
+Hypothesis: serving optimization is easy for agents to do unsafely because it
+mixes server startup flags, benchmark commands, cluster state, and quality
+promotion gates. `./forge agent optimize-serving` should generate a validated
+pre-run plan that marks server starts as heavy execute-only work, reuses the
+existing serving sweep config, and requires serving cards plus sampled
+quality/behavior checks before promotion.
+
+Changes:
+
+- added `./forge agent optimize-serving`
+- reused `configs/sweeps/dgx_spark_vllm_baseline.yaml` and
+  `src/model_forge.benchmarks.sweep` plan expansion
+- generated agent experiment plans with per-case server commands, per-case
+  benchmark commands, resource policy, rollback plan, and evidence plan
+- marked vLLM server starts as `starts_heavy_job: true` and
+  `requires_execute: true`
+- added serving optimization coverage to `tests/test_agents.py`
+- updated README, AGENTS, agent experiment docs, status, and roadmap state
+
+Validation:
+
+```bash
+./forge agent optimize-serving --family gemma4_26b_a4b --variant base --json
+.venv/bin/python -m unittest tests.test_agents -v
+bash -n forge
+.venv/bin/python -m py_compile src/model_forge/agents.py
+```
+
+Result:
+
+- optimize-serving emits a valid `model_forge.agent_experiment.v1` plan
+- the plan includes five DGX Spark vLLM sweep cases from the baseline config
+- server commands are marked heavy and execute-only; benchmark commands are
+  separate and include expected serving-card artifacts
+- MF-0702 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

@@ -26,6 +26,10 @@ This is the short handoff state for humans and agents. Use
   convention instead of branching on Gemma.
 - Agent experiment plans are now schema-backed through `./forge agent
   schema|audit|init`; `./forge doctor` validates tracked agent templates.
+- `./forge agent optimize-serving` now writes a validated pre-run agent plan
+  for serving sweeps, marking server starts as heavy execute-only steps and
+  requiring serving cards, manifests, and sampled quality checks before
+  promotion.
 - Gemma 4 A4B is the first worked family for base, downloaded FT, downloaded
   abli, local base abli, local FT, and local FT abli comparisons.
 - Internal evals now cover refusal suppression, benign paired quality,

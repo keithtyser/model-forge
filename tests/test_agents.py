@@ -4,7 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from model_forge.agents import audit_agent_experiments, load_yaml, validate_agent_experiment
+from argparse import Namespace
+
+from model_forge.agents import audit_agent_experiments, load_yaml, optimize_serving_plan, validate_agent_experiment
 
 
 class AgentExperimentTests(unittest.TestCase):
@@ -58,6 +60,35 @@ class AgentExperimentTests(unittest.TestCase):
         findings = validate_agent_experiment(loaded)
         self.assertGreater(len(findings), 0)
         self.assertEqual(plan["schema_version"], "model_forge.agent_experiment.v1")
+
+    def test_optimize_serving_plan_is_valid_and_marks_heavy_server_commands(self) -> None:
+        plan = optimize_serving_plan(
+            Namespace(
+                family="gemma4_26b_a4b",
+                variant="base",
+                objective_profile="dgx_spark_latency_throughput",
+                sweep_config=Path("configs/sweeps/dgx_spark_vllm_baseline.yaml"),
+                cluster_config=None,
+                base_url=None,
+                experiment_id="unit_optimize_serving",
+                title=None,
+                hypothesis=None,
+                owner_agent="unit",
+                output=None,
+                json=False,
+            )
+        )
+        findings = validate_agent_experiment(plan)
+        commands = plan["planned_commands"]
+
+        self.assertEqual(findings, [])
+        self.assertEqual(plan["experiment_type"], "serving")
+        self.assertGreaterEqual(plan["metadata"]["case_count"], 1)
+        self.assertTrue(any(command["starts_heavy_job"] for command in commands))
+        self.assertTrue(any("bench sweep plan" in command["command"] for command in commands))
+        self.assertTrue(any("bench serve" in command["command"] for command in commands))
+        self.assertTrue(plan["evidence_plan"]["manifest_required"])
+        self.assertTrue(plan["resource_policy"]["use_cluster_when_heavy"])
 
 
 if __name__ == "__main__":

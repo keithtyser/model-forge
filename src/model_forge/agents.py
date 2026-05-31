@@ -3,12 +3,15 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shlex
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
 import yaml
 
+from model_forge.benchmarks.sweep import DEFAULT_CONFIG as DEFAULT_SERVING_SWEEP_CONFIG
+from model_forge.benchmarks.sweep import build_sweep_plan, load_sweep_config
 from model_forge.runs.manifest import REPO_DIR, display_path, sanitize_run_id
 
 
@@ -23,6 +26,10 @@ class Finding:
     message: str
     path: str | None = None
     field: str | None = None
+
+
+def shlex_quote(value: Any) -> str:
+    return shlex.quote(str(value))
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -177,6 +184,145 @@ def init_agent_experiment(args: argparse.Namespace) -> dict[str, Any]:
     return template
 
 
+def optimize_serving_plan(args: argparse.Namespace) -> dict[str, Any]:
+    sweep_config, sweep_path = load_sweep_config(args.sweep_config)
+    sweep_plan = build_sweep_plan(
+        sweep_config,
+        sweep_path,
+        family=args.family,
+        variant=args.variant,
+        base_url=args.base_url,
+        cluster_config=args.cluster_config,
+    )
+    experiment_id = sanitize_run_id(args.experiment_id or f"{args.family}_{args.variant}_serving_optimization")
+    target = sweep_plan["target"]
+    planned_commands: list[dict[str, Any]] = [
+        {
+            "command": f"./forge bench sweep doctor --config {display_path(sweep_path)} --strict",
+            "purpose": "Validate the serving sweep config before planning or running cases.",
+            "starts_heavy_job": False,
+            "requires_execute": False,
+            "expected_artifacts": ["terminal_output"],
+        },
+        {
+            "command": (
+                f"./forge bench sweep plan --config {display_path(sweep_path)} "
+                f"--family {args.family} --variant {args.variant} --write-plan"
+            ),
+            "purpose": "Write the concrete serving sweep plan and per-case benchmark commands.",
+            "starts_heavy_job": False,
+            "requires_execute": False,
+            "expected_artifacts": ["sweep_plan.json", "bench_commands.sh"],
+        },
+    ]
+    if args.cluster_config:
+        planned_commands.append(
+            {
+                "command": f"./forge cluster health --config {display_path(args.cluster_config)}",
+                "purpose": "Verify the configured Spark cluster is reachable before serving optimization.",
+                "starts_heavy_job": False,
+                "requires_execute": False,
+                "expected_artifacts": ["terminal_output"],
+            }
+        )
+    for case in sweep_plan.get("cases") or []:
+        env_prefix = " ".join(f"{key}={shlex_quote(value)}" for key, value in sorted((case.get("server_env") or {}).items()))
+        planned_commands.append(
+            {
+                "command": f"{env_prefix} ./forge serve {args.family} {args.variant}".strip(),
+                "purpose": f"Start exactly one vLLM server for serving sweep case {case['id']}.",
+                "starts_heavy_job": True,
+                "requires_execute": True,
+                "expected_artifacts": ["running_openai_compatible_endpoint"],
+            }
+        )
+        planned_commands.append(
+            {
+                "command": str(case["bench_command"]),
+                "purpose": f"Benchmark serving sweep case {case['id']} after its server is healthy.",
+                "starts_heavy_job": False,
+                "requires_execute": True,
+                "expected_artifacts": [f"{case['output_dir']}/summary.json", f"{case['output_dir']}/serving_card.md"],
+            }
+        )
+    for command in (sweep_plan.get("quality_gate") or {}).get("required_after_sweep") or []:
+        planned_commands.append(
+            {
+                "command": str(command).replace("<family>", args.family).replace("<variant>", args.variant),
+                "purpose": "Run sampled quality/behavior validation under the selected serving configuration before promotion.",
+                "starts_heavy_job": False,
+                "requires_execute": True,
+                "expected_artifacts": ["eval_manifest", "scores.csv", "eval_provenance_card.json"],
+            }
+        )
+
+    resource_policy = sweep_plan.get("resource_policy") or {}
+    return {
+        "schema_version": AGENT_EXPERIMENT_VERSION,
+        "experiment_id": experiment_id,
+        "title": args.title or f"Optimize serving for {args.family}/{args.variant}",
+        "hypothesis": args.hypothesis
+        or (
+            "A bounded serving sweep can improve throughput or latency for the target model "
+            "without losing sampled quality/behavior once the selected case is re-evaluated."
+        ),
+        "owner_agent": args.owner_agent,
+        "experiment_type": "serving",
+        "status": "planned",
+        "family": args.family,
+        "variant": args.variant,
+        "objective_profile": args.objective_profile,
+        "planned_commands": planned_commands,
+        "resource_policy": {
+            "max_concurrent_large_jobs": int(resource_policy.get("max_concurrent_servers") or 1),
+            "start_if_memory_available_above_fraction": float(resource_policy.get("start_if_memory_available_above_fraction") or 0.05),
+            "stop_if_memory_available_below_fraction": float(resource_policy.get("stop_if_memory_available_below_fraction") or 0.05),
+            "require_disk_free_fraction": float(resource_policy.get("require_disk_free_fraction") or 0.15),
+            "use_cluster_when_heavy": True,
+            "checkpoint_or_write_plan_before_execute": True,
+        },
+        "evidence_plan": {
+            "manifest_required": True,
+            "ledger_update_required": True,
+            "expected_reports": [
+                "sweep_plan.json",
+                "bench_commands.sh",
+                "summary.json",
+                "serving_card.md",
+                "manifest.json",
+            ],
+            "required_validation_commands": [
+                f"./forge bench sweep doctor --config {display_path(sweep_path)} --strict",
+                "./forge doctor --json",
+            ],
+        },
+        "success_criteria": [
+            "At least one candidate case improves the selected serving metric versus baseline.",
+            "The selected case has a serving card and canonical manifest.",
+            "Sampled quality/behavior validation under the selected case has no unacceptable regression.",
+            "The selected command, metrics, and caveats are recorded in docs/experiment-ledger.md.",
+        ],
+        "rollback_plan": [
+            "Stop the active vLLM server before starting another case.",
+            "Return to the baseline serving environment from the sweep plan if candidate quality or stability regresses.",
+            "Do not promote serving settings without matching quality/behavior evidence.",
+        ],
+        "handoff": {
+            "push_to_github": True,
+            "update_status_docs": True,
+            "hf_upload_policy": "not_applicable",
+            "raw_artifact_policy": "keep_large_outputs_untracked",
+            "notes": "This plan does not execute serving. Run one server case at a time and attach serving cards before promotion.",
+        },
+        "metadata": {
+            "sweep": sweep_plan["sweep"],
+            "target": target,
+            "cluster": sweep_plan.get("cluster"),
+            "case_count": len(sweep_plan.get("cases") or []),
+        },
+    }
+
+
 def render_findings(findings: list[Finding]) -> None:
     if not findings:
         print("model-forge agent audit: OK")
@@ -210,6 +356,20 @@ def main() -> None:
     init.add_argument("--hypothesis")
     init.add_argument("--template", type=Path, default=DEFAULT_TEMPLATE)
     init.add_argument("--output", type=Path)
+
+    optimize_serving = sub.add_parser("optimize-serving", help="Create a serving optimization agent experiment plan")
+    optimize_serving.add_argument("--family", required=True)
+    optimize_serving.add_argument("--variant", default="base")
+    optimize_serving.add_argument("--objective-profile", default="dgx_spark_latency_throughput")
+    optimize_serving.add_argument("--sweep-config", type=Path, default=DEFAULT_SERVING_SWEEP_CONFIG)
+    optimize_serving.add_argument("--cluster-config", type=Path)
+    optimize_serving.add_argument("--base-url")
+    optimize_serving.add_argument("--experiment-id")
+    optimize_serving.add_argument("--title")
+    optimize_serving.add_argument("--hypothesis")
+    optimize_serving.add_argument("--owner-agent", default="codex")
+    optimize_serving.add_argument("--output", type=Path)
+    optimize_serving.add_argument("--json", action="store_true")
 
     args = parser.parse_args()
     if args.command == "schema":
@@ -251,6 +411,26 @@ def main() -> None:
             args.output.write_text(text, encoding="utf-8")
         else:
             print(text)
+        return
+
+    if args.command == "optimize-serving":
+        plan = optimize_serving_plan(args)
+        findings = validate_agent_experiment(plan, path=str(args.output) if args.output else None)
+        if findings:
+            if args.json:
+                print(json.dumps({"findings": [asdict(finding) for finding in findings]}, indent=2, sort_keys=True) + "\n")
+            else:
+                render_findings(findings)
+            raise SystemExit(1)
+        text = yaml.safe_dump(plan, sort_keys=False)
+        if args.output:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(text, encoding="utf-8")
+        if args.json:
+            print(json.dumps(plan, indent=2, sort_keys=True) + "\n")
+        else:
+            if not args.output:
+                print(text)
 
 
 if __name__ == "__main__":

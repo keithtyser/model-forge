@@ -220,6 +220,7 @@ Agent experiment plans:
 ```bash
 ./forge agent schema
 ./forge agent audit
+./forge agent optimize-serving --family gemma4_26b_a4b --variant base
 ./forge agent init --experiment-id next_step --title "Next step" --family gemma4_26b_a4b --variant base --objective-profile capability_sft --output recipes/agents/next_step.yaml
 ```
 

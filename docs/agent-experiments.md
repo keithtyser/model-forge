@@ -19,6 +19,16 @@ Validate tracked agent recipes:
 ./forge agent audit
 ```
 
+Create a serving optimization plan without starting a server:
+
+```bash
+./forge agent optimize-serving \
+  --family gemma4_26b_a4b \
+  --variant base \
+  --cluster-config configs/clusters/dgx_spark_x2.example.yaml \
+  --output recipes/agents/gemma4_base_serving_optimization.yaml
+```
+
 Create a new plan from the template:
 
 ```bash

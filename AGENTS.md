@@ -248,6 +248,7 @@ Write or validate an agent experiment plan before starting material work:
   --variant base \
   --objective-profile capability_sft \
   --output recipes/agents/next_agent_step.yaml
+./forge agent optimize-serving --family gemma4_26b_a4b --variant base
 ```
 
 Agent plans are pre-run contracts. They should state the hypothesis, resource
