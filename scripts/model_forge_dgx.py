@@ -295,7 +295,7 @@ def action_serve(family: dict[str, Any], family_name: str, variant: str) -> None
     run([str(REPO_DIR / serve["script"])], env=env)
 
 
-def action_eval(family: dict[str, Any], family_name: str, variant: str, kind: str) -> None:
+def action_eval(family: dict[str, Any], family_name: str, variant: str, kind: str, extra_args: list[str] | None = None) -> None:
     eval_cfg = family["eval"]
     config_key = "artifact_config" if kind == "artifact" else "config"
     suffix_key = {
@@ -324,11 +324,13 @@ def action_eval(family: dict[str, Any], family_name: str, variant: str, kind: st
     max_tokens = "4096" if kind == "artifact" else "1200"
     env.setdefault("MODEL_FORGE_TIMEOUT_SECONDS", timeout)
     env.setdefault("MODEL_FORGE_MAX_TOKENS", max_tokens)
-    run([
+    command = [
         str(REPO_DIR / "scripts" / "run_dgx_spark_eval.sh"),
         eval_cfg[config_key],
         suffix,
-    ], env=env)
+    ]
+    command.extend(extra_args or [])
+    run(command, env=env)
 
 
 def action_compare(family: dict[str, Any], family_name: str) -> None:
@@ -571,7 +573,10 @@ def main() -> None:
     ])
     parser.add_argument("variant", nargs="?", default="base", help="Variant such as base, ft, or abli")
     parser.add_argument("tasks", nargs="?", default=None, help="External lm-eval tasks, e.g. ifeval")
-    args = parser.parse_args()
+    args, extra_args = parser.parse_known_args()
+    if args.action in {"smoke", "full", "artifact"} and args.tasks:
+        extra_args.insert(0, args.tasks)
+        args.tasks = None
 
     family = load_family(args.family)
     family_name = family["name"]
@@ -581,7 +586,7 @@ def main() -> None:
         tasks = args.tasks or os.environ.get("MODEL_FORGE_EXTERNAL_TASKS") or family["external"].get("default_tasks", "ifeval")
         action_suite(family, family_name, args.variant, tasks)
     elif args.action in {"smoke", "full", "artifact"}:
-        action_eval(family, family_name, args.variant, args.action)
+        action_eval(family, family_name, args.variant, args.action, extra_args=extra_args)
     elif args.action == "compare":
         action_compare(family, family_name)
     elif args.action == "external":

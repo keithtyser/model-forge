@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -346,6 +347,30 @@ class ModelForgeDgxServeTests(unittest.TestCase):
         self.assertIn(f"local_ft_abli={output_root / 'qwen36_27b_local_ft_abli_artifacts_dgx_spark'}", command)
         self.assertIn("--external-run", command)
         self.assertIn(f"local_ft_abli={external_root / 'local_ft_abli'}", command)
+
+    def test_eval_passthrough_args_reach_runner(self) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_action_eval(family, family_name, variant, kind, extra_args=None):
+            captured["family"] = family
+            captured["family_name"] = family_name
+            captured["variant"] = variant
+            captured["kind"] = kind
+            captured["extra_args"] = extra_args
+
+        original_argv = sys.argv
+        try:
+            sys.argv = ["model_forge_dgx.py", "qwen36_27b", "full", "base", "--dry-run"]
+            with mock.patch.object(model_forge_dgx, "load_family", return_value={"name": "qwen36_27b"}):
+                with mock.patch.object(model_forge_dgx, "action_eval", side_effect=fake_action_eval):
+                    model_forge_dgx.main()
+        finally:
+            sys.argv = original_argv
+
+        self.assertEqual(captured["family_name"], "qwen36_27b")
+        self.assertEqual(captured["variant"], "base")
+        self.assertEqual(captured["kind"], "full")
+        self.assertEqual(captured["extra_args"], ["--dry-run"])
 
     def test_download_audits_completed_variant(self) -> None:
         family = {

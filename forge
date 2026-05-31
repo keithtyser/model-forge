@@ -203,9 +203,16 @@ PY
     ;;
   eval)
     FAMILY=${1:?family is required}
-    VARIANT=${2:-base}
-    MODE=${3:-suite}
-    TASKS=${4:-}
+    shift
+    VARIANT=${1:-base}
+    if [[ $# -gt 0 ]]; then
+      shift
+    fi
+    MODE=${1:-suite}
+    if [[ $# -gt 0 ]]; then
+      shift
+    fi
+    TASKS=${1:-}
     case "$MODE" in
       --smoke|smoke) MODE=smoke ;;
       --internal|--full|internal|full) MODE=full ;;
@@ -215,9 +222,9 @@ PY
       *) echo "unknown eval mode: $MODE" >&2; usage >&2; exit 2 ;;
     esac
     if [[ "$MODE" == "suite" || "$MODE" == "external" ]] && [[ -n "$TASKS" ]]; then
-      "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" "$MODE" "$VARIANT" "$TASKS"
+      "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" "$MODE" "$VARIANT" "$@"
     else
-      "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" "$MODE" "$VARIANT"
+      "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" "$MODE" "$VARIANT" "$@"
     fi
     ;;
   external)
