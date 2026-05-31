@@ -77,6 +77,8 @@ class FinetunePlanTests(unittest.TestCase):
         self.assertTrue(plan["cluster"]["enabled"])
         self.assertEqual(plan["family"], "qwen36_27b")
         self.assertEqual(plan["trainer"]["backend"], "hf_causal_lm")
+        self.assertEqual(plan["trainer"]["dataloader_num_workers"], 2)
+        self.assertEqual(plan["trainer"]["dataloader_prefetch_factor"], 2)
         self.assertEqual(plan["data"]["target_samples"], 42037)
         self.assertIn('"docker", "run", "--rm", "--gpus"', cluster_script)
         self.assertIn("torch.distributed.run", cluster_script)

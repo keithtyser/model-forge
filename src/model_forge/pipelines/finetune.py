@@ -102,6 +102,9 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "save_total_limit": int(trainer.get("save_total_limit", 2)),
             "seed": int(trainer.get("seed", 3407)),
             "report_to": trainer.get("report_to", "none"),
+            "dataloader_num_workers": int(trainer.get("dataloader_num_workers", 0) or 0),
+            "dataloader_prefetch_factor": int(trainer.get("dataloader_prefetch_factor", 2) or 2),
+            "dataloader_persistent_workers": bool(trainer.get("dataloader_persistent_workers", False)),
         },
         "lora": {
             "r": int(lora.get("r", 64)),
