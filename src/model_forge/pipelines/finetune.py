@@ -58,6 +58,7 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
     lora = config.get("lora", {})
     eval_cfg = config.get("eval", {})
     resource_policy = config.get("resource_policy", {})
+    cluster = config.get("cluster", {})
     sources = resolve_sources(data_manifest)
     total_target = sum(int(source.get("target_samples", 0) or 0) for source in sources)
 
@@ -146,6 +147,15 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "dataloader_num_workers_max_offset": int(resource_policy.get("dataloader_num_workers_max_offset", 2)),
             "persistent_workers_when_memory_tight": bool(resource_policy.get("persistent_workers_when_memory_tight", False)),
             "checkpoint_on_memory_pressure": bool(resource_policy.get("checkpoint_on_memory_pressure", True)),
+        },
+        "cluster": {
+            "enabled": bool(cluster.get("enabled", False)),
+            "config": str(cluster.get("config", "")),
+            "launcher": str(cluster.get("launcher", "torchrun")),
+            "image": str(cluster.get("image", "")),
+            "nccl_socket_ifname": str(cluster.get("nccl_socket_ifname", "")),
+            "require_torchrun_smoke": bool(cluster.get("require_torchrun_smoke", True)),
+            "sync_run_dir_to_workers": bool(cluster.get("sync_run_dir_to_workers", True)),
         },
         "baseline": config.get("baseline", {}),
         "dry_run_only": bool(config.get("dry_run_only", False)),
@@ -434,7 +444,8 @@ def valid_messages(messages: list[dict[str, str]], gates: dict[str, Any]) -> boo
 
 
 def tokenizer_source(plan: dict[str, Any]) -> str:
-    source = plan["model"].get("local_dir") or plan["model"]["source"]
+    local_dir = plan["model"].get("local_dir")
+    source = local_dir if local_dir and Path(str(local_dir)).expanduser().exists() else plan["model"]["source"]
     source_path = Path(source).expanduser()
     config_path = source_path / "tokenizer_config.json"
     if not config_path.exists():
@@ -639,7 +650,8 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
     gc.collect()
     guard.check_runtime()
 
-    model_id = plan["model"].get("local_dir") or plan["model"]["source"]
+    local_model_dir = plan["model"].get("local_dir")
+    model_id = local_model_dir if local_model_dir and Path(str(local_model_dir)).expanduser().exists() else plan["model"]["source"]
     quantization_config = None
     if backend != "unsloth" and plan["trainer"].get("load_in_4bit", True):
         quantization_config = BitsAndBytesConfig(
@@ -812,6 +824,7 @@ def write_artifacts(plan: dict[str, Any], *, overwrite: bool = False) -> dict[st
         "plan": run_dir / "plan.json",
         "trainer": run_dir / "train_trl_sft.py",
         "shell": run_dir / "run.sh",
+        "cluster_shell": run_dir / "run_cluster_torchrun.sh",
         "eval": run_dir / "eval_after_training.sh",
         "method_card": run_dir / "training_method_card.md",
     }
@@ -874,6 +887,176 @@ run_limited "$PYTHON" {shlex.quote(str(outputs["trainer"]))} --plan {shlex.quote
 """
     outputs["shell"].write_text(run_script)
     outputs["shell"].chmod(0o755)
+
+    cluster = plan.get("cluster", {})
+    cluster_config = cluster.get("config") or "${MODEL_FORGE_CLUSTER_CONFIG:?set cluster config path}"
+    cluster_image = cluster.get("image") or "${MODEL_FORGE_TRAIN_IMAGE:-nemotron-runner:latest}"
+    cluster_iface = cluster.get("nccl_socket_ifname") or "${MODEL_FORGE_NCCL_SOCKET_IFNAME:-}"
+    cluster_script = f"""#!/usr/bin/env bash
+set -euo pipefail
+cd {shlex.quote(str(REPO_DIR))}
+
+CLUSTER_CONFIG="${{MODEL_FORGE_CLUSTER_CONFIG:-{shlex.quote(str(cluster_config))}}}"
+TRAIN_IMAGE="${{MODEL_FORGE_TRAIN_IMAGE:-{shlex.quote(str(cluster_image))}}}"
+NCCL_SOCKET_IFNAME="${{MODEL_FORGE_NCCL_SOCKET_IFNAME:-{shlex.quote(str(cluster_iface))}}}"
+PYTHON=${{PYTHON:-{shlex.quote(str(REPO_DIR / '.venv' / 'bin' / 'python'))}}}
+RUN_DIR={shlex.quote(str(run_dir))}
+PLAN={shlex.quote(str(outputs["plan"]))}
+TRAINER={shlex.quote(str(outputs["trainer"]))}
+JOB_LOCK="${{MODEL_FORGE_CLUSTER_JOB_LOCK:-runs/locks/model-forge-cluster.lock}}"
+
+mkdir -p "$(dirname "$JOB_LOCK")"
+
+echo "[model-forge] cluster config: $CLUSTER_CONFIG"
+echo "[model-forge] train image: $TRAIN_IMAGE"
+./forge cluster doctor --config "$CLUSTER_CONFIG" --strict
+./forge cluster health --config "$CLUSTER_CONFIG" --timeout "${{MODEL_FORGE_CLUSTER_HEALTH_TIMEOUT:-30}}"
+./forge cluster runtime --config "$CLUSTER_CONFIG" --image "$TRAIN_IMAGE" --timeout "${{MODEL_FORGE_CLUSTER_RUNTIME_TIMEOUT:-120}}"
+if [[ "${{MODEL_FORGE_SKIP_TORCHRUN_SMOKE:-0}}" != "1" ]]; then
+  SMOKE_ARGS=(--config "$CLUSTER_CONFIG" --image "$TRAIN_IMAGE" --timeout "${{MODEL_FORGE_CLUSTER_SMOKE_TIMEOUT:-180}}")
+  if [[ -n "$NCCL_SOCKET_IFNAME" ]]; then
+    SMOKE_ARGS+=(--nccl-socket-ifname "$NCCL_SOCKET_IFNAME")
+  fi
+  ./forge cluster torchrun-smoke "${{SMOKE_ARGS[@]}}"
+fi
+
+if [[ "${{MODEL_FORGE_SKIP_PREPARE:-0}}" == "1" && -s "$RUN_DIR/train.jsonl" ]]; then
+  echo "[model-forge] skipping data prep; existing train.jsonl found"
+else
+  "$PYTHON" "$TRAINER" --plan "$PLAN" --prepare-data
+fi
+
+"$PYTHON" - "$CLUSTER_CONFIG" "$RUN_DIR" <<'PY'
+import shlex
+import subprocess
+import sys
+from pathlib import Path
+import yaml
+
+config = yaml.safe_load(Path(sys.argv[1]).read_text()) or {{}}
+run_dir = Path(sys.argv[2])
+for node in config.get("nodes", []):
+    host = str(node.get("host") or "")
+    if host in {{"", "localhost", "127.0.0.1", "::1"}}:
+        continue
+    user = str(node.get("user") or "")
+    target = f"{{user + '@' if user else ''}}{{host}}:{{run_dir}}/"
+    subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", f"{{user + '@' if user else ''}}{{host}}", shlex.join(["mkdir", "-p", str(run_dir)])], check=True)
+    subprocess.run(["rsync", "-az", str(run_dir).rstrip("/") + "/", target], check=True)
+PY
+
+"$PYTHON" - "$CLUSTER_CONFIG" "$TRAIN_IMAGE" "$NCCL_SOCKET_IFNAME" "$TRAINER" "$PLAN" "$RUN_DIR" "${{MODEL_FORGE_EXECUTE_CLUSTER_TRAIN:-0}}" <<'PY'
+import concurrent.futures
+import os
+import shlex
+import subprocess
+import sys
+from pathlib import Path
+import yaml
+
+config = yaml.safe_load(Path(sys.argv[1]).read_text()) or {{}}
+image, iface, trainer, plan, run_dir, execute = sys.argv[2:]
+nodes = list(config.get("nodes", []))
+distributed = config.get("distributed", {{}})
+endpoint = str(distributed.get("rdzv_endpoint") or "")
+master_addr, _, master_port = endpoint.rpartition(":")
+if not master_addr or not master_port:
+    raise SystemExit(f"bad rdzv_endpoint in {{sys.argv[1]}}: {{endpoint!r}}")
+nnodes = int(distributed.get("nnodes") or len(nodes))
+nproc = int(distributed.get("nproc_per_node") or 1)
+repo = Path.cwd()
+models_dir = str((config.get("paths") or {{}}).get("models_dir") or os.environ.get("MODEL_FORGE_MODELS_DIR") or (Path.home() / "models"))
+cache_dir = str((config.get("paths") or {{}}).get("cache_dir") or os.environ.get("HF_HOME") or (Path.home() / "cache" / "huggingface"))
+policy = config.get("resource_policy", {{}})
+per_node = policy.get("per_node", {{}}) if isinstance(policy.get("per_node"), dict) else {{}}
+cpu_quota = str(per_node.get("cpu_quota") or policy.get("cpu_quota") or "80%")
+memory_fraction = float(per_node.get("memory_max_fraction") or policy.get("memory_max_fraction") or 0.85)
+io_weight = str(per_node.get("io_weight") or policy.get("io_weight") or 100)
+nice = str(per_node.get("nice") or policy.get("nice") or 10)
+lock_path = str((config.get("paths") or {{}}).get("job_lock") or "runs/locks/model-forge-cluster.lock")
+
+def target(node):
+    host = str(node.get("host") or "")
+    user = str(node.get("user") or "")
+    if host in {{"", "localhost", "127.0.0.1", "::1"}}:
+        return None
+    return f"{{user + '@' if user else ''}}{{host}}"
+
+def command_for(rank, node):
+    node_work_dir = str(node.get("work_dir") or repo)
+    lock = lock_path if Path(lock_path).is_absolute() else str(Path(node_work_dir) / lock_path)
+    docker = [
+        "docker", "run", "--rm", "--gpus", "all", "--network", "host", "--ipc", "host",
+        "--cpus", os.environ.get("MODEL_FORGE_TRAIN_DOCKER_CPUS", "8"),
+        "--memory", os.environ.get("MODEL_FORGE_TRAIN_DOCKER_MEMORY", "108g"),
+        "--memory-swap", os.environ.get("MODEL_FORGE_TRAIN_DOCKER_MEMORY_SWAP", "108g"),
+        "--shm-size", os.environ.get("MODEL_FORGE_TRAIN_DOCKER_SHM", "32g"),
+        "--pids-limit", os.environ.get("MODEL_FORGE_TRAIN_DOCKER_PIDS", "4096"),
+        "-e", "PYTHONPATH=/workspace/model-forge/src",
+        "-e", f"HF_HOME={{cache_dir}}",
+        "-e", "MODEL_FORGE_DISABLE_SYSTEMD_SCOPE=1",
+        "-e", "TOKENIZERS_PARALLELISM=true",
+        "-e", "NCCL_DEBUG=WARN",
+        "-e", "TORCH_NCCL_ASYNC_ERROR_HANDLING=1",
+        "-e", "HF_TOKEN",
+        "-e", "HUGGINGFACE_HUB_TOKEN",
+    ]
+    if iface:
+        docker.extend(["-e", f"NCCL_SOCKET_IFNAME={{iface}}"])
+    docker.extend([
+        "-v", f"{{node_work_dir}}:/workspace/model-forge",
+        "-v", f"{{models_dir}}:{{models_dir}}",
+        "-v", f"{{cache_dir}}:{{cache_dir}}",
+        "-w", "/workspace/model-forge",
+        "--entrypoint", "python3",
+        image,
+        "-m", "torch.distributed.run",
+        f"--nnodes={{nnodes}}",
+        f"--nproc-per-node={{nproc}}",
+        f"--node-rank={{rank}}",
+        f"--master-addr={{master_addr}}",
+        f"--master-port={{master_port}}",
+        "--max-restarts=0",
+        trainer.replace(str(repo), "/workspace/model-forge"),
+        "--plan", plan.replace(str(repo), "/workspace/model-forge"),
+        "--train",
+    ])
+    wrapped = (
+        f"mkdir -p {{shlex.quote(str(Path(lock).parent))}} && "
+        f"flock {{shlex.quote(lock)}} systemd-run --user --scope "
+        f"-p CPUQuota={{shlex.quote(cpu_quota)}} -p MemoryMax={{int(memory_fraction * 100)}}% "
+        f"-p IOWeight={{shlex.quote(io_weight)}} nice -n {{shlex.quote(nice)}} {{shlex.join(docker)}}"
+    )
+    return wrapped
+
+commands = [(rank, node, command_for(rank, node)) for rank, node in enumerate(nodes)]
+print("[model-forge] docker torchrun launch commands:")
+for rank, node, cmd in commands:
+    print(f"--- node_rank={{rank}} name={{node.get('name')}} host={{node.get('host')}}")
+    print(cmd)
+
+if execute != "1":
+    print("[model-forge] dry run: set MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 to launch")
+    raise SystemExit(0)
+
+def run_one(item):
+    rank, node, cmd = item
+    remote = target(node)
+    if remote:
+        proc = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", remote, cmd], text=True)
+    else:
+        proc = subprocess.run(cmd, shell=True, text=True)
+    return rank, proc.returncode
+
+with concurrent.futures.ThreadPoolExecutor(max_workers=len(commands)) as pool:
+    results = list(pool.map(run_one, commands))
+failed = [item for item in results if item[1] != 0]
+if failed:
+    raise SystemExit(f"cluster training failed: {{failed}}")
+PY
+"""
+    outputs["cluster_shell"].write_text(cluster_script)
+    outputs["cluster_shell"].chmod(0o755)
 
     eval_lines = ["#!/usr/bin/env bash", "set -euo pipefail", f"cd {shlex.quote(str(REPO_DIR))}"]
     eval_lines.extend(plan.get("eval", {}).get("commands", []))

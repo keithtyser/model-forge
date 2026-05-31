@@ -65,6 +65,24 @@ class FinetunePlanTests(unittest.TestCase):
         self.assertIn("model_forge_local_ft_v1_seeds", source_ids)
         self.assertIn("model_forge_local_ft_v1_live_teacher_smoke", source_ids)
 
+    def test_qwen36_plan_writes_cluster_torchrun_artifact(self) -> None:
+        config_path = REPO_DIR / "configs" / "finetuning" / "qwen36_27b_local_ft_v1.yaml"
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["run_dir"] = tmp
+            plan = build_plan(config, config_path)
+            outputs = write_artifacts(plan, overwrite=False)
+            cluster_script = Path(outputs["cluster_shell"]).read_text()
+
+        self.assertTrue(plan["cluster"]["enabled"])
+        self.assertEqual(plan["family"], "qwen36_27b")
+        self.assertEqual(plan["trainer"]["backend"], "hf_causal_lm")
+        self.assertEqual(plan["data"]["target_samples"], 42037)
+        self.assertIn('"docker", "run", "--rm", "--gpus"', cluster_script)
+        self.assertIn("torch.distributed.run", cluster_script)
+        self.assertIn("MODEL_FORGE_EXECUTE_CLUSTER_TRAIN", cluster_script)
+        self.assertIn("Path.home() / \"models\"", cluster_script)
+
     def test_prepare_writes_dry_run_artifacts(self) -> None:
         config_path = REPO_DIR / "configs" / "finetuning" / "gemma4_26b_a4b_local_ft_v0.yaml"
         config = load_yaml(config_path)

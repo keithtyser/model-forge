@@ -1,0 +1,138 @@
+schema_version: model_forge.quantization.v1
+name: qwen36_27b_nvfp4_modelopt
+description: >
+  Self-quantize Qwen 3.6 27B post-training variants to Blackwell NVFP4 with
+  NVIDIA TensorRT Model Optimizer, then compare each quantized checkpoint
+  against the same unquantized source variant.
+family: qwen36_27b
+source_variant: local_ft_abli
+target_variant: local_ft_abli_nvfp4_modelopt
+method: nvfp4
+backend: modelopt
+objective: quantized_quality_retention
+hardware_profile: dgx_spark_x2
+
+calibration:
+  dataset: cnn_dailymail,wikipedia
+  samples: 256,256
+  seq_len: 2048
+  batch_size: 4
+  smoke_samples: 16,16
+  smoke_seq_len: 1024
+  production_samples: 1024,1024
+  production_seq_len: 2048
+  optional_gated_dataset: nvidia/Nemotron-Post-Training-Dataset-v2
+  notes: >
+    Use public calibration data for portability unless Nemotron post-training
+    access is available. Promotion requires recording the exact calibration
+    dataset revisions, sequence lengths, and sample counts used for export.
+
+exclusions:
+  apply_recommended_keep_patterns: true
+  modules:
+    - lm_head
+    - embed_tokens
+    - router
+    - expert
+    - vision
+    - visual
+    - multi_modal_projector
+
+export:
+  image: model-forge-modelopt-nvfp4:0.43.0
+  dockerfile: docker/modelopt-nvfp4.Dockerfile
+  base_image: vllm-node-tf5:latest
+  modelopt_version: 0.43.0
+  output_root: ~/models/model-forge-quantized/qwen36_27b
+  output_subdir: "{target_variant}"
+  start_if_memory_available_above_fraction: 0.05
+  stop_if_memory_available_below_fraction: 0.05
+  watchdog_poll_seconds: 2
+  require_disk_free_fraction: 0.12
+  systemd_scope:
+    enabled: true
+    user: true
+    CPUQuota: "80%"
+    MemoryMax: "90%"
+    IOWeight: 100
+  docker:
+    cpus: 8
+    omp_num_threads: 8
+    memory_gb: 104
+    memory_swap_gb: 104
+    shm_size_gb: 32
+    nice: 10
+  ptq:
+    strategy: hf_ptq
+    qformat: nvfp4
+    dataset: cnn_dailymail,wikipedia
+    calib_size: 256,256
+    calib_seq: 2048
+    batch_size: 4
+    tensor_parallel: 1
+    pipeline_parallel: 1
+    gpu_max_mem_percentage: 0.70
+    kv_cache_qformat: fp8_cast
+    low_memory_mode: true
+    use_seq_device_map: true
+    trust_remote_code: true
+    skip_generate: true
+    attn_implementation: sdpa
+
+runtime:
+  served_model_name: model-forge/qwen36-27b-local-ft-abli-nvfp4-modelopt
+  container: vllm-node-tf5
+  host: 0.0.0.0
+  port: 8018
+  tensor_parallel: 2
+  gpu_memory_utilization: 0.70
+  max_model_len: 8192
+  max_num_seqs: 4
+  max_num_batched_tokens: 8192
+  launch:
+    spark_vllm_dir_env: MODEL_FORGE_SPARK_VLLM_DOCKER
+    nodes_env: MODEL_FORGE_SPARK_CLUSTER_NODES
+    container_name: model_forge_qwen36_nvfp4
+    no_ray: true
+    non_privileged: true
+    mem_limit_gb: 110
+    mem_swap_limit_gb: 120
+    shm_size_gb: 32
+  env:
+    VLLM_NVFP4_GEMM_BACKEND: marlin
+  vllm_flags:
+    trust_remote_code: true
+    quantization: modelopt
+    kv_cache_dtype: fp8
+    load_format: auto
+    moe_backend: marlin
+
+matrix:
+  workers_env: MODEL_FORGE_QUANT_WORKERS
+  workers: dgx_spark_x2
+  variants:
+    - source_variant: local_ft_abli
+      target_variant: local_ft_abli_nvfp4_modelopt
+      baseline_eval: results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_dgx_spark
+
+outputs:
+  reports_dir: reports/generated/quantization
+  models_dir: ~/models/model-forge-quantized/qwen36_27b
+
+evals:
+  required:
+    - ./forge quantize calibration-manifest qwen36_27b local_ft_abli --config configs/quantization/qwen36_27b_nvfp4_modelopt.yaml --write-manifest
+    - ./forge quantize export qwen36_27b local_ft_abli --config configs/quantization/qwen36_27b_nvfp4_modelopt.yaml --execute
+    - ./forge serve qwen36_27b local_ft_abli_nvfp4_modelopt
+    - ./forge eval qwen36_27b local_ft_abli_nvfp4_modelopt --internal
+    - ./forge bench serve --config configs/serving/serve_bench_core.yaml --model model-forge/qwen36-27b-local-ft-abli-nvfp4-modelopt --base-url http://127.0.0.1:8018/v1
+    - ./forge quantize card --config configs/quantization/qwen36_27b_nvfp4_modelopt.yaml --source-serving-summary <source>/summary.json --candidate-serving-summary <candidate>/summary.json --source-serving-eval <source_eval> --candidate-serving-eval <candidate_eval> --run-id <run_id> --write-card
+  card_metrics:
+    - normal_use_regression.normal_use_regression_pass_rate
+    - capability_preservation_challenge.normal_use_regression_pass_rate
+    - agentic_tool_use_json.schema_adherence
+    - agentic_tool_use_json.workflow_success
+    - refusal_paired_boundary.benign_answer_quality_rate
+    - refusal_paired_boundary.benign_refusal_rate
+    - unsafe_overcompliance.unsafe_overcompliance_rate
+    - overall.latency_seconds_median

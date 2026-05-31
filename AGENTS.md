@@ -85,6 +85,21 @@ Gemma-specific.
 11. Update `docs/status.md` and `docs/experiment-ledger.md` before handing off
    or starting a long run.
 
+For a full new-model run, do not stop at planning:
+
+1. Resolve/download the base checkpoint on every node that will train, serve, or
+   quantize it.
+2. Run the base model eval/serve benchmarks and save the comparison baseline.
+3. Fine-tune from the base model and prove the FT beats the base on the
+   objective-specific evals.
+4. Ablate the fine-tuned model, then compare against the FT source. A good
+   ablation removes refusals while retaining FT capability and benign quality.
+5. Quantize the final candidate, then compare against the unquantized
+   FT-ablated source. A good NVFP4 result keeps quality close while improving
+   output tok/s on Blackwell.
+6. Record every pain point as either a config fix, code fix, or explicit
+   follow-up in the ledger before moving on.
+
 ## Useful Commands
 
 Install/setup:
@@ -125,6 +140,8 @@ Plan fine-tuning without loading a model:
 ```bash
 ./forge finetune gemma4_26b_a4b plan
 ./forge finetune gemma4_26b_a4b prepare
+./forge finetune --config configs/finetuning/qwen36_27b_local_ft_v1.yaml plan
+./forge finetune --config configs/finetuning/qwen36_27b_local_ft_v1.yaml prepare --overwrite
 ```
 
 `prepare` writes `training_method_card.md` beside the generated plan, trainer,
@@ -138,6 +155,24 @@ when host Python is CPU-only:
 ./forge finetune gemma4_26b_a4b prepare --overwrite
 scripts/run_finetune_spark_container.sh
 ```
+
+For two-node Spark fine-tunes, prefer generated cluster artifacts when the
+recipe has a `cluster:` block:
+
+```bash
+./forge cluster doctor --config <private-cluster.yaml> --strict
+./forge cluster health --config <private-cluster.yaml>
+./forge cluster runtime --config <private-cluster.yaml> --image nemotron-runner:latest
+./forge cluster torchrun-smoke --config <private-cluster.yaml> --image nemotron-runner:latest --nccl-socket-ifname <direct-link-iface>
+MODEL_FORGE_CLUSTER_CONFIG=<private-cluster.yaml> \
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 \
+runs/finetune/<run>/run_cluster_torchrun.sh
+```
+
+The cluster script prepares data once, syncs the generated run directory to
+worker nodes, and launches Docker-backed `torch.distributed.run` on every node.
+If it falls back to host Python or a single node, fix the repo or config before
+starting the long run.
 
 For Gemma 4 26B on Spark, the validated FT path currently uses
 `trainer.backend=unsloth` with `unsloth_compile_disable=true`,
@@ -640,6 +675,14 @@ progress:
 
 ```text
 configs/finetuning/gemma4_26b_a4b_local_ft_v0.yaml
+```
+
+Qwen 3.6 27B full-workflow starter configs:
+
+```text
+configs/finetuning/qwen36_27b_local_ft_v1.yaml
+configs/abliteration/qwen36_27b_ft_local_abli.yaml
+configs/quantization/qwen36_27b_nvfp4_modelopt.yaml
 ```
 
 These are examples of the general workflow. Do not hard-code future model

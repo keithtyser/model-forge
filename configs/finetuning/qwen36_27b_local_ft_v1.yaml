@@ -1,0 +1,107 @@
+name: qwen36_27b_local_ft_v1
+family: qwen36_27b
+run_dir: runs/finetune/qwen36_27b_local_ft_v1
+dry_run_only: false
+
+model:
+  source: Qwen/Qwen3.6-27B
+  local_dir: ~/models/Qwen3.6-27B
+  output_dir: ~/models/Qwen3.6-27B-local-ft-v1
+  served_model_name: local/qwen36-27b-local-ft-v1
+  trust_remote_code: true
+  max_seq_length: 8192
+
+trainer:
+  backend: hf_causal_lm
+  method: qlora
+  device_map: single_gpu
+  load_in_4bit: true
+  attn_implementation: sdpa
+  bf16: true
+  gradient_checkpointing: true
+  group_by_length: true
+  pad_to_multiple_of: 256
+  torch_dynamo_recompile_limit: 128
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  learning_rate: 0.00006
+  num_train_epochs: 1
+  max_steps: 800
+  warmup_ratio: 0.03
+  lr_scheduler_type: cosine
+  optim: paged_adamw_8bit
+  weight_decay: 0.001
+  logging_steps: 5
+  save_steps: 100
+  save_total_limit: 3
+  seed: 3407
+  report_to: none
+  dataloader_num_workers: 2
+  dataloader_prefetch_factor: 2
+
+resource_policy:
+  cpu_quota: "80%"
+  memory_max: "85%"
+  io_weight: 100
+  nice: 10
+  reserve_cores: 1
+  min_memory_available_start: 0.05
+  min_memory_available_runtime: 0.05
+  min_disk_free: 0.12
+  monitor_interval_seconds: 30
+  dataloader_num_workers_max_offset: 2
+  persistent_workers_when_memory_tight: false
+  checkpoint_on_memory_pressure: true
+
+cluster:
+  enabled: true
+  config: /tmp/model_forge_dgx_spark_x2_runtime.yaml
+  launcher: torchrun
+  image: nemotron-runner:latest
+  nccl_socket_ifname: enp1s0f0np0
+  require_torchrun_smoke: true
+  sync_run_dir_to_workers: true
+
+lora:
+  r: 64
+  alpha: 128
+  dropout: 0.0
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+  exclude_modules:
+    - embed_tokens
+    - lm_head
+    - router
+    - expert
+  modules_to_save: []
+
+data:
+  manifest: datasets/finetuning/qwen36_27b_local_ft_v1.yaml
+
+baseline:
+  target_to_beat: Qwen/Qwen3.6-27B
+  observed_baseline_role: source_base_for_model_forge_evals
+  strategy_delta:
+    - Use a compact high-signal SFT blend rather than broad low-quality volume.
+    - Keep Qwen chat-template thinking disabled during eval and serving unless a task explicitly asks for reasoning traces.
+    - Compare only against the same Qwen 3.6 source family before judging success.
+
+eval:
+  source_variant: base
+  baseline_variant: base
+  required_gates:
+    challenge_capability_vs_base: "> base"
+    paired_benign_quality_vs_base: ">= base"
+    normal_use_regression: ">= 0.95"
+    artifact_quality_vs_base: ">= base"
+  commands:
+    - MODEL_FORGE_TRIALS=3 ./forge eval qwen36_27b local_ft --internal
+    - ./forge eval qwen36_27b local_ft --artifact
+    - ./forge external qwen36_27b local_ft ifeval
+    - ./forge compare qwen36_27b

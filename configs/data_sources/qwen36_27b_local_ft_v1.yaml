@@ -1,0 +1,112 @@
+version: 0.1.0
+description: >
+  Source registry for Qwen 3.6 27B local FT v1. The mix starts from public
+  high-signal code, reasoning, and instruction data used by prior Gemma work,
+  plus optional NVIDIA Nemotron post-training data when available locally or
+  through Hugging Face access.
+
+sources:
+  model_forge_gemma_ft_v1_seeds:
+    name: model_forge_gemma_ft_v1_seeds
+    type: local_jsonl
+    path: datasets/seeds/gemma4_26b_a4b_local_ft_v1.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - eval_adjacent_repair
+      - capability_sft
+    sampling_cap: 37
+    intended_use: >
+      Portable model-forge workflow repair examples. These are not
+      Gemma-specific in content and target the repo's eval and agentic workflow
+      weaknesses.
+
+  jackrong_competitive_programming_python:
+    name: competitive_programming_python
+    type: hf_dataset
+    dataset: Jackrong/Competitive-Programming-python-blend
+    split: train
+    messages_field: messages
+    license: mixed-upstream
+    quality_tier: external_candidate
+    roles:
+      - code_reasoning
+
+  jackrong_qwen_coder_distill:
+    name: qwen_coder_distill
+    type: hf_dataset
+    dataset: Jackrong/qwen3-coder-480b-distill-mini
+    split: train
+    input_field: Input
+    output_field: code_output
+    license: Apache-2.0
+    quality_tier: external_candidate
+    roles:
+      - code_generation_and_debugging
+
+  jackrong_logicmind_chat_reasoning:
+    name: logicmind_chat_reasoning
+    type: hf_dataset
+    dataset: Jackrong/LogicMind-Chat-Reasoning-SFT-300K
+    split: train
+    messages_field: conversations
+    license: check-dataset-card
+    quality_tier: external_candidate
+    roles:
+      - multi_turn_reasoning_chat
+
+  jackrong_natural_reasoning_gpt_oss_120b:
+    name: natural_reasoning_gpt_oss_120b
+    type: hf_dataset
+    dataset: Jackrong/Natural-Reasoning-gpt-oss-120B-S1
+    split: train
+    input_field: question
+    reasoning_field: CoT_reasoning
+    output_field: anwser
+    wrap_reasoning: true
+    license: check-dataset-card
+    quality_tier: external_candidate
+    roles:
+      - natural_reasoning
+
+  jackrong_stem_reasoning_gpt_oss_120b:
+    name: stem_reasoning_gpt_oss_120b
+    type: hf_dataset
+    dataset: Jackrong/gpt-oss-120b-reasoning-STEM-5K
+    split: train
+    input_field: Input
+    reasoning_field: "CoT_Native--reasoning"
+    output_field: Anwser
+    wrap_reasoning: true
+    license: CC-BY-4.0
+    quality_tier: external_candidate
+    roles:
+      - stem_reasoning
+
+  jackrong_sharegpt_reasoning_chat:
+    name: sharegpt_reasoning_chat
+    type: hf_dataset
+    dataset: Jackrong/ShareGPT-gpt-oss-120B-reasoning
+    split: train
+    messages_field: conversation
+    license: check-dataset-card
+    quality_tier: external_candidate
+    roles:
+      - instruction_following_chat
+
+  nvidia_nemotron_post_training_v2:
+    name: nvidia_nemotron_post_training_v2
+    type: hf_dataset
+    dataset: nvidia/Nemotron-Post-Training-Dataset-v2
+    split: train
+    messages_field: messages
+    license: check-dataset-card
+    quality_tier: production_candidate
+    gated: true
+    roles:
+      - general_post_training
+      - instruction_following_chat
+      - reasoning
+    intended_use: >
+      Optional production source when HF access is available. Keep exact
+      revision, selected subsets, and row checksums in generated manifests.

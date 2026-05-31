@@ -38,10 +38,11 @@ variants:
     served_model_name: Qwen/Qwen3.6-27B
   local_ft:
     repo_id: Qwen/Qwen3.6-27B
-    local_dir: Qwen3.6-27B-local-ft-v0
-    served_model_name: local/qwen36-27b-local-ft-v0
+    local_dir: Qwen3.6-27B-local-ft-v1
+    served_model_name: local/qwen36-27b-local-ft-v1
     adapter: true
     base_variant: base
+    lora_rank: 64
     downloadable: false
   local_abli:
     repo_id: Qwen/Qwen3.6-27B
@@ -51,9 +52,16 @@ variants:
     downloadable: false
   local_ft_abli:
     repo_id: Qwen/Qwen3.6-27B
-    local_dir: Qwen3.6-27B-local-ft-abliterated-v0
-    served_model_name: local/qwen36-27b-local-ft-abliterated-v0
+    local_dir: Qwen3.6-27B-local-ft-abliterated-v1
+    served_model_name: local/qwen36-27b-local-ft-abliterated-v1
     base_variant: local_ft
+    downloadable: false
+  local_ft_abli_nvfp4_modelopt:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: model-forge-quantized/qwen36_27b/local_ft_abli_nvfp4_modelopt
+    served_model_name: model-forge/qwen36-27b-local-ft-abli-nvfp4-modelopt
+    base_variant: local_ft_abli
+    quantization: nvfp4
     downloadable: false
 
 serve:

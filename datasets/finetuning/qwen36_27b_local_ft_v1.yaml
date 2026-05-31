@@ -1,0 +1,63 @@
+name: qwen36_27b_local_ft_v1
+description: >
+  First Qwen 3.6 27B model-forge SFT blend. It is designed to improve base
+  model agentic workflow, code/debugging, structured-output, and reasoning
+  performance while preserving normal assistant behavior.
+format: messages
+chat_template: auto
+max_context_window: 8192
+random_seed: 3407
+
+source_registry: configs/data_sources/qwen36_27b_local_ft_v1.yaml
+
+quality_gates:
+  min_turn_chars: 2
+  require_assistant_content: true
+  reject_unclosed_think: true
+  dedupe_by_conversation_hash: true
+  max_tokens: 8192
+  reject_eval_prompt_overlap: true
+
+sources:
+  - id: model_forge_gemma_ft_v1_seeds
+    target_samples: 37
+    role: eval_adjacent_seed
+  - id: jackrong_competitive_programming_python
+    target_samples: 8000
+    role: code_reasoning
+  - id: jackrong_qwen_coder_distill
+    target_samples: 6000
+    role: code_generation_and_debugging
+  - id: jackrong_logicmind_chat_reasoning
+    target_samples: 10000
+    role: multi_turn_reasoning_chat
+  - id: jackrong_natural_reasoning_gpt_oss_120b
+    target_samples: 8000
+    role: natural_reasoning
+  - id: jackrong_stem_reasoning_gpt_oss_120b
+    target_samples: 4000
+    role: stem_reasoning
+  - id: jackrong_sharegpt_reasoning_chat
+    target_samples: 6000
+    role: instruction_following_chat
+
+optional_sources:
+  - id: nvidia_nemotron_post_training_v2
+    target_samples: 12000
+    role: general_post_training
+    enable_when_accessible: true
+
+holdouts:
+  - evals/prompts/capability_preservation_challenge.yaml
+  - evals/prompts/normal_use_regression.yaml
+  - evals/prompts/agentic_code_debug.yaml
+  - evals/prompts/artifact_code_generation.yaml
+  - evals/prompts/artifact_web_design.yaml
+  - evals/prompts/agentic_tool_use_json.yaml
+  - evals/prompts/refusal_paired_boundary.yaml
+  - evals/prompts/refusal_benign_boundary.yaml
+
+promotion_notes:
+  - Compare against Qwen 3.6 27B base on the same internal, artifact, serving, and IFEval runs.
+  - Winning means challenge capability, structured output, code/debugging, and artifact quality improve without normal-use regression.
+  - If the model becomes too verbose or overuses reasoning traces, lower reasoning-trace data and raise concise chat/code-debug examples.

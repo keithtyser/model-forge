@@ -70,8 +70,12 @@ class VariantGraphTests(unittest.TestCase):
         self.assertEqual(targets["local_ft"]["transform"]["type"], "fine_tune")
 
         qwen36 = variant_graph("qwen36_27b")
-        self.assertEqual(qwen36["node_count"], 4)
+        self.assertEqual(qwen36["node_count"], 5)
         self.assertEqual(ancestry(qwen36, "local_abli"), ["base", "local_abli"])
+        self.assertEqual(
+            ancestry(qwen36, "local_ft_abli_nvfp4_modelopt"),
+            ["base", "local_ft", "local_ft_abli", "local_ft_abli_nvfp4_modelopt"],
+        )
 
     def test_llama_family_config_is_graph_ready(self) -> None:
         graph = variant_graph("llama31_8b")
