@@ -134,6 +134,10 @@ This is the short handoff state for humans and agents. Use
 - LMCache/NIXL/Dynamo are tracked through `./forge research watch` and
   `configs/research_watch/advanced_serving.yaml`; these are watch hooks, not
   validated backends.
+- Distributed-KV placeholder architecture is tracked through
+  `./forge serving architecture-doctor` and
+  `configs/serving/architectures/distributed_kv_placeholder.yaml`; it documents
+  roles, gates, and blockers only.
 - Serving Card generation now writes a structured `serving_card.md` for each
   `bench serve` run with identity, hardware/config, overall metrics,
   per-workload metrics, artifacts, and promotion gates.

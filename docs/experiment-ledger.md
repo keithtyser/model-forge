@@ -1057,6 +1057,40 @@ Result:
   adoption
 - MF-0904 is marked tested / smoke-validated
 
+## Advanced Serving: Distributed-KV Placeholder Architecture
+
+Status: implemented as architecture/audit scaffolding only. No distributed KV
+backend, LMCache, NIXL, Dynamo, vLLM server, benchmark run, training run,
+quantization run, or eval job was started.
+
+Hypothesis: Multi-node/distributed-KV work needs a shared architecture contract
+before implementation. The contract should name roles, transport candidates,
+required metrics, validation gates, and promotion blockers so future agents do
+not confuse placeholder plans with working backend evidence.
+
+Changes:
+
+- added `configs/serving/architectures/distributed_kv_placeholder.yaml`
+- added `./forge serving architecture-doctor`
+- recorded OpenAI frontend, prefill pool, decode pool, distributed-KV transport,
+  and evidence-pipeline roles
+- recorded validation gates, promotion blockers, open questions, and research
+  basis IDs
+- updated README, AGENTS, serving benchmark docs, status, and roadmap state
+
+Validation:
+
+```bash
+./forge serving architecture-doctor --config configs/serving/architectures/distributed_kv_placeholder.yaml --strict
+.venv/bin/python -m unittest tests.test_serving_backends -v
+```
+
+Result:
+
+- future distributed-KV work has a portable architecture contract
+- the repo still makes no claim that distributed KV is implemented or validated
+- MF-0905 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

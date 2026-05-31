@@ -14,16 +14,16 @@ This file is generated from the prioritized backlog in
 |---|---:|
 | implemented | 2 |
 | not_started | 7 |
-| scaffolded | 14 |
-| tested | 73 |
+| scaffolded | 13 |
+| tested | 74 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 29 |
-| smoke_validated | 65 |
+| planned | 28 |
+| smoke_validated | 66 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -131,4 +131,4 @@ No status audit findings.
 | MF-0902 | P3: Advanced serving | tested | smoke_validated | Add TensorRT-LLM backend |
 | MF-0903 | P3: Advanced serving | tested | smoke_validated | Add disaggregated prefill/decode experiment profile |
 | MF-0904 | P3: Advanced serving | tested | smoke_validated | Add LMCache/NIXL research-watch hooks |
-| MF-0905 | P3: Advanced serving | scaffolded | planned | Add multi-node/distributed-KV placeholder architecture |
+| MF-0905 | P3: Advanced serving | tested | smoke_validated | Add multi-node/distributed-KV placeholder architecture |

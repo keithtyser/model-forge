@@ -3856,7 +3856,7 @@ MF-0901 Add SGLang backend. implementation_status=tested validation_state=smoke_
 MF-0902 Add TensorRT-LLM backend. implementation_status=tested validation_state=smoke_validated
 MF-0903 Add disaggregated prefill/decode experiment profile. implementation_status=tested validation_state=smoke_validated
 MF-0904 Add LMCache/NIXL research-watch hooks. implementation_status=tested validation_state=smoke_validated
-MF-0905 Add multi-node/distributed-KV placeholder architecture. implementation_status=scaffolded validation_state=planned
+MF-0905 Add multi-node/distributed-KV placeholder architecture. implementation_status=tested validation_state=smoke_validated
 ```
 
 

@@ -320,6 +320,7 @@ Benchmark serving only after an endpoint is already running:
 ./forge serving plan --config configs/serving/backends/sglang_openai.yaml --family gemma4_26b_a4b --variant base --write-plan
 ./forge serving doctor --config configs/serving/backends/tensorrt_llm_openai.yaml
 ./forge serving plan --config configs/serving/backends/tensorrt_llm_openai.yaml --family gemma4_26b_a4b --variant base --write-plan
+./forge serving architecture-doctor --config configs/serving/architectures/distributed_kv_placeholder.yaml --strict
 ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
 ./forge bench serve --family gemma4_26b_a4b --variant base
 ./forge bench sweep doctor --config configs/sweeps/dgx_spark_vllm_baseline.yaml --strict
@@ -360,6 +361,11 @@ The disaggregated prefill/decode sweep profile is a plan-only advanced serving
 profile. Compare it against the single-endpoint control under the same model,
 precision, benchmark config, and quality/behavior sample before claiming the
 split improved Spark throughput or latency.
+
+The distributed-KV architecture file is a placeholder contract. Do not treat it
+as implementation evidence; use it to check that a future LMCache/NIXL/Dynamo
+or vLLM-disaggregated run records topology, transport, control, and promotion
+blockers before claiming success.
 
 Plan and report quantization without loading a model:
 

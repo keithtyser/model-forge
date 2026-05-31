@@ -260,6 +260,7 @@ Serving benchmark:
 ./forge serving plan --config configs/serving/backends/sglang_openai.yaml --family gemma4_26b_a4b --variant base --write-plan
 ./forge serving doctor --config configs/serving/backends/tensorrt_llm_openai.yaml
 ./forge serving plan --config configs/serving/backends/tensorrt_llm_openai.yaml --family gemma4_26b_a4b --variant base --write-plan
+./forge serving architecture-doctor --config configs/serving/architectures/distributed_kv_placeholder.yaml --strict
 ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
 MODEL_FORGE_BASE_URL=http://127.0.0.1:8000/v1 ./forge bench serve --model served/model-name
 ./forge bench sweep plan --family gemma4_26b_a4b --variant base

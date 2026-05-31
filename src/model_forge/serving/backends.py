@@ -18,9 +18,11 @@ from model_forge.runs.manifest import REPO_DIR, display_path, redact_value, sani
 
 
 DEFAULT_CONFIG = REPO_DIR / "configs" / "serving" / "backends" / "sglang_openai.yaml"
+DEFAULT_ARCHITECTURE_CONFIG = REPO_DIR / "configs" / "serving" / "architectures" / "distributed_kv_placeholder.yaml"
 SUPPORTED_ENGINES = {"sglang", "tensorrt_llm"}
 SCHEMA_VERSION = "model_forge.serving_backend.v1"
 PLAN_SCHEMA_VERSION = "model_forge.serving_backend_plan.v1"
+ARCHITECTURE_SCHEMA_VERSION = "model_forge.serving_architecture.v1"
 SECRET_PATTERN = re.compile(r"(hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,})")
 PRIVATE_PATH_PATTERN = re.compile(r"^/(home|Users)/[^/]+/")
 
@@ -106,6 +108,37 @@ def audit_config(config: Mapping[str, Any], config_path: Path, strict: bool = Fa
         findings.append(Finding("warning", "resource_policy", "serving backend should default to one server at a time", config_display))
     if not policy.get("prefer_systemd_scope", False):
         findings.append(Finding("warning", "resource_policy", "prefer_systemd_scope should be true for Spark safety", config_display))
+    return findings
+
+
+def audit_architecture_config(config: Mapping[str, Any], config_path: Path, strict: bool = False) -> list[Finding]:
+    findings: list[Finding] = []
+    config_display = display_path(config_path)
+    scan_value(config, findings, path=config_display)
+    if config.get("schema_version") != ARCHITECTURE_SCHEMA_VERSION:
+        findings.append(Finding("error", "schema", f"schema_version must be {ARCHITECTURE_SCHEMA_VERSION}", config_display))
+    if not config.get("name"):
+        findings.append(Finding("error", "schema", "architecture name is required", config_display))
+    components = config.get("components")
+    if not isinstance(components, list) or not components:
+        findings.append(Finding("error", "components", "components must be a non-empty list", config_display))
+    else:
+        component_ids = []
+        for component in components:
+            if not isinstance(component, dict):
+                findings.append(Finding("error", "components", "component entries must be mappings", config_display))
+                continue
+            component_ids.append(str(component.get("id") or ""))
+            if not component.get("role"):
+                component_id = str(component.get("id") or "<unknown>")
+                findings.append(Finding("error", "components", f"component role is required: {component_id}", config_display))
+        if len(component_ids) != len(set(component_ids)):
+            findings.append(Finding("error", "components", "component ids must be unique", config_display))
+    for key in ("promotion_blockers", "validation_gates", "open_questions"):
+        value = config.get(key)
+        severity = "error" if strict else "warning"
+        if not isinstance(value, list) or not value:
+            findings.append(Finding(severity, "architecture", f"{key} must be a non-empty list", config_display))
     return findings
 
 
@@ -381,6 +414,10 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     doctor.add_argument("--strict", action="store_true")
     doctor.add_argument("--json", action="store_true")
+    architecture = sub.add_parser("architecture-doctor")
+    architecture.add_argument("--config", type=Path, default=DEFAULT_ARCHITECTURE_CONFIG)
+    architecture.add_argument("--strict", action="store_true")
+    architecture.add_argument("--json", action="store_true")
     plan = sub.add_parser("plan")
     plan.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     plan.add_argument("--family")
@@ -398,6 +435,14 @@ def main() -> None:
     config, config_path = load_yaml(args.config)
     if args.command == "doctor":
         findings = audit_config(config, config_path, strict=args.strict)
+        if args.json:
+            print(json.dumps([asdict(finding) for finding in findings], indent=2) + "\n")
+        else:
+            render_findings(findings)
+        raise SystemExit(1 if any(finding.severity == "error" for finding in findings) else 0)
+
+    if args.command == "architecture-doctor":
+        findings = audit_architecture_config(config, config_path, strict=args.strict)
         if args.json:
             print(json.dumps([asdict(finding) for finding in findings], indent=2) + "\n")
         else:

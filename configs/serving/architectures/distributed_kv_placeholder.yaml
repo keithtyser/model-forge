@@ -1,0 +1,75 @@
+schema_version: model_forge.serving_architecture.v1
+name: distributed_kv_placeholder
+status: placeholder
+description: >
+  Placeholder architecture for future multi-node/distributed-KV serving. This
+  file documents roles, evidence requirements, and promotion blockers only; it
+  is not an executable launcher or a validated backend.
+
+target_hardware:
+  cluster_profile: configs/clusters/dgx_spark_x2.example.yaml
+  expected_nodes: 2
+  expected_total_memory_gb: 256
+
+components:
+  - id: openai_frontend
+    role: Stable OpenAI-compatible API endpoint for Model Forge benchmarks.
+    responsibilities:
+      - Keep base URL and served model name stable across backend experiments.
+      - Emit request IDs and route metadata for Serving Card artifacts.
+
+  - id: prefill_pool
+    role: Handles prompt prefill and long-context admission.
+    responsibilities:
+      - Report prefill tokens/sec and queueing latency separately.
+      - Preserve model, tokenizer, precision, and chat-template identity.
+
+  - id: decode_pool
+    role: Handles decode-heavy generation after prefill handoff.
+    responsibilities:
+      - Report ITL, decode tokens/sec, output tok/s, and memory pressure.
+      - Preserve request ordering and streaming semantics.
+
+  - id: distributed_kv_transport
+    role: Moves or shares KV-cache state between prefill and decode components.
+    candidate_paths:
+      - vLLM disaggregated prefill
+      - LMCache
+      - NIXL
+      - Dynamo
+    responsibilities:
+      - Report transfer latency, transferred bytes, and cache hit/miss behavior.
+      - Keep transport choice version-pinned in run manifests.
+
+  - id: evidence_pipeline
+    role: Converts endpoint runs into comparable Model Forge artifacts.
+    responsibilities:
+      - Run `./forge bench serve` under the same workload set as the control.
+      - Attach sampled quality/behavior evals under the same endpoint config.
+      - Write Serving Cards and run manifests with topology metadata.
+
+validation_gates:
+  - Single-endpoint control and distributed-KV candidate use the same model, precision, tokenizer, and benchmark config.
+  - Cluster plan records both Spark nodes, 2 declared GPUs, and 256 GB declared RAM.
+  - TTFT, ITL, output tok/s, prefill tok/s, decode tok/s, memory, and transfer metadata are captured.
+  - Quality and behavior sampled evals are comparable to the control.
+  - Failure mode is documented if the distributed-KV candidate is slower or unstable.
+
+promotion_blockers:
+  - No real two-node endpoint evidence.
+  - No transfer-overhead metadata.
+  - No same-endpoint quality/behavior sample.
+  - No single-endpoint control with identical model and precision.
+  - Hardcoded hostnames, local paths, tokens, or private network details in repo files.
+
+open_questions:
+  - Which backend should be the first executable distributed-KV target on DGX Spark x2?
+  - Which transport metrics can be captured consistently across vLLM, LMCache, NIXL, and Dynamo?
+  - Does distributed KV improve the user-visible bottleneck after accounting for transfer overhead?
+  - What topology is best for MoE checkpoints versus dense checkpoints?
+
+research_basis:
+  - vllm_disaggregated_prefill
+  - lmcache_kv_reuse
+  - nvidia_nixl
+  - nvidia_dynamo_disaggregated_serving

@@ -4,7 +4,16 @@ import tempfile
 import unittest
 
 from model_forge.runs.manifest import REPO_DIR
-from model_forge.serving.backends import DEFAULT_CONFIG, PLAN_SCHEMA_VERSION, audit_config, build_plan, load_yaml, write_plan
+from model_forge.serving.backends import (
+    DEFAULT_ARCHITECTURE_CONFIG,
+    DEFAULT_CONFIG,
+    PLAN_SCHEMA_VERSION,
+    audit_architecture_config,
+    audit_config,
+    build_plan,
+    load_yaml,
+    write_plan,
+)
 
 
 class ServingBackendTests(unittest.TestCase):
@@ -66,6 +75,14 @@ class ServingBackendTests(unittest.TestCase):
         self.assertIn("--max_batch_size", command)
         self.assertEqual(command[-1], "google/gemma-4-26B-A4B-it")
         self.assertIn("google/gemma-4-26B-A4B-it", plan["benchmarks"]["smoke_command"])
+
+    def test_distributed_kv_placeholder_architecture_audits(self) -> None:
+        config, path = load_yaml(DEFAULT_ARCHITECTURE_CONFIG)
+        findings = audit_architecture_config(config, path, strict=True)
+        self.assertFalse([finding for finding in findings if finding.severity == "error"])
+        component_ids = {component["id"] for component in config["components"]}
+        self.assertIn("distributed_kv_transport", component_ids)
+        self.assertIn("promotion_blockers", config)
 
 
 if __name__ == "__main__":

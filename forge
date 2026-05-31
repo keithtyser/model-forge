@@ -51,6 +51,7 @@ Examples:
   ./forge serve gemma4_26b_a4b base
   ./forge serving plan --config configs/serving/backends/sglang_openai.yaml --family gemma4_26b_a4b --variant base --write-plan
   ./forge serving plan --config configs/serving/backends/tensorrt_llm_openai.yaml --family gemma4_26b_a4b --variant base --write-plan
+  ./forge serving architecture-doctor --config configs/serving/architectures/distributed_kv_placeholder.yaml --strict
   ./forge bench sweep plan --config configs/sweeps/dgx_spark_vllm_disagg_prefill_decode.yaml --family gemma4_26b_a4b --variant base --cluster-config configs/clusters/dgx_spark_x2.example.yaml
   ./forge serve-teacher qwen35_9b
   ./forge eval gemma4_26b_a4b base

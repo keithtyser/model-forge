@@ -78,6 +78,18 @@ higher-parallelism split case. It must be benchmarked with the same model,
 precision, workloads, and quality/behavior sample before making latency or
 throughput claims.
 
+Audit the distributed-KV placeholder architecture:
+
+```bash
+./forge serving architecture-doctor \
+  --config configs/serving/architectures/distributed_kv_placeholder.yaml \
+  --strict
+```
+
+The architecture file records roles, candidate transport paths, validation
+gates, promotion blockers, and open questions for future LMCache/NIXL/Dynamo or
+vLLM-disaggregated work. It is not executable evidence.
+
 Before treating a serving config as better, attach a sampled quality/behavior
 check to the same endpoint and served model:
 
