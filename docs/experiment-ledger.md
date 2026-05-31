@@ -602,6 +602,47 @@ Result:
   payload and preserve existing ledger text
 - MF-0706 is marked tested / smoke-validated
 
+## Kernel/Perf: Nsight Profile Integration
+
+Status: implemented and pushed as profiling planning CLI work. No model server,
+profiler, benchmark, training run, quantization run, or eval job was started.
+
+Hypothesis: kernel/perf work should start from reproducible profiler command
+plans instead of ad hoc `nsys` or `ncu` invocations. `./forge profile nsight`
+should validate a portable profile config, detect Nsight tool availability, and
+write `nsys`/`ncu` command scripts around existing benchmark commands without
+starting servers or profilers by default.
+
+Changes:
+
+- added `./forge profile nsight doctor`
+- added `./forge profile nsight plan`
+- added `configs/profiling/nsight_serving_smoke.yaml`
+- added `src/model_forge/profiling/nsight.py`
+- added `docs/profiling.md`
+- generated profile plans with target command, resource policy, expected Nsight
+  outputs, tool availability, and explicit dry-run execution contract
+- added Nsight profile planner coverage to `tests/test_nsight_profile.py`
+- updated README, AGENTS, config docs, status, and roadmap state
+
+Validation:
+
+```bash
+./forge profile nsight doctor --config configs/profiling/nsight_serving_smoke.yaml --json
+./forge profile nsight plan --config configs/profiling/nsight_serving_smoke.yaml --run-id unit_nsight_cli --write-plan --output-root /tmp/model_forge_nsight --json
+.venv/bin/python -m unittest tests.test_nsight_profile -v
+bash -n forge
+.venv/bin/python -m py_compile src/model_forge/profiling/nsight.py
+```
+
+Result:
+
+- the default Nsight profile config validates without errors
+- profile planning emits `nsys` and `ncu` command lines around the configured
+  serving benchmark command
+- `--output-root` is reflected in both written artifacts and the JSON plan
+- MF-0801 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

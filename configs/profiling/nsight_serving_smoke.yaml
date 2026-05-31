@@ -1,0 +1,49 @@
+schema_version: model_forge.nsight_profile.v1
+name: nsight_serving_smoke
+description: >
+  Safe Nsight Systems / Nsight Compute planning profile for an already-running
+  OpenAI-compatible serving endpoint. The plan wraps a small serving benchmark
+  command and writes profiler command lines without launching profilers by
+  default.
+kind: serving
+
+command:
+  - ./forge
+  - bench
+  - serve
+  - --config
+  - configs/serving/serve_bench_smoke.yaml
+  - --family
+  - gemma4_26b_a4b
+  - --variant
+  - base
+
+tools:
+  nsys:
+    enabled: true
+    trace:
+      - cuda
+      - nvtx
+      - osrt
+      - cudnn
+      - cublas
+    sample: cpu
+    force_overwrite: true
+  ncu:
+    enabled: true
+    target_processes: all
+    set: full
+    metrics:
+      - sm__throughput.avg.pct_of_peak_sustained_elapsed
+      - gpu__time_duration.sum
+      - dram__throughput.avg.pct_of_peak_sustained_elapsed
+
+resource_policy:
+  max_concurrent_profiles: 1
+  require_existing_server: true
+  require_small_workload_first: true
+  stop_if_memory_available_below_fraction: 0.05
+  require_disk_free_fraction: 0.15
+
+outputs:
+  root: reports/generated/profiles/nsight

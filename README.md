@@ -109,6 +109,7 @@ Run evals from another terminal:
 ./forge artifacts validate reports/generated/.../artifacts/
 ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
 ./forge bench sweep plan --family gemma4_26b_a4b --variant base
+./forge profile nsight plan --config configs/profiling/nsight_serving_smoke.yaml
 ./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan
 ./forge doctor
 ```
@@ -265,6 +266,17 @@ expects a running OpenAI-compatible endpoint and writes `requests.jsonl`,
 `reports/generated/serve_bench/`. Reusable workload definitions live under
 `configs/serving/workloads/`. Sweep plans expand startup-time server env cases
 and the matching `bench serve` commands, but they do not launch vLLM.
+
+Profiling:
+
+```bash
+./forge profile nsight doctor --config configs/profiling/nsight_serving_smoke.yaml
+./forge profile nsight plan --config configs/profiling/nsight_serving_smoke.yaml --write-plan
+```
+
+See [docs/profiling.md](docs/profiling.md). Nsight profiling plans wrap
+existing benchmark commands and write profiler command scripts without starting
+servers or profilers by default.
 
 Quantization:
 

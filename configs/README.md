@@ -16,6 +16,8 @@ and experiment constants here instead of hard-coding them in scripts.
 - `serving/`: generic serving benchmark configs and reusable workload
   definitions. These should describe endpoint/workload shape, not private
   infrastructure.
+- `profiling/`: profiler command-plan configs such as Nsight Systems and
+  Nsight Compute wrappers around serving or benchmark commands.
 - `sweeps/`: benchmark sweep matrices. Public sweep configs should describe
   cases, hypotheses, env deltas, resource policy, and follow-up gates, but not
   private hosts or absolute local paths.

@@ -42,6 +42,7 @@ Gemma-specific.
   rules
 - `docs/serving-benchmarks.md`: serving benchmark command, outputs, and
   interpretation rules
+- `docs/profiling.md`: Nsight Systems / Nsight Compute profile planning rules
 - `docs/quantization.md`: Blackwell NVFP4, runtime import, checkpoint creation,
   and quantization-card evidence rules
 - `docs/roadmaps/`: long-form roadmap and archived planning documents
@@ -318,13 +319,16 @@ Benchmark serving only after an endpoint is already running:
 ./forge bench serve --family gemma4_26b_a4b --variant base
 ./forge bench sweep doctor --config configs/sweeps/dgx_spark_vllm_baseline.yaml --strict
 ./forge bench sweep plan --family gemma4_26b_a4b --variant base
+./forge profile nsight plan --config configs/profiling/nsight_serving_smoke.yaml --write-plan
 ```
 
 `bench serve` is for OpenAI-compatible endpoint mechanics only. `bench sweep`
 expands startup-time server env cases plus matching benchmark commands. Neither
-command starts a vLLM server. A good latency result is not a quality or behavior
-pass. Use the generated `manifest.json`, `summary.json`, `requests.jsonl`, and
-`serving_card.md` with eval results before making serving claims.
+command starts a vLLM server. `profile nsight` writes profiler command plans
+around existing benchmark commands; it does not start servers or profilers by
+default. A good latency result is not a quality or behavior pass. Use the
+generated `manifest.json`, `summary.json`, `requests.jsonl`, `serving_card.md`,
+and profile plan with eval results before making serving claims.
 
 Plan and report quantization without loading a model:
 

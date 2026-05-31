@@ -95,6 +95,10 @@ This is the short handoff state for humans and agents. Use
 - Serving workload definitions are now present under
   `configs/serving/workloads/`, with smoke and core benchmark configs loading
   reusable workload files instead of hard-coding all requests inline.
+- Nsight profile planning is now present through `./forge profile nsight`,
+  `configs/profiling/nsight_serving_smoke.yaml`, and
+  `docs/profiling.md`; it writes `nsys`/`ncu` command plans around existing
+  benchmark commands without starting profilers by default.
 - Serving Card generation now writes a structured `serving_card.md` for each
   `bench serve` run with identity, hardware/config, overall metrics,
   per-workload metrics, artifacts, and promotion gates.
