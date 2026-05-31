@@ -3,8 +3,17 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from pathlib import Path
 
-from model_forge.profiling.nsight import DEFAULT_CONFIG, audit_config, build_plan, load_config, write_plan
+from model_forge.profiling.nsight import (
+    DEFAULT_CONFIG,
+    audit_config,
+    build_plan,
+    build_summary,
+    load_config,
+    write_plan,
+    write_summary,
+)
 
 
 class NsightProfileTests(unittest.TestCase):
@@ -42,6 +51,27 @@ class NsightProfileTests(unittest.TestCase):
         self.assertTrue(saved["outputs"]["plan"].endswith("unit_nsight_write/nsight_profile_plan.json"))
         self.assertIn("nsys profile", commands)
         self.assertIn("ncu --target-processes", commands)
+
+    def test_profile_summary_reports_present_and_missing_artifacts(self) -> None:
+        config, path = load_config(DEFAULT_CONFIG)
+        with tempfile.TemporaryDirectory() as tmp:
+            plan = build_plan(config, path, run_id="unit_nsight_summary", output_root=tmp)
+            plan_path = write_plan(plan, tmp)
+            first_output = Path(plan["profiles"][0]["output"])
+            if not first_output.is_absolute():
+                first_output = Path.cwd() / first_output
+            first_output.parent.mkdir(parents=True, exist_ok=True)
+            first_output.write_bytes(b"profile")
+
+            summary = build_summary(plan, plan_path=plan_path)
+            summary_path = write_summary(summary)
+            markdown = summary_path.with_suffix(".md").read_text(encoding="utf-8")
+
+        self.assertEqual(summary["schema_version"], "model_forge.profile_summary.v1")
+        self.assertEqual(summary["summary"]["expected_profile_artifacts"], 2)
+        self.assertEqual(summary["summary"]["present_profile_artifacts"], 1)
+        self.assertEqual(summary["summary"]["missing_profile_artifacts"], 1)
+        self.assertIn("# Profile Summary: unit_nsight_summary", markdown)
 
 
 if __name__ == "__main__":

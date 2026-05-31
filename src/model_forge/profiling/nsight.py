@@ -20,6 +20,7 @@ from model_forge.runs.manifest import REPO_DIR, display_path, redact_value, sani
 DEFAULT_CONFIG = REPO_DIR / "configs" / "profiling" / "nsight_serving_smoke.yaml"
 SCHEMA_VERSION = "model_forge.nsight_profile.v1"
 PLAN_SCHEMA_VERSION = "model_forge.nsight_profile_plan.v1"
+SUMMARY_SCHEMA_VERSION = "model_forge.profile_summary.v1"
 SECRET_PATTERN = re.compile(r"(hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,})")
 PRIVATE_PATH_PATTERN = re.compile(r"^/(home|Users)/[^/]+/")
 
@@ -55,6 +56,13 @@ def load_yaml(path: Path) -> dict[str, Any]:
 def load_config(path: str | Path = DEFAULT_CONFIG) -> tuple[dict[str, Any], Path]:
     config_path = resolve_repo_path(path)
     return load_yaml(config_path), config_path
+
+
+def load_json(path: Path) -> dict[str, Any]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"expected JSON object in {display_path(path)}")
+    return data
 
 
 def check_no_secret_literals(value: Any, findings: list[Finding], path: str) -> None:
@@ -240,6 +248,100 @@ def write_plan(plan: Mapping[str, Any], output_root: str | Path | None = None) -
     return plan_path
 
 
+def artifact_record(path: str | Path) -> dict[str, Any]:
+    resolved = resolve_repo_path(path)
+    exists = resolved.exists()
+    return {
+        "path": display_path(resolved),
+        "exists": exists,
+        "size_bytes": resolved.stat().st_size if exists and resolved.is_file() else None,
+    }
+
+
+def build_summary(plan: Mapping[str, Any], *, plan_path: Path | None = None, extra_artifacts: list[str] | None = None) -> dict[str, Any]:
+    profiles = list(plan.get("profiles") or [])
+    profile_artifacts = [artifact_record(str(profile.get("output") or "")) for profile in profiles if profile.get("output")]
+    extra_records = [artifact_record(path) for path in extra_artifacts or []]
+    present = [record for record in [*profile_artifacts, *extra_records] if record["exists"]]
+    missing = [record for record in [*profile_artifacts, *extra_records] if not record["exists"]]
+    return redact_value(
+        {
+            "schema_version": SUMMARY_SCHEMA_VERSION,
+            "created_at": utc_timestamp(),
+            "source_plan": display_path(plan_path) if plan_path else None,
+            "run_id": plan.get("run_id"),
+            "profile": dict(plan.get("profile") or {}),
+            "execution_contract": dict(plan.get("execution_contract") or {}),
+            "profile_artifacts": profile_artifacts,
+            "extra_artifacts": extra_records,
+            "summary": {
+                "expected_profile_artifacts": len(profile_artifacts),
+                "present_profile_artifacts": len([record for record in profile_artifacts if record["exists"]]),
+                "missing_profile_artifacts": len([record for record in profile_artifacts if not record["exists"]]),
+                "present_total_artifacts": len(present),
+                "missing_total_artifacts": len(missing),
+                "total_present_size_bytes": sum(int(record["size_bytes"] or 0) for record in present),
+                "tools": sorted({str(profile.get("tool")) for profile in profiles if profile.get("tool")}),
+            },
+            "notes": [
+                "This summary records profiler artifact presence and sizes.",
+                "Use Nsight Systems/Compute reports or exported stats for kernel-level interpretation.",
+            ],
+        }
+    )
+
+
+def render_summary_markdown(summary: Mapping[str, Any]) -> str:
+    metrics = summary.get("summary") or {}
+    lines = [
+        f"# Profile Summary: {summary.get('run_id')}",
+        "",
+        "## Source",
+        "",
+        f"- Plan: `{summary.get('source_plan')}`",
+        f"- Target command: `{shlex.join((summary.get('profile') or {}).get('target_command') or [])}`",
+        f"- Tools: `{', '.join(metrics.get('tools') or [])}`",
+        "",
+        "## Artifact Status",
+        "",
+        f"- Expected profile artifacts: {metrics.get('expected_profile_artifacts')}",
+        f"- Present profile artifacts: {metrics.get('present_profile_artifacts')}",
+        f"- Missing profile artifacts: {metrics.get('missing_profile_artifacts')}",
+        f"- Total present artifact bytes: {metrics.get('total_present_size_bytes')}",
+        "",
+        "## Profile Artifacts",
+        "",
+    ]
+    for record in summary.get("profile_artifacts") or []:
+        status = "present" if record.get("exists") else "missing"
+        lines.append(f"- `{record.get('path')}`: {status}, bytes={record.get('size_bytes')}")
+    extra = summary.get("extra_artifacts") or []
+    if extra:
+        lines.extend(["", "## Extra Artifacts", ""])
+        for record in extra:
+            status = "present" if record.get("exists") else "missing"
+            lines.append(f"- `{record.get('path')}`: {status}, bytes={record.get('size_bytes')}")
+    lines.extend(["", "## Notes", ""])
+    lines.extend(f"- {note}" for note in summary.get("notes") or [])
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_summary(summary: Mapping[str, Any], output_dir: str | Path | None = None) -> Path:
+    if output_dir:
+        root = resolve_repo_path(output_dir)
+    elif summary.get("source_plan"):
+        root = resolve_repo_path(str(summary["source_plan"])).parent
+    else:
+        root = REPO_DIR / "reports" / "generated" / "profiles" / "nsight" / str(summary.get("run_id") or "profile_summary")
+    root.mkdir(parents=True, exist_ok=True)
+    json_path = root / "profile_summary.json"
+    md_path = root / "profile_summary.md"
+    json_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    md_path.write_text(render_summary_markdown(summary), encoding="utf-8")
+    return json_path
+
+
 def render_findings(findings: list[Finding]) -> None:
     if not findings:
         console.print("[green]nsight profile config OK[/green]")
@@ -270,9 +372,16 @@ def main() -> None:
     plan_parser.add_argument("--write-plan", action="store_true")
     plan_parser.add_argument("--json", action="store_true")
 
+    summary_parser = sub.add_parser("summarize", help="Summarize expected and present Nsight profile artifacts")
+    summary_parser.add_argument("--plan", type=Path, required=True)
+    summary_parser.add_argument("--artifact", action="append", default=[], help="Additional artifact path to include")
+    summary_parser.add_argument("--output-dir", type=Path)
+    summary_parser.add_argument("--write-summary", action="store_true")
+    summary_parser.add_argument("--json", action="store_true")
+
     args = parser.parse_args()
-    config, config_path = load_config(args.config)
     if args.command == "doctor":
+        config, config_path = load_config(args.config)
         findings = audit_config(config, config_path, strict=args.strict)
         if args.json:
             print(json.dumps([asdict(finding) for finding in findings], indent=2) + "\n")
@@ -281,6 +390,7 @@ def main() -> None:
         raise SystemExit(1 if any(finding.severity == "error" for finding in findings) else 0)
 
     if args.command == "plan":
+        config, config_path = load_config(args.config)
         plan = build_plan(config, config_path, run_id=args.run_id, command=args.profile_command, output_root=args.output_root)
         if args.write_plan:
             write_plan(plan, args.output_root)
@@ -288,6 +398,18 @@ def main() -> None:
             print(json.dumps(plan, indent=2, sort_keys=True) + "\n")
         else:
             render_plan(plan)
+        return
+
+    if args.command == "summarize":
+        plan_path = resolve_repo_path(args.plan)
+        plan = load_json(plan_path)
+        summary = build_summary(plan, plan_path=plan_path, extra_artifacts=args.artifact)
+        if args.write_summary:
+            write_summary(summary, args.output_dir)
+        if args.json:
+            print(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+        else:
+            print(render_summary_markdown(summary))
 
 
 if __name__ == "__main__":

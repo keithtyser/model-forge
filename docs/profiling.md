@@ -38,6 +38,19 @@ The generated plan writes:
 - expected `profile_nsys.nsys-rep`
 - expected `profile_ncu.ncu-rep`
 
+Summarize the profile artifacts after running the generated command script:
+
+```bash
+./forge profile nsight summarize \
+  --plan reports/generated/profiles/nsight/gemma4_base_serving_smoke/nsight_profile_plan.json \
+  --write-summary
+```
+
+The summary writes:
+
+- `profile_summary.json`
+- `profile_summary.md`
+
 The default config requires an already-running OpenAI-compatible endpoint,
 uses the small serving benchmark as the target command, and records a
 one-profile-at-a-time resource policy.
@@ -48,5 +61,7 @@ one-profile-at-a-time resource policy.
 - Start with the smoke workload before profiling long or high-concurrency runs.
 - Keep profiler outputs under `reports/generated/profiles/` or another ignored
   runtime directory.
+- Treat `profile_summary.md` as an artifact inventory and triage aid. It does
+  not replace Nsight's own kernel timeline, statistics, or exported reports.
 - Pair profile traces with the serving card, eval evidence, and exact command
   plan before making performance claims.

@@ -77,6 +77,7 @@ Examples:
   ./forge bench serve-eval plan --family gemma4_26b_a4b --variant base
   ./forge bench sweep plan --family gemma4_26b_a4b --variant base
   ./forge profile nsight plan --config configs/profiling/nsight_serving_smoke.yaml
+  ./forge profile nsight summarize --plan reports/generated/profiles/nsight/<run>/nsight_profile_plan.json
   ./forge quantize plan --config configs/quantization/nvfp4_blackwell_runtime.yaml --write-plan
   ./forge quantize matrix-plan --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml
   ./forge cluster plan --config configs/clusters/dgx_spark_x2.example.yaml --workload train

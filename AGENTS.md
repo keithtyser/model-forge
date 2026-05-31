@@ -320,15 +320,18 @@ Benchmark serving only after an endpoint is already running:
 ./forge bench sweep doctor --config configs/sweeps/dgx_spark_vllm_baseline.yaml --strict
 ./forge bench sweep plan --family gemma4_26b_a4b --variant base
 ./forge profile nsight plan --config configs/profiling/nsight_serving_smoke.yaml --write-plan
+./forge profile nsight summarize --plan reports/generated/profiles/nsight/<run>/nsight_profile_plan.json --write-summary
 ```
 
 `bench serve` is for OpenAI-compatible endpoint mechanics only. `bench sweep`
 expands startup-time server env cases plus matching benchmark commands. Neither
 command starts a vLLM server. `profile nsight` writes profiler command plans
 around existing benchmark commands; it does not start servers or profilers by
-default. A good latency result is not a quality or behavior pass. Use the
-generated `manifest.json`, `summary.json`, `requests.jsonl`, `serving_card.md`,
-and profile plan with eval results before making serving claims.
+default. `profile nsight summarize` inventories expected and present profiler
+artifacts; it is not a kernel interpretation by itself. A good latency result is
+not a quality or behavior pass. Use the generated `manifest.json`,
+`summary.json`, `requests.jsonl`, `serving_card.md`, profile plan, and profile
+summary with eval results before making serving claims.
 
 Plan and report quantization without loading a model:
 

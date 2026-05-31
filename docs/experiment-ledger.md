@@ -643,6 +643,46 @@ Result:
 - `--output-root` is reflected in both written artifacts and the JSON plan
 - MF-0801 is marked tested / smoke-validated
 
+## Kernel/Perf: Profile Summarizer
+
+Status: implemented and pushed as profiling summary CLI work. No model server,
+profiler, benchmark, training run, quantization run, or eval job was started.
+
+Hypothesis: profiler traces are large and often ignored unless each run has a
+small inventory artifact showing what was expected, what exists, and which
+tool outputs are missing. `./forge profile nsight summarize` should read an
+Nsight profile plan and write JSON/Markdown summaries that can be attached to
+serving cards, kernel cards, and future upstream PRs.
+
+Changes:
+
+- added `./forge profile nsight summarize`
+- added `model_forge.profile_summary.v1`
+- summarized expected profile artifacts, present/missing counts, total present
+  bytes, tools, target command, and execution contract
+- wrote `profile_summary.json` and `profile_summary.md` beside the profile plan
+  by default
+- allowed extra artifacts via repeated `--artifact`
+- added summary coverage to `tests/test_nsight_profile.py`
+- updated README, AGENTS, profiling docs, status, and roadmap state
+
+Validation:
+
+```bash
+./forge profile nsight plan --config configs/profiling/nsight_serving_smoke.yaml --run-id unit_nsight_summary_cli --write-plan --output-root /tmp/model_forge_nsight_summary --json
+./forge profile nsight summarize --plan /tmp/model_forge_nsight_summary/unit_nsight_summary_cli/nsight_profile_plan.json --write-summary --json
+.venv/bin/python -m unittest tests.test_nsight_profile -v
+bash -n forge
+.venv/bin/python -m py_compile src/model_forge/profiling/nsight.py
+```
+
+Result:
+
+- profile summaries report expected, present, and missing Nsight artifacts
+- summaries write JSON and Markdown without requiring actual profiler output
+- extra artifact paths can be attached to the summary for later exported stats
+- MF-0802 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

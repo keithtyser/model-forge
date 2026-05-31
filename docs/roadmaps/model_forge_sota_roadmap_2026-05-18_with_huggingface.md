@@ -3840,7 +3840,7 @@ MF-0706 Add automatic ledger update. implementation_status=tested validation_sta
 
 ```text
 MF-0801 Add Nsight profile integration. implementation_status=tested validation_state=smoke_validated
-MF-0802 Add profile summarizer. implementation_status=not_started validation_state=planned
+MF-0802 Add profile summarizer. implementation_status=tested validation_state=smoke_validated
 MF-0803 Add bench kernel rmsnorm. implementation_status=not_started validation_state=planned
 MF-0804 Add bench kernel rope. implementation_status=not_started validation_state=planned
 MF-0805 Add bench kernel dequant. implementation_status=not_started validation_state=planned

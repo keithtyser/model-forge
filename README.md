@@ -272,11 +272,13 @@ Profiling:
 ```bash
 ./forge profile nsight doctor --config configs/profiling/nsight_serving_smoke.yaml
 ./forge profile nsight plan --config configs/profiling/nsight_serving_smoke.yaml --write-plan
+./forge profile nsight summarize --plan reports/generated/profiles/nsight/<run>/nsight_profile_plan.json --write-summary
 ```
 
 See [docs/profiling.md](docs/profiling.md). Nsight profiling plans wrap
 existing benchmark commands and write profiler command scripts without starting
-servers or profilers by default.
+servers or profilers by default. Profile summaries inventory expected and
+present profiler artifacts before deeper kernel interpretation.
 
 Quantization:
 

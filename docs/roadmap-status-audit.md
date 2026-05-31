@@ -13,17 +13,17 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| not_started | 18 |
+| not_started | 17 |
 | scaffolded | 13 |
-| tested | 63 |
+| tested | 64 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 39 |
-| smoke_validated | 55 |
+| planned | 38 |
+| smoke_validated | 56 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -120,7 +120,7 @@ No status audit findings.
 | MF-0705 | P2: Agents | tested | smoke_validated | Add agent run card |
 | MF-0706 | P2: Agents | tested | smoke_validated | Add automatic ledger update |
 | MF-0801 | P2: Kernel/perf | tested | smoke_validated | Add Nsight profile integration |
-| MF-0802 | P2: Kernel/perf | not_started | planned | Add profile summarizer |
+| MF-0802 | P2: Kernel/perf | tested | smoke_validated | Add profile summarizer |
 | MF-0803 | P2: Kernel/perf | not_started | planned | Add bench kernel rmsnorm |
 | MF-0804 | P2: Kernel/perf | not_started | planned | Add bench kernel rope |
 | MF-0805 | P2: Kernel/perf | not_started | planned | Add bench kernel dequant |

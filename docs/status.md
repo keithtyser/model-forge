@@ -99,6 +99,9 @@ This is the short handoff state for humans and agents. Use
   `configs/profiling/nsight_serving_smoke.yaml`, and
   `docs/profiling.md`; it writes `nsys`/`ncu` command plans around existing
   benchmark commands without starting profilers by default.
+- Profile summarization is now present through `./forge profile nsight
+  summarize`; it inventories expected and present profiler artifacts and writes
+  `profile_summary.json` plus `profile_summary.md`.
 - Serving Card generation now writes a structured `serving_card.md` for each
   `bench serve` run with identity, hardware/config, overall metrics,
   per-workload metrics, artifacts, and promotion gates.
