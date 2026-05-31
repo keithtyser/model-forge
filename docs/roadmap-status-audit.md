@@ -13,8 +13,8 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| not_started | 12 |
-| scaffolded | 13 |
+| not_started | 11 |
+| scaffolded | 14 |
 | tested | 69 |
 | wired_to_cli | 1 |
 
@@ -126,7 +126,7 @@ No status audit findings.
 | MF-0805 | P2: Kernel/perf | tested | smoke_validated | Add bench kernel dequant |
 | MF-0806 | P2: Kernel/perf | tested | smoke_validated | Add bench kernel kv-layout |
 | MF-0807 | P2: Kernel/perf | tested | smoke_validated | Add Kernel Card |
-| MF-0808 | P2: Kernel/perf | not_started | planned | Open first upstream PR |
+| MF-0808 | P2: Kernel/perf | scaffolded | planned | Open first upstream PR |
 | MF-0901 | P3: Advanced serving | not_started | planned | Add SGLang backend |
 | MF-0902 | P3: Advanced serving | not_started | planned | Add TensorRT-LLM backend |
 | MF-0903 | P3: Advanced serving | not_started | planned | Add disaggregated prefill/decode experiment profile |

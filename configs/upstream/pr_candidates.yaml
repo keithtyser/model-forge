@@ -1,0 +1,30 @@
+schema_version: model_forge.upstream_pr_candidates.v1
+name: model_forge_upstream_pr_candidates
+description: >
+  Candidate upstream contribution queue. Do not mark an upstream PR complete
+  until an external pull request URL and evidence path are recorded.
+policy:
+  require_external_pr_url: true
+  require_profiler_or_benchmark_evidence: true
+  require_no_private_paths: true
+  require_sensitive_literal_scan: true
+candidates:
+  - id: kernel_card_docs_or_example
+    target_project: model-forge-adjacent
+    target_url: https://github.com/<owner>/<repo>
+    status: candidate
+    hypothesis: >
+      A profiler-backed kernel benchmark card or example can be upstreamed once
+      we have an external repo with matching benchmark/report conventions.
+    contribution_type: docs_or_example
+    local_evidence:
+      - reports/generated/kernel_benchmarks/<run>/summary.json
+      - reports/generated/kernel_benchmarks/<run>/kernel_card.json
+      - reports/generated/profiles/nsight/<run>/profile_summary.json
+    required_validation:
+      - ./forge bench kernel <benchmark> --write
+      - ./forge profile nsight summarize --plan <plan> --write-summary
+      - ./forge upstream plan --config configs/upstream/pr_candidates.yaml --candidate kernel_card_docs_or_example --write-plan
+    next_action: >
+      Replace target_url with a real upstream repository after selecting a
+      project whose maintainers accept benchmark examples or profiling docs.

@@ -872,6 +872,41 @@ Result:
 - profile summary attachment is covered by unit tests
 - MF-0807 is marked tested / smoke-validated
 
+## Kernel/Perf: Upstream PR Candidate Planner
+
+Status: scaffolded as planning and evidence-gating code. No external upstream
+pull request was opened, so MF-0808 is intentionally not marked complete.
+
+Hypothesis: upstream PRs should be based on concrete profiler, kernel, serving,
+or report evidence. A local candidate planner prevents agents from treating a
+placeholder target or generic docs patch as a completed upstream contribution.
+
+Changes:
+
+- added `configs/upstream/pr_candidates.yaml`
+- added `./forge upstream audit`
+- added `./forge upstream plan`
+- added `model_forge.upstream_pr_plan.v1`
+- wrote `upstream_pr_plan.json` and `upstream_pr_plan.md`
+- added audit checks for secrets, private paths, placeholder targets, invalid
+  statuses, and opened/merged candidates without `external_pr_url`
+- documented that MF-0808 requires a real external PR URL
+
+Validation:
+
+```bash
+./forge upstream audit --config configs/upstream/pr_candidates.yaml
+./forge upstream plan --config configs/upstream/pr_candidates.yaml --candidate kernel_card_docs_or_example --write-plan --json
+.venv/bin/python -m unittest tests.test_upstream -v
+```
+
+Result:
+
+- upstream PR candidates can now be planned without pretending completion
+- actual completion remains blocked on selecting a target repo and opening a
+  real external PR
+- MF-0808 is marked scaffolded / planned, not smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

@@ -3846,7 +3846,7 @@ MF-0804 Add bench kernel rope. implementation_status=tested validation_state=smo
 MF-0805 Add bench kernel dequant. implementation_status=tested validation_state=smoke_validated
 MF-0806 Add bench kernel kv-layout. implementation_status=tested validation_state=smoke_validated
 MF-0807 Add Kernel Card. implementation_status=tested validation_state=smoke_validated
-MF-0808 Open first upstream PR. implementation_status=not_started validation_state=planned
+MF-0808 Open first upstream PR. implementation_status=scaffolded validation_state=planned
 ```
 
 ### P3: Advanced serving

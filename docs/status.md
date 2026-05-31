@@ -118,6 +118,9 @@ This is the short handoff state for humans and agents. Use
   `src/model_forge/reports/kernel_card.py`; benchmark writes include
   `kernel_card.json` and `kernel_card.md`, and `./forge bench kernel card` can
   regenerate cards from existing summaries with optional profile summaries.
+- Upstream PR planning is scaffolded through `./forge upstream`; it audits
+  candidate contribution plans and writes `upstream_pr_plan.json`/`.md`, but
+  MF-0808 is not complete until a real external PR URL is recorded.
 - Serving Card generation now writes a structured `serving_card.md` for each
   `bench serve` run with identity, hardware/config, overall metrics,
   per-workload metrics, artifacts, and promotion gates.

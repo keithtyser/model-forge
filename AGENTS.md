@@ -400,6 +400,17 @@ it failed with a meta-tensor dispatch error on the earlier stock path. The
 normal-mode export uses a full-RAM Spark profile with CPU limits, Docker memory
 limits, disk preflight, and a 5% available-RAM watchdog floor.
 
+Plan upstream PRs only when there is evidence:
+
+```bash
+./forge upstream audit --config configs/upstream/pr_candidates.yaml
+./forge upstream plan --config configs/upstream/pr_candidates.yaml --candidate kernel_card_docs_or_example --write-plan
+```
+
+Do not mark `MF-0808` complete from a local plan alone. It requires a real
+external pull request URL plus benchmark, profiler, Kernel Card, or serving
+evidence suitable for the target upstream project.
+
 ## Abliteration Rules
 
 - The reusable recipe is the structure, not fixed constants.

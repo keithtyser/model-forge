@@ -284,6 +284,16 @@ write `summary.json`, `kernel_card.json`, and `kernel_card.md` under
 optimization and must be paired with end-to-end serving evidence before making
 performance claims.
 
+Upstream PR planning:
+
+```bash
+./forge upstream audit --config configs/upstream/pr_candidates.yaml
+./forge upstream plan --config configs/upstream/pr_candidates.yaml --candidate kernel_card_docs_or_example --write-plan
+```
+
+See [docs/upstream-prs.md](docs/upstream-prs.md). Upstream PR planning is an
+evidence gate, not a substitute for opening a real external pull request.
+
 Profiling:
 
 ```bash
