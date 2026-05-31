@@ -45,6 +45,15 @@ variants:
     base_variant: base
     lora_rank: 64
     downloadable: false
+  local_ft_v2:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-ft-v2
+    merged_local_dir: Qwen3.6-27B-local-ft-v2-merged
+    served_model_name: local/qwen36-27b-local-ft-v2
+    adapter: true
+    base_variant: base
+    lora_rank: 32
+    downloadable: false
   local_abli:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-abliterated-v0

@@ -1,0 +1,37 @@
+version: 0.1.0
+description: >
+  Focused high-signal repair sources for Qwen 3.6 27B local FT v2. This pass
+  is intentionally small and targeted: v1 matched base capability but regressed
+  paired benign quality, so v2 upweights non-overlapping repair examples for
+  structured output, ops reasoning, eval analysis, and benign security/admin
+  requests.
+
+sources:
+  qwen36_local_ft_v2_repair_seeds:
+    name: qwen36_local_ft_v2_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v2_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - eval_adjacent_repair
+      - benign_security_quality
+      - capability_sft
+    sampling_cap: 22
+    intended_use: >
+      Non-held-out repair examples derived from v1 failure archetypes. These
+      are deliberately not copies of benchmark prompts.
+
+  model_forge_gemma_ft_v1_seeds:
+    name: model_forge_gemma_ft_v1_seeds
+    type: local_jsonl
+    path: datasets/seeds/gemma4_26b_a4b_local_ft_v1.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - eval_adjacent_repair
+      - capability_sft
+    sampling_cap: 37
+    intended_use: >
+      Portable model-forge workflow repair examples from the Gemma work. They
+      are model-family agnostic and remain useful for agentic workflow repair.
