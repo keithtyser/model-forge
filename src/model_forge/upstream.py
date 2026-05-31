@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass
@@ -22,6 +23,7 @@ DEFAULT_CONFIG = REPO_DIR / "configs" / "upstream" / "pr_candidates.yaml"
 SCHEMA_VERSION = "model_forge.upstream_pr_candidates.v1"
 PLAN_SCHEMA_VERSION = "model_forge.upstream_pr_plan.v1"
 VERIFICATION_SCHEMA_VERSION = "model_forge.upstream_pr_verification.v1"
+APPLY_DRAFT_SCHEMA_VERSION = "model_forge.upstream_pr_apply_draft.v1"
 SECRET_PATTERN = re.compile(r"(hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,})")
 PRIVATE_PATH_PATTERN = re.compile(r"^/(home|Users)/[^/]+/")
 GITHUB_PR_URL_PATTERN = re.compile(r"^https://github\.com/[^/\s]+/[^/\s]+/pull/[0-9]+/?$")
@@ -290,6 +292,137 @@ def build_verification(
     return verification
 
 
+def patch_paths_for_candidate(candidate: Mapping[str, Any]) -> list[Path]:
+    paths: list[Path] = []
+    for raw_path in candidate.get("local_evidence") or []:
+        path = resolve_repo_path(str(raw_path))
+        if path.suffix == ".patch":
+            paths.append(path)
+    return paths
+
+
+def run_git_apply_check(target_worktree: Path, patch_path: Path) -> tuple[bool, str]:
+    result = subprocess.run(
+        ["git", "apply", "--check", str(patch_path)],
+        cwd=target_worktree,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    return result.returncode == 0, result.stdout.strip()
+
+
+def run_git_apply(target_worktree: Path, patch_path: Path) -> tuple[bool, str]:
+    result = subprocess.run(
+        ["git", "apply", str(patch_path)],
+        cwd=target_worktree,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    return result.returncode == 0, result.stdout.strip()
+
+
+def is_git_worktree(path: Path) -> bool:
+    result = subprocess.run(
+        ["git", "rev-parse", "--is-inside-work-tree"],
+        cwd=path,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0 and result.stdout.strip() == "true"
+
+
+def build_apply_draft(
+    config: Mapping[str, Any],
+    config_path: Path,
+    *,
+    candidate_id: str | None,
+    target_worktree: str | Path,
+    branch: str | None = None,
+    apply: bool = False,
+    run_id: str | None = None,
+) -> dict[str, Any]:
+    candidate = candidate_by_id(config, candidate_id)
+    candidate_run_id = sanitize_run_id(run_id or f"upstream_apply_{candidate['id']}")
+    output_dir = REPO_DIR / "reports" / "generated" / "upstream_prs" / candidate_run_id
+    worktree = Path(str(target_worktree)).expanduser().resolve()
+    branch_name = sanitize_run_id(branch or f"model-forge-{candidate['id']}")
+    patch_paths = patch_paths_for_candidate(candidate)
+    checks: list[VerificationCheck] = []
+    checks.append(check_status("target_worktree_exists", worktree.exists() and worktree.is_dir(), str(worktree)))
+    checks.append(check_status("target_worktree_has_git", worktree.exists() and worktree.is_dir() and is_git_worktree(worktree), str(worktree)))
+    checks.append(check_status("candidate_has_patch", bool(patch_paths), ", ".join(display_path(path) for path in patch_paths) or "no .patch in local_evidence"))
+    patch_results: list[dict[str, Any]] = []
+    applied = False
+    if checks[0].status == "pass" and checks[1].status == "pass":
+        for patch_path in patch_paths:
+            ok, output = run_git_apply_check(worktree, patch_path)
+            checks.append(check_status(f"patch_{patch_path.name}_applies", ok, output or "git apply --check passed"))
+            patch_results.append(
+                {
+                    "patch": display_path(patch_path),
+                    "apply_check_passed": ok,
+                    "apply_check_output": output,
+                }
+            )
+        if apply and patch_paths and all(item["apply_check_passed"] for item in patch_results):
+            for patch_path in patch_paths:
+                ok, output = run_git_apply(worktree, patch_path)
+                checks.append(check_status(f"patch_{patch_path.name}_applied", ok, output or "git apply passed"))
+                if not ok:
+                    break
+            applied = all(check.status == "pass" for check in checks if check.name.endswith("_applied"))
+    elif apply:
+        checks.append(check_status("patch_apply_skipped", False, "target worktree must exist and be a git checkout"))
+    failures = [check for check in checks if check.status == "fail"]
+    draft = redact_value(
+        {
+            "schema_version": APPLY_DRAFT_SCHEMA_VERSION,
+            "created_at": utc_timestamp(),
+            "run_id": candidate_run_id,
+            "source_config": display_path(config_path),
+            "output_dir": display_path(output_dir),
+            "candidate_id": candidate.get("id"),
+            "target_project": candidate.get("target_project"),
+            "target_url": candidate.get("target_url"),
+            "target_worktree": display_path(worktree),
+            "branch": branch_name,
+            "apply_requested": apply,
+            "applied": applied,
+            "patches": patch_results,
+            "checks": [asdict(check) for check in checks],
+            "ready": not failures,
+            "blocked_until": [f"{check.name}: {check.message}" for check in failures],
+            "handoff_commands": [
+                f"cd {worktree}",
+                f"git switch -c {branch_name}",
+                *[f"git apply {patch}" for patch in (display_path(path) for path in patch_paths)],
+                "git diff --check",
+                "git status --short",
+                "git add docs/benchmarking/dgx_spark_gb10.md docs/benchmarking/README.md docs/.nav.yml",
+                'git commit -m "docs: add DGX Spark GB10 serving recipe"',
+                f"git push <your-fork-remote> {branch_name}",
+                "open a pull request against the upstream default branch",
+            ],
+            "completion_rule": "After the external PR is opened, record external_pr_url in the upstream candidate and run non-offline verify-pr.",
+        }
+    )
+    return draft
+
+
+def write_apply_draft(draft: Mapping[str, Any]) -> Path:
+    output_dir = resolve_repo_path(str(draft["output_dir"]))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / "upstream_pr_apply_draft.json"
+    path.write_text(json.dumps(draft, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
 def write_verification(verification: Mapping[str, Any]) -> Path:
     output_dir = resolve_repo_path(str(verification["output_dir"]))
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -385,6 +518,22 @@ def render_verification(verification: Mapping[str, Any]) -> None:
     console.print(check_table)
 
 
+def render_apply_draft(draft: Mapping[str, Any]) -> None:
+    table = Table(title=f"Upstream PR Draft Apply: {draft.get('candidate_id')}")
+    table.add_column("Field")
+    table.add_column("Value")
+    for key in ("target_url", "target_worktree", "branch", "apply_requested", "applied", "ready"):
+        table.add_row(key, str(draft.get(key)))
+    console.print(table)
+    check_table = Table(title="Apply Checks")
+    check_table.add_column("Check")
+    check_table.add_column("Status")
+    check_table.add_column("Message")
+    for check in draft.get("checks") or []:
+        check_table.add_row(str(check.get("name")), str(check.get("status")), str(check.get("message")))
+    console.print(check_table)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Plan upstream pull requests with evidence requirements")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -406,6 +555,15 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--run-id")
     verify.add_argument("--write-report", action="store_true")
     verify.add_argument("--json", action="store_true")
+    apply_draft = sub.add_parser("apply-draft", help="Validate or apply a prepared upstream patch to a local upstream checkout")
+    apply_draft.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    apply_draft.add_argument("--candidate")
+    apply_draft.add_argument("--target-worktree", required=True, help="Local clone of the upstream repository")
+    apply_draft.add_argument("--branch", help="Suggested upstream contribution branch")
+    apply_draft.add_argument("--apply", action="store_true", help="Apply the candidate patch after git apply --check passes")
+    apply_draft.add_argument("--run-id")
+    apply_draft.add_argument("--write-report", action="store_true")
+    apply_draft.add_argument("--json", action="store_true")
     return parser
 
 
@@ -446,6 +604,24 @@ def main() -> None:
         else:
             render_verification(verification)
         raise SystemExit(0 if verification.get("verified") else 1)
+
+    if args.command == "apply-draft":
+        draft = build_apply_draft(
+            config,
+            config_path,
+            candidate_id=args.candidate,
+            target_worktree=args.target_worktree,
+            branch=args.branch,
+            apply=args.apply,
+            run_id=args.run_id,
+        )
+        if args.write_report:
+            write_apply_draft(draft)
+        if args.json:
+            print(json.dumps(draft, indent=2, sort_keys=True) + "\n")
+        else:
+            render_apply_draft(draft)
+        raise SystemExit(0 if draft.get("ready") else 1)
 
 
 if __name__ == "__main__":

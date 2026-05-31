@@ -28,7 +28,7 @@ candidates:
     required_validation:
       - ./forge upstream audit --config configs/upstream/pr_candidates.yaml --strict
       - ./forge upstream plan --config configs/upstream/pr_candidates.yaml --candidate dgx_spark_vllm_serving_recipe --write-plan
-      - git apply --check docs/upstream/dgx_spark_vllm_serving_recipe/vllm_dgx_spark_gb10_serving_recipe.patch
+      - ./forge upstream apply-draft --config configs/upstream/pr_candidates.yaml --candidate dgx_spark_vllm_serving_recipe --target-worktree /path/to/vllm --write-report
       - ./forge upstream verify-pr --config configs/upstream/pr_candidates.yaml --candidate dgx_spark_vllm_serving_recipe --offline --write-report
     next_action: >
       Apply the prepared patch to vllm-project/vllm, open it, then record

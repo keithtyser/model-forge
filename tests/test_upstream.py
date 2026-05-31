@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,9 +9,11 @@ import yaml
 
 from model_forge.upstream import (
     DEFAULT_CONFIG,
+    APPLY_DRAFT_SCHEMA_VERSION,
     PLAN_SCHEMA_VERSION,
     VERIFICATION_SCHEMA_VERSION,
     audit_config,
+    build_apply_draft,
     build_plan,
     build_verification,
     load_yaml,
@@ -216,6 +219,55 @@ class UpstreamPlanTests(unittest.TestCase):
 
         self.assertEqual(report_path.name, "upstream_pr_verification.json")
         self.assertEqual(saved["schema_version"], VERIFICATION_SCHEMA_VERSION)
+
+    def test_apply_draft_validates_candidate_patch_against_target_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "upstream"
+            target.mkdir()
+            subprocess.run(["git", "init"], cwd=target, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            (target / "README.md").write_text("hello\n", encoding="utf-8")
+            patch = root / "change.patch"
+            patch.write_text(
+                """diff --git a/README.md b/README.md
+index ce01362..94954ab 100644
+--- a/README.md
++++ b/README.md
+@@ -1 +1,2 @@
+ hello
++world
+""",
+                encoding="utf-8",
+            )
+            config_path = root / "upstream.yaml"
+            config_path.write_text(
+                yaml.safe_dump(
+                    {
+                        "schema_version": "model_forge.upstream_pr_candidates.v1",
+                        "candidates": [
+                            {
+                                "id": "docs_patch",
+                                "target_project": "example",
+                                "target_url": "https://github.com/example/repo",
+                                "status": "candidate",
+                                "hypothesis": "test patch",
+                                "contribution_type": "docs",
+                                "local_evidence": [str(patch)],
+                                "next_action": "open PR",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config, path = load_yaml(config_path)
+            draft = build_apply_draft(config, path, candidate_id="docs_patch", target_worktree=target)
+
+        self.assertEqual(draft["schema_version"], APPLY_DRAFT_SCHEMA_VERSION)
+        self.assertTrue(draft["ready"], draft["blocked_until"])
+        self.assertFalse(draft["applied"])
+        checks = {check["name"]: check for check in draft["checks"]}
+        self.assertEqual(checks["patch_change.patch_applies"]["status"], "pass")
 
 
 if __name__ == "__main__":

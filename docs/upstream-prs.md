@@ -33,6 +33,21 @@ Write an upstream PR plan:
   --write-plan
 ```
 
+Validate the prepared patch against a local upstream checkout:
+
+```bash
+./forge upstream apply-draft \
+  --config configs/upstream/pr_candidates.yaml \
+  --candidate dgx_spark_vllm_serving_recipe \
+  --target-worktree /path/to/vllm \
+  --write-report
+```
+
+Add `--apply` only when the target checkout is disposable or already on the
+intended contribution branch. The command does not push or open a PR; it emits
+the handoff commands needed to create the branch, commit, push to a user fork,
+and open the external pull request.
+
 Verify a recorded PR and evidence paths:
 
 ```bash

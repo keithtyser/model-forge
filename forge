@@ -32,7 +32,7 @@ Usage:
   ./forge roadmap [audit|cli-drift]
   ./forge generalization [audit]
   ./forge agent [schema|audit|card|init|optimize-serving|optimize-quantization|optimize-behavior-edit]
-  ./forge upstream [audit|plan|verify-pr]
+  ./forge upstream [audit|plan|apply-draft|verify-pr]
   ./forge research [list|show|audit|watch]
   ./forge hf [status|login|whoami|plan-model|publish-model|publish-dataset|release-classes]
   ./forge variants [graph|node|audit-node|tokenizer-audit|architecture-audit]
@@ -79,6 +79,7 @@ Examples:
   ./forge agent optimize-quantization --config configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml --variants base
   ./forge agent optimize-behavior-edit --family gemma4_26b_a4b
   ./forge upstream plan --config configs/upstream/pr_candidates.yaml --candidate dgx_spark_vllm_serving_recipe --write-plan
+  ./forge upstream apply-draft --config configs/upstream/pr_candidates.yaml --candidate dgx_spark_vllm_serving_recipe --target-worktree /tmp/model_forge_vllm
   ./forge upstream verify-pr --config configs/upstream/pr_candidates.yaml --candidate dgx_spark_vllm_serving_recipe --offline --write-report
   ./forge research audit
   ./forge research watch
