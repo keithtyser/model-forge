@@ -107,6 +107,7 @@ Run evals from another terminal:
 ./forge hf status --offline
 ./forge hf release-classes --audit
 ./forge hf plan-model gemma4_26b_a4b base --release-class report_only
+./forge hf publish-dataset datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_bundle --repo-id keithtyser/model-forge-gemma-local-ft-v1 --dry-run
 ./forge variants graph gemma4_26b_a4b
 ./forge artifacts validate reports/generated/.../artifacts/
 ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run
@@ -174,10 +175,13 @@ Dataset factory:
 ./forge data pack gemma4_26b_a4b local_ft_v1 --smoke
 ./forge data training-gate gemma4_26b_a4b local_ft_v1 --finetune-plan <run>/plan.json --data-summary <run>/data_summary.json --promotion-report <promotion>.json --write-gate
 ./forge data publish gemma4_26b_a4b local_ft_v1 --smoke
+./forge hf publish-dataset datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_bundle --repo-id keithtyser/model-forge-gemma-local-ft-v1 --dry-run
 ```
 
 Use `generate --overwrite` only when replacing candidates intentionally.
 Downstream `--overwrite` refreshes derived artifacts from existing candidates.
+Use `data publish` to build the redacted bundle and `hf publish-dataset --dry-run`
+to audit a prepared dataset path before any Hub upload.
 `propose` turns saved eval failures into the next dataset skill targets and a
 candidate config patch.
 `publish` writes a dry-run HF plan by default; `publish --execute` refuses

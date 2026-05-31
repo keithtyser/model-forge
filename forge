@@ -34,7 +34,7 @@ Usage:
   ./forge agent [schema|audit|card|init|optimize-serving|optimize-quantization|optimize-behavior-edit]
   ./forge upstream [audit|plan]
   ./forge research [list|show|audit|watch]
-  ./forge hf [status|login|whoami|plan-model|publish-model|release-classes]
+  ./forge hf [status|login|whoami|plan-model|publish-model|publish-dataset|release-classes]
   ./forge variants [graph|node|audit-node|tokenizer-audit|architecture-audit]
   ./forge manifest [write|show]
   ./forge artifacts [validate]
@@ -84,6 +84,7 @@ Examples:
   ./forge hf release-classes --audit
   ./forge hf status
   ./forge hf plan-model gemma4_26b_a4b local_ft --release-class report_only
+  ./forge hf publish-dataset datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_bundle --repo-id keithtyser/model-forge-gemma-local-ft-v1 --dry-run
   ./forge variants graph gemma4_26b_a4b
   ./forge variants architecture-audit gemma4_26b_a4b
   ./forge variants tokenizer-audit gemma4_26b_a4b

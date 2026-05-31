@@ -17,6 +17,7 @@ from model_forge.runs.manifest import REPO_DIR, display_path, redact_value, sani
 
 
 SCHEMA_VERSION = "model_forge.hub_publish_plan.v1"
+DATASET_PLAN_SCHEMA_VERSION = "model_forge.hub_dataset_publish_plan.v1"
 DEFAULT_HUB_CONFIG = REPO_DIR / "configs" / "hub.yaml"
 RELEASE_CLASS_DIR = REPO_DIR / "configs" / "release_classes"
 DEFAULT_OUTPUT_ROOT = REPO_DIR / "reports" / "generated" / "hub"
@@ -585,6 +586,153 @@ def build_model_plan(args: argparse.Namespace) -> dict[str, Any]:
     return plan
 
 
+def count_jsonl_rows(path: Path) -> int | None:
+    if not path.is_file() or path.suffix.lower() != ".jsonl":
+        return None
+    count = 0
+    with path.open("r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if line.strip():
+                count += 1
+    return count
+
+
+def dataset_files(root: Path) -> list[Path]:
+    if root.is_file():
+        return [root]
+    return sorted(path for path in root.rglob("*") if path.is_file())
+
+
+def read_small_text(path: Path) -> str:
+    if not path.exists() or not path.is_file() or path.stat().st_size > 2_000_000:
+        return ""
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def dataset_card_text(files: list[Path]) -> str:
+    for name in ("README.md", "dataset_card.md"):
+        for path in files:
+            if path.name == name:
+                return read_small_text(path)
+    return ""
+
+
+def load_optional_json(path: Path) -> dict[str, Any] | None:
+    if not path.exists() or not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def dataset_publish_gates_for_path(
+    *,
+    dataset_path: Path,
+    files: list[Path],
+    visibility: str,
+    include_raw_outputs: bool,
+) -> tuple[list[Gate], dict[str, Any]]:
+    names = {path.name for path in files}
+    suffixes = {path.suffix.lower() for path in files}
+    card = dataset_card_text(files)
+    manifest_text = "\n".join(read_small_text(path) for path in files if path.name in {"manifest.yaml", "manifest.json", "dataset_info.json"})
+    redaction_report = next((load_optional_json(path) for path in files if path.name == "redaction_report.json"), None)
+    redaction_report = redaction_report or None
+    data_candidates = [
+        path
+        for path in files
+        if path.suffix.lower() in {".jsonl", ".json", ".csv", ".parquet"}
+        and path.name not in {"redaction_report.json", "quality_report.json", "generation_report.json", "review_report.json", "hf_publish_plan.json"}
+    ]
+    row_counts = {
+        publish_path_label(path): count
+        for path in data_candidates
+        for count in [count_jsonl_rows(path)]
+        if count is not None
+    }
+    has_license = "license:" in card.lower() or "license" in manifest_text.lower()
+    has_provenance = "provenance" in card.lower() or "source" in manifest_text.lower() or "source" in card.lower()
+    card_sections = ("## Purpose", "## Counts", "## Provenance")
+    private_findings = []
+    token_findings = []
+    for path in files:
+        findings = scan_text_file(path)
+        private_findings.extend(finding for finding in findings if "private absolute path" in finding)
+        token_findings.extend(finding for finding in findings if "secret-like literal" in finding)
+    public = visibility == "public"
+    redacted_or_private = (
+        not public
+        or not include_raw_outputs
+        or bool(redaction_report and not redaction_report.get("raw_message_content_published"))
+        or any("redacted" in path.name for path in data_candidates)
+    )
+    gates = [
+        gate_status("license_present", has_license, "dataset card or manifest records a license"),
+        gate_status("source_provenance_present", has_provenance, "dataset card or manifest records provenance/source information"),
+        gate_status("pii_scan_passed", not private_findings, "; ".join(private_findings[:5]) or "no private absolute paths found"),
+        gate_status("unsafe_examples_redacted_or_private", redacted_or_private, "public plans require redaction or raw-output exclusion"),
+        gate_status("dataset_card_complete", all(section in card for section in card_sections), "dataset card contains required sections"),
+        gate_status("schema_present", bool(data_candidates) and bool({".jsonl", ".json", ".csv", ".parquet"} & suffixes), "dataset file with known schema-like extension is present"),
+        gate_status("split_sizes_present", bool(row_counts) or ".parquet" in suffixes or ".csv" in suffixes, f"row_counts={row_counts or '{}'}"),
+        gate_status("no_absolute_paths", not private_findings, "; ".join(private_findings[:5]) or "no private absolute paths found"),
+        gate_status("no_tokens_or_credentials", not token_findings, "; ".join(token_findings[:5]) or "no token or credential literals found"),
+    ]
+    metadata = {
+        "dataset_path": publish_path_label(dataset_path),
+        "files": [publish_path_label(path) for path in files],
+        "row_counts": row_counts,
+        "redaction_report": redaction_report,
+        "data_files": [publish_path_label(path) for path in data_candidates],
+    }
+    return gates, metadata
+
+
+def build_dataset_plan(args: argparse.Namespace) -> dict[str, Any]:
+    hub_config = load_hub_config()
+    dataset_path = resolve_path(args.dataset_path)
+    files = dataset_files(dataset_path) if dataset_path.exists() else []
+    repo_id = args.repo_id or f"{hub_config.get('default_owner') or 'model-forge'}/{sanitize_run_id(dataset_path.stem or dataset_path.name)}"
+    run_id = args.run_id or sanitize_run_id(f"{dataset_path.name}_dataset_hf_plan")
+    output_dir = resolve_path(args.output_dir) if args.output_dir else DEFAULT_OUTPUT_ROOT / run_id
+    gates, metadata = dataset_publish_gates_for_path(
+        dataset_path=dataset_path,
+        files=files,
+        visibility=args.visibility,
+        include_raw_outputs=args.include_raw_outputs,
+    )
+    gates.insert(0, gate_status("dataset_path_exists", dataset_path.exists(), f"path={publish_path_label(dataset_path)}"))
+    blocking_failures = [gate for gate in gates if gate.status == "fail"]
+    plan = {
+        "schema_version": DATASET_PLAN_SCHEMA_VERSION,
+        "created_at": utc_now().isoformat(),
+        "dry_run": True,
+        "run_id": run_id,
+        "repo_id": repo_id,
+        "repo_type": "dataset",
+        "visibility": args.visibility,
+        "release_class": args.release_class,
+        "dataset_path": publish_path_label(dataset_path),
+        "split": args.split,
+        "card_template": args.card_template,
+        "files_included": metadata["files"],
+        "data_files": metadata["data_files"],
+        "row_counts": metadata["row_counts"],
+        "redaction_report": metadata["redaction_report"],
+        "release_gates": [gate.__dict__ for gate in gates],
+        "blocked": bool(blocking_failures),
+        "blocked_until": [f"{gate.name}: {gate.message}" for gate in blocking_failures],
+        "github_repo": REPO_URL,
+    }
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "hub_dataset_plan.json").write_text(
+        json.dumps(redact_value(plan), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return plan
+
+
 def print_status(data: Mapping[str, Any]) -> None:
     table = Table(title="Hugging Face Status")
     table.add_column("Field")
@@ -612,6 +760,22 @@ def print_plan(plan: Mapping[str, Any]) -> None:
         table.add_row(key, str(plan.get(key)))
     console.print(table)
     gate_table = Table(title="Release Gates")
+    gate_table.add_column("Gate")
+    gate_table.add_column("Status")
+    gate_table.add_column("Message")
+    for gate in plan.get("release_gates") or []:
+        gate_table.add_row(str(gate["name"]), str(gate["status"]), str(gate["message"]))
+    console.print(gate_table)
+
+
+def print_dataset_plan(plan: Mapping[str, Any]) -> None:
+    table = Table(title="HF Dataset Publish Plan")
+    table.add_column("Field")
+    table.add_column("Value")
+    for key in ("repo_id", "repo_type", "visibility", "release_class", "dataset_path", "split", "blocked"):
+        table.add_row(key, str(plan.get(key)))
+    console.print(table)
+    gate_table = Table(title="Dataset Release Gates")
     gate_table.add_column("Gate")
     gate_table.add_column("Status")
     gate_table.add_column("Message")
@@ -676,6 +840,19 @@ def build_parser() -> argparse.ArgumentParser:
     add_model_args(publish_model)
     publish_model.add_argument("--dry-run", action="store_true", default=True)
     publish_model.add_argument("--execute", action="store_true", help="Reserved for future guarded upload support")
+    publish_dataset = sub.add_parser("publish-dataset", help="Dry-run dataset publish plan")
+    publish_dataset.add_argument("dataset_path")
+    publish_dataset.add_argument("--repo-id")
+    publish_dataset.add_argument("--release-class", default="public_dataset")
+    publish_dataset.add_argument("--split")
+    publish_dataset.add_argument("--card-template", default="dataset")
+    publish_dataset.add_argument("--visibility", choices=["public", "private"], default="public")
+    publish_dataset.add_argument("--include-raw-outputs", action="store_true")
+    publish_dataset.add_argument("--dry-run", action="store_true", default=True)
+    publish_dataset.add_argument("--execute", action="store_true", help="Reserved for future guarded dataset upload support")
+    publish_dataset.add_argument("--output-dir")
+    publish_dataset.add_argument("--run-id")
+    publish_dataset.add_argument("--json", action="store_true")
     release_classes = sub.add_parser("release-classes", help="List or audit release-class configs")
     release_classes.add_argument("--audit", action="store_true")
     release_classes.add_argument("--json", action="store_true")
@@ -730,6 +907,16 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print_plan(plan)
         return 1 if plan.get("blocked") and args.command == "publish-model" else 0
+    if args.command == "publish-dataset":
+        if args.execute:
+            console.print("[red]Non-dry-run dataset upload is not implemented; inspect the dry-run plan first.[/red]")
+            return 2
+        plan = build_dataset_plan(args)
+        if args.json:
+            print(json.dumps(redact_value(plan), indent=2, sort_keys=True))
+        else:
+            print_dataset_plan(plan)
+        return 1 if plan.get("blocked") else 0
     if args.command == "release-classes":
         findings = audit_release_classes()
         if args.json:

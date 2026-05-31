@@ -2755,6 +2755,36 @@ passes dataset-card, redaction, license/provenance, and no-secret/no-private-pat
 gates, and remains blocked as a dry run because the local FT v1 pack is still a
 smoke scaffold.
 
+## Hugging Face Dataset Publish Dry Run
+
+Status: implemented and smoke validated.
+
+Purpose: add a generic Hub dataset publication audit that can inspect any
+prepared dataset path, not only datasets produced by the Model Forge factory.
+This is the final dry-run gate before a manual or future automated upload.
+
+Primary files:
+
+```text
+src/model_forge/hub/cli.py
+tests/test_hub_cli.py
+docs/huggingface-publishing.md
+```
+
+Validation:
+
+```text
+.venv/bin/python -m unittest tests.test_hub_cli -v
+./forge hf publish-dataset datasets/generated/gemma4_26b_a4b_local_ft_v1/hf_publish_bundle --repo-id keithtyser/model-forge-gemma-local-ft-v1 --dry-run --json
+```
+
+Observed result: the dry run wrote `hub_dataset_plan.json`, returned
+`blocked=false`, evaluated 10 release gates, and counted 49 rows each in
+`dataset_redacted.jsonl` and `verification.jsonl`. Gates cover dataset
+existence, license, provenance, PII scan status, public redaction, dataset-card
+sections, schema, split sizes, no private absolute paths, and no secret-like
+tokens. Non-dry-run upload execution is intentionally not implemented yet.
+
 ## Eval Provenance Card
 
 Status: implemented and smoke validated.

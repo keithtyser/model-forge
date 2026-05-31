@@ -26,6 +26,12 @@ Plan a public dataset release through the dataset factory:
 ./forge data publish <family> <variant> --source-license-checked --overwrite
 ```
 
+Audit a prepared dataset or redacted publish bundle before upload:
+
+```bash
+./forge hf publish-dataset <dataset_path> --repo-id <user-or-org>/<dataset-repo> --dry-run
+```
+
 Plans are written under `reports/generated/hub/<run_id>/` by default:
 
 ```text
@@ -34,10 +40,10 @@ hub_publish.json
 hub_model_plan.json
 ```
 
-`publish-model` is dry-run only for now. A blocked dry run returns nonzero so it
-can be used in CI or before a manual upload. Dataset publishing can execute only
-for non-smoke datasets and uploads the generated redacted bundle when the
-release class requires public redaction.
+`publish-model` and `hf publish-dataset` are dry-run only for now. A blocked dry
+run returns nonzero so it can be used in CI or before a manual upload. Dataset
+factory publishing can execute only for non-smoke datasets and uploads the
+generated redacted bundle when the release class requires public redaction.
 
 ## Release Classes
 
@@ -75,8 +81,8 @@ Every model plan records `release_gates` in `hub_publish.json`. Common gates:
 Do not override these gates in generated JSON. Fix the evidence or choose a
 less permissive release class.
 
-Dataset publish plans record the same gate shape in `hf_publish_plan.json`. For
-`public_dataset`, the factory creates `hf_publish_bundle/` with:
+Dataset factory publish plans record the same gate shape in `hf_publish_plan.json`.
+For `public_dataset`, the factory creates `hf_publish_bundle/` with:
 
 - `README.md`
 - `dataset_redacted.jsonl`
@@ -88,6 +94,23 @@ quality metadata, content hashes, and message lengths while replacing message
 text with `<redacted>`. Public plans exclude `accepted.jsonl`, `rejected.jsonl`,
 and raw `dataset.jsonl` unless a different release class explicitly allows raw
 outputs.
+
+The generic Hub audit path writes `hub_dataset_plan.json` next to the dataset
+path, or under `--output-dir` when supplied. It checks:
+
+- dataset path exists
+- license is present
+- source provenance is present
+- PII scan passed when a report is available
+- unsafe examples are redacted for public releases unless raw outputs are
+  explicitly included
+- dataset card has purpose, counts, and provenance sections
+- schema and split-size metadata are present
+- planned files do not contain private absolute paths or secret-like tokens
+
+Use the factory path to build a Model Forge dataset bundle, then use
+`forge hf publish-dataset --dry-run` as the final publication gate before any
+manual or future automated Hub upload.
 
 ## Secrets And Paths
 

@@ -655,6 +655,10 @@ When publishing a model:
   and inspect `hf_publish_bundle/`; public dataset plans must not include raw
   accepted/rejected rows or unredacted message text unless the release class
   explicitly allows it
+- before uploading any dataset, run
+  `./forge hf publish-dataset <dataset_path> --repo-id <namespace>/<repo> --dry-run`
+  and fix every failed gate instead of overriding the generated
+  `hub_dataset_plan.json`
 - for eval evidence, inspect `eval_provenance_card.json` before making claims;
   raw `responses.jsonl` and `examples.md` need redaction before public release
 - include a model card linking back to this repo

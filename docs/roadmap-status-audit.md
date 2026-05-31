@@ -13,8 +13,8 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| scaffolded | 2 |
-| tested | 93 |
+| scaffolded | 1 |
+| tested | 94 |
 
 ## Validation State
 
@@ -97,7 +97,7 @@ No status audit findings.
 | MF-0501 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add forge hf status/login/whoami |
 | MF-0502 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add forge hf plan-model |
 | MF-0503 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add forge hf publish-model --dry-run |
-| MF-0504 | P1: Hugging Face Hub publishing | scaffolded | smoke_validated | Add forge hf publish-dataset --dry-run |
+| MF-0504 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add forge hf publish-dataset --dry-run |
 | MF-0505 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add Hub model card generator |
 | MF-0506 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add Hub dataset card generator |
 | MF-0507 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add release-class validators |
