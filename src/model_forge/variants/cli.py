@@ -11,6 +11,7 @@ from rich.table import Table
 
 from model_forge.objectives import IMPLEMENTATION_STATUSES, VALIDATION_STATES
 from model_forge.variants.architecture_audit import build_architecture_audit
+from model_forge.variants.checkpoint_audit import build_checkpoint_audit
 from model_forge.variants.graph import ancestry, variant_graph
 from model_forge.variants.manifest import (
     DEFAULT_OUTPUT_ROOT,
@@ -133,6 +134,13 @@ def main() -> None:
     architecture_parser.add_argument("--strict", action="store_true", help="treat missing local dirs or config.json as errors")
     architecture_parser.add_argument("--json", action="store_true")
 
+    checkpoint_parser = subparsers.add_parser("checkpoint-audit", help="Check local checkpoint completeness before serve/train")
+    checkpoint_parser.add_argument("family")
+    checkpoint_parser.add_argument("--variant", help="Audit one variant local checkpoint; defaults to all configured variants")
+    checkpoint_parser.add_argument("--models-dir", help="Override the family models directory")
+    checkpoint_parser.add_argument("--strict", action="store_true", help="treat missing local dirs or incomplete downloads as errors")
+    checkpoint_parser.add_argument("--json", action="store_true")
+
     args = parser.parse_args()
 
     if args.action == "graph":
@@ -238,6 +246,37 @@ def main() -> None:
                 style = "red" if finding["level"] == "error" else "yellow"
                 variant = f" {finding['variant']}" if finding.get("variant") else ""
                 console.print(f"[{style}]{finding['level']}{variant} {finding['check']}: {finding['message']}[/{style}]")
+        raise SystemExit(0 if audit["passed"] else 1)
+
+    if args.action == "checkpoint-audit":
+        audit = build_checkpoint_audit(
+            args.family,
+            variant=args.variant,
+            models_dir_override=args.models_dir,
+            strict=args.strict,
+        )
+        if args.json:
+            print(json.dumps(audit, indent=2, sort_keys=True))
+        else:
+            table = Table(title=f"Checkpoint Audit: {audit['family']}")
+            table.add_column("Variant")
+            table.add_column("Exists")
+            table.add_column("Shards")
+            table.add_column("Bytes")
+            table.add_column("Incomplete")
+            for record in audit["records"]:
+                safetensors = record.get("safetensors") or {}
+                table.add_row(
+                    str(record["variant"]),
+                    str(record.get("exists")),
+                    str(safetensors.get("shard_count") or 0),
+                    str(safetensors.get("total_shard_bytes") or 0),
+                    str(len(record.get("incomplete_download_files") or [])),
+                )
+            console.print(table)
+            for finding in audit["findings"]:
+                style = "red" if finding["level"] == "error" else "yellow"
+                console.print(f"[{style}]{finding['level']} {finding['variant']} {finding['check']}: {finding['message']}[/{style}]")
         raise SystemExit(0 if audit["passed"] else 1)
 
     data = yaml.safe_load(args.path.read_text(encoding="utf-8")) if args.path.suffix in {".yaml", ".yml"} else json.loads(args.path.read_text(encoding="utf-8"))

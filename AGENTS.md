@@ -360,6 +360,7 @@ Inspect or write variant graph nodes:
 ./forge variants node gemma4_26b_a4b local_ft --write
 ./forge variants architecture-audit gemma4_26b_a4b --variant base
 ./forge variants tokenizer-audit gemma4_26b_a4b --variant local_abli
+./forge variants checkpoint-audit gemma4_26b_a4b --variant base --strict
 ```
 
 Variant nodes record the source variant, transform, checkpoint reference,
@@ -369,6 +370,9 @@ example is intentionally promoted. Run `tokenizer-audit --load-tokenizer
 --strict` before release gates so adapter merges, ablation exports,
 quantization exports, and future GGUF conversions cannot silently lose
 chat-template or special-token behavior.
+Run `checkpoint-audit --strict` before serving or training a downloaded model;
+it catches missing safetensor shards, missing index files, missing config or
+tokenizer markers, and active Hugging Face `.incomplete` downloads.
 
 Validate or plan cluster usage:
 

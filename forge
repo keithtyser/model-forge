@@ -35,7 +35,7 @@ Usage:
   ./forge upstream [audit|plan|apply-draft|verify-pr]
   ./forge research [list|show|audit|watch]
   ./forge hf [status|login|whoami|plan-model|publish-model|publish-dataset|release-classes]
-  ./forge variants [graph|node|audit-node|tokenizer-audit|architecture-audit]
+  ./forge variants [graph|node|audit-node|tokenizer-audit|architecture-audit|checkpoint-audit]
   ./forge manifest [write|show]
   ./forge artifacts [validate]
   ./forge bench [serve|serve-eval|sweep|kernel]
@@ -90,6 +90,7 @@ Examples:
   ./forge variants graph gemma4_26b_a4b
   ./forge variants architecture-audit gemma4_26b_a4b
   ./forge variants tokenizer-audit gemma4_26b_a4b
+  ./forge variants checkpoint-audit gemma4_26b_a4b --variant base --strict
   ./forge manifest write --run-type eval --family gemma4_26b_a4b --variant base --command './forge eval gemma4_26b_a4b base --internal'
   ./forge artifacts validate reports/generated/.../artifacts/
   ./forge bench serve --family gemma4_26b_a4b --variant base --dry-run

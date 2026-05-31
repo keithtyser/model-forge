@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from model_forge.variants.architecture_audit import audit_architecture_metadata, build_architecture_audit
+from model_forge.variants.checkpoint_audit import build_checkpoint_audit
 from model_forge.variants.graph import ancestry, variant_graph
 from model_forge.variants.manifest import default_variant_node, load_family, node_output_path, validate_family_config, validate_variant_node, write_variant_node
 from model_forge.variants.tokenizer_audit import build_tokenizer_audit
@@ -279,6 +280,59 @@ class VariantGraphTests(unittest.TestCase):
             )
         self.assertTrue(audit["passed"], audit["findings"])
         self.assertEqual(audit["records"][0]["round_trip"]["status"], "passed")
+
+    def test_checkpoint_audit_flags_incomplete_base_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            models = Path(tmp)
+            checkpoint = models / "Qwen3.5-9B"
+            write_tokenizer_fixture(checkpoint)
+            write_model_config_fixture(checkpoint)
+            (checkpoint / "generation_config.json").write_text(json.dumps({}), encoding="utf-8")
+            cache = checkpoint / ".cache" / "huggingface" / "download"
+            cache.mkdir(parents=True)
+            (cache / "model-00001-of-00002.safetensors.lock").write_text("", encoding="utf-8")
+            (cache / "partial.incomplete").write_text("partial", encoding="utf-8")
+            audit = build_checkpoint_audit(
+                "qwen35_9b",
+                variant="base",
+                models_dir_override=str(models),
+                strict=True,
+            )
+        self.assertFalse(audit["passed"])
+        checks = {finding["check"] for finding in audit["findings"]}
+        self.assertIn("weights", checks)
+        self.assertIn("download", checks)
+
+    def test_checkpoint_audit_accepts_indexed_safetensor_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            models = Path(tmp)
+            checkpoint = models / "Qwen3.5-9B"
+            write_tokenizer_fixture(checkpoint)
+            write_model_config_fixture(checkpoint)
+            (checkpoint / "generation_config.json").write_text(json.dumps({}), encoding="utf-8")
+            for shard in ("model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors"):
+                (checkpoint / shard).write_text("placeholder", encoding="utf-8")
+            (checkpoint / "model.safetensors.index.json").write_text(
+                json.dumps(
+                    {
+                        "metadata": {"total_size": 22},
+                        "weight_map": {
+                            "a.weight": "model-00001-of-00002.safetensors",
+                            "b.weight": "model-00002-of-00002.safetensors",
+                        },
+                    },
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+            audit = build_checkpoint_audit(
+                "qwen35_9b",
+                variant="base",
+                models_dir_override=str(models),
+                strict=True,
+            )
+        self.assertTrue(audit["passed"], audit["findings"])
+        self.assertEqual(audit["records"][0]["safetensors"]["shard_count"], 2)
 
 
 if __name__ == "__main__":

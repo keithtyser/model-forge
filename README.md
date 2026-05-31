@@ -79,6 +79,7 @@ Then audit before training or editing:
 ./forge variants graph my_model
 ./forge variants architecture-audit my_model --variant base
 ./forge variants tokenizer-audit my_model --variant base
+./forge variants checkpoint-audit my_model --variant base --strict
 ./forge generalization audit
 ./forge doctor
 ```
