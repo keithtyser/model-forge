@@ -907,6 +907,8 @@ RUN_DIR={shlex.quote(str(run_dir))}
 PLAN={shlex.quote(str(outputs["plan"]))}
 TRAINER={shlex.quote(str(outputs["trainer"]))}
 JOB_LOCK="${{MODEL_FORGE_CLUSTER_JOB_LOCK:-runs/locks/model-forge-cluster.lock}}"
+FAMILY={shlex.quote(str(plan["family"]))}
+SOURCE_VARIANT={shlex.quote(str(plan.get("eval", {}).get("source_variant") or "base"))}
 
 mkdir -p "$(dirname "$JOB_LOCK")"
 
@@ -915,6 +917,7 @@ echo "[model-forge] train image: $TRAIN_IMAGE"
 ./forge cluster doctor --config "$CLUSTER_CONFIG" --strict
 ./forge cluster health --config "$CLUSTER_CONFIG" --timeout "${{MODEL_FORGE_CLUSTER_HEALTH_TIMEOUT:-30}}"
 ./forge cluster runtime --config "$CLUSTER_CONFIG" --image "$TRAIN_IMAGE" --timeout "${{MODEL_FORGE_CLUSTER_RUNTIME_TIMEOUT:-120}}"
+./forge variants checkpoint-audit "$FAMILY" --variant "$SOURCE_VARIANT" --strict
 if [[ "${{MODEL_FORGE_SKIP_TORCHRUN_SMOKE:-0}}" != "1" ]]; then
   SMOKE_ARGS=(--config "$CLUSTER_CONFIG" --image "$TRAIN_IMAGE" --timeout "${{MODEL_FORGE_CLUSTER_SMOKE_TIMEOUT:-180}}")
   if [[ -n "$NCCL_SOCKET_IFNAME" ]]; then

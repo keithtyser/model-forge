@@ -83,6 +83,7 @@ class FinetunePlanTests(unittest.TestCase):
         self.assertIn('"docker", "run", "--rm", "--gpus"', cluster_script)
         self.assertIn("torch.distributed.run", cluster_script)
         self.assertIn("MODEL_FORGE_EXECUTE_CLUSTER_TRAIN", cluster_script)
+        self.assertIn('./forge variants checkpoint-audit "$FAMILY" --variant "$SOURCE_VARIANT" --strict', cluster_script)
         self.assertIn("Path.home() / \"models\"", cluster_script)
 
     def test_prepare_writes_dry_run_artifacts(self) -> None:
