@@ -67,8 +67,11 @@ variants:
 
 serve:
   script: scripts/dgx_spark_serve_qwen.sh
+  default_image: vllm-node-tf5
   default_gpu_memory_utilization: "0.78"
   default_max_model_len: "32768"
+  default_max_num_batched_tokens: "16384"
+  default_max_num_seqs: "4"
 
 eval:
   config: configs/experiments/qwen36_27b_v0.yaml

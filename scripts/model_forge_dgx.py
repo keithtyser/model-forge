@@ -247,6 +247,16 @@ def action_serve(family: dict[str, Any], family_name: str, variant: str) -> None
     env = os.environ.copy()
     serve_details = configure_serving_variant(family, variant, env)
     env.setdefault("MODEL_FORGE_MODELS_DIR", str(models_dir(family)))
+    if serve.get("default_gpu_memory_utilization"):
+        env.setdefault("GPU_MEMORY_UTILIZATION", str(serve["default_gpu_memory_utilization"]))
+    if serve.get("default_max_model_len"):
+        env.setdefault("MAX_MODEL_LEN", str(serve["default_max_model_len"]))
+    if serve.get("default_max_num_batched_tokens"):
+        env.setdefault("MAX_NUM_BATCHED_TOKENS", str(serve["default_max_num_batched_tokens"]))
+    if serve.get("default_max_num_seqs"):
+        env.setdefault("VLLM_MAX_NUM_SEQS", str(serve["default_max_num_seqs"]))
+    if serve.get("default_image"):
+        env.setdefault("MODEL_FORGE_SPARK_VLLM_IMAGE", str(serve["default_image"]))
     if recommended_vllm_env is not None:
         for key, value in recommended_vllm_env(env).items():
             env.setdefault(key, value)
@@ -265,10 +275,6 @@ def action_serve(family: dict[str, Any], family_name: str, variant: str) -> None
             title="[bold cyan]Serving Hardware Profile[/bold cyan]",
             border_style="cyan",
         ))
-    if serve.get("default_gpu_memory_utilization"):
-        env.setdefault("GPU_MEMORY_UTILIZATION", str(serve["default_gpu_memory_utilization"]))
-    if serve.get("default_max_model_len"):
-        env.setdefault("MAX_MODEL_LEN", str(serve["default_max_model_len"]))
     run([str(REPO_DIR / serve["script"])], env=env)
 
 

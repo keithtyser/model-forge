@@ -145,6 +145,51 @@ class ModelForgeDgxServeTests(unittest.TestCase):
         self.assertIn("--served-model-name", script)
         self.assertIn("--default-chat-template-kwargs", script)
 
+    def test_qwen_launcher_builds_valid_default_chat_template_kwargs(self) -> None:
+        script = (REPO_DIR / "scripts" / "dgx_spark_serve_qwen.sh").read_text(encoding="utf-8")
+        self.assertIn('DEFAULT_CHAT_TEMPLATE_KWARGS=${VLLM_DEFAULT_CHAT_TEMPLATE_KWARGS:-"{\\"enable_thinking\\": ${QWEN_ENABLE_THINKING}}"}', script)
+        self.assertIn('--default-chat-template-kwargs "$DEFAULT_CHAT_TEMPLATE_KWARGS"', script)
+
+    def test_family_serving_defaults_are_applied_before_hardware_recommendations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "base-model").mkdir()
+            family = {
+                "models_dir_env": "MODEL_FORGE_TEST_MODELS_DIR",
+                "default_models_dir": str(root),
+                "architecture": {},
+                "variants": {
+                    "base": {
+                        "repo_id": "org/base",
+                        "local_dir": "base-model",
+                        "served_model_name": "org/base",
+                    },
+                },
+                "serve": {
+                    "script": "scripts/dgx_spark_serve_qwen.sh",
+                    "default_image": "vllm-node-tf5",
+                    "default_gpu_memory_utilization": "0.78",
+                    "default_max_model_len": "32768",
+                    "default_max_num_batched_tokens": "16384",
+                    "default_max_num_seqs": "4",
+                },
+            }
+            captured_env = {}
+
+            def fake_run(_cmd, env=None):
+                captured_env.update(env or {})
+
+            with mock.patch.object(model_forge_dgx, "recommended_vllm_env", return_value={"GPU_MEMORY_UTILIZATION": "0.95", "MAX_NUM_BATCHED_TOKENS": "32768"}):
+                with mock.patch.object(model_forge_dgx, "detect_hardware_profile", None):
+                    with mock.patch.object(model_forge_dgx, "run", side_effect=fake_run):
+                        model_forge_dgx.action_serve(family, "test_family", "base")
+
+        self.assertEqual(captured_env["GPU_MEMORY_UTILIZATION"], "0.78")
+        self.assertEqual(captured_env["MAX_MODEL_LEN"], "32768")
+        self.assertEqual(captured_env["MAX_NUM_BATCHED_TOKENS"], "16384")
+        self.assertEqual(captured_env["VLLM_MAX_NUM_SEQS"], "4")
+        self.assertEqual(captured_env["MODEL_FORGE_SPARK_VLLM_IMAGE"], "vllm-node-tf5")
+
     def test_compare_uses_generic_variant_arguments(self) -> None:
         with tempfile.TemporaryDirectory(dir=REPO_DIR) as tmp:
             root = Path(tmp)
