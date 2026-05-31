@@ -641,8 +641,11 @@ Set `MODEL_FORGE_QUANT_WORKERS=local,<ssh-host>` to distribute independent
 variant exports across a Spark cluster. Do not commit those worker names or IPs.
 Run at most one export per Spark node, and do not launch export commands outside
 `./forge quantize export`; the runner has a runtime memory watchdog and Docker
-cleanup path. The generated command defaults to `systemd-run --user --scope`,
-`nice`, Docker CPU/memory limits, and a checkout-local export lock. If the
+cleanup path. For configured family variants, `--execute` also runs the strict
+source checkpoint audit before launching ModelOpt, so missing or partial source
+checkpoints fail before a heavy export starts. The generated command defaults
+to `systemd-run --user --scope`, `nice`, Docker CPU/memory limits, and a
+checkout-local export lock. If the
 configured systemd mode fails or asks for interactive authorization, stop and
 fix the host execution path; do not rerun the same heavy command without
 equivalent limits. Use `--target-variant` on single exports so metadata matches

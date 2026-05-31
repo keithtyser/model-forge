@@ -23,6 +23,7 @@ from rich.table import Table
 
 from model_forge.hardware import detect_hardware_profile, recommended_quantization_env
 from model_forge.runs.manifest import REPO_DIR, display_path, redact_value, sanitize_run_id
+from model_forge.variants.checkpoint_audit import build_checkpoint_audit
 from model_forge.variants.tokenizer_audit import compare_records, live_round_trip, tokenizer_record
 
 
@@ -817,6 +818,17 @@ def write_calibration_manifest_outputs(manifest: Mapping[str, Any]) -> Path:
 
 
 def guard_export(export_plan: Mapping[str, Any]) -> None:
+    source = export_plan.get("source") or {}
+    source_family = str(source.get("family") or "")
+    source_variant = str(source.get("variant") or "")
+    if source_family and source_variant:
+        checkpoint_audit = build_checkpoint_audit(source_family, variant=source_variant, strict=True)
+        if not checkpoint_audit["passed"]:
+            findings = checkpoint_audit.get("findings") or []
+            summary = "; ".join(
+                f"{item.get('variant')} {item.get('check')}: {item.get('message')}" for item in findings[:5]
+            )
+            raise RuntimeError(f"source checkpoint audit failed before quantization export: {summary}")
     policy = export_plan.get("resource_policy") or {}
     memory_floor = float(policy.get("start_if_memory_available_above_fraction", 0.05))
     disk_floor = float(policy.get("require_disk_free_fraction", 0.15))
@@ -2337,7 +2349,11 @@ def main() -> None:
         else:
             console.print(export_plan["command_display"])
         if args.execute:
-            raise SystemExit(execute_export(export_plan))
+            try:
+                raise SystemExit(execute_export(export_plan))
+            except RuntimeError as exc:
+                console.print(f"[red]quantization export failed preflight: {exc}[/red]")
+                raise SystemExit(1) from None
         return
 
     if args.command == "calibration-manifest":

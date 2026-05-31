@@ -24,6 +24,7 @@ from model_forge.quantization.cli import (
     build_nvfp4_gate_report,
     build_sensitivity_report,
     build_tokenizer_report,
+    guard_export,
     build_plan,
     filter_matrix_entries,
     load_quantization_config,
@@ -111,6 +112,19 @@ class QuantizationCliTests(unittest.TestCase):
         self.assertIn("vllm-node-tf5", launch)
         self.assertIn("--quantization modelopt", launch)
         self.assertNotIn("169.254.", launch)
+
+    def test_export_guard_requires_complete_family_source_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            export_plan = {
+                "source": {"family": "qwen36_27b", "variant": "local_ft_abli"},
+                "target": {"host_output_path": str(Path(tmp) / "candidate")},
+                "resource_policy": {
+                    "start_if_memory_available_above_fraction": 0.0,
+                    "require_disk_free_fraction": 0.0,
+                },
+            }
+            with self.assertRaisesRegex(RuntimeError, "source checkpoint audit failed"):
+                guard_export(export_plan)
 
     def test_quantization_card_compares_serving_and_sampled_eval_deltas(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
