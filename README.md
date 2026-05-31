@@ -97,6 +97,7 @@ Run evals from another terminal:
 ./forge objectives audit
 ./forge roadmap audit --write-doc
 ./forge roadmap cli-drift
+./forge generalization audit
 ./forge research audit
 ./forge manifest write --run-type eval --family gemma4_26b_a4b --variant base --command './forge eval gemma4_26b_a4b base --internal'
 ./forge hf status --offline

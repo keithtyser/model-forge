@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 
 from model_forge.doctor import (
     Finding,
+    check_generalization_assumptions,
     check_generated_dataset_policy,
     check_machine_paths,
     check_model_family_configs,
@@ -75,6 +76,9 @@ class DoctorTests(unittest.TestCase):
 
     def test_model_family_config_audit_passes_current_configs(self) -> None:
         self.assertEqual(check_model_family_configs(), [])
+
+    def test_generalization_assumption_audit_passes_current_common_code(self) -> None:
+        self.assertEqual(check_generalization_assumptions(), [])
 
 
 if __name__ == "__main__":

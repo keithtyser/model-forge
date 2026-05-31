@@ -20,6 +20,10 @@ This is the short handoff state for humans and agents. Use
 - Architecture target-discovery checks are now wired through
   `./forge variants architecture-audit`; family configs record attention/MLP
   target patterns plus embedding, LM-head, and router/expert exclusions.
+- Common-code family assumptions are now checked by `./forge generalization
+  audit`, which is also part of `./forge doctor`. The top-level `./forge`
+  finetune, ablate, promote, and golden commands discover family configs by
+  convention instead of branching on Gemma.
 - Gemma 4 A4B is the first worked family for base, downloaded FT, downloaded
   abli, local base abli, local FT, and local FT abli comparisons.
 - Internal evals now cover refusal suppression, benign paired quality,

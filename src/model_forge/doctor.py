@@ -11,6 +11,7 @@ from typing import Iterable
 
 import yaml
 
+from model_forge.generalization import run_audit as run_generalization_audit
 from model_forge.objectives import audit_profiles
 from model_forge.roadmap import (
     audit_roadmap_command_examples,
@@ -267,6 +268,13 @@ def check_model_family_configs(repo_dir: Path = REPO_DIR) -> list[Finding]:
     return findings
 
 
+def check_generalization_assumptions(repo_dir: Path = REPO_DIR) -> list[Finding]:
+    return [
+        Finding("generalization", finding.message, finding.path, finding.line)
+        for finding in run_generalization_audit(repo_dir)
+    ]
+
+
 def run_checks(repo_dir: Path = REPO_DIR) -> list[Finding]:
     files = tracked_files(repo_dir)
     findings: list[Finding] = []
@@ -280,6 +288,7 @@ def run_checks(repo_dir: Path = REPO_DIR) -> list[Finding]:
     findings.extend(check_roadmap_status())
     findings.extend(check_roadmap_cli_drift())
     findings.extend(check_model_family_configs(repo_dir))
+    findings.extend(check_generalization_assumptions(repo_dir))
     findings.extend(check_tracked_variant_nodes(files, repo_dir))
     return findings
 

@@ -1641,7 +1641,7 @@ def command_sweep_reference(args: argparse.Namespace) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Plan and run memory-guarded model abliteration steps")
-    parser.add_argument("--config", default="configs/abliteration/gemma4_26b_a4b_local_abli.yaml")
+    parser.add_argument("--config", required=True, help="Path to abliteration YAML config")
     sub = parser.add_subparsers(dest="command", required=True)
 
     plan = sub.add_parser("plan", help="Inspect config, prompts, hardware, and memory guard without loading a model")

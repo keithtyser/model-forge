@@ -303,6 +303,56 @@ Result:
 
 ## Roadmap Foundation: MF Backlog Status Audit
 
+## Multi-Family: Common Code Generalization Audit
+
+Status: implemented and pushed as CLI/schema work. No model server, training
+run, quantization run, or eval job was started.
+
+Hypothesis: adding Qwen and Llama configs is not enough if common entrypoints
+still branch on `gemma4_26b_a4b` or carry Gemma configs as hidden defaults.
+Common commands should discover family-specific configs by convention, and a
+cheap audit should fail when hardcoded family control flow returns.
+
+Changes:
+
+- added `./forge generalization audit`
+- added `src/model_forge/generalization.py`
+- wired the generalization audit into `./forge doctor`
+- changed `./forge finetune <family>` to discover
+  `configs/finetuning/<family>_local_ft_v0.yaml`
+- changed `./forge ablate <family>` to discover
+  `configs/abliteration/<family>_local_abli.yaml`
+- changed `./forge promote <family>` to discover
+  `configs/promotion/<family>.yaml`
+- changed `./forge golden-summary/check <family>` to use family-derived report
+  paths instead of a Gemma case branch
+- changed the abliteration module to require `--config` when called directly
+- moved the Qwen teacher launcher settings into the Qwen family config's
+  `teacher` block and made the teacher launcher accept parser/template env vars
+- updated README, status, adding-model-family, and roadmap docs
+
+Validation:
+
+```bash
+./forge generalization audit --json
+./forge doctor --json
+bash -n forge scripts/serve_teacher_vllm_dgx_spark.sh
+.venv/bin/python -m py_compile src/model_forge/generalization.py src/model_forge/doctor.py src/model_forge/pipelines/abliterate.py
+./forge finetune gemma4_26b_a4b plan
+./forge ablate gemma4_26b_a4b plan
+```
+
+Result:
+
+- generalization audit currently returns no findings
+- doctor now fails if common code reintroduces family case branches or
+  hardcoded default configs for configured model families
+- existing Gemma finetune and ablation plan commands still resolve through the
+  new convention-based config discovery
+- MF-0606 is marked tested / smoke-validated
+
+## Roadmap Foundation: MF Backlog Status Audit
+
 Status: implemented as code/docs only. No model server, training run,
 quantization run, or eval job was started.
 

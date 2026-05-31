@@ -14,16 +14,16 @@ This file is generated from the prioritized backlog in
 |---|---:|
 | implemented | 2 |
 | not_started | 24 |
-| scaffolded | 15 |
-| tested | 55 |
+| scaffolded | 14 |
+| tested | 56 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 47 |
-| smoke_validated | 47 |
+| planned | 46 |
+| smoke_validated | 48 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -112,7 +112,7 @@ No status audit findings.
 | MF-0603 | P1: Multi-family | tested | smoke_validated | Add tokenizer/chat-template round-trip tests |
 | MF-0604 | P1: Multi-family | tested | smoke_validated | Add architecture target discovery and MoE/router exclusion checks |
 | MF-0605 | P1: Multi-family | tested | smoke_validated | Add Llama/Mistral family plan |
-| MF-0606 | P1: Multi-family | scaffolded | planned | Ensure common code has no Gemma-only assumptions |
+| MF-0606 | P1: Multi-family | tested | smoke_validated | Ensure common code has no Gemma-only assumptions |
 | MF-0701 | P2: Agents | scaffolded | planned | Add agent experiment schema |
 | MF-0702 | P2: Agents | not_started | planned | Add forge agent optimize-serving |
 | MF-0703 | P2: Agents | not_started | planned | Add forge agent optimize-quantization |

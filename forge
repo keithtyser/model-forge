@@ -26,6 +26,7 @@ Usage:
   ./forge promote <family> [profile]
   ./forge objectives [list|show|audit]
   ./forge roadmap [audit|cli-drift]
+  ./forge generalization [audit]
   ./forge research [list|show|audit]
   ./forge hf [status|login|whoami|plan-model|publish-model]
   ./forge variants [graph|node|audit-node|tokenizer-audit|architecture-audit]
@@ -55,6 +56,7 @@ Examples:
   ./forge objectives audit
   ./forge roadmap audit --write-doc
   ./forge roadmap cli-drift
+  ./forge generalization audit
   ./forge research audit
   ./forge hf status
   ./forge hf plan-model gemma4_26b_a4b local_ft --release-class report_only
@@ -83,6 +85,15 @@ USAGE
 ACTION=${1:-help}
 shift || true
 
+require_config() {
+  local path=$1
+  local message=$2
+  if [[ ! -f "$path" ]]; then
+    echo "$message" >&2
+    exit 2
+  fi
+}
+
 case "$ACTION" in
   setup)
     ./scripts/setup.sh "${1:-base}"
@@ -98,13 +109,50 @@ case "$ACTION" in
     "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" serve "$VARIANT"
     ;;
   serve-teacher)
-    TEACHER=${1:-qwen35_9b}
-    case "$TEACHER" in
-      qwen35_9b)
-        exec "$REPO_DIR/scripts/serve_teacher_vllm_dgx_spark.sh"
-        ;;
-      *) echo "unknown teacher preset: $TEACHER" >&2; exit 2 ;;
-    esac
+    TEACHER=${1:-${MODEL_FORGE_TEACHER_FAMILY:-qwen35_9b}}
+    TEACHER_CONFIG="$REPO_DIR/configs/model_families/${TEACHER}.yaml"
+    require_config "$TEACHER_CONFIG" "missing teacher family config: configs/model_families/${TEACHER}.yaml"
+    eval "$("$PYTHON" - "$REPO_DIR" "$TEACHER" <<'PY'
+import os
+import shlex
+import sys
+from pathlib import Path
+
+import yaml
+
+repo = Path(sys.argv[1])
+family_name = sys.argv[2]
+family = yaml.safe_load((repo / "configs" / "model_families" / f"{family_name}.yaml").read_text()) or {}
+teacher = family.get("teacher") or {}
+if not teacher:
+    raise SystemExit(f"family {family_name!r} has no teacher block")
+variant_name = str(teacher.get("variant") or "base")
+variant = (family.get("variants") or {}).get(variant_name) or {}
+if not variant:
+    raise SystemExit(f"family {family_name!r} has no teacher variant {variant_name!r}")
+env_name = str(family.get("models_dir_env") or "MODEL_FORGE_MODELS_DIR")
+models_dir = Path(os.environ.get(env_name) or family.get("default_models_dir") or "~/models").expanduser()
+local_dir = Path(str(variant.get("local_dir") or "")).expanduser()
+model_path = local_dir if local_dir.is_absolute() else models_dir / local_dir
+script = repo / str(teacher.get("script") or "scripts/serve_teacher_vllm_dgx_spark.sh")
+chat_template = (family.get("architecture") or {}).get("chat_template") or {}
+assignments = {
+    "MODEL_FORGE_TEACHER_SCRIPT": str(script),
+    "MODEL_FORGE_TEACHER_MODEL": str(model_path),
+    "MODEL_FORGE_TEACHER_NAME": str(teacher.get("served_model_name") or variant.get("served_model_name") or variant.get("repo_id")),
+    "PORT": str(teacher.get("port") or 8011),
+}
+if chat_template.get("reasoning_parser"):
+    assignments["MODEL_FORGE_TEACHER_REASONING_PARSER"] = str(chat_template["reasoning_parser"])
+if chat_template.get("default_chat_template_kwargs") is not None:
+    import json
+    assignments["MODEL_FORGE_TEACHER_CHAT_TEMPLATE_KWARGS"] = json.dumps(chat_template["default_chat_template_kwargs"])
+for key, value in assignments.items():
+    print(f"export {key}={shlex.quote(value)}")
+PY
+)"
+    require_config "$MODEL_FORGE_TEACHER_SCRIPT" "missing teacher launcher: $MODEL_FORGE_TEACHER_SCRIPT"
+    exec "$MODEL_FORGE_TEACHER_SCRIPT"
     ;;
   eval)
     FAMILY=${1:?family is required}
@@ -147,14 +195,14 @@ case "$ACTION" in
           shift
         fi
         ;;
-      gemma4_26b_a4b)
+      *)
         STEP=${1:-plan}
         if [[ $# -gt 0 ]]; then
           shift
         fi
-        CONFIG="$REPO_DIR/configs/finetuning/gemma4_26b_a4b_local_ft_v0.yaml"
+        CONFIG="$REPO_DIR/configs/finetuning/${FAMILY}_local_ft_v0.yaml"
+        require_config "$CONFIG" "missing fine-tune config for family '$FAMILY': configs/finetuning/${FAMILY}_local_ft_v0.yaml"
         ;;
-      *) echo "unknown fine-tune family: $FAMILY" >&2; exit 2 ;;
     esac
     "$PYTHON" -m model_forge.pipelines.finetune --config "$CONFIG" "$STEP" "$@"
     ;;
@@ -172,12 +220,8 @@ case "$ACTION" in
     if [[ $# -gt 0 ]]; then
       shift
     fi
-    case "$FAMILY" in
-      gemma4_26b_a4b)
-        CONFIG="$REPO_DIR/configs/abliteration/gemma4_26b_a4b_local_abli.yaml"
-        ;;
-      *) echo "unknown ablation family: $FAMILY" >&2; exit 2 ;;
-    esac
+    CONFIG="$REPO_DIR/configs/abliteration/${FAMILY}_local_abli.yaml"
+    require_config "$CONFIG" "missing ablation config for family '$FAMILY': configs/abliteration/${FAMILY}_local_abli.yaml"
     "$PYTHON" -m model_forge.pipelines.abliterate --config "$CONFIG" "$STEP" "$@"
     ;;
   compare)
@@ -187,12 +231,8 @@ case "$ACTION" in
   promote)
     FAMILY=${1:?family is required}
     PROFILE=${2:-}
-    case "$FAMILY" in
-      gemma4_26b_a4b)
-        CONFIG="$REPO_DIR/configs/promotion/gemma4_26b_a4b.yaml"
-        ;;
-      *) echo "unknown promotion family: $FAMILY" >&2; exit 2 ;;
-    esac
+    CONFIG="$REPO_DIR/configs/promotion/${FAMILY}.yaml"
+    require_config "$CONFIG" "missing promotion config for family '$FAMILY': configs/promotion/${FAMILY}.yaml"
     if [[ -n "$PROFILE" ]]; then
       "$PYTHON" -m model_forge.evals.promotion --config "$CONFIG" "$PROFILE"
     else
@@ -213,6 +253,9 @@ case "$ACTION" in
     ;;
   roadmap)
     "$PYTHON" -m model_forge.roadmap "$@"
+    ;;
+  generalization)
+    "$PYTHON" -m model_forge.generalization "$@"
     ;;
   manifest)
     "$PYTHON" -m model_forge.runs.manifest "$@"
@@ -247,13 +290,8 @@ case "$ACTION" in
   golden-summary)
     FAMILY=${1:?family is required}
     OUTPUT=${2:-}
-    case "$FAMILY" in
-      gemma4_26b_a4b)
-        COMPARISON="$REPO_DIR/reports/generated/gemma4_26b_a4b_comparison/comparison.json"
-        DEFAULT_OUTPUT="$REPO_DIR/reports/golden/gemma4_26b_a4b_ablation_internal.json"
-        ;;
-      *) echo "unknown golden summary family: $FAMILY" >&2; exit 2 ;;
-    esac
+    COMPARISON="$REPO_DIR/reports/generated/${FAMILY}_comparison/comparison.json"
+    DEFAULT_OUTPUT="$REPO_DIR/reports/golden/${FAMILY}_ablation_internal.json"
     "$PYTHON" -m model_forge.evals.golden_summary \
       --comparison "$COMPARISON" \
       --output "${OUTPUT:-$DEFAULT_OUTPUT}" \
@@ -262,13 +300,8 @@ case "$ACTION" in
   golden-check)
     FAMILY=${1:?family is required}
     BASELINE=${2:-}
-    case "$FAMILY" in
-      gemma4_26b_a4b)
-        COMPARISON="$REPO_DIR/reports/generated/gemma4_26b_a4b_comparison/comparison.json"
-        DEFAULT_BASELINE="$REPO_DIR/reports/golden/gemma4_26b_a4b_ablation_internal.json"
-        ;;
-      *) echo "unknown golden summary family: $FAMILY" >&2; exit 2 ;;
-    esac
+    COMPARISON="$REPO_DIR/reports/generated/${FAMILY}_comparison/comparison.json"
+    DEFAULT_BASELINE="$REPO_DIR/reports/golden/${FAMILY}_ablation_internal.json"
     "$PYTHON" -m model_forge.evals.golden_summary \
       --comparison "$COMPARISON" \
       --check "${BASELINE:-$DEFAULT_BASELINE}" \

@@ -11,6 +11,8 @@ MODEL_FORGE_MODELS_DIR=${MODEL_FORGE_MODELS_DIR:-"$HOME/models"}
 SPARK_VLLM_DOCKER_DIR=${SPARK_VLLM_DOCKER_DIR:-"$HOME/projects/spark-vllm-docker"}
 MODEL_FORGE_TEACHER_MODEL=${MODEL_FORGE_TEACHER_MODEL:-"$MODEL_FORGE_MODELS_DIR/Qwen3.5-9B"}
 MODEL_FORGE_TEACHER_NAME=${MODEL_FORGE_TEACHER_NAME:-local/qwen35-9b-teacher}
+MODEL_FORGE_TEACHER_REASONING_PARSER=${MODEL_FORGE_TEACHER_REASONING_PARSER:-qwen3}
+MODEL_FORGE_TEACHER_CHAT_TEMPLATE_KWARGS=${MODEL_FORGE_TEACHER_CHAT_TEMPLATE_KWARGS:-}
 PORT=${PORT:-8011}
 
 GPU_MEMORY_UTILIZATION=${GPU_MEMORY_UTILIZATION:-0.60}
@@ -22,6 +24,9 @@ VLLM_MEM_LIMIT_GB=${VLLM_MEM_LIMIT_GB:-90}
 VLLM_SHM_SIZE_GB=${VLLM_SHM_SIZE_GB:-32}
 VLLM_PIDS_LIMIT=${VLLM_PIDS_LIMIT:-4096}
 QWEN_ENABLE_THINKING=${QWEN_ENABLE_THINKING:-false}
+if [[ -z "$MODEL_FORGE_TEACHER_CHAT_TEMPLATE_KWARGS" ]]; then
+  MODEL_FORGE_TEACHER_CHAT_TEMPLATE_KWARGS="{\"enable_thinking\": $QWEN_ENABLE_THINKING}"
+fi
 
 if [[ ! -d "$SPARK_VLLM_DOCKER_DIR" ]]; then
   echo "[model-forge] spark-vllm-docker dir not found: $SPARK_VLLM_DOCKER_DIR" >&2
@@ -53,8 +58,8 @@ exec ./launch-cluster.sh \
     --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION" \
     --max-model-len "$MAX_MODEL_LEN" \
     --served-model-name "$MODEL_FORGE_TEACHER_NAME" \
-    --reasoning-parser qwen3 \
-    --default-chat-template-kwargs "{\"enable_thinking\": $QWEN_ENABLE_THINKING}" \
+    --reasoning-parser "$MODEL_FORGE_TEACHER_REASONING_PARSER" \
+    --default-chat-template-kwargs "$MODEL_FORGE_TEACHER_CHAT_TEMPLATE_KWARGS" \
     --language-model-only \
     --enable-prefix-caching \
     --max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS" \

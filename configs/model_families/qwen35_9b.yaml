@@ -61,6 +61,12 @@ serve:
   default_gpu_memory_utilization: "0.80"
   default_max_model_len: "32768"
 
+teacher:
+  script: scripts/serve_teacher_vllm_dgx_spark.sh
+  variant: base
+  served_model_name: local/qwen35-9b-teacher
+  port: 8011
+
 eval:
   config: configs/experiments/qwen35_9b_v0.yaml
   artifact_config: configs/experiments/qwen35_9b_artifacts_v0.yaml
