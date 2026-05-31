@@ -231,6 +231,24 @@ quality must stay within allowed deltas. Risk metrics such as unsafe
 overcompliance are reported separately because ablated models may intentionally
 change refusal behavior.
 
+Check tokenizer and chat-template preservation for every quantized or GGUF
+export directory:
+
+```bash
+./forge quantize tokenizer-report \
+  --source-tokenizer-dir /path/to/source-model \
+  --candidate-tokenizer-dir /path/to/quantized-or-gguf-export \
+  --source-variant base \
+  --candidate-variant base_fp8_w8a8_modelopt \
+  --run-id source_vs_quantized_tokenizer \
+  --write-report
+```
+
+Use `--load-tokenizer --strict` for promotion when the tokenizer can be loaded
+locally. Configured family variants can still use
+`./forge variants tokenizer-audit`; `quantize tokenizer-report` exists for
+new export directories before they are added to a family config.
+
 ## FP8 W8A8 Checkpoint Pipeline
 
 FP8 W8A8 is a checkpoint-creation path, unlike runtime FP8 KV cache. Use the

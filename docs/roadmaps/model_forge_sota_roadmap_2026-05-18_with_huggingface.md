@@ -3775,7 +3775,7 @@ MF-0306 Add GGUF/llama.cpp conversion and quantization pipeline. implementation_
 MF-0307 Add Quantization Card. implementation_status=tested validation_state=smoke_validated
 MF-0308 Add layer/component sensitivity scan. implementation_status=not_started validation_state=planned
 MF-0309 Add quantization-preserves-behavior report. implementation_status=tested validation_state=smoke_validated
-MF-0310 Add tokenizer/chat-template preservation checks for GGUF and quantized exports. implementation_status=not_started validation_state=planned
+MF-0310 Add tokenizer/chat-template preservation checks for GGUF and quantized exports. implementation_status=tested validation_state=smoke_validated
 MF-0311 Add import-existing-quantized-checkpoint path for already-available FP8/NVFP4/GGUF artifacts. implementation_status=tested validation_state=smoke_validated
 ```
 

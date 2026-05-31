@@ -23,6 +23,7 @@ from rich.table import Table
 
 from model_forge.hardware import detect_hardware_profile, recommended_quantization_env
 from model_forge.runs.manifest import REPO_DIR, display_path, redact_value, sanitize_run_id
+from model_forge.variants.tokenizer_audit import compare_records, live_round_trip, tokenizer_record
 
 
 DEFAULT_CONFIG = REPO_DIR / "configs" / "quantization" / "nvfp4_blackwell_runtime.yaml"
@@ -32,6 +33,7 @@ CARD_SCHEMA_VERSION = "model_forge.quantization_card.v1"
 CALIBRATION_MANIFEST_SCHEMA_VERSION = "model_forge.quantization_calibration_manifest.v1"
 FP8_KV_REPORT_SCHEMA_VERSION = "model_forge.fp8_kv_behavior_report.v1"
 BEHAVIOR_REPORT_SCHEMA_VERSION = "model_forge.quantization_behavior_preservation_report.v1"
+TOKENIZER_REPORT_SCHEMA_VERSION = "model_forge.quantization_tokenizer_preservation_report.v1"
 
 console = Console(stderr=True)
 
@@ -1336,6 +1338,104 @@ def write_behavior_report_outputs(report: Mapping[str, Any]) -> Path:
     return output_dir
 
 
+def build_tokenizer_report(
+    *,
+    source_tokenizer_dir: Path,
+    candidate_tokenizer_dir: Path,
+    output_dir: Path,
+    run_id: str,
+    source_variant: str = "source",
+    candidate_variant: str = "candidate",
+    load_tokenizer: bool = False,
+    strict: bool = False,
+    trust_remote_code: bool = False,
+) -> dict[str, Any]:
+    source_path = resolve_repo_path(source_tokenizer_dir)
+    candidate_path = resolve_repo_path(candidate_tokenizer_dir)
+    source = tokenizer_record(source_path)
+    candidate = tokenizer_record(candidate_path)
+    findings = []
+    if not source.get("exists"):
+        findings.append({"level": "error" if strict else "warning", "variant": source_variant, "check": "source_tokenizer_dir", "message": "source tokenizer dir is not present"})
+    if not candidate.get("exists"):
+        findings.append({"level": "error" if strict else "warning", "variant": candidate_variant, "check": "candidate_tokenizer_dir", "message": "candidate tokenizer dir is not present"})
+    if source.get("exists") and candidate.get("exists"):
+        findings.extend(finding.__dict__ for finding in compare_records(candidate_variant, candidate, source_variant, source))
+    if load_tokenizer:
+        if source.get("exists"):
+            source["round_trip"] = live_round_trip(source_path, trust_remote_code=trust_remote_code)
+            if source["round_trip"].get("status") != "passed":
+                findings.append(
+                    {
+                        "level": "error" if strict else "warning",
+                        "variant": source_variant,
+                        "check": "round_trip",
+                        "message": str(source["round_trip"].get("reason") or source["round_trip"].get("status")),
+                    }
+                )
+        if candidate.get("exists"):
+            candidate["round_trip"] = live_round_trip(candidate_path, trust_remote_code=trust_remote_code)
+            if candidate["round_trip"].get("status") != "passed":
+                findings.append(
+                    {
+                        "level": "error" if strict else "warning",
+                        "variant": candidate_variant,
+                        "check": "round_trip",
+                        "message": str(candidate["round_trip"].get("reason") or candidate["round_trip"].get("status")),
+                    }
+                )
+    errors = [finding for finding in findings if finding.get("level") == "error"]
+    return redact_value(
+        {
+            "schema_version": TOKENIZER_REPORT_SCHEMA_VERSION,
+            "created_at": utc_now().isoformat(),
+            "run_id": run_id,
+            "source_variant": source_variant,
+            "candidate_variant": candidate_variant,
+            "source": source,
+            "candidate": candidate,
+            "metadata_only": not load_tokenizer,
+            "strict": strict,
+            "findings": findings,
+            "passed": not errors,
+            "output_dir": display_path(output_dir),
+            "notes": [
+                "Use this report for quantized or GGUF export directories before they are promoted.",
+                "Configured family variants can also use ./forge variants tokenizer-audit.",
+                "Promotion should use strict mode and a live tokenizer round trip when the tokenizer can be loaded locally.",
+            ],
+        }
+    )
+
+
+def write_tokenizer_report_outputs(report: Mapping[str, Any]) -> Path:
+    output_dir = resolve_repo_path(str(report["output_dir"]))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "tokenizer_preservation_report.json").write_text(
+        json.dumps(redact_value(report), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    lines = [
+        f"# Quantization Tokenizer Preservation Report: {report.get('run_id')}",
+        "",
+        f"- Passed: `{str(report.get('passed')).lower()}`",
+        f"- Source: `{report.get('source_variant')}`",
+        f"- Candidate: `{report.get('candidate_variant')}`",
+        f"- Metadata only: `{str(report.get('metadata_only')).lower()}`",
+        "",
+        "## Findings",
+        "",
+    ]
+    if report.get("findings"):
+        lines.extend(f"- {item.get('level')} `{item.get('variant')}` {item.get('check')}: {item.get('message')}" for item in report["findings"])
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Notes", ""])
+    lines.extend(f"- {note}" for note in report.get("notes") or [])
+    (output_dir / "tokenizer_preservation_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return output_dir
+
+
 def write_fp8_kv_report_outputs(report: Mapping[str, Any]) -> Path:
     output_dir = resolve_repo_path(str(report["output_dir"]))
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1589,9 +1689,49 @@ def main() -> None:
     behavior_parser.add_argument("--write-report", action="store_true", help="Write behavior_preservation_report.json and .md")
     behavior_parser.add_argument("--json", action="store_true", help="Print JSON report")
 
+    tokenizer_parser = subparsers.add_parser("tokenizer-report", help="Check tokenizer/chat-template preservation for a quantized or GGUF export")
+    tokenizer_parser.add_argument("--source-tokenizer-dir", type=Path, required=True)
+    tokenizer_parser.add_argument("--candidate-tokenizer-dir", type=Path, required=True)
+    tokenizer_parser.add_argument("--source-variant", default="source")
+    tokenizer_parser.add_argument("--candidate-variant", default="candidate")
+    tokenizer_parser.add_argument("--load-tokenizer", action="store_true", help="Run a live AutoTokenizer chat-template round trip")
+    tokenizer_parser.add_argument("--strict", action="store_true", help="Treat missing dirs or skipped round trips as errors")
+    tokenizer_parser.add_argument("--trust-remote-code", action="store_true")
+    tokenizer_parser.add_argument("--output-dir", type=Path, default=REPO_DIR / "reports" / "generated" / "quantization")
+    tokenizer_parser.add_argument("--run-id", required=True)
+    tokenizer_parser.add_argument("--write-report", action="store_true", help="Write tokenizer_preservation_report.json and .md")
+    tokenizer_parser.add_argument("--json", action="store_true", help="Print JSON report")
+
     args = parser.parse_args()
-    config_path = resolve_repo_path(args.config)
-    config = load_quantization_config(config_path)
+    config_path = resolve_repo_path(args.config) if hasattr(args, "config") else DEFAULT_CONFIG
+    config = load_quantization_config(config_path) if hasattr(args, "config") else None
+
+    if args.command == "tokenizer-report":
+        output_dir = resolve_repo_path(args.output_dir) / sanitize_run_id(args.run_id)
+        report = build_tokenizer_report(
+            source_tokenizer_dir=args.source_tokenizer_dir,
+            candidate_tokenizer_dir=args.candidate_tokenizer_dir,
+            output_dir=output_dir,
+            run_id=sanitize_run_id(args.run_id),
+            source_variant=args.source_variant,
+            candidate_variant=args.candidate_variant,
+            load_tokenizer=bool(args.load_tokenizer),
+            strict=bool(args.strict),
+            trust_remote_code=bool(args.trust_remote_code),
+        )
+        if args.write_report:
+            write_tokenizer_report_outputs(report)
+        if args.json:
+            print(json.dumps(redact_value(report), indent=2, sort_keys=True) + "\n")
+        else:
+            table = Table(title="Quantization Tokenizer Preservation Report")
+            table.add_column("Field")
+            table.add_column("Value")
+            table.add_row("passed", str(report["passed"]))
+            table.add_row("findings", str(len(report.get("findings") or [])))
+            table.add_row("metadata_only", str(report["metadata_only"]))
+            console.print(table)
+        return
 
     if args.command == "plan":
         plan = build_plan(

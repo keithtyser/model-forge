@@ -421,6 +421,11 @@ Plan and report quantization without loading a model:
   --candidate-serving-eval <candidate_eval_dir> \
   --run-id source_vs_quantized_behavior \
   --write-report
+./forge quantize tokenizer-report \
+  --source-tokenizer-dir <source_model_dir> \
+  --candidate-tokenizer-dir <quantized_or_gguf_dir> \
+  --run-id source_vs_quantized_tokenizer \
+  --write-report
 ```
 
 NVFP4 is the priority Blackwell path. `nvfp4_runtime` means Model Forge is
@@ -444,6 +449,9 @@ common quantization code.
 For every quantized candidate, write a behavior-preservation report from the
 same source/candidate eval evidence used by the quantization card. Throughput
 does not compensate for failing the required behavior-retention checks.
+For quantized or GGUF export directories that are not yet configured variants,
+use `./forge quantize tokenizer-report` to compare tokenizer files, special
+tokens, and chat-template metadata directly against the source model directory.
 
 For self-quantization, use the ModelOpt export runner and the matrix config:
 

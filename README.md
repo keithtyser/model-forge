@@ -366,6 +366,11 @@ Quantization:
   --candidate-serving-eval <candidate_eval_dir> \
   --run-id source_vs_quantized_behavior \
   --write-report
+./forge quantize tokenizer-report \
+  --source-tokenizer-dir <source_model_dir> \
+  --candidate-tokenizer-dir <quantized_or_gguf_dir> \
+  --run-id source_vs_quantized_tokenizer \
+  --write-report
 ```
 
 See [docs/quantization.md](docs/quantization.md). NVFP4 is the priority

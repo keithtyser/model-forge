@@ -13,17 +13,17 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| not_started | 4 |
+| not_started | 3 |
 | scaffolded | 8 |
-| tested | 82 |
+| tested | 83 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 19 |
-| smoke_validated | 75 |
+| planned | 18 |
+| smoke_validated | 76 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -81,7 +81,7 @@ No status audit findings.
 | MF-0307 | P1: Quantization | tested | smoke_validated | Add Quantization Card |
 | MF-0308 | P1: Quantization | not_started | planned | Add layer/component sensitivity scan |
 | MF-0309 | P1: Quantization | tested | smoke_validated | Add quantization-preserves-behavior report |
-| MF-0310 | P1: Quantization | not_started | planned | Add tokenizer/chat-template preservation checks for GGUF and quantized exports |
+| MF-0310 | P1: Quantization | tested | smoke_validated | Add tokenizer/chat-template preservation checks for GGUF and quantized exports |
 | MF-0311 | P1: Quantization | tested | smoke_validated | Add import-existing-quantized-checkpoint path for already-available FP8/NVFP4/GGUF artifacts |
 | MF-0351 | P1: Dataset factory | tested | smoke_validated | Add configs/datasets/*.yaml plan schema |
 | MF-0352 | P1: Dataset factory | tested | smoke_validated | Add forge data plan/seed/generate |

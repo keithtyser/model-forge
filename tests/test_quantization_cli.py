@@ -10,11 +10,13 @@ from model_forge.quantization.cli import (
     BEHAVIOR_REPORT_SCHEMA_VERSION,
     CALIBRATION_MANIFEST_SCHEMA_VERSION,
     FP8_KV_REPORT_SCHEMA_VERSION,
+    TOKENIZER_REPORT_SCHEMA_VERSION,
     build_card,
     build_behavior_report,
     build_calibration_manifest,
     build_fp8_kv_report,
     build_modelopt_export_command,
+    build_tokenizer_report,
     build_plan,
     filter_matrix_entries,
     load_quantization_config,
@@ -22,6 +24,23 @@ from model_forge.quantization.cli import (
     matrix_workers,
     resolve_source,
 )
+
+
+def write_tokenizer_fixture(path: Path, *, chat_template: str = "{{ messages }}", eos_token: str = "<eos>") -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "tokenizer.json").write_text(json.dumps({"version": "1.0", "model": {"type": "WordLevel"}}), encoding="utf-8")
+    (path / "tokenizer_config.json").write_text(
+        json.dumps(
+            {
+                "bos_token": "<bos>",
+                "eos_token": eos_token,
+                "pad_token": "<pad>",
+                "chat_template": chat_template,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (path / "special_tokens_map.json").write_text(json.dumps({"eos_token": eos_token}), encoding="utf-8")
 
 
 class QuantizationCliTests(unittest.TestCase):
@@ -317,6 +336,47 @@ class QuantizationCliTests(unittest.TestCase):
         self.assertFalse(report["behavior_preserved"])
         normal_check = next(check for check in report["checks"] if check["name"] == "normal_use_regression.normal_use_regression_pass_rate")
         self.assertEqual(normal_check["status"], "fail")
+
+    def test_tokenizer_report_passes_when_quantized_export_preserves_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            candidate = root / "candidate"
+            write_tokenizer_fixture(source)
+            write_tokenizer_fixture(candidate)
+            report = build_tokenizer_report(
+                source_tokenizer_dir=source,
+                candidate_tokenizer_dir=candidate,
+                output_dir=root / "report",
+                run_id="unit_tokenizer_report",
+                source_variant="base",
+                candidate_variant="base_fp8_w8a8_modelopt",
+                strict=True,
+            )
+
+        self.assertEqual(report["schema_version"], TOKENIZER_REPORT_SCHEMA_VERSION)
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["findings"], [])
+
+    def test_tokenizer_report_fails_chat_template_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            candidate = root / "candidate"
+            write_tokenizer_fixture(source, chat_template="{{ messages }}")
+            write_tokenizer_fixture(candidate, chat_template="{{ broken }}")
+            report = build_tokenizer_report(
+                source_tokenizer_dir=source,
+                candidate_tokenizer_dir=candidate,
+                output_dir=root / "report",
+                run_id="unit_tokenizer_report_fail",
+                source_variant="base",
+                candidate_variant="base_gguf_q4",
+                strict=True,
+            )
+
+        self.assertFalse(report["passed"])
+        self.assertTrue(any(finding["check"] == "tokenizer_preservation" for finding in report["findings"]))
 
     def test_modelopt_export_command_quantizes_local_gemma_variant(self) -> None:
         config_path = Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml")

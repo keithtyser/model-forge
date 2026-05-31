@@ -1513,6 +1513,49 @@ Result:
 - quantized candidates now have an explicit behavior-preservation gate
 - MF-0309 is marked tested / smoke-validated
 
+## Quantization: Tokenizer And Chat-Template Preservation Report
+
+Status: implemented as report code/docs only. No model server, export job,
+quantization run, eval, or benchmark was started.
+
+Hypothesis: Quantized and GGUF exports can silently change tokenizer files,
+special-token metadata, or chat-template behavior before the export is added to
+`configs/model_families`. Promotion needs a direct source-vs-candidate
+tokenizer report for arbitrary export directories.
+
+Implemented command:
+
+```bash
+./forge quantize tokenizer-report \
+  --source-tokenizer-dir <source_model_dir> \
+  --candidate-tokenizer-dir <quantized_or_gguf_dir> \
+  --source-variant base \
+  --candidate-variant base_fp8_w8a8_modelopt \
+  --run-id source_vs_quantized_tokenizer \
+  --write-report
+```
+
+Changes:
+
+- added `model_forge.quantization_tokenizer_preservation_report.v1`
+- compares tokenizer file hashes, special tokens, and chat-template metadata
+  between arbitrary source/candidate directories
+- supports optional `--load-tokenizer --strict` live AutoTokenizer round trip
+- writes `tokenizer_preservation_report.json` and `.md`
+- updated README, AGENTS, quantization docs, and roadmap state
+
+Validation:
+
+```bash
+.venv/bin/python -m unittest tests.test_quantization_cli -v
+```
+
+Result:
+
+- quantized and GGUF export directories now have a tokenizer preservation gate
+  before promotion
+- MF-0310 is marked tested / smoke-validated
+
 ## Quantization: ModelOpt NVFP4 Self-Export Guardrail Incident
 
 Status: stopped before a completed NVFP4 checkpoint. Code and docs now enforce
