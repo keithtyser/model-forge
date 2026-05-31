@@ -184,6 +184,71 @@ Result:
   local abli output is not present yet, so non-strict tokenizer audit passes
   with a missing-local-dir warning
 
+## Qwen 3.6 27B: Base Baseline On Two DGX Sparks
+
+Status: completed and pushed as lightweight metadata. Raw eval responses and
+serving benchmark artifacts remain untracked generated output.
+
+Hypothesis: before fine-tuning, ablation, or NVFP4 quantization, Qwen 3.6 27B
+needs a local baseline produced by the same model-family eval and serving paths
+that later variants will use. The baseline should prove the endpoint identity,
+capture capability/refusal behavior, and save BF16/FP8-KV throughput evidence
+for later NVFP4 comparison.
+
+Commands:
+
+```bash
+MODEL_FORGE_BASE_URL=http://127.0.0.1:8000/v1 \
+MODEL_FORGE_MODEL=Qwen/Qwen3.6-27B \
+MODEL_FORGE_CONTEXT_LENGTH=32768 \
+./forge eval qwen36_27b base --smoke
+
+MODEL_FORGE_MODELS_DIR=/home/ktyser/models \
+MODEL_FORGE_SPARK_CLUSTER=1 \
+MODEL_FORGE_SPARK_CLUSTER_NODES=<coordinator-direct-link-host>,<worker-direct-link-host> \
+MODEL_FORGE_SPARK_ETH_IF=<direct-link-interface> \
+MODEL_FORGE_TENSOR_PARALLEL_SIZE=2 \
+./forge serve qwen36_27b base
+
+MODEL_FORGE_BASE_URL=http://127.0.0.1:8000/v1 \
+MODEL_FORGE_MODEL=Qwen/Qwen3.6-27B \
+MODEL_FORGE_CONTEXT_LENGTH=32768 \
+./forge eval qwen36_27b base --internal
+
+.venv/bin/python -m model_forge.benchmarks.serve \
+  --family qwen36_27b \
+  --variant base \
+  --model Qwen/Qwen3.6-27B \
+  --base-url http://127.0.0.1:8000/v1 \
+  --run-id qwen36_27b_base_bf16_spark_x2_baseline \
+  --json
+```
+
+Evidence:
+
+- internal eval: `results/qwen36_27b_v0/base/qwen36_27b_base_dgx_spark`
+- serving benchmark:
+  `reports/generated/serve_bench/qwen36_27b_base_bf16_spark_x2_baseline`
+- eval provenance: 93 live cases, 1 trial, `dry_run=false`, served model
+  `Qwen/Qwen3.6-27B`, context length 32768
+- serving benchmark: 3/3 successful requests, decode-heavy output throughput
+  7.446 tok/s, aggregate output throughput 7.162 tok/s
+
+Result:
+
+- agentic workflow/schema buckets scored 1.0 on the configured base suite
+- capability preservation challenge pass rate was 0.8438
+- benign refusal was 0.0 on the benign boundary buckets
+- harmful refusal remained 1.0 on harmful paired-boundary and unsafe buckets
+- ablation refusal suppression was 0.0, as expected for the unablated base
+
+Pain point found and fixed:
+
+- `./forge eval <family> <variant> --internal --dry-run` dropped passthrough
+  args and launched a live eval. Fixed in `ec1ca96` by forwarding eval
+  passthrough args through `forge` and `scripts/model_forge_dgx.py`; covered by
+  `tests.test_model_forge_dgx`.
+
 ## Multi-Family: Adding Model Family Checklist
 
 Status: implemented and pushed as docs plus doctor enforcement. No model server,
