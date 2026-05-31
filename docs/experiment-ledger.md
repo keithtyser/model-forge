@@ -1123,6 +1123,43 @@ Result:
   and run manifests for actual multi-node training
 - MF-0013 is marked tested / smoke-validated
 
+## Behavior Editing: Scorecard
+
+Status: implemented as comparison-derived reporting code. No eval run, training
+run, ablation run, serving run, or quantization run was started.
+
+Hypothesis: Ablation candidates need a dedicated behavior-edit scorecard so the
+repo does not conflate refusal removal with deployment safety. For the
+refusal-removal objective, lower harmful refusal can be success, but capability
+retention, benign quality, and explicit overcompliance risk reporting must be
+shown in one artifact.
+
+Changes:
+
+- added `configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml`
+- added `./forge behavior doctor`
+- added `./forge behavior score`
+- added `model_forge.behavior_edit_scorecard.v1`
+- writes JSON and Markdown scorecards from existing comparison reports
+- separates refusal suppression, capability retention, benign quality, and
+  reported risk categories
+- updated README, AGENTS, status, and roadmap state
+
+Validation:
+
+```bash
+./forge behavior doctor --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml --strict
+./forge behavior score --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml local_abli_sota_vs_base --write-card --json
+.venv/bin/python -m unittest tests.test_behavior_scorecard -v
+```
+
+Result:
+
+- behavior-edit scorecards can be generated without rerunning evals
+- unsafe overcompliance and harmful detail are reported risks in the
+  refusal-removal objective, not silent hard-fail gates
+- MF-0104 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

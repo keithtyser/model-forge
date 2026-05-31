@@ -141,6 +141,10 @@ This is the short handoff state for humans and agents. Use
 - Fine-tune `prepare` now writes `training_method_card.md` beside generated run
   artifacts. The card records recipe, data, LoRA, eval commands, and Spark
   resource guardrails, but does not claim training completed.
+- Behavior-edit scorecards are present through `./forge behavior`; they read
+  comparison reports and write objective-specific ablation scorecards that
+  separate refusal suppression, capability retention, benign quality, and
+  reported overcompliance risks.
 - Serving Card generation now writes a structured `serving_card.md` for each
   `bench serve` run with identity, hardware/config, overall metrics,
   per-workload metrics, artifacts, and promotion gates.

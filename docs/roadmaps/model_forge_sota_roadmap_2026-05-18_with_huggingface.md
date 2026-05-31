@@ -3731,7 +3731,7 @@ MF-0013 Publish Training Method Card with distributed training correctness. impl
 MF-0101 Add noncompliance taxonomy. implementation_status=scaffolded validation_state=planned
 MF-0102 Add invalid-refusal vs valid-safety-refusal classifier fields. implementation_status=scaffolded validation_state=planned
 MF-0103 Add harmful-overcompliance and behavior-drift scoring. implementation_status=implemented validation_state=smoke_validated
-MF-0104 Add behavior edit scorecard. implementation_status=not_started validation_state=planned
+MF-0104 Add behavior edit scorecard. implementation_status=tested validation_state=smoke_validated
 MF-0105 Add candidate frontier report from actual local candidates. implementation_status=scaffolded validation_state=planned
 MF-0106 Add redacted public risk-report mode and private raw-output retention. implementation_status=scaffolded validation_state=planned
 MF-0107 Add release classes and release-class validators. implementation_status=not_started validation_state=planned

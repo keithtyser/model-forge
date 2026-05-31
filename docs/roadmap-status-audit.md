@@ -13,17 +13,17 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| not_started | 6 |
+| not_started | 5 |
 | scaffolded | 13 |
-| tested | 75 |
+| tested | 76 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 27 |
-| smoke_validated | 67 |
+| planned | 26 |
+| smoke_validated | 68 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -52,7 +52,7 @@ No status audit findings.
 | MF-0101 | P0: Behavior editing | scaffolded | planned | Add noncompliance taxonomy |
 | MF-0102 | P0: Behavior editing | scaffolded | planned | Add invalid-refusal vs valid-safety-refusal classifier fields |
 | MF-0103 | P0: Behavior editing | implemented | smoke_validated | Add harmful-overcompliance and behavior-drift scoring |
-| MF-0104 | P0: Behavior editing | not_started | planned | Add behavior edit scorecard |
+| MF-0104 | P0: Behavior editing | tested | smoke_validated | Add behavior edit scorecard |
 | MF-0105 | P0: Behavior editing | scaffolded | planned | Add candidate frontier report from actual local candidates |
 | MF-0106 | P0: Behavior editing | scaffolded | planned | Add redacted public risk-report mode and private raw-output retention |
 | MF-0107 | P0: Behavior editing | not_started | planned | Add release classes and release-class validators |

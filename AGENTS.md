@@ -178,6 +178,20 @@ another backend without hard-coding Gemma behavior.
   `ready_to_scale_generation=true` as the gate before scaling generation.
   `propose` reads saved eval failures and writes `feedback_proposal.yaml` with
   ranked skill targets, generation scale, and candidate config-patch guidance.
+
+## Behavior Editing Scorecards
+
+Use the behavior scorecard before claiming an ablation is successful:
+
+```bash
+./forge behavior doctor --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml --strict
+./forge behavior score --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml local_abli_sota_vs_base --write-card
+```
+
+For refusal-removal objectives, lower harmful-prompt refusal can be success.
+The scorecard still requires source-relative capability and benign-quality
+retention, and it reports unsafe overcompliance or harmful detail as explicit
+risks rather than silently ignoring them.
   Run `generate --overwrite` only when replacing candidates intentionally;
   downstream `--overwrite` refreshes derived artifacts from existing
   candidates. Current local FT v1 configs reject assistant length violations

@@ -25,6 +25,7 @@ Usage:
   ./forge ablate <family> [plan|collect|analyze-reference|sweep-reference|export|sota-plan|sota-prepare|sota-run] [--execute]
   ./forge ablate --config <path> [plan|collect|analyze-reference|sweep-reference|export|sota-plan|sota-prepare|sota-run] [--execute]
   ./forge compare <family>
+  ./forge behavior [doctor|score]
   ./forge promote <family> [profile]
   ./forge objectives [list|show|audit]
   ./forge roadmap [audit|cli-drift]
@@ -61,6 +62,7 @@ Examples:
   ./forge data propose gemma4_26b_a4b local_ft_v1
   ./forge ablate gemma4_26b_a4b plan
   ./forge compare gemma4_26b_a4b
+  ./forge behavior score --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml local_abli_sota_vs_base --write-card
   ./forge promote gemma4_26b_a4b local_ft_vs_jackrong
   ./forge objectives audit
   ./forge roadmap audit --write-doc
@@ -266,6 +268,9 @@ PY
   compare)
     FAMILY=${1:?family is required}
     "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" compare
+    ;;
+  behavior)
+    "$PYTHON" -m model_forge.evals.behavior_scorecard "$@"
     ;;
   promote)
     FAMILY=${1:?family is required}
