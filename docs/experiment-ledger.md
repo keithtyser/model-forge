@@ -1160,6 +1160,39 @@ Result:
   refusal-removal objective, not silent hard-fail gates
 - MF-0104 is marked tested / smoke-validated
 
+## Behavior Editing: Release Classes And Validators
+
+Status: implemented as config validation and publish-plan gates. No model
+upload, dataset upload, training run, eval run, ablation run, serving run, or
+quantization run was started.
+
+Hypothesis: Release classes should be auditable outside a specific publish plan,
+and behavior-edited public releases should require a risk report or
+behavior-edit scorecard before the Hub plan can pass.
+
+Changes:
+
+- added `./forge hf release-classes --audit`
+- added release-class YAML schema checks for visibility, validation state,
+  booleans, raw-output policy, and known requirements
+- added an explicit `behavior_edit_risk_report` gate for public
+  behavior-edited model publish plans
+- updated README, AGENTS, status, and roadmap state
+
+Validation:
+
+```bash
+./forge hf release-classes --audit
+.venv/bin/python -m unittest tests.test_hub_cli -v
+```
+
+Result:
+
+- release classes can be audited independently
+- public behavior-edited releases are blocked unless `--risk-report` points to
+  a risk report or behavior-edit scorecard
+- MF-0107 is marked tested / smoke-validated
+
 ## Roadmap Foundation: MF Backlog Status Audit
 
 Status: implemented as code/docs only. No model server, training run,

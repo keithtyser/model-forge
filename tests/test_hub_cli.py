@@ -9,6 +9,7 @@ from io import StringIO
 from pathlib import Path
 
 from model_forge.hub.cli import (
+    audit_release_classes,
     build_model_plan,
     hf_status,
     main,
@@ -103,6 +104,36 @@ class HubCliTests(unittest.TestCase):
             self.assertTrue(plan["blocked"])
             self.assertEqual(gate["status"], "fail")
             self.assertIn("Spark validation", gate["message"])
+
+    def test_release_class_audit_has_no_errors(self) -> None:
+        findings = audit_release_classes()
+        errors = [finding for finding in findings if finding.severity == "error"]
+        self.assertEqual(errors, [])
+
+    def test_public_behavior_edited_release_requires_risk_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            adapter_dir = root / "adapter"
+            adapter_dir.mkdir()
+            (adapter_dir / "adapter_config.json").write_text("{}", encoding="utf-8")
+            (adapter_dir / "adapter_model.safetensors").write_text("placeholder", encoding="utf-8")
+
+            plan = build_model_plan(
+                model_args(
+                    variant="local_ft",
+                    artifact_path=str(adapter_dir),
+                    output_dir=str(root / "out"),
+                    release_class="public_adapter",
+                    validation_state="smoke_validated",
+                    source_license_checked=True,
+                    eval_results=str(root / "eval.json"),
+                    behavior_edited=True,
+                )
+            )
+
+            gate = next(item for item in plan["release_gates"] if item["name"] == "behavior_edit_risk_report")
+            self.assertTrue(plan["blocked"])
+            self.assertEqual(gate["status"], "fail")
 
     def test_scanner_catches_secret_like_literals(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

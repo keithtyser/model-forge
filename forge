@@ -33,7 +33,7 @@ Usage:
   ./forge agent [schema|audit|card|init|optimize-serving|optimize-quantization|optimize-behavior-edit]
   ./forge upstream [audit|plan]
   ./forge research [list|show|audit|watch]
-  ./forge hf [status|login|whoami|plan-model|publish-model]
+  ./forge hf [status|login|whoami|plan-model|publish-model|release-classes]
   ./forge variants [graph|node|audit-node|tokenizer-audit|architecture-audit]
   ./forge manifest [write|show]
   ./forge artifacts [validate]
@@ -76,6 +76,7 @@ Examples:
   ./forge upstream plan --config configs/upstream/pr_candidates.yaml --candidate kernel_card_docs_or_example --write-plan
   ./forge research audit
   ./forge research watch
+  ./forge hf release-classes --audit
   ./forge hf status
   ./forge hf plan-model gemma4_26b_a4b local_ft --release-class report_only
   ./forge variants graph gemma4_26b_a4b

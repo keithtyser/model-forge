@@ -13,17 +13,17 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| not_started | 5 |
+| not_started | 4 |
 | scaffolded | 13 |
-| tested | 76 |
+| tested | 77 |
 | wired_to_cli | 1 |
 
 ## Validation State
 
 | State | Count |
 |---|---:|
-| planned | 26 |
-| smoke_validated | 68 |
+| planned | 25 |
+| smoke_validated | 69 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -55,7 +55,7 @@ No status audit findings.
 | MF-0104 | P0: Behavior editing | tested | smoke_validated | Add behavior edit scorecard |
 | MF-0105 | P0: Behavior editing | scaffolded | planned | Add candidate frontier report from actual local candidates |
 | MF-0106 | P0: Behavior editing | scaffolded | planned | Add redacted public risk-report mode and private raw-output retention |
-| MF-0107 | P0: Behavior editing | not_started | planned | Add release classes and release-class validators |
+| MF-0107 | P0: Behavior editing | tested | smoke_validated | Add release classes and release-class validators |
 | MF-0108 | P0: Behavior editing | tested | planned | Add zero_refusal_capability_retention objective gates |
 | MF-0200 | P0: Serving | tested | spark_cluster_validated | Add generic cluster inventory planner and DGX Spark x2 example |
 | MF-0201 | P0: Serving | tested | smoke_validated | Add forge bench serve |

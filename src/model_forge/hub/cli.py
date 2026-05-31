@@ -45,6 +45,15 @@ class Gate:
     message: str
 
 
+@dataclass(frozen=True)
+class ReleaseClassFinding:
+    severity: str
+    check: str
+    message: str
+    path: str | None = None
+    release_class: str | None = None
+
+
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -132,6 +141,57 @@ def load_release_class(name: str) -> dict[str, Any]:
     data = load_yaml(path)
     data.setdefault("id", name)
     return data
+
+
+def audit_release_classes(root: Path = RELEASE_CLASS_DIR) -> list[ReleaseClassFinding]:
+    findings: list[ReleaseClassFinding] = []
+    allowed_requirements = {
+        "dataset_card_complete",
+        "eval_results_present",
+        "model_card_complete",
+        "no_private_tokens_or_paths",
+        "promotion_gates_passed_or_research_report_only",
+        "quantization_card_present",
+        "risk_report_present_or_not_applicable",
+        "serving_card_present",
+        "source_license_checked",
+        "unsafe_examples_redacted",
+    }
+    allowed_raw_outputs = {False, "private_only", "redacted_only"}
+    if not root.exists():
+        return [ReleaseClassFinding("error", "release_class_dir", "release class directory is missing", display_path(root))]
+    for path in sorted(root.glob("*.yaml")):
+        try:
+            data = load_yaml(path)
+        except Exception as exc:
+            findings.append(ReleaseClassFinding("error", "load", str(exc), display_path(path)))
+            continue
+        release_id = str(data.get("id") or "")
+        expected_id = path.stem
+        if release_id != expected_id:
+            findings.append(ReleaseClassFinding("error", "id", f"id must match filename stem {expected_id!r}", display_path(path), release_id))
+        if data.get("hf_visibility") not in {"public", "private"}:
+            findings.append(ReleaseClassFinding("error", "visibility", "hf_visibility must be public or private", display_path(path), release_id))
+        if str(data.get("minimum_validation_state") or "") not in VALIDATION_RANK:
+            findings.append(ReleaseClassFinding("error", "validation_state", "minimum_validation_state is unknown", display_path(path), release_id))
+        for field in ("publish_weights", "publish_adapter", "publish_reports", "allow_public_checkpoint"):
+            if not isinstance(data.get(field), bool):
+                findings.append(ReleaseClassFinding("error", "schema", f"{field} must be boolean", display_path(path), release_id))
+        if data.get("publish_raw_outputs") not in allowed_raw_outputs:
+            findings.append(ReleaseClassFinding("error", "raw_outputs", "publish_raw_outputs has unsupported value", display_path(path), release_id))
+        requirements = data.get("requires")
+        if not isinstance(requirements, list) or not requirements:
+            findings.append(ReleaseClassFinding("error", "requires", "requires must be a non-empty list", display_path(path), release_id))
+        else:
+            for requirement in requirements:
+                if requirement not in allowed_requirements:
+                    findings.append(ReleaseClassFinding("error", "requires", f"unknown requirement {requirement!r}", display_path(path), release_id))
+        public_full_checkpoint = data.get("hf_visibility") == "public" and data.get("publish_weights") and not data.get("publish_adapter")
+        if public_full_checkpoint and not data.get("allow_public_checkpoint"):
+            findings.append(ReleaseClassFinding("warning", "public_checkpoint", "public full checkpoint release is blocked by allow_public_checkpoint=false", display_path(path), release_id))
+        if data.get("hf_visibility") == "public" and data.get("publish_raw_outputs") not in {False, "redacted_only"}:
+            findings.append(ReleaseClassFinding("error", "raw_outputs", "public releases cannot publish private-only raw outputs", display_path(path), release_id))
+    return findings
 
 
 def token_source(env: Mapping[str, str] | None = None) -> tuple[str, bool]:
@@ -396,6 +456,14 @@ def build_release_gates(
                 "risk report supplied or not behavior-edited",
             )
         )
+    if release_class.get("hf_visibility") == "public" and args.behavior_edited:
+        gates.append(
+            gate_status(
+                "behavior_edit_risk_report",
+                bool(args.risk_report),
+                "public behavior-edited releases require a risk or behavior-edit scorecard report",
+            )
+        )
     if "unsafe_examples_redacted" in required:
         gates.append(gate_status("unsafe_examples_redacted", not bool(args.include_raw_outputs), "raw outputs are excluded from this plan"))
     if "no_private_tokens_or_paths" in required:
@@ -552,6 +620,20 @@ def print_plan(plan: Mapping[str, Any]) -> None:
     console.print(gate_table)
 
 
+def print_release_class_audit(findings: list[ReleaseClassFinding]) -> None:
+    if not findings:
+        console.print("release class audit: OK")
+        return
+    table = Table(title="Release Class Audit")
+    table.add_column("Severity")
+    table.add_column("Check")
+    table.add_column("Class")
+    table.add_column("Message")
+    for finding in findings:
+        table.add_row(finding.severity.upper(), finding.check, finding.release_class or "", finding.message)
+    console.print(table)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Plan Hugging Face Hub publication for Model Forge artifacts")
     sub = parser.add_subparsers(dest="command")
@@ -594,6 +676,9 @@ def build_parser() -> argparse.ArgumentParser:
     add_model_args(publish_model)
     publish_model.add_argument("--dry-run", action="store_true", default=True)
     publish_model.add_argument("--execute", action="store_true", help="Reserved for future guarded upload support")
+    release_classes = sub.add_parser("release-classes", help="List or audit release-class configs")
+    release_classes.add_argument("--audit", action="store_true")
+    release_classes.add_argument("--json", action="store_true")
     return parser
 
 
@@ -645,6 +730,16 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print_plan(plan)
         return 1 if plan.get("blocked") and args.command == "publish-model" else 0
+    if args.command == "release-classes":
+        findings = audit_release_classes()
+        if args.json:
+            print(json.dumps([finding.__dict__ for finding in findings], indent=2, sort_keys=True))
+        elif args.audit:
+            print_release_class_audit(findings)
+        else:
+            for path in sorted(RELEASE_CLASS_DIR.glob("*.yaml")):
+                print(path.stem)
+        return 1 if any(finding.severity == "error" for finding in findings) else 0
     parser.print_help()
     return 2
 

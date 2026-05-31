@@ -558,9 +558,12 @@ When publishing a model:
 
 - start with `./forge hf status --offline` and
   `./forge hf plan-model <family> <variant> --release-class <class>`
+- run `./forge hf release-classes --audit` after editing release-class YAMLs
 - use release classes from `configs/release_classes/` to decide whether a
   release is report-only, adapter-only, private research, public dataset, or a
   public quantized checkpoint
+- public behavior-edited releases require a risk report or behavior-edit
+  scorecard path through `--risk-report`
 - never bypass failed `release_gates` in `hub_publish.json`; public full
   checkpoints require explicit allowance plus Spark validation evidence
 - for dataset releases, prefer `./forge data publish ... --source-license-checked`

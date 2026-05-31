@@ -145,6 +145,9 @@ This is the short handoff state for humans and agents. Use
   comparison reports and write objective-specific ablation scorecards that
   separate refusal suppression, capability retention, benign quality, and
   reported overcompliance risks.
+- Release classes are audited through `./forge hf release-classes --audit`.
+  Public behavior-edited releases now require a risk report or behavior-edit
+  scorecard path before publish plans can pass.
 - Serving Card generation now writes a structured `serving_card.md` for each
   `bench serve` run with identity, hardware/config, overall metrics,
   per-workload metrics, artifacts, and promotion gates.
