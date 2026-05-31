@@ -9,7 +9,9 @@ from pathlib import Path
 from model_forge.quantization.cli import (
     BEHAVIOR_REPORT_SCHEMA_VERSION,
     CALIBRATION_MANIFEST_SCHEMA_VERSION,
+    CARD_SCHEMA_VERSION,
     FP8_KV_REPORT_SCHEMA_VERSION,
+    NVFP4_GATE_SCHEMA_VERSION,
     SENSITIVITY_REPORT_SCHEMA_VERSION,
     TOKENIZER_REPORT_SCHEMA_VERSION,
     build_card,
@@ -19,6 +21,7 @@ from model_forge.quantization.cli import (
     build_export_command,
     build_gguf_export_command,
     build_modelopt_export_command,
+    build_nvfp4_gate_report,
     build_sensitivity_report,
     build_tokenizer_report,
     build_plan,
@@ -582,6 +585,93 @@ class QuantizationCliTests(unittest.TestCase):
         self.assertIn("llama-bench", command)
         self.assertIn("tokenizer-report passes", " ".join(export["validation_gates"]))
         self.assertEqual(dispatched["strategy"], "llama_cpp_gguf")
+
+    def test_nvfp4_gate_requires_export_serving_behavior_and_tokenizer_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = load_quantization_config(Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml"))
+            source = resolve_source(config, "gemma4_26b_a4b", "base", {"MODEL_FORGE_MODELS_DIR": "/models-host"})
+            export = build_modelopt_export_command(
+                config,
+                source,
+                output_dir=root / "models",
+                run_id="unit_nvfp4",
+                env={"MODEL_FORGE_MODELS_DIR": "/models-host", "HF_HOME": "/hf-cache"},
+            )
+            export_path = root / "export_plan.json"
+            export_path.write_text(json.dumps(export), encoding="utf-8")
+            serving = root / "summary.json"
+            write_serving_summary(serving, model="candidate", output_tps=50.0, decode_heavy_tps=50.5)
+            serving_eval = root / "serving_eval"
+            write_behavior_scores(serving_eval)
+            card = root / "quantization_card.json"
+            card.write_text(json.dumps({"schema_version": "model_forge.quantization_card.v1"}), encoding="utf-8")
+            behavior = root / "behavior.json"
+            behavior.write_text(
+                json.dumps({"schema_version": BEHAVIOR_REPORT_SCHEMA_VERSION, "behavior_preserved": True}),
+                encoding="utf-8",
+            )
+            tokenizer = root / "tokenizer.json"
+            tokenizer.write_text(
+                json.dumps({"schema_version": TOKENIZER_REPORT_SCHEMA_VERSION, "passed": True}),
+                encoding="utf-8",
+            )
+            report = build_nvfp4_gate_report(
+                export_plan=export_path,
+                serving_summary=serving,
+                serving_eval=serving_eval,
+                quantization_card=card,
+                behavior_report=behavior,
+                tokenizer_report=tokenizer,
+                output_dir=root / "gate",
+                run_id="unit_nvfp4_gate",
+                min_output_tps=45.0,
+            )
+
+        self.assertEqual(report["schema_version"], NVFP4_GATE_SCHEMA_VERSION)
+        self.assertTrue(report["nvfp4_ready"])
+        self.assertEqual(report["metrics"]["decode_heavy_output_tokens_per_second_p50"], 50.5)
+
+    def test_nvfp4_gate_fails_when_throughput_target_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            export = root / "export_plan.json"
+            export.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "model_forge.quantization_export.v1",
+                        "method": "nvfp4",
+                        "backend": "modelopt",
+                        "command_display": "--qformat nvfp4",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            serving = root / "summary.json"
+            write_serving_summary(serving, model="candidate", output_tps=25.0, decode_heavy_tps=25.0)
+            serving_eval = root / "serving_eval"
+            write_behavior_scores(serving_eval)
+            card = root / "quantization_card.json"
+            card.write_text(json.dumps({"schema_version": CARD_SCHEMA_VERSION}), encoding="utf-8")
+            behavior = root / "behavior.json"
+            behavior.write_text(json.dumps({"schema_version": BEHAVIOR_REPORT_SCHEMA_VERSION, "behavior_preserved": True}), encoding="utf-8")
+            tokenizer = root / "tokenizer.json"
+            tokenizer.write_text(json.dumps({"schema_version": TOKENIZER_REPORT_SCHEMA_VERSION, "passed": True}), encoding="utf-8")
+            report = build_nvfp4_gate_report(
+                export_plan=export,
+                serving_summary=serving,
+                serving_eval=serving_eval,
+                quantization_card=card,
+                behavior_report=behavior,
+                tokenizer_report=tokenizer,
+                output_dir=root / "gate",
+                run_id="unit_nvfp4_gate_fail",
+                min_output_tps=45.0,
+            )
+
+        self.assertFalse(report["nvfp4_ready"])
+        throughput = next(check for check in report["checks"] if check["name"] == "output_tps_target_met")
+        self.assertEqual(throughput["status"], "fail")
 
     def test_calibration_manifest_resolves_exact_dataset_inputs(self) -> None:
         config_path = Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml")

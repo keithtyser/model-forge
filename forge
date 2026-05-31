@@ -39,7 +39,7 @@ Usage:
   ./forge artifacts [validate]
   ./forge bench [serve|serve-eval|sweep|kernel]
   ./forge profile [nsight]
-  ./forge quantize [plan|export|calibration-manifest|matrix-plan|card|fp8-kv-report|behavior-report|tokenizer-report|sensitivity-report]
+  ./forge quantize [plan|export|calibration-manifest|matrix-plan|card|fp8-kv-report|behavior-report|tokenizer-report|sensitivity-report|nvfp4-gate]
   ./forge cluster [plan|doctor|sync|health|runtime|torchrun-smoke]
   ./forge golden-summary <family> [output-json]
   ./forge golden-check <family> [baseline-json]
@@ -104,6 +104,7 @@ Examples:
   ./forge quantize behavior-report --config configs/quantization/fp8_w8a8_modelopt.yaml --source-serving-summary <source>/summary.json --candidate-serving-summary <candidate>/summary.json --source-serving-eval <source_eval> --candidate-serving-eval <candidate_eval> --run-id source_vs_quantized_behavior --write-report
   ./forge quantize tokenizer-report --source-tokenizer-dir <source_model_dir> --candidate-tokenizer-dir <quantized_or_gguf_dir> --run-id source_vs_quantized_tokenizer --write-report
   ./forge quantize sensitivity-report --config configs/quantization/sensitivity_scan.yaml --baseline-serving-summary <source>/summary.json --baseline-serving-eval <source_eval> --candidate name=mlp_only,component=mlp,summary=<candidate>/summary.json,eval=<candidate_eval> --run-id quant_sensitivity --write-report
+  ./forge quantize nvfp4-gate --export-plan <export_plan.json> --serving-summary <serve>/summary.json --serving-eval <serve_eval> --quantization-card <quantization_card.json> --behavior-report <behavior_report.json> --tokenizer-report <tokenizer_report.json> --run-id nvfp4_gate --write-gate
   ./forge cluster plan --config configs/clusters/dgx_spark_x2.example.yaml --workload train
   ./forge cluster sync --config configs/clusters/dgx_spark_x2.example.yaml
   ./forge cluster health --config configs/clusters/dgx_spark_x2.example.yaml

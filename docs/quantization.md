@@ -181,6 +181,24 @@ length, batching, scheduler, prompt set, max tokens, and hardware allocation.
 If token throughput does not improve, keep the run as loader evidence instead
 of claiming an optimized NVFP4 path.
 
+Gate completed Blackwell NVFP4 evidence before promotion:
+
+```bash
+./forge quantize nvfp4-gate \
+  --export-plan reports/generated/quantization/<run>/quantization_export_plan.json \
+  --serving-summary reports/generated/serve_bench/<candidate>/summary.json \
+  --serving-eval reports/generated/serve_eval/<candidate> \
+  --quantization-card reports/generated/quantization/<run>/quantization_card.json \
+  --behavior-report reports/generated/quantization/<run>/behavior_preservation_report.json \
+  --tokenizer-report reports/generated/quantization/<run>/tokenizer_preservation_report.json \
+  --run-id nvfp4_gate \
+  --write-gate
+```
+
+The default minimum is `45` output tok/s, matching the near-term DGX Spark
+target for full-MoE Gemma 4 NVFP4. Override `--min-output-tps` only when the
+model family, hardware, or workload target is explicitly different.
+
 Write the card:
 
 ```bash

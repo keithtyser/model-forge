@@ -35,6 +35,7 @@ FP8_KV_REPORT_SCHEMA_VERSION = "model_forge.fp8_kv_behavior_report.v1"
 BEHAVIOR_REPORT_SCHEMA_VERSION = "model_forge.quantization_behavior_preservation_report.v1"
 TOKENIZER_REPORT_SCHEMA_VERSION = "model_forge.quantization_tokenizer_preservation_report.v1"
 SENSITIVITY_REPORT_SCHEMA_VERSION = "model_forge.quantization_sensitivity_report.v1"
+NVFP4_GATE_SCHEMA_VERSION = "model_forge.nvfp4_evidence_gate.v1"
 
 console = Console(stderr=True)
 
@@ -1173,6 +1174,10 @@ def load_json(path: Path) -> dict[str, Any]:
     return data
 
 
+def load_optional_json(path: Path | None) -> dict[str, Any]:
+    return load_json(resolve_repo_path(path)) if path else {}
+
+
 def scores_csv_path(path: Path) -> Path:
     if path.is_dir():
         return path / "scores.csv"
@@ -1784,6 +1789,111 @@ def write_sensitivity_report_outputs(report: Mapping[str, Any]) -> Path:
     return output_dir
 
 
+def nested_float(data: Mapping[str, Any], path: tuple[str, ...]) -> float | None:
+    value = stats_value(data, path)
+    return value
+
+
+def build_nvfp4_gate_report(
+    *,
+    export_plan: Path,
+    serving_summary: Path,
+    serving_eval: Path,
+    quantization_card: Path,
+    behavior_report: Path,
+    tokenizer_report: Path,
+    output_dir: Path,
+    run_id: str,
+    min_output_tps: float = 45.0,
+) -> dict[str, Any]:
+    export_data = load_json(resolve_repo_path(export_plan))
+    serving_data = load_json(resolve_repo_path(serving_summary))
+    card_data = load_json(resolve_repo_path(quantization_card))
+    behavior_data = load_json(resolve_repo_path(behavior_report))
+    tokenizer_data = load_json(resolve_repo_path(tokenizer_report))
+    eval_scores_path = scores_csv_path(resolve_repo_path(serving_eval))
+    output_tps = nested_float(serving_data, ("metrics", "output_tokens_per_second", "p50"))
+    decode_heavy_tps = nested_float(serving_data, ("by_category", "decode_heavy", "metrics", "output_tokens_per_second", "p50"))
+    command_display = str(export_data.get("command_display") or "")
+    checks = [
+        status_check("export_plan_schema", export_data.get("schema_version") == "model_forge.quantization_export.v1", f"schema={export_data.get('schema_version')}"),
+        status_check("export_method_nvfp4", export_data.get("method") == "nvfp4", f"method={export_data.get('method')}"),
+        status_check("export_backend_modelopt", export_data.get("backend") == "modelopt", f"backend={export_data.get('backend')}"),
+        status_check("export_command_modelopt_nvfp4", "--qformat nvfp4" in command_display or "--qformat nvfp4" in " ".join(map(str, export_data.get("command") or [])), "command includes qformat nvfp4"),
+        status_check("serving_success_rate_complete", serving_data.get("success_rate") == 1.0, f"success_rate={serving_data.get('success_rate')}"),
+        status_check(
+            "output_tps_target_met",
+            any(isinstance(value, (int, float)) and float(value) >= min_output_tps for value in (output_tps, decode_heavy_tps)),
+            f"output_tps={output_tps} decode_heavy_output_tps={decode_heavy_tps} min={min_output_tps}",
+        ),
+        status_check("serving_eval_scores_exist", eval_scores_path.exists(), f"scores={display_path(eval_scores_path)}"),
+        status_check("quantization_card_schema", card_data.get("schema_version") == CARD_SCHEMA_VERSION, f"schema={card_data.get('schema_version')}"),
+        status_check("behavior_report_schema", behavior_data.get("schema_version") == BEHAVIOR_REPORT_SCHEMA_VERSION, f"schema={behavior_data.get('schema_version')}"),
+        status_check("behavior_preserved", behavior_data.get("behavior_preserved") is True, f"behavior_preserved={behavior_data.get('behavior_preserved')}"),
+        status_check("tokenizer_report_schema", tokenizer_data.get("schema_version") == TOKENIZER_REPORT_SCHEMA_VERSION, f"schema={tokenizer_data.get('schema_version')}"),
+        status_check("tokenizer_preserved", tokenizer_data.get("passed") is True, f"passed={tokenizer_data.get('passed')}"),
+    ]
+    ready = all(check["status"] == "pass" for check in checks if check["required"])
+    return redact_value(
+        {
+            "schema_version": NVFP4_GATE_SCHEMA_VERSION,
+            "created_at": utc_now().isoformat(),
+            "run_id": run_id,
+            "artifact_paths": {
+                "export_plan": display_path(resolve_repo_path(export_plan)),
+                "serving_summary": display_path(resolve_repo_path(serving_summary)),
+                "serving_eval": display_path(resolve_repo_path(serving_eval)),
+                "quantization_card": display_path(resolve_repo_path(quantization_card)),
+                "behavior_report": display_path(resolve_repo_path(behavior_report)),
+                "tokenizer_report": display_path(resolve_repo_path(tokenizer_report)),
+            },
+            "metrics": {
+                "output_tokens_per_second_p50": output_tps,
+                "decode_heavy_output_tokens_per_second_p50": decode_heavy_tps,
+                "min_output_tokens_per_second": min_output_tps,
+            },
+            "checks": checks,
+            "nvfp4_ready": ready,
+            "output_dir": display_path(output_dir),
+            "notes": [
+                "This gate consumes completed artifacts; it does not run export, serving, or eval jobs.",
+                "Blackwell NVFP4 promotion requires export evidence, serving throughput, behavior preservation, tokenizer preservation, and a quantization card.",
+                "For Gemma 4 MoE on DGX Spark, the near-term target is roughly 45-60 output tok/s on decode-heavy workloads.",
+            ],
+        }
+    )
+
+
+def write_nvfp4_gate_outputs(report: Mapping[str, Any]) -> Path:
+    output_dir = resolve_repo_path(str(report["output_dir"]))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "nvfp4_evidence_gate.json").write_text(
+        json.dumps(redact_value(report), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    lines = [
+        f"# NVFP4 Evidence Gate: {report.get('run_id')}",
+        "",
+        f"- Ready: `{str(report.get('nvfp4_ready')).lower()}`",
+        f"- Output tok/s p50: `{(report.get('metrics') or {}).get('output_tokens_per_second_p50')}`",
+        f"- Decode-heavy output tok/s p50: `{(report.get('metrics') or {}).get('decode_heavy_output_tokens_per_second_p50')}`",
+        "",
+        "## Checks",
+        "",
+        "| Status | Required | Check | Message |",
+        "|---|---|---|---|",
+    ]
+    for check in report.get("checks") or []:
+        lines.append(
+            f"| {str(check.get('status')).upper()} | {'yes' if check.get('required') else 'no'} | "
+            f"{check.get('name')} | {check.get('message')} |"
+        )
+    lines.extend(["", "## Notes", ""])
+    lines.extend(f"- {note}" for note in report.get("notes") or [])
+    (output_dir / "nvfp4_evidence_gate.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return output_dir
+
+
 def write_fp8_kv_report_outputs(report: Mapping[str, Any]) -> Path:
     output_dir = resolve_repo_path(str(report["output_dir"]))
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -2065,6 +2175,19 @@ def main() -> None:
     sensitivity_parser.add_argument("--write-report", action="store_true", help="Write sensitivity_report.json and .md")
     sensitivity_parser.add_argument("--json", action="store_true", help="Print JSON report")
 
+    nvfp4_gate_parser = subparsers.add_parser("nvfp4-gate", help="Validate completed Blackwell NVFP4 promotion evidence")
+    nvfp4_gate_parser.add_argument("--export-plan", type=Path, required=True)
+    nvfp4_gate_parser.add_argument("--serving-summary", type=Path, required=True)
+    nvfp4_gate_parser.add_argument("--serving-eval", type=Path, required=True)
+    nvfp4_gate_parser.add_argument("--quantization-card", type=Path, required=True)
+    nvfp4_gate_parser.add_argument("--behavior-report", type=Path, required=True)
+    nvfp4_gate_parser.add_argument("--tokenizer-report", type=Path, required=True)
+    nvfp4_gate_parser.add_argument("--min-output-tps", type=float, default=45.0)
+    nvfp4_gate_parser.add_argument("--output-dir", type=Path, default=REPO_DIR / "reports" / "generated" / "quantization")
+    nvfp4_gate_parser.add_argument("--run-id", required=True)
+    nvfp4_gate_parser.add_argument("--write-gate", action="store_true", help="Write nvfp4_evidence_gate.json and .md")
+    nvfp4_gate_parser.add_argument("--json", action="store_true", help="Print JSON report")
+
     args = parser.parse_args()
     config_path = resolve_repo_path(args.config) if hasattr(args, "config") else DEFAULT_CONFIG
     config = load_quantization_config(config_path) if hasattr(args, "config") else None
@@ -2130,6 +2253,34 @@ def main() -> None:
                 )
             console.print(table)
         return
+
+    if args.command == "nvfp4-gate":
+        output_dir = resolve_repo_path(args.output_dir) / sanitize_run_id(args.run_id)
+        report = build_nvfp4_gate_report(
+            export_plan=args.export_plan,
+            serving_summary=args.serving_summary,
+            serving_eval=args.serving_eval,
+            quantization_card=args.quantization_card,
+            behavior_report=args.behavior_report,
+            tokenizer_report=args.tokenizer_report,
+            output_dir=output_dir,
+            run_id=sanitize_run_id(args.run_id),
+            min_output_tps=float(args.min_output_tps),
+        )
+        if args.write_gate:
+            write_nvfp4_gate_outputs(report)
+        if args.json:
+            print(json.dumps(redact_value(report), indent=2, sort_keys=True) + "\n")
+        else:
+            table = Table(title="NVFP4 Evidence Gate")
+            table.add_column("Check")
+            table.add_column("Status")
+            table.add_column("Message")
+            for check in report.get("checks") or []:
+                table.add_row(str(check.get("name")), str(check.get("status")), str(check.get("message")))
+            console.print(table)
+            console.print(f"NVFP4 ready: {report.get('nvfp4_ready')}")
+        raise SystemExit(0 if report.get("nvfp4_ready") else 1)
 
     if args.command == "plan":
         plan = build_plan(

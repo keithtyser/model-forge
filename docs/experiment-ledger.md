@@ -1645,6 +1645,54 @@ Result:
   generation
 - MF-0306 is marked tested / smoke_validated
 
+## Quantization: Blackwell NVFP4 Evidence Gate
+
+Status: implemented as artifact validation code/docs only. No model server,
+export job, quantization run, eval, or benchmark was started.
+
+Hypothesis: The Blackwell NVFP4 pipeline should not be considered ready from a
+generated ModelOpt command or loader proof alone. Promotion needs one gate that
+requires export evidence, serving throughput, sampled eval evidence,
+quantization card, behavior preservation report, tokenizer preservation report,
+and a family-appropriate output tok/s target.
+
+Implemented command:
+
+```bash
+./forge quantize nvfp4-gate \
+  --export-plan <export_plan.json> \
+  --serving-summary <serve>/summary.json \
+  --serving-eval <serve_eval> \
+  --quantization-card <quantization_card.json> \
+  --behavior-report <behavior_preservation_report.json> \
+  --tokenizer-report <tokenizer_preservation_report.json> \
+  --run-id nvfp4_gate \
+  --write-gate
+```
+
+Changes:
+
+- added `model_forge.nvfp4_evidence_gate.v1`
+- validates ModelOpt NVFP4 export-plan metadata and command intent
+- requires successful serving evidence plus output/decode-heavy tok/s meeting
+  the configured threshold
+- requires sampled eval scores, quantization card, behavior preservation report,
+  and tokenizer preservation report
+- writes `nvfp4_evidence_gate.json` and `.md`
+- updated README, AGENTS, quantization docs, and roadmap state
+
+Validation:
+
+```bash
+.venv/bin/python -m unittest tests.test_quantization_cli -v
+```
+
+Result:
+
+- Blackwell NVFP4 now has a concrete evidence gate for promotion
+- MF-0305 is marked tested / smoke_validated; Spark validation remains
+  candidate-run-specific evidence
+
 ## Quantization: ModelOpt NVFP4 Self-Export Guardrail Incident
 
 Status: stopped before a completed NVFP4 checkpoint. Code and docs now enforce

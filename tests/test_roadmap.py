@@ -24,8 +24,8 @@ class RoadmapAuditTests(unittest.TestCase):
         by_id = {item.item_id: item for item in items}
         self.assertEqual(by_id["MF-0000"].implementation_status, "tested")
         self.assertEqual(by_id["MF-0000"].validation_state, "planned")
-        self.assertEqual(by_id["MF-0305"].implementation_status, "wired_to_cli")
-        self.assertEqual(by_id["MF-0305"].validation_state, "planned")
+        self.assertEqual(by_id["MF-0305"].implementation_status, "tested")
+        self.assertEqual(by_id["MF-0305"].validation_state, "smoke_validated")
 
     def test_audit_reports_missing_or_invalid_statuses(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

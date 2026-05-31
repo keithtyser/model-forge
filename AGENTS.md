@@ -434,6 +434,15 @@ Plan and report quantization without loading a model:
   --candidate name=mlp_only,component=mlp,summary=<candidate>/summary.json,eval=<candidate_eval_dir> \
   --run-id quant_sensitivity \
   --write-report
+./forge quantize nvfp4-gate \
+  --export-plan <export_plan.json> \
+  --serving-summary <serve>/summary.json \
+  --serving-eval <serve_eval_dir> \
+  --quantization-card <quantization_card.json> \
+  --behavior-report <behavior_preservation_report.json> \
+  --tokenizer-report <tokenizer_preservation_report.json> \
+  --run-id nvfp4_gate \
+  --write-gate
 ```
 
 NVFP4 is the priority Blackwell path. `nvfp4_runtime` means Model Forge is
@@ -467,6 +476,10 @@ For GGUF exports, set `MODEL_FORGE_LLAMA_CPP_DIR` outside git, run the guarded
 `./forge quantize export ... --config configs/quantization/gguf_llama_cpp_q4_k_m.yaml`
 path, and attach tokenizer, llama-cli load, llama-bench, behavior, and
 quantization-card evidence before promotion.
+For Blackwell NVFP4, run `./forge quantize nvfp4-gate` before promotion. The
+gate must see ModelOpt NVFP4 export evidence, completed serving/eval artifacts,
+quantization card, behavior report, tokenizer report, and a clear output tok/s
+win against the configured threshold.
 
 For self-quantization, use the ModelOpt export runner and the matrix config:
 

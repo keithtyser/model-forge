@@ -379,6 +379,15 @@ Quantization:
   --candidate name=mlp_only,component=mlp,summary=<candidate>/summary.json,eval=<candidate_eval_dir> \
   --run-id quant_sensitivity \
   --write-report
+./forge quantize nvfp4-gate \
+  --export-plan <export_plan.json> \
+  --serving-summary <serve>/summary.json \
+  --serving-eval <serve_eval_dir> \
+  --quantization-card <quantization_card.json> \
+  --behavior-report <behavior_preservation_report.json> \
+  --tokenizer-report <tokenizer_preservation_report.json> \
+  --run-id nvfp4_gate \
+  --write-gate
 ```
 
 See [docs/quantization.md](docs/quantization.md). NVFP4 is the priority
