@@ -3793,7 +3793,7 @@ MF-0358 Add generated dataset HF publish path. implementation_status=tested vali
 MF-0359 Add Gemma local_ft_v1 eval-adjacent dataset recipe. implementation_status=tested validation_state=smoke_validated
 MF-0360 Add eval-feedback loop that proposes next dataset skills from failures. implementation_status=tested validation_state=smoke_validated
 MF-0361 Add forge data review with curation flags and scale-up gate. implementation_status=tested validation_state=smoke_validated
-MF-0362 Add smoke_pack, medium_pack, and training_pack promotion gates. implementation_status=scaffolded validation_state=smoke_validated
+MF-0362 Add smoke_pack, medium_pack, and training_pack promotion gates. implementation_status=tested validation_state=smoke_validated
 MF-0363 Require bounded Spark fine-tune evidence before dataset recipe is marked validated. implementation_status=tested validation_state=smoke_validated
 ```
 

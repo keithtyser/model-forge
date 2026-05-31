@@ -35,6 +35,8 @@ observed fine-tuning gaps without copying held-out model-forge eval prompts.
 - Verification failed: 0
 - Seed-only scaffold: false
 - Smoke-only scaffold: true
+- Pack stage: smoke_pack
+- Pack stage ready: true
 
 ## Skill Counts
 

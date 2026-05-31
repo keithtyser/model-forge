@@ -1,6 +1,6 @@
 {
   "accepted_count": 49,
-  "created_at": "2026-05-19T12:47:24.035903+00:00",
+  "created_at": "2026-05-31T03:29:21.674888+00:00",
   "dataset_id": "gemma4_26b_a4b_local_ft_v1",
   "generation_method_counts": {
     "eval_adjacent_generation": 3,
@@ -8,6 +8,131 @@
     "human_seed": 37,
     "instruction_backtranslation": 3,
     "self_instruct": 3
+  },
+  "pack_promotion_gates": {
+    "created_at": "2026-05-31T03:29:21.675041+00:00",
+    "dataset_id": "gemma4_26b_a4b_local_ft_v1",
+    "gates": {
+      "medium_pack": [
+        {
+          "message": "accepted_count=49",
+          "name": "accepted_rows_present",
+          "passed": true
+        },
+        {
+          "message": "rejected_count=0",
+          "name": "rejected_rows_recorded",
+          "passed": true
+        },
+        {
+          "message": "verification_passed=49 accepted=49",
+          "name": "verification_covers_accepted_rows",
+          "passed": true
+        },
+        {
+          "message": "warnings=1",
+          "name": "no_high_level_quality_warnings",
+          "passed": false
+        },
+        {
+          "message": "medium packs must not be seed-only or smoke-only",
+          "name": "not_seed_or_smoke_only",
+          "passed": false
+        },
+        {
+          "message": "medium packs should contain 250-500 accepted examples",
+          "name": "medium_size_band",
+          "passed": false
+        },
+        {
+          "message": "review_report.ready_to_scale_generation must be true",
+          "name": "review_ready_to_scale",
+          "passed": true
+        },
+        {
+          "message": "review report must have no critical flags",
+          "name": "no_critical_review_flags",
+          "passed": true
+        }
+      ],
+      "smoke_pack": [
+        {
+          "message": "accepted_count=49",
+          "name": "accepted_rows_present",
+          "passed": true
+        },
+        {
+          "message": "rejected_count=0",
+          "name": "rejected_rows_recorded",
+          "passed": true
+        },
+        {
+          "message": "verification_passed=49 accepted=49",
+          "name": "verification_covers_accepted_rows",
+          "passed": true
+        },
+        {
+          "message": "smoke packs should contain 25-100 accepted examples",
+          "name": "smoke_size_band",
+          "passed": true
+        },
+        {
+          "message": "pack wrote dataset, manifest, quality report, card, accepted/rejected, and verification artifacts",
+          "name": "schema_card_filtering_ready",
+          "passed": true
+        }
+      ],
+      "training_pack": [
+        {
+          "message": "accepted_count=49",
+          "name": "accepted_rows_present",
+          "passed": true
+        },
+        {
+          "message": "rejected_count=0",
+          "name": "rejected_rows_recorded",
+          "passed": true
+        },
+        {
+          "message": "verification_passed=49 accepted=49",
+          "name": "verification_covers_accepted_rows",
+          "passed": true
+        },
+        {
+          "message": "warnings=1",
+          "name": "no_high_level_quality_warnings",
+          "passed": false
+        },
+        {
+          "message": "training packs must not be seed-only or smoke-only",
+          "name": "not_seed_or_smoke_only",
+          "passed": false
+        },
+        {
+          "message": "accepted_count=49 min_target=500",
+          "name": "training_size_floor",
+          "passed": false
+        },
+        {
+          "message": "accepted_count=49 max_target=2000",
+          "name": "training_size_ceiling",
+          "passed": true
+        },
+        {
+          "message": "review_report.ready_to_scale_generation must be true",
+          "name": "review_ready_to_scale",
+          "passed": true
+        },
+        {
+          "message": "training-gate evidence must pass before recipe validation",
+          "name": "bounded_training_evidence_attached",
+          "passed": false
+        }
+      ]
+    },
+    "schema_version": "model_forge.dataset_pack_promotion_gates.v1",
+    "stage": "smoke_pack",
+    "stage_ready": true
   },
   "quality_score_average": 0.8966,
   "rejected_count": 0,

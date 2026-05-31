@@ -2580,6 +2580,36 @@ Publish status: already uploaded to Hugging Face before the FT handoff. No
 additional upload needed for this completed ablated checkpoint unless the model
 card or files need revision.
 
+## Dataset Factory: Pack Promotion Gates
+
+Status: smoke-validated implementation; no heavy training launched.
+
+Purpose: make dataset pack stages explicit so agents do not treat a smoke pack,
+medium pack, and training pack as interchangeable. The pack step now writes
+`pack_promotion_gates` into `quality_report.json` and `manifest.yaml`.
+
+Implemented:
+
+```text
+model_forge.dataset_pack_promotion_gates.v1
+```
+
+Gate stages:
+
+```text
+smoke_pack: schema/card/filtering readiness for 25-100 accepted examples
+medium_pack: non-smoke 250-500 rows plus review readiness
+training_pack: target row count, review readiness, and passing training-gate evidence
+```
+
+Validation:
+
+```text
+.venv/bin/python -m unittest tests.test_data_factory -v
+```
+
+Result: `MF-0362` is now `tested` / `smoke_validated`.
+
 ## Foundation: Validation Schema Audit
 
 Status: smoke-validated schema audit; no heavy run launched.

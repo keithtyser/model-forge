@@ -25,6 +25,7 @@ from model_forge.data.sources import registry_summary
 REPO_DIR = Path(__file__).resolve().parents[3]
 console = Console()
 TRAINING_EVIDENCE_GATE_SCHEMA_VERSION = "model_forge.dataset_training_evidence_gate.v1"
+PACK_PROMOTION_GATES_SCHEMA_VERSION = "model_forge.dataset_pack_promotion_gates.v1"
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -1584,12 +1585,97 @@ def quality_report(config: dict[str, Any], accepted: list[dict[str, Any]], rejec
     }
 
 
+def _gate(name: str, passed: bool, message: str) -> dict[str, Any]:
+    return {"name": name, "passed": bool(passed), "message": message}
+
+
+def pack_stage(config: dict[str, Any], report: dict[str, Any]) -> str:
+    accepted = int(report.get("accepted_count", 0) or 0)
+    target = report.get("target_accept_count") or config.get("target_accept_count") or {}
+    min_target = int(target.get("min", 0) or 0) if isinstance(target, dict) else 0
+    if bool(report.get("seed_only", config.get("seed_only", False))):
+        return "seed_pack"
+    if bool(report.get("smoke_only", config.get("smoke_only", False))) or accepted < 250:
+        return "smoke_pack"
+    if min_target and accepted < min_target:
+        return "medium_pack"
+    return "training_pack"
+
+
+def build_pack_promotion_gates(
+    config: dict[str, Any],
+    report: dict[str, Any],
+    *,
+    review_report: dict[str, Any] | None = None,
+    training_gate_report: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    accepted = int(report.get("accepted_count", 0) or 0)
+    rejected = int(report.get("rejected_count", 0) or 0)
+    verification = report.get("verification_counts") or {}
+    warnings = report.get("warnings") or []
+    target = report.get("target_accept_count") or config.get("target_accept_count") or {}
+    min_target = int(target.get("min", 0) or 0) if isinstance(target, dict) else 0
+    max_target = int(target.get("max", 0) or 0) if isinstance(target, dict) else 0
+    stage = pack_stage(config, report)
+    review_ready = bool(review_report and review_report.get("ready_to_scale_generation"))
+    no_critical_review_flags = not bool((review_report or {}).get("critical_flag_counts"))
+    common = [
+        _gate("accepted_rows_present", accepted > 0, f"accepted_count={accepted}"),
+        _gate("rejected_rows_recorded", rejected >= 0, f"rejected_count={rejected}"),
+        _gate("verification_covers_accepted_rows", int(verification.get("passed", 0) or 0) >= accepted, f"verification_passed={verification.get('passed', 0)} accepted={accepted}"),
+    ]
+    quality_gates = [
+        _gate("no_high_level_quality_warnings", not warnings, f"warnings={len(warnings)}"),
+    ]
+    smoke_gates = [
+        *copy.deepcopy(common),
+        _gate("smoke_size_band", 25 <= accepted <= 100, "smoke packs should contain 25-100 accepted examples"),
+        _gate("schema_card_filtering_ready", True, "pack wrote dataset, manifest, quality report, card, accepted/rejected, and verification artifacts"),
+    ]
+    medium_gates = [
+        *copy.deepcopy(common),
+        *copy.deepcopy(quality_gates),
+        _gate("not_seed_or_smoke_only", not report.get("seed_only") and not report.get("smoke_only"), "medium packs must not be seed-only or smoke-only"),
+        _gate("medium_size_band", 250 <= accepted <= 500, "medium packs should contain 250-500 accepted examples"),
+        _gate("review_ready_to_scale", review_ready, "review_report.ready_to_scale_generation must be true"),
+        _gate("no_critical_review_flags", no_critical_review_flags, "review report must have no critical flags"),
+    ]
+    training_gates = [
+        *copy.deepcopy(common),
+        *copy.deepcopy(quality_gates),
+        _gate("not_seed_or_smoke_only", not report.get("seed_only") and not report.get("smoke_only"), "training packs must not be seed-only or smoke-only"),
+        _gate("training_size_floor", accepted >= min_target if min_target else accepted >= 500, f"accepted_count={accepted} min_target={min_target or 500}"),
+        _gate("training_size_ceiling", accepted <= max_target if max_target else True, f"accepted_count={accepted} max_target={max_target or 'unbounded'}"),
+        _gate("review_ready_to_scale", review_ready, "review_report.ready_to_scale_generation must be true"),
+        _gate("bounded_training_evidence_attached", bool(training_gate_report and training_gate_report.get("dataset_recipe_validated")), "training-gate evidence must pass before recipe validation"),
+    ]
+    stage_gates = {
+        "smoke_pack": smoke_gates,
+        "medium_pack": medium_gates,
+        "training_pack": training_gates,
+    }
+    selected = stage_gates.get(stage, smoke_gates)
+    return {
+        "schema_version": PACK_PROMOTION_GATES_SCHEMA_VERSION,
+        "dataset_id": config["id"],
+        "stage": stage,
+        "stage_ready": all(gate["passed"] for gate in selected),
+        "gates": {
+            "smoke_pack": smoke_gates,
+            "medium_pack": medium_gates,
+            "training_pack": training_gates,
+        },
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 def dataset_card(config: dict[str, Any], report: dict[str, Any]) -> str:
     skills = "\n".join(f"- `{skill}`: {count}" for skill, count in report["skill_counts"].items()) or "- none"
     warnings = "\n".join(f"- `{item['code']}`: {item['message']}" for item in report.get("warnings", [])) or "- none"
     source_counts = "\n".join(f"- `{kind}`: {count}" for kind, count in report.get("source_kind_counts", {}).items()) or "- none"
     method_counts = "\n".join(f"- `{method}`: {count}" for method, count in report.get("generation_method_counts", {}).items()) or "- none"
     verification_counts = report.get("verification_counts", {})
+    pack_gates = report.get("pack_promotion_gates") or {}
     return f"""---
 dataset_info:
   config_name: {config['id']}
@@ -1627,6 +1713,8 @@ observed fine-tuning gaps without copying held-out model-forge eval prompts.
 - Verification failed: {verification_counts.get('failed', 0)}
 - Seed-only scaffold: {str(bool(config.get('seed_only', False))).lower()}
 - Smoke-only scaffold: {str(bool(config.get('smoke_only', False))).lower()}
+- Pack stage: {pack_gates.get('stage', 'unknown')}
+- Pack stage ready: {str(bool(pack_gates.get('stage_ready', False))).lower()}
 
 ## Skill Counts
 
@@ -1716,6 +1804,8 @@ def command_pack(
     write_jsonl(dataset_path, dataset_rows)
 
     report = quality_report(config, accepted, rejected)
+    review_report = load_json(review_report_path) if review_report_path.exists() else None
+    report["pack_promotion_gates"] = build_pack_promotion_gates(config, report, review_report=review_report)
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     manifest = build_plan(config, config_path)

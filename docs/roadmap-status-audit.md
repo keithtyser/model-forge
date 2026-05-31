@@ -13,8 +13,8 @@ This file is generated from the prioritized backlog in
 | Status | Count |
 |---|---:|
 | implemented | 2 |
-| scaffolded | 3 |
-| tested | 92 |
+| scaffolded | 2 |
+| tested | 93 |
 
 ## Validation State
 
@@ -92,7 +92,7 @@ No status audit findings.
 | MF-0359 | P1: Dataset factory | tested | smoke_validated | Add Gemma local_ft_v1 eval-adjacent dataset recipe |
 | MF-0360 | P1: Dataset factory | tested | smoke_validated | Add eval-feedback loop that proposes next dataset skills from failures |
 | MF-0361 | P1: Dataset factory | tested | smoke_validated | Add forge data review with curation flags and scale-up gate |
-| MF-0362 | P1: Dataset factory | scaffolded | smoke_validated | Add smoke_pack, medium_pack, and training_pack promotion gates |
+| MF-0362 | P1: Dataset factory | tested | smoke_validated | Add smoke_pack, medium_pack, and training_pack promotion gates |
 | MF-0363 | P1: Dataset factory | tested | smoke_validated | Require bounded Spark fine-tune evidence before dataset recipe is marked validated |
 | MF-0501 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add forge hf status/login/whoami |
 | MF-0502 | P1: Hugging Face Hub publishing | tested | smoke_validated | Add forge hf plan-model |

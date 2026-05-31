@@ -460,6 +460,12 @@ assistant length violations before packaging. The deterministic smoke pack and
 the live-teacher smoke pack clear the scale-up gate; the next step is a medium
 live-teacher generation pass, not training yet.
 
+The pack step writes `pack_promotion_gates` into `quality_report.json` and
+`manifest.yaml`. The gate schema classifies the artifact as `smoke_pack`,
+`medium_pack`, or `training_pack` and records stage-specific readiness checks.
+Training packs require a passing `training-gate` report before the dataset
+recipe can be called validated.
+
 The v1 dry-run fine-tune config validates wiring without a long run:
 
 ```bash

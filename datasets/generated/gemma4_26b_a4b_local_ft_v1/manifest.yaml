@@ -138,7 +138,7 @@ review:
   - too_long
 seed_only: false
 smoke_only: true
-created_at: '2026-05-19T12:47:24.037200+00:00'
+created_at: '2026-05-31T03:29:21.677005+00:00'
 source_registry:
   path: configs/data_sources/gemma4_26b_a4b_local_ft_v1.yaml
   version: 0.1.0
@@ -222,4 +222,81 @@ quality_report:
   warnings:
   - code: accepted_count_below_min_target
     message: accepted rows 49 below configured minimum 500
-  created_at: '2026-05-19T12:47:24.035903+00:00'
+  created_at: '2026-05-31T03:29:21.674888+00:00'
+  pack_promotion_gates:
+    schema_version: model_forge.dataset_pack_promotion_gates.v1
+    dataset_id: gemma4_26b_a4b_local_ft_v1
+    stage: smoke_pack
+    stage_ready: true
+    gates:
+      smoke_pack:
+      - name: accepted_rows_present
+        passed: true
+        message: accepted_count=49
+      - name: rejected_rows_recorded
+        passed: true
+        message: rejected_count=0
+      - name: verification_covers_accepted_rows
+        passed: true
+        message: verification_passed=49 accepted=49
+      - name: smoke_size_band
+        passed: true
+        message: smoke packs should contain 25-100 accepted examples
+      - name: schema_card_filtering_ready
+        passed: true
+        message: pack wrote dataset, manifest, quality report, card, accepted/rejected,
+          and verification artifacts
+      medium_pack:
+      - name: accepted_rows_present
+        passed: true
+        message: accepted_count=49
+      - name: rejected_rows_recorded
+        passed: true
+        message: rejected_count=0
+      - name: verification_covers_accepted_rows
+        passed: true
+        message: verification_passed=49 accepted=49
+      - name: no_high_level_quality_warnings
+        passed: false
+        message: warnings=1
+      - name: not_seed_or_smoke_only
+        passed: false
+        message: medium packs must not be seed-only or smoke-only
+      - name: medium_size_band
+        passed: false
+        message: medium packs should contain 250-500 accepted examples
+      - name: review_ready_to_scale
+        passed: true
+        message: review_report.ready_to_scale_generation must be true
+      - name: no_critical_review_flags
+        passed: true
+        message: review report must have no critical flags
+      training_pack:
+      - name: accepted_rows_present
+        passed: true
+        message: accepted_count=49
+      - name: rejected_rows_recorded
+        passed: true
+        message: rejected_count=0
+      - name: verification_covers_accepted_rows
+        passed: true
+        message: verification_passed=49 accepted=49
+      - name: no_high_level_quality_warnings
+        passed: false
+        message: warnings=1
+      - name: not_seed_or_smoke_only
+        passed: false
+        message: training packs must not be seed-only or smoke-only
+      - name: training_size_floor
+        passed: false
+        message: accepted_count=49 min_target=500
+      - name: training_size_ceiling
+        passed: true
+        message: accepted_count=49 max_target=2000
+      - name: review_ready_to_scale
+        passed: true
+        message: review_report.ready_to_scale_generation must be true
+      - name: bounded_training_evidence_attached
+        passed: false
+        message: training-gate evidence must pass before recipe validation
+    created_at: '2026-05-31T03:29:21.675041+00:00'

@@ -7,11 +7,13 @@ import unittest
 from pathlib import Path
 
 from model_forge.data.factory import (
+    PACK_PROMOTION_GATES_SCHEMA_VERSION,
     REPO_DIR,
     TRAINING_EVIDENCE_GATE_SCHEMA_VERSION,
     build_provider,
     build_feedback_proposal,
     build_gap_report,
+    build_pack_promotion_gates,
     build_plan,
     build_training_evidence_gate,
     command_generate,
@@ -125,11 +127,16 @@ class DatasetFactoryTests(unittest.TestCase):
             self.assertIn("Skill Counts", card)
             self.assertIn("Coverage Warnings", card)
             self.assertIn("Verification passed", card)
+            self.assertIn("Pack stage", card)
             manifest = load_yaml(Path(outputs["manifest"]))
             self.assertIn("verification", manifest["artifacts"])
             self.assertIn("generation_report", manifest["artifacts"])
             self.assertEqual(manifest["quality_report"]["verification_counts"]["passed"], len(dataset_rows))
             self.assertGreater(manifest["quality_report"]["source_kind_counts"]["synthetic"], 0)
+            gates = manifest["quality_report"]["pack_promotion_gates"]
+            self.assertEqual(gates["schema_version"], PACK_PROMOTION_GATES_SCHEMA_VERSION)
+            self.assertEqual(gates["stage"], "smoke_pack")
+            self.assertTrue(gates["stage_ready"])
 
     def test_generate_expands_seeds_with_template_provider(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
@@ -308,6 +315,43 @@ class DatasetFactoryTests(unittest.TestCase):
             command_publish(config, config_path, overwrite=True)
             with self.assertRaises(SystemExit):
                 command_publish(config, config_path, overwrite=False, execute=True)
+
+    def test_pack_promotion_gates_distinguish_medium_and_training_packs(self) -> None:
+        config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
+        config = load_yaml(config_path)
+        base_report = {
+            "dataset_id": config["id"],
+            "rejected_count": 3,
+            "verification_counts": {"passed": 300},
+            "warnings": [],
+            "target_accept_count": {"min": 500, "max": 2000},
+            "seed_only": False,
+            "smoke_only": False,
+        }
+        medium = build_pack_promotion_gates(
+            config,
+            {**base_report, "accepted_count": 300},
+            review_report={"ready_to_scale_generation": True, "critical_flag_counts": {}},
+        )
+        self.assertEqual(medium["stage"], "medium_pack")
+        self.assertTrue(medium["stage_ready"])
+
+        training = build_pack_promotion_gates(
+            config,
+            {**base_report, "accepted_count": 600, "verification_counts": {"passed": 600}},
+            review_report={"ready_to_scale_generation": True, "critical_flag_counts": {}},
+            training_gate_report={"dataset_recipe_validated": True},
+        )
+        self.assertEqual(training["stage"], "training_pack")
+        self.assertTrue(training["stage_ready"])
+
+        blocked_training = build_pack_promotion_gates(
+            config,
+            {**base_report, "accepted_count": 600, "verification_counts": {"passed": 600}},
+            review_report={"ready_to_scale_generation": True, "critical_flag_counts": {}},
+        )
+        self.assertEqual(blocked_training["stage"], "training_pack")
+        self.assertFalse(blocked_training["stage_ready"])
 
     def test_training_gate_requires_bounded_spark_finetune_evidence(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
