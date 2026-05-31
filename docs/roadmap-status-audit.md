@@ -20,8 +20,8 @@ This file is generated from the prioritized backlog in
 
 | State | Count |
 |---|---:|
-| planned | 9 |
-| smoke_validated | 85 |
+| planned | 1 |
+| smoke_validated | 93 |
 | spark_cluster_validated | 2 |
 | spark_single_node_validated | 1 |
 
@@ -33,15 +33,15 @@ No status audit findings.
 
 | Item | Section | Implementation | Validation | Title |
 |---|---|---|---|---|
-| MF-0000 | P0: Foundation | tested | planned | Convert legacy [x] backlog into implementation_status + validation_state |
+| MF-0000 | P0: Foundation | tested | smoke_validated | Convert legacy [x] backlog into implementation_status + validation_state |
 | MF-0001 | P0: Foundation | tested | smoke_validated | Add required validation schema to manifests, cards, objectives, and variant nodes |
-| MF-0002 | P0: Foundation | tested | planned | Add evidence ledger with command, node count, topology, logs, metrics, checksums, and promotion decision |
-| MF-0003 | P0: Foundation | tested | planned | Add objective profile loader and objective audit |
-| MF-0004 | P0: Foundation | tested | planned | Add configs/objectives/zero_refusal_capability_retention.yaml |
-| MF-0005 | P0: Foundation | tested | planned | Add configs/objectives/quantized_quality_retention.yaml |
-| MF-0006 | P0: Foundation | tested | planned | Add configs/objectives/dgx_spark_latency_throughput.yaml |
-| MF-0007 | P0: Foundation | tested | planned | Add variant graph and variant_node.json writer |
-| MF-0008 | P0: Foundation | tested | planned | Add artifact checksum and retention policy fields |
+| MF-0002 | P0: Foundation | tested | smoke_validated | Add evidence ledger with command, node count, topology, logs, metrics, checksums, and promotion decision |
+| MF-0003 | P0: Foundation | tested | smoke_validated | Add objective profile loader and objective audit |
+| MF-0004 | P0: Foundation | tested | smoke_validated | Add configs/objectives/zero_refusal_capability_retention.yaml |
+| MF-0005 | P0: Foundation | tested | smoke_validated | Add configs/objectives/quantized_quality_retention.yaml |
+| MF-0006 | P0: Foundation | tested | smoke_validated | Add configs/objectives/dgx_spark_latency_throughput.yaml |
+| MF-0007 | P0: Foundation | tested | smoke_validated | Add variant graph and variant_node.json writer |
+| MF-0008 | P0: Foundation | tested | smoke_validated | Add artifact checksum and retention policy fields |
 | MF-0009 | P0: Foundation | tested | smoke_validated | Add eval provenance card |
 | MF-0010 | P0: Foundation | tested | smoke_validated | Add golden baseline create/check hardening |
 | MF-0011 | P0: Foundation | tested | smoke_validated | Add CLI/doc drift check for roadmap command examples |

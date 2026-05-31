@@ -2608,6 +2608,36 @@ profiles audit cleanly, canonical run manifests expose required fields, and a
 default variant node validates with validation evidence and retention fields.
 `MF-0001` is now `tested` / `smoke_validated`.
 
+## Foundation: Roadmap Evidence-State Cleanup
+
+Status: documentation and audit-state cleanup only; no heavy run launched.
+
+Purpose: align the foundation backlog status fields with current checked
+evidence. These items already had implementation and tests, but several still
+showed `validation_state=planned`, which made the roadmap understate completed
+smoke validation.
+
+Evidence used:
+
+```text
+./forge roadmap audit --write-doc
+./forge objectives audit --json
+./forge schema audit --json
+./forge variants graph gemma4_26b_a4b
+.venv/bin/python -m unittest tests.test_roadmap tests.test_objectives tests.test_variants tests.test_run_manifest tests.test_schema_audit -v
+```
+
+Result:
+
+- `MF-0000` is smoke-validated by roadmap status audit coverage.
+- `MF-0002` is smoke-validated by run manifest and variant-node evidence fields.
+- `MF-0003` is smoke-validated by objective profile loader/audit tests.
+- `MF-0004`, `MF-0005`, and `MF-0006` are smoke-validated by objective profile
+  config audit coverage.
+- `MF-0007` is smoke-validated by variant graph/node writer tests.
+- `MF-0008` is smoke-validated by artifact checksum and retention-field tests
+  in variant nodes.
+
 ## Dataset Factory: Bounded Fine-Tune Evidence Gate
 
 Status: smoke-validated artifact gate; no heavy training launched.

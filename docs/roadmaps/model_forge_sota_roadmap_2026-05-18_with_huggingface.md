@@ -3709,15 +3709,15 @@ validation_state:
 ### P0: Foundation
 
 ```text
-MF-0000 Convert legacy [x] backlog into implementation_status + validation_state. implementation_status=tested validation_state=planned
+MF-0000 Convert legacy [x] backlog into implementation_status + validation_state. implementation_status=tested validation_state=smoke_validated
 MF-0001 Add required validation schema to manifests, cards, objectives, and variant nodes. implementation_status=tested validation_state=smoke_validated
-MF-0002 Add evidence ledger with command, node count, topology, logs, metrics, checksums, and promotion decision. implementation_status=tested validation_state=planned
-MF-0003 Add objective profile loader and objective audit. implementation_status=tested validation_state=planned
-MF-0004 Add configs/objectives/zero_refusal_capability_retention.yaml. implementation_status=tested validation_state=planned
-MF-0005 Add configs/objectives/quantized_quality_retention.yaml. implementation_status=tested validation_state=planned
-MF-0006 Add configs/objectives/dgx_spark_latency_throughput.yaml. implementation_status=tested validation_state=planned
-MF-0007 Add variant graph and variant_node.json writer. implementation_status=tested validation_state=planned
-MF-0008 Add artifact checksum and retention policy fields. implementation_status=tested validation_state=planned
+MF-0002 Add evidence ledger with command, node count, topology, logs, metrics, checksums, and promotion decision. implementation_status=tested validation_state=smoke_validated
+MF-0003 Add objective profile loader and objective audit. implementation_status=tested validation_state=smoke_validated
+MF-0004 Add configs/objectives/zero_refusal_capability_retention.yaml. implementation_status=tested validation_state=smoke_validated
+MF-0005 Add configs/objectives/quantized_quality_retention.yaml. implementation_status=tested validation_state=smoke_validated
+MF-0006 Add configs/objectives/dgx_spark_latency_throughput.yaml. implementation_status=tested validation_state=smoke_validated
+MF-0007 Add variant graph and variant_node.json writer. implementation_status=tested validation_state=smoke_validated
+MF-0008 Add artifact checksum and retention policy fields. implementation_status=tested validation_state=smoke_validated
 MF-0009 Add eval provenance card. implementation_status=tested validation_state=smoke_validated
 MF-0010 Add golden baseline create/check hardening. implementation_status=tested validation_state=smoke_validated
 MF-0011 Add CLI/doc drift check for roadmap command examples. implementation_status=tested validation_state=smoke_validated

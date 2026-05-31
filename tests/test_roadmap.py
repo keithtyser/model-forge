@@ -23,7 +23,7 @@ class RoadmapAuditTests(unittest.TestCase):
         self.assertGreaterEqual(len(items), 60)
         by_id = {item.item_id: item for item in items}
         self.assertEqual(by_id["MF-0000"].implementation_status, "tested")
-        self.assertEqual(by_id["MF-0000"].validation_state, "planned")
+        self.assertEqual(by_id["MF-0000"].validation_state, "smoke_validated")
         self.assertEqual(by_id["MF-0305"].implementation_status, "tested")
         self.assertEqual(by_id["MF-0305"].validation_state, "smoke_validated")
 
