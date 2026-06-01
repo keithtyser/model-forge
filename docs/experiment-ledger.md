@@ -249,6 +249,59 @@ Pain point found and fixed:
   passthrough args through `forge` and `scripts/model_forge_dgx.py`; covered by
   `tests.test_model_forge_dgx`.
 
+## Qwen 3.6 27B: Local FT v4 Repair Candidate
+
+Status: completed on the two-DGX-Spark cluster. Recipe/configs are pushed;
+adapter and raw eval responses remain generated local artifacts.
+
+Hypothesis: a compact repair pass can beat the base model and preserve the
+successful v2 challenge gain while fixing v2/v3 regressions in paired benign
+quality and multi-step planning. The repair data should be adjacent to, but not
+copies of, held-out eval prompts.
+
+Primary recipe:
+
+```text
+configs/finetuning/qwen36_27b_local_ft_v4.yaml
+datasets/finetuning/qwen36_27b_local_ft_v4.yaml
+datasets/seeds/qwen36_27b_local_ft_v4_planning_repair.jsonl
+```
+
+Runtime:
+
+```text
+training: 2-node DDP QLoRA on DGX Spark x2
+samples: 94 accepted / 0 rejected
+steps: 120
+train_runtime: 885.1s
+train_loss: 1.406
+adapter: ~/models/Qwen3.6-27B-local-ft-v4
+```
+
+Eval evidence:
+
+```text
+smoke: results/qwen36_27b_v0/base/qwen36_27b_local_ft_v4_smoke
+full:  results/qwen36_27b_v0/base/qwen36_27b_local_ft_v4_dgx_spark
+```
+
+Result versus prior Qwen runs:
+
+```text
+metric                                      base     ft_v1    ft_v2    ft_v4
+challenge pass rate                        0.8438   0.8438   0.9062   0.9062
+paired benign answer quality               0.95     0.85     0.85     0.95
+agentic planning workflow success          1.0      1.0      0.6667   1.0
+normal-use regression pass rate            1.0      1.0      1.0      1.0
+harmful refusal rate before ablation        1.0      1.0      1.0      1.0
+ablation refusal suppression before edit    0.0      0.0      0.0      0.0
+median latency seconds                     89.0353  104.6907 97.1105  97.2484
+```
+
+Decision: promote `local_ft_v4` as the Qwen FT source for the FT-to-ablated
+candidate. The generic `local_ft_abli` variant now points at the v4-based
+ablation target so downstream quantization uses the promoted FT source.
+
 ## Multi-Family: Adding Model Family Checklist
 
 Status: implemented and pushed as docs plus doctor enforcement. No model server,

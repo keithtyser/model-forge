@@ -2,9 +2,9 @@ name: qwen36_27b_ft_local_abli
 method: contrastive_refusal_direction
 
 model:
-  source: local/qwen36-27b-local-ft-v1
-  local_dir: ~/models/Qwen3.6-27B-local-ft-v1-merged
-  output_dir: ~/models/Qwen3.6-27B-local-ft-abliterated-v1
+  source: local/qwen36-27b-local-ft-v4
+  local_dir: ~/models/Qwen3.6-27B-local-ft-v4-merged
+  output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-v1
   dtype: bfloat16
   device_map: cuda
   trust_remote_code: true
@@ -55,8 +55,8 @@ artifacts_dir: artifacts/abliteration/qwen36_27b_ft_local_abli
 
 sota:
   preferred_backend: heretic
-  output_dir: ~/models/Qwen3.6-27B-local-ft-abliterated-v1
-  work_dir: artifacts/abliteration/qwen36_27b_ft_local_abli/sota
+  output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-v1
+  work_dir: artifacts/abliteration/qwen36_27b_ft_local_abli/sota_v4
   backends:
     heretic:
       install: pip install -U 'heretic-llm[research]'
@@ -72,17 +72,17 @@ sota:
       winsorization_quantile: 1.0
       model_forge_prompt_datasets: {}
       direct_parameters:
-        recipe: qwen36_ft_initial_search
+        recipe: qwen36_ft_v4_initial_search
         notes: >
-          Compute fresh refusal directions on the fine-tuned Qwen 3.6 model.
-          Do not transfer Gemma constants except as weak starting priors for
-          target module classes. Select by model-forge evals: refusal removal
-          improves only when source-relative capability and benign quality are
-          preserved.
+          Compute fresh refusal directions on the promoted local Qwen 3.6 FT v4
+          model. Do not transfer Gemma constants except as weak starting priors
+          for target module classes. Select by model-forge evals: refusal
+          removal improves only when source-relative capability and benign
+          quality are preserved.
 
 eval:
-  source_variant: local_ft
+  source_variant: local_ft_v4
   target_variant: local_ft_abli
   commands:
-    - MODEL_FORGE_TRIALS=3 ./forge eval qwen36_27b local_ft_abli --internal
+    - MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli --internal
     - ./forge compare qwen36_27b
