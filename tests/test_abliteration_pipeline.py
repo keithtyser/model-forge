@@ -179,6 +179,17 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("search_only = True", script)
         self.assertIn("model_forge_sota_heretic_search.json", script)
 
+    def test_qwen_long_search_trial2_exports_direct_parameters(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_heretic_long_trial2.yaml"
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+        direct = plan["backend_config"]["direct_parameters"]
+        self.assertFalse(plan["backend_config"].get("search_only", False))
+        self.assertTrue(plan["output_dir"].endswith("Qwen3.6-27B-local-ft-v4-abliterated-heretic-long-trial2"))
+        self.assertEqual(direct["recipe"], "qwen36_ft_v4_heretic_long_search_trial2_direct_merge")
+        self.assertIsNone(direct["direction_index"])
+        self.assertGreater(direct["parameters"]["attn.o_proj"]["max_weight"], 1.4)
+        self.assertGreater(direct["parameters"]["mlp.down_proj"]["min_weight"], 1.0)
+
     def test_source_checkpoint_guard_fails_missing_configured_checkpoint(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli.yaml"
         config = load_yaml(config_path)
