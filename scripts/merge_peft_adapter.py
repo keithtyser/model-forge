@@ -93,6 +93,33 @@ def copy_tokenizer_files(adapter_dir: Path, output_dir: Path) -> None:
             shutil.copy2(source, output_dir / name)
 
 
+def restore_base_wrapper_config_if_needed(base_model: Path, output_dir: Path) -> bool:
+    """Keep wrapper configs when saved weights still use wrapper module names."""
+
+    base_config_path = base_model / "config.json"
+    output_config_path = output_dir / "config.json"
+    index_path = output_dir / "model.safetensors.index.json"
+    if not base_config_path.exists() or not output_config_path.exists() or not index_path.exists():
+        return False
+
+    base_config = json.loads(base_config_path.read_text())
+    output_config = json.loads(output_config_path.read_text())
+    if not isinstance(base_config.get("text_config"), dict):
+        return False
+    if isinstance(output_config.get("text_config"), dict):
+        return False
+
+    weight_map = json.loads(index_path.read_text()).get("weight_map") or {}
+    has_wrapped_language_weights = any(str(name).startswith("model.language_model.") for name in weight_map)
+    if not has_wrapped_language_weights:
+        return False
+
+    restored_config = dict(base_config)
+    restored_config["language_model_only"] = True
+    output_config_path.write_text(json.dumps(restored_config, indent=2, sort_keys=True) + "\n")
+    return True
+
+
 def write_merge_manifest(args: argparse.Namespace, output_dir: Path, started_at: float, finished_at: float) -> None:
     manifest = {
         "base_model": str(args.base_model),
@@ -233,6 +260,8 @@ def main() -> None:
             safe_serialization=True,
             max_shard_size=args.max_shard_size,
         )
+        if restore_base_wrapper_config_if_needed(base_model, output_dir):
+            print("[model-forge] restored base wrapper config for language-model-only checkpoint", flush=True)
         guard.check("after model save")
 
         tokenizer = AutoTokenizer.from_pretrained(adapter if (adapter / "tokenizer_config.json").exists() else base_model)
