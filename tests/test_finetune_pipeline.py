@@ -28,6 +28,8 @@ class FinetunePlanTests(unittest.TestCase):
         self.assertEqual(plan["trainer"]["pad_to_multiple_of"], 256)
         self.assertEqual(plan["trainer"]["torch_dynamo_recompile_limit"], 128)
         self.assertEqual(plan["trainer"]["max_steps"], 500)
+        self.assertEqual(plan["trainer"]["save_strategy"], "steps")
+        self.assertFalse(plan["trainer"]["benchmark_only"])
         self.assertEqual(plan["lora"]["r"], 64)
         self.assertIn("q_proj", plan["lora"]["target_modules"])
         self.assertNotIn("q_proj.linear", plan["lora"]["target_modules"])
@@ -90,6 +92,24 @@ class FinetunePlanTests(unittest.TestCase):
         self.assertIn('./forge variants checkpoint-audit "$FAMILY" --variant "$SOURCE_VARIANT" --strict', cluster_script)
         self.assertIn("Path.home() / \"models\"", cluster_script)
 
+    def test_qwen36_tp_probe_is_benchmark_only(self) -> None:
+        config_path = REPO_DIR / "configs" / "finetuning" / "qwen36_27b_local_ft_v4_tp2_probe.yaml"
+        with tempfile.TemporaryDirectory() as tmp:
+            config = load_yaml(config_path)
+            config["run_dir"] = tmp
+            plan = build_plan(config, config_path)
+            outputs = write_artifacts(plan, overwrite=False)
+            trainer_script = Path(outputs["trainer"]).read_text()
+            method_card = Path(outputs["method_card"]).read_text()
+
+        self.assertEqual(plan["trainer"]["tensor_parallel_size"], 2)
+        self.assertEqual(plan["trainer"]["max_steps"], 10)
+        self.assertEqual(plan["trainer"]["save_strategy"], "no")
+        self.assertTrue(plan["trainer"]["benchmark_only"])
+        self.assertIn("MODEL_FORGE_TRAIN_BENCHMARK_ONLY", trainer_script)
+        self.assertIn("training_result.json", trainer_script)
+        self.assertIn("Benchmark only: `True`", method_card)
+
     def test_prepare_writes_dry_run_artifacts(self) -> None:
         config_path = REPO_DIR / "configs" / "finetuning" / "gemma4_26b_a4b_local_ft_v0.yaml"
         config = load_yaml(config_path)
@@ -116,6 +136,8 @@ class FinetunePlanTests(unittest.TestCase):
             self.assertIn("torch._dynamo.config.recompile_limit", trainer_script)
             self.assertIn("pad_to_multiple_of", trainer_script)
             self.assertIn("dataloader_num_workers", trainer_script)
+            self.assertIn("training_result.json", trainer_script)
+            self.assertIn("benchmark_only", trainer_script)
             method_card = Path(outputs["method_card"]).read_text()
             self.assertIn("# Training Method Card: gemma4_26b_a4b_local_ft_v0", method_card)
             self.assertIn("Distributed Correctness And Resource Guardrails", method_card)

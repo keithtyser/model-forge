@@ -1,0 +1,105 @@
+name: qwen36_27b_local_ft_v4_tp2_probe
+family: qwen36_27b
+run_dir: runs/finetune/qwen36_27b_local_ft_v4_tp2_probe
+dry_run_only: false
+
+model:
+  source: Qwen/Qwen3.6-27B
+  local_dir: ~/models/Qwen3.6-27B
+  output_dir: ~/models/model-forge-probes/Qwen3.6-27B-local-ft-v4-tp2-probe
+  served_model_name: local/qwen36-27b-local-ft-v4-tp2-probe
+  trust_remote_code: true
+  max_seq_length: 4096
+
+trainer:
+  backend: hf_causal_lm
+  method: qlora
+  device_map: single_gpu
+  load_in_4bit: true
+  attn_implementation: sdpa
+  bf16: true
+  gradient_checkpointing: true
+  group_by_length: true
+  pad_to_multiple_of: 256
+  torch_dynamo_recompile_limit: 128
+  ddp_find_unused_parameters: false
+  tensor_parallel_size: 2
+  tensor_parallel_plan: auto
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 2
+  learning_rate: 0.000035
+  num_train_epochs: 1
+  max_steps: 10
+  warmup_ratio: 0.05
+  lr_scheduler_type: cosine
+  optim: paged_adamw_8bit
+  weight_decay: 0.001
+  logging_steps: 5
+  save_strategy: "no"
+  save_steps: 1000
+  save_total_limit: 1
+  benchmark_only: true
+  seed: 3407
+  report_to: none
+  dataloader_num_workers: 1
+  dataloader_prefetch_factor: 2
+
+resource_policy:
+  cpu_quota: "80%"
+  memory_max: "85%"
+  io_weight: 100
+  nice: 10
+  reserve_cores: 1
+  min_memory_available_start: 0.05
+  min_memory_available_runtime: 0.05
+  min_disk_free: 0.12
+  monitor_interval_seconds: 30
+  dataloader_num_workers_max_offset: 2
+  persistent_workers_when_memory_tight: false
+  checkpoint_on_memory_pressure: true
+
+cluster:
+  enabled: true
+  config: /tmp/model_forge_dgx_spark_x2_runtime.yaml
+  launcher: torchrun
+  image: model-forge-posttrain-tf5:latest
+  nccl_socket_ifname: enp1s0f0np0
+  require_torchrun_smoke: true
+  sync_run_dir_to_workers: true
+  sync_model_to_workers: true
+
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.0
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+  exclude_modules:
+    - embed_tokens
+    - lm_head
+    - router
+    - expert
+  modules_to_save: []
+
+data:
+  manifest: datasets/finetuning/qwen36_27b_local_ft_v4.yaml
+
+baseline:
+  target_to_compare: configs/finetuning/qwen36_27b_local_ft_v4.yaml
+  purpose: >
+    Bounded tensor-parallel training throughput probe. This is not a promoted
+    fine-tune recipe; it compares TP=2 against the completed DDP QLoRA v4 run
+    without saving a candidate adapter.
+
+eval:
+  source_variant: base
+  baseline_variant: base
+  required_gates:
+    throughput_probe_only: true
+  commands: []

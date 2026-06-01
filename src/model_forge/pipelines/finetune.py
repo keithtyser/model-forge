@@ -101,8 +101,10 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "optim": trainer.get("optim", "paged_adamw_8bit"),
             "weight_decay": float(trainer.get("weight_decay", 0.001)),
             "logging_steps": int(trainer.get("logging_steps", 5)),
+            "save_strategy": str(trainer.get("save_strategy", "steps")),
             "save_steps": int(trainer.get("save_steps", 100)),
             "save_total_limit": int(trainer.get("save_total_limit", 2)),
+            "benchmark_only": bool(trainer.get("benchmark_only", False)),
             "seed": int(trainer.get("seed", 3407)),
             "report_to": trainer.get("report_to", "none"),
             "dataloader_num_workers": int(trainer.get("dataloader_num_workers", 0) or 0),
@@ -235,6 +237,7 @@ def render_training_method_card(plan: dict[str, Any]) -> str:
             f"- Excluded modules: `{', '.join(plan['lora']['exclude_modules'])}`",
             f"- Learning rate: `{trainer['learning_rate']}`",
             f"- Max steps: `{trainer['max_steps']}`",
+            f"- Benchmark only: `{trainer['benchmark_only']}`",
             f"- Optimizer: `{trainer['optim']}`",
             "",
             "## Data",
@@ -781,6 +784,11 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
         steps_per_epoch = max(1, math.ceil(len(dataset) / max(1, effective_batch)))
         warmup_steps = max(0, int(math.ceil(steps_per_epoch * float(plan["trainer"]["num_train_epochs"]) * float(plan["trainer"]["warmup_ratio"]))))
 
+    benchmark_only = (
+        bool(plan["trainer"].get("benchmark_only", False))
+        or os.environ.get("MODEL_FORGE_TRAIN_BENCHMARK_ONLY", "0") == "1"
+    )
+    save_strategy = "no" if benchmark_only else str(plan["trainer"].get("save_strategy", "steps"))
     training_kwargs = dict(
         output_dir=plan["model"]["output_dir"],
         per_device_train_batch_size=int(plan["trainer"]["per_device_train_batch_size"]),
@@ -793,15 +801,16 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
         optim=plan["trainer"]["optim"],
         weight_decay=float(plan["trainer"]["weight_decay"]),
         logging_steps=int(plan["trainer"]["logging_steps"]),
-        save_steps=int(plan["trainer"]["save_steps"]),
-        save_total_limit=int(plan["trainer"]["save_total_limit"]),
         bf16=bool(plan["trainer"]["bf16"]),
         gradient_checkpointing=bool(plan["trainer"]["gradient_checkpointing"]),
         seed=int(plan["trainer"]["seed"]),
         report_to=plan["trainer"]["report_to"],
-        save_strategy="steps",
+        save_strategy=save_strategy,
         remove_unused_columns=False,
     )
+    if save_strategy != "no":
+        training_kwargs["save_steps"] = int(plan["trainer"]["save_steps"])
+        training_kwargs["save_total_limit"] = int(plan["trainer"]["save_total_limit"])
     if "ddp_find_unused_parameters" in inspect.signature(TrainingArguments.__init__).parameters:
         training_kwargs["ddp_find_unused_parameters"] = bool(plan["trainer"].get("ddp_find_unused_parameters", True))
     if tensor_parallel_size > 1:
@@ -843,9 +852,32 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
     trainer = Trainer(**trainer_kwargs)
     trainer.add_callback(ResourceGuardCallback())
     try:
-        trainer.train()
-        trainer.save_model(plan["model"]["output_dir"])
-        tokenizer.save_pretrained(plan["model"]["output_dir"])
+        train_output = trainer.train()
+        result_payload = {
+            "schema_version": "model_forge.finetune_training_result.v1",
+            "name": plan["name"],
+            "family": plan["family"],
+            "benchmark_only": benchmark_only,
+            "dataset_rows": len(dataset),
+            "global_step": getattr(train_output, "global_step", None),
+            "metrics": dict(getattr(train_output, "metrics", {}) or {}),
+            "trainer": {
+                "backend": backend,
+                "method": plan["trainer"].get("method"),
+                "tensor_parallel_size": tensor_parallel_size,
+                "tensor_parallel_plan": tensor_parallel_plan,
+                "max_steps": max_steps,
+                "per_device_train_batch_size": int(plan["trainer"]["per_device_train_batch_size"]),
+                "gradient_accumulation_steps": int(plan["trainer"]["gradient_accumulation_steps"]),
+                "save_strategy": save_strategy,
+            },
+        }
+        if trainer.is_world_process_zero():
+            result_path = Path(plan["run_dir"]) / "training_result.json"
+            result_path.write_text(json.dumps(result_payload, indent=2, sort_keys=True) + "\n")
+        if not benchmark_only:
+            trainer.save_model(plan["model"]["output_dir"])
+            tokenizer.save_pretrained(plan["model"]["output_dir"])
     finally:
         guard.stop_monitor()
 
