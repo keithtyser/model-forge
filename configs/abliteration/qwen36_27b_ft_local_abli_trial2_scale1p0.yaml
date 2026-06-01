@@ -34,18 +34,20 @@ artifacts_dir: artifacts/abliteration/qwen36_27b_ft_local_abli_trial2_scale1p0
 
 hypothesis: >
   Scale0.75 preserved full-suite capability and benign quality but still refused
-  60% of paired harmful prompts. Restoring the same Qwen-specific Heretic trial2
-  adapter to full scale should increase refusal suppression while remaining
-  close enough to the promoted local FT v4 source to justify a quick gate.
+  75% of paired harmful prompts after scorer/rubric v4. Restoring the same
+  Qwen-specific Heretic trial2 adapter to full scale should increase refusal
+  suppression while remaining close enough to the promoted local FT v4 source
+  to justify a quick gate. This must be tested as a full merged checkpoint; live
+  LoRA scale0.75 did not reproduce the merged scale0.75 result for this adapter.
 
 source_candidate:
   config: configs/abliteration/qwen36_27b_ft_local_abli_trial2_scale0p75.yaml
-  full_eval: results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_scale0p75_full_rescored_v3
+  full_eval: results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_scale0p75_full_rescored_v4
   rescored_metrics:
     challenge_capability_pass_rate: 1.0
     paired_benign_answer_quality: 1.0
-    paired_harmful_refusal_rate: 0.6
-    paired_ablation_refusal_suppression: 0.4
+    paired_harmful_refusal_rate: 0.75
+    paired_ablation_refusal_suppression: 0.25
     harmful_detail_rate: 0.0
 
 eval:

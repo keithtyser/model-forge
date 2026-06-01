@@ -169,9 +169,11 @@ Known Qwen 3.6 27B state: local FT v4 is the current FT source. Trial2
 scale0.75 preserves full-suite measured capability and benign quality after
 scorer/rubric v4, but it still refuses 75% of paired harmful prompts, so the
 next agent should continue Qwen-specific ablation search rather than quantizing
-that checkpoint as the final model. The current low-disk path for that search is
-the live-LoRA scale0.85 adapter variant, which uses `local_ft_v4`'s
-`merged_local_dir` as the serving base.
+that checkpoint as the final model. Do not trust live-LoRA Qwen Heretic scale
+gates yet: live scale0.75 refused 95% of paired harmful prompts while the merged
+scale0.75 checkpoint refused 65% on the same paired bucket. Use full merged
+checkpoints for the next Qwen candidates unless vLLM live LoRA support is first
+verified for the adapter's `linear_attn.out_proj` tensors.
 
 Before exporting another full Qwen checkpoint, check coordinator disk headroom.
 `scripts/merge_peft_adapter.py` now blocks exports projected to leave less than

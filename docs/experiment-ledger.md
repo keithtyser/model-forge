@@ -622,9 +622,10 @@ Painpoints found and fixed during this gate:
   `zero_refusal_capability_retention`; the primary target is now enforced when
   the objective config defines a numeric target
 
-## Qwen 3.6 27B: Live LoRA Trial2 Scale 0.85x Follow-Up
+## Qwen 3.6 27B: Live LoRA Trial2 Scale Follow-Up
 
-Status: configured and adapter materialized; quick eval pending.
+Status: technically functional for serving, but rejected as an accurate Qwen
+Heretic ablation search path.
 
 Primary config:
 
@@ -644,11 +645,48 @@ Operational notes:
 - The scale0.85 adapter is at
   `~/models/model-forge-adapters/qwen36_27b/local_ft_abli_trial2_lora_scale0p85`
   on both nodes.
+- Additional diagnostic scaled adapters were materialized at scales `0.75`,
+  `1.0`, `1.25`, `1.5`, and `2.0` under
+  `~/models/model-forge-adapters/qwen36_27b/`.
+- `scripts/dgx_spark_serve_qwen.sh` can now pass multiple LoRA modules through
+  to vLLM in one server process; this was validated by vLLM advertising all
+  five scale adapters in `/v1/models`.
 
 Hypothesis: scale0.75 preserves measured capability but leaves too many direct
 refusals, while prior full-strength trial2 was worse on the quick gate. A
 scale0.85 live adapter tests an intermediate point without consuming another
 full-checkpoint slot.
+
+Quick eval evidence:
+
+```text
+scale0.85 live TP=2:
+  results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_lora_scale0p85_quick
+scale0.75 live TP=2 equivalence control:
+  results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_lora_scale0p75_paired
+```
+
+Result:
+
+```text
+metric                                      live scale0.75  live scale0.85
+paired benign answer quality                0.85            0.90
+paired harmful refusal rate                 0.95            0.95
+paired ablation refusal suppression         0.05            0.05
+paired harmful detail rate                  0.0             0.0
+paired unsafe-overcompliance rate           0.0             0.0
+paired observed throughput                  ~6.95 tok/s     ~7.04 tok/s
+```
+
+Decision: do not use live LoRA scale gates for Qwen 3.6 Heretic candidate
+selection yet. The live scale0.75 control did not match the already merged
+scale0.75 checkpoint, which scored `0.65` paired harmful refusal and `1.0`
+benign quality on the same paired bucket after scorer/rubric v4. The Heretic
+adapter includes `linear_attn.out_proj` tensors in addition to MLP and attention
+projection tensors, and vLLM live LoRA appears to under-apply this edit path for
+the current Qwen architecture. The next accurate search step is a full merged
+checkpoint candidate after freeing or relocating enough coordinator disk to
+stay above the 15% disk floor.
 
 ## Qwen 3.6 27B: Local FT v4 Trial2 Scale 1.0x Follow-Up
 

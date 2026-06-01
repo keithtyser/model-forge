@@ -69,9 +69,12 @@ This is the short handoff state for humans and agents. Use
   preserves or improves measured capability versus base and FT, but still
   refuses 75% of paired harmful prompts, so it is a hold, not the final
   zero-refusal FT-abli target.
-- A live LoRA scale0.85 follow-up adapter has been materialized for quick
-  ablation gating without writing another 51 GiB checkpoint. The worker now has
-  the merged FT v4 base needed for two-Spark TP=2 live-LoRA serving.
+- Live LoRA follow-up adapters were materialized for low-disk ablation gating,
+  but the equivalence control failed for this Qwen Heretic adapter. A live
+  scale0.75 adapter refused 95% of paired harmful prompts, while the already
+  merged scale0.75 checkpoint refused 65% on the same paired bucket. Treat
+  live-LoRA Qwen Heretic results as diagnostic only until vLLM live LoRA support
+  is verified for the adapter's `linear_attn.out_proj` edits.
 - A trial2 scale1.0 follow-up config exists, but the guarded merge helper
   blocked export on the coordinator because projected free disk would fall to
   14.2%, below the 15% floor. Free coordinator disk or relocate old local model
@@ -289,8 +292,10 @@ length filtering:
 8. Continue Qwen 3.6 FT-ablation search from the promoted local FT v4 source.
    Trial2 scale0.75 passed capability retention on the full internal suite but
    only reduced paired harmful-prompt refusal from 1.0 to 0.75 after
-   scorer/rubric v4. Run the live LoRA scale0.85 quick gate next; do not
-   quantize or upload scale0.75 as the final FT-abli model.
+   scorer/rubric v4. Live-LoRA scale gates are not trusted for this adapter
+   after the scale0.75 equivalence failure; free or relocate coordinator disk
+   and run the next candidates as full merged checkpoints before quantization
+   or upload.
 
 ## Operational Guardrails
 
