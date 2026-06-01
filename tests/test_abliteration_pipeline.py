@@ -172,7 +172,8 @@ class AbliterationPlanTests(unittest.TestCase):
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_heretic_long_search.yaml"
         plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
         self.assertTrue(plan["backend_config"]["search_only"])
-        self.assertEqual(plan["backend_config"]["max_response_length"], 128)
+        self.assertEqual(plan["backend_config"]["max_response_length"], 96)
+        self.assertEqual(plan["backend_config"]["response_prefix"], "")
         runner = write_heretic_runner(plan)
         script = runner.read_text(encoding="utf-8")
         self.assertIn("search_only = True", script)

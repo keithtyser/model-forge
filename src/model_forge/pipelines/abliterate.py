@@ -774,6 +774,9 @@ def write_heretic_config(plan: dict[str, Any]) -> Path:
         f'winsorization_quantile = {float(backend.get("winsorization_quantile", 1.0))}',
         f'study_checkpoint_dir = "{work_dir / "heretic_checkpoints"}"',
     ]
+    if "response_prefix" in backend:
+        response_prefix = backend["response_prefix"]
+        lines.append(f"response_prefix = {json.dumps(None if response_prefix is None else str(response_prefix))}")
     if backend.get("max_memory"):
         items = ", ".join(f'"{key}" = "{value}"' for key, value in backend["max_memory"].items())
         lines.append(f"max_memory = {{ {items} }}")

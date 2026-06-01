@@ -895,9 +895,10 @@ configs/abliteration/qwen36_27b_ft_local_abli_heretic_long_search.yaml
 
 Hypothesis: Qwen needs a search objective aligned to the repo's eval behavior,
 not direct reuse of Heretic trials optimized with 16-token probes. The new
-config runs Heretic with 128-token responses over model-forge good/bad prompt
-buckets and exits after writing the Optuna journal. No checkpoint is exported
-from this config.
+config runs Heretic with 96-token responses over model-forge good/bad prompt
+buckets, sets `response_prefix=""` to skip Qwen's expensive prefix-detection
+generation pass, and exits after writing the Optuna journal. No checkpoint is
+exported from this config.
 
 Decision rule: inspect the journal and create a follow-up direct-parameters
 export only if a trial materially improves over trial2 scale1.0 on harmful

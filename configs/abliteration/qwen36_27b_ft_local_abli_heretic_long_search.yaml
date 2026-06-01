@@ -47,8 +47,9 @@ sota:
       device_map: auto
       batch_size: 1
       max_batch_size: 1
-      max_response_length: 128
-      n_trials: 12
+      max_response_length: 96
+      response_prefix: ""
+      n_trials: 6
       n_startup_trials: 6
       orthogonalize_direction: true
       row_normalization: full
@@ -76,11 +77,12 @@ sota:
       notes: >
         Search-only run for Qwen 3.6 FT v4 after trial2 and trial0 direct
         exports failed the model-forge internal gate. Heretic evaluates longer
-        128-token responses over model-forge harmful/benign prompts, writes the
-        Optuna journal, and exits without exporting a checkpoint. Select a
-        journal trial only if it reaches materially lower refusals at acceptable
-        KL, then export through a direct Heretic adapter plus model-forge merge
-        config.
+        96-token responses over model-forge harmful/benign prompts, writes the
+        Optuna journal, and exits without exporting a checkpoint. The explicit
+        empty response_prefix skips Heretic's expensive Qwen prefix-detection
+        generation pass. Select a journal trial only if it reaches materially
+        lower refusals at acceptable KL, then export through a direct Heretic
+        adapter plus model-forge merge config.
 
 eval:
   source_variant: local_ft_v4

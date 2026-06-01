@@ -179,11 +179,12 @@ or the ablation objective.
 
 The next Qwen ablation step is the search-only longer-response Heretic config
 `configs/abliteration/qwen36_27b_ft_local_abli_heretic_long_search.yaml`.
-It runs a 128-token, model-forge-prompt-aligned Heretic search and exits after
-writing the Optuna journal. Do not export from Heretic's native save path for
-Qwen; after selecting a journal trial, create a follow-up direct-parameters
-config and export through the guarded Heretic adapter plus model-forge merge
-helper.
+It runs a 96-token, model-forge-prompt-aligned Heretic search with
+`response_prefix` set to an empty string to skip Qwen's expensive prefix
+detection pass, then exits after writing the Optuna journal. Do not export from
+Heretic's native save path for Qwen; after selecting a journal trial, create a
+follow-up direct-parameters config and export through the guarded Heretic
+adapter plus model-forge merge helper.
 
 Do not trust live-LoRA Qwen Heretic scale gates yet: live scale0.75 refused 95%
 of paired harmful prompts while the merged scale0.75 checkpoint refused 65% on
