@@ -199,6 +199,17 @@ class ModelForgeDgxServeTests(unittest.TestCase):
         self.assertIn("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", script)
         self.assertIn("MODEL_FORGE_MIN_FREE_DISK_FRACTION", script)
 
+    def test_heretic_container_runner_uses_cuda_and_resource_guards(self) -> None:
+        script = (REPO_DIR / "scripts" / "run_heretic_direct_container.sh").read_text(encoding="utf-8")
+        self.assertIn("model-forge-heretic-tf5:latest", script)
+        self.assertIn("--gpus all", script)
+        self.assertIn("--cpus=\"$CPU_LIMIT\"", script)
+        self.assertIn("--memory=\"${TOTAL_MEM_GB}g\"", script)
+        self.assertIn("--memory-swap=\"${TOTAL_MEM_GB}g\"", script)
+        self.assertIn('--user "$(id -u):$(id -g)"', script)
+        self.assertIn("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", script)
+        self.assertIn("MODEL_FORGE_MIN_FREE_DISK_FRACTION", script)
+
     def test_generic_vllm_launcher_uses_model_family_env(self) -> None:
         script = (REPO_DIR / "scripts" / "serve_vllm_dgx_spark.sh").read_text(encoding="utf-8")
         self.assertIn("MODEL=${1:-${MODEL_FORGE_MODEL:-Qwen/Qwen3.5-9B}}", script)

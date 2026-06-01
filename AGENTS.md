@@ -174,6 +174,11 @@ worker Spark and quick-gated from a worker-local server; it still refused 65% of
 paired harmful prompts, only reached 90% paired benign quality, and scored
 84.38% on the challenge bucket. Do not keep scaling trial2 as the next primary
 path; change direction selection or the ablation objective.
+The next bounded Qwen candidate is
+`configs/abliteration/qwen36_27b_ft_local_abli_trial0_direction50.yaml`, which
+uses the completed Heretic trial0 global direction instead of trial2. Build the
+Heretic CUDA image and run the generated direct runner on the worker Spark first
+if coordinator disk is still near the 15% floor.
 
 Do not trust live-LoRA Qwen Heretic scale gates yet: live scale0.75 refused 95%
 of paired harmful prompts while the merged scale0.75 checkpoint refused 65% on
@@ -204,6 +209,18 @@ The default image is `model-forge-posttrain-tf5:latest`, which supports Qwen
 3.6's `qwen3_5` model type. It runs with CPU, memory, pids, swap, and disk
 guards and writes outputs as the host user. Avoid ad hoc root Docker merges
 unless you also repair ownership immediately.
+
+For Heretic direct exports, host `.venv` may have CPU-only Torch. Use the CUDA
+container path instead:
+
+```bash
+docker build -f docker/heretic.Dockerfile -t model-forge-heretic-tf5:latest .
+./forge ablate --config configs/abliteration/<candidate>.yaml sota-prepare --backend heretic
+scripts/run_heretic_direct_container.sh artifacts/abliteration/<candidate>/sota_direct/run_heretic_direct.py
+```
+
+The Heretic runner computes fresh directions, writes a LoRA adapter, then invokes
+the model-forge PEFT merge helper inside the same guarded container.
 
 Plan ablation without loading a model:
 

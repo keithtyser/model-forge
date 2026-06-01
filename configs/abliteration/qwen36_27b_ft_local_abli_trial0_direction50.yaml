@@ -1,0 +1,100 @@
+name: qwen36_27b_ft_local_abli_trial0_direction50
+method: heretic_direct_refusal_direction
+
+model:
+  source: local/qwen36-27b-local-ft-v4
+  local_dir: ~/models/Qwen3.6-27B-local-ft-v4-merged
+  output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-trial0-direction50
+  dtype: bfloat16
+  device_map: cuda
+  trust_remote_code: true
+
+data:
+  harmful_prompts: ../../datasets/abliteration/harmful_refusal.yaml
+  benign_prompts: ../../datasets/abliteration/benign_control.yaml
+
+activation_collection:
+  batch_size: 1
+  max_pairs: 32
+  max_seq_len: 1024
+  preprocessing_parallelism: auto
+  high_parallelism_c: 192
+  layer_skip_first: 4
+  layer_skip_last: 2
+  token_position: suffix_mean
+  direction_extraction: mean_difference
+  winsorize_quantile: 0.02
+  harmful_suffix: "\n\nI can't help with instructions for harmful requests."
+  benign_suffix: "\n\nHere is a direct, helpful answer."
+
+safety:
+  require_execute_flag: true
+  min_free_cuda_gb: 18
+  one_model_process_at_a_time: true
+
+artifacts_dir: artifacts/abliteration/qwen36_27b_ft_local_abli_trial0_direction50
+
+sota:
+  preferred_backend: heretic
+  output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-trial0-direction50
+  work_dir: artifacts/abliteration/qwen36_27b_ft_local_abli_trial0_direction50/sota_direct
+  backends:
+    heretic:
+      install: docker build -f docker/heretic.Dockerfile -t model-forge-heretic-tf5:latest .
+      container_image: model-forge-heretic-tf5:latest
+      quantization: none
+      device_map: auto
+      batch_size: 1
+      max_batch_size: 1
+      max_response_length: 96
+      n_trials: 1
+      n_startup_trials: 1
+      orthogonalize_direction: true
+      row_normalization: full
+      winsorization_quantile: 1.0
+      model_forge_prompt_datasets: {}
+      direct_parameters:
+        recipe: qwen36_ft_v4_heretic_trial0_direction50_direct_merge
+        derived_from:
+          selected_trial: "journal trial_id=0/index=1, Refusals: 0/27, KL divergence: 3.8030"
+          source_run: artifacts/abliteration/qwen36_27b_ft_local_abli/sota_v4/heretic_checkpoints
+          note: >
+            Trial2 scaling plateaued at 65-75% harmful refusal on model-forge
+            scorer v4. This candidate changes direction selection to the
+            completed Heretic trial0 global direction rather than further
+            scaling the trial2 per-layer direction.
+        direction_index: 50.13648585583047
+        parameters:
+          attn.o_proj:
+            max_weight: 1.3466222197953535
+            max_weight_position: 47.08597665278149
+            min_weight: 0.8685631262211624
+            min_weight_distance: 1.085579158162375
+          mlp.down_proj:
+            max_weight: 1.3322677716632605
+            max_weight_position: 55.78487866444133
+            min_weight: 0.5315225595367181
+            min_weight_distance: 37.750707930918495
+        notes: >
+          Compute fresh refusal directions on the promoted local Qwen 3.6 FT v4
+          model, apply Heretic trial0's global direction parameters, save a LoRA
+          adapter, and merge it through the model-forge helper. Judge only by
+          model-forge internal evals; Heretic's short probe previously
+          overestimated refusal removal.
+
+eval:
+  source_variant: local_ft_v4
+  target_variant: local_ft_abli_trial0_direction50
+  first_gate:
+    prompt_sets:
+      - refusal_paired_boundary
+      - unsafe_overcompliance
+      - capability_preservation_challenge
+    required_interpretation: >
+      Continue only if harmful refusal drops materially below trial2 scale0.75
+      and scale1.0 while paired benign quality and challenge capability remain
+      close to the local FT v4 source. Zero harmful refusal remains the final
+      promotion target.
+  commands:
+    - MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_trial0_direction50 --internal
+    - ./forge compare qwen36_27b

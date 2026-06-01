@@ -146,9 +146,23 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("attn.o_proj", direct["parameters"])
         self.assertIn("mlp.down_proj", direct["parameters"])
 
-    def test_source_checkpoint_guard_fails_missing_qwen_merged_ft(self) -> None:
+    def test_qwen_trial0_direction50_uses_global_direct_recipe(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_trial0_direction50.yaml"
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+        direct = plan["backend_config"]["direct_parameters"]
+        self.assertEqual(plan["backend"], "heretic")
+        self.assertTrue(plan["output_dir"].endswith("Qwen3.6-27B-local-ft-v4-abliterated-trial0-direction50"))
+        self.assertEqual(plan["backend_config"]["container_image"], "model-forge-heretic-tf5:latest")
+        self.assertEqual(plan["backend_config"]["max_response_length"], 96)
+        self.assertEqual(direct["recipe"], "qwen36_ft_v4_heretic_trial0_direction50_direct_merge")
+        self.assertAlmostEqual(float(direct["direction_index"]), 50.13648585583047)
+        self.assertGreater(direct["parameters"]["attn.o_proj"]["max_weight"], 1.3)
+
+    def test_source_checkpoint_guard_fails_missing_configured_checkpoint(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli.yaml"
-        plan = build_plan(load_yaml(config_path), config_path)
+        config = load_yaml(config_path)
+        config["model"]["local_dir"] = "~/models/model-forge-test-missing-source-checkpoint"
+        plan = build_plan(config, config_path)
         with self.assertRaisesRegex(SystemExit, "ablation source checkpoint is not present"):
             guard_source_checkpoint(plan)
 
