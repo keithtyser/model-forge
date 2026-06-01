@@ -140,8 +140,14 @@ class ModelForgeDgxServeTests(unittest.TestCase):
             self.assertEqual(env["MODEL_FORGE_MODEL"], str(root / "ft-merged"))
             self.assertEqual(env["MODEL_FORGE_SERVED_MODEL_NAME"], "local/ft")
             self.assertEqual(env["MODEL_FORGE_LORA_MODULES"], f"local/ft-abli-lora={root / 'abli-adapter'}")
-            self.assertEqual(env["VLLM_MAX_LORA_RANK"], "3")
+            self.assertEqual(env["VLLM_MAX_LORA_RANK"], "8")
             self.assertEqual(details["base_variant"], "local_ft")
+
+    def test_lora_rank_cap_uses_vllm_supported_values(self) -> None:
+        self.assertEqual(model_forge_dgx.vllm_lora_rank_cap(1), 1)
+        self.assertEqual(model_forge_dgx.vllm_lora_rank_cap(3), 8)
+        self.assertEqual(model_forge_dgx.vllm_lora_rank_cap(64), 64)
+        self.assertEqual(model_forge_dgx.vllm_lora_rank_cap(65), 128)
 
     def test_full_model_variant_serves_its_local_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

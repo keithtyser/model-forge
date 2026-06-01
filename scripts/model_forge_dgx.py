@@ -89,6 +89,14 @@ def live_lora_base_path(family: dict[str, Any], base_variant: str) -> Path:
     return variant_local_path(family, base_variant)
 
 
+def vllm_lora_rank_cap(rank: int) -> int:
+    supported = [1, 8, 16, 32, 64, 128, 256, 320, 512]
+    for candidate in supported:
+        if rank <= candidate:
+            return candidate
+    return supported[-1]
+
+
 def format_template(template: str, family_name: str, variant: str) -> str:
     return template.format(family=family_name, variant=variant)
 
@@ -225,7 +233,7 @@ def configure_serving_variant(family: dict[str, Any], variant: str, env: dict[st
         env.setdefault("VLLM_ENABLE_LORA", "1")
         env.setdefault("VLLM_MAX_LORAS", str(cfg.get("max_loras", 1)))
         if cfg.get("lora_rank"):
-            env.setdefault("VLLM_MAX_LORA_RANK", str(cfg["lora_rank"]))
+            env.setdefault("VLLM_MAX_LORA_RANK", str(vllm_lora_rank_cap(int(cfg["lora_rank"]))))
         details.update({
             "model": str(base_path),
             "served_model_name": env["MODEL_FORGE_SERVED_MODEL_NAME"],
