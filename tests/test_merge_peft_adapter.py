@@ -102,6 +102,21 @@ class MergePeftAdapterTests(unittest.TestCase):
         self.assertFalse(restored)
         self.assertEqual(config, plain_config)
 
+    def test_resolves_wrapper_parameter_prefixes(self) -> None:
+        module = load_merge_module()
+        parameters = {
+            "layers.0.weight": object(),
+            "model.model.language_model.layers.0.self_attn.o_proj.weight": object(),
+        }
+
+        self.assertEqual(module.resolve_target_parameter("model.layers.0.weight", parameters), "layers.0.weight")
+        self.assertEqual(
+            module.resolve_target_parameter("model.language_model.layers.0.self_attn.o_proj.weight", parameters),
+            "model.model.language_model.layers.0.self_attn.o_proj.weight",
+        )
+        with self.assertRaises(RuntimeError):
+            module.resolve_target_parameter("model.layers.1.weight", parameters)
+
 
 if __name__ == "__main__":
     unittest.main()

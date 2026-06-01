@@ -141,6 +141,19 @@ def adapter_target_name(lora_a_name: str) -> str:
     return target.removesuffix(".lora_A.weight") + ".weight"
 
 
+def resolve_target_parameter(target: str, parameters: dict[str, torch.nn.Parameter]) -> str:
+    if target in parameters:
+        return target
+    candidates = []
+    if target.startswith("model."):
+        candidates.append(target.removeprefix("model."))
+    candidates.append(f"model.{target}")
+    for candidate in candidates:
+        if candidate in parameters:
+            return candidate
+    raise RuntimeError(f"target base parameter not found for adapter target {target}")
+
+
 def merge_direct_lora(model: torch.nn.Module, adapter_dir: Path, guard: ResourceGuard, safe_merge: bool) -> dict[str, int]:
     adapter_config = json.loads((adapter_dir / "adapter_config.json").read_text())
     rank = int(adapter_config["r"])
@@ -156,14 +169,13 @@ def merge_direct_lora(model: torch.nn.Module, adapter_dir: Path, guard: Resource
         if lora_b_name not in state:
             raise RuntimeError(f"missing LoRA B tensor for {lora_a_name}")
         target = adapter_target_name(lora_a_name)
-        if target not in parameters:
-            raise RuntimeError(f"target base parameter not found for adapter tensor {lora_a_name}: {target}")
-        weight = parameters[target]
+        resolved_target = resolve_target_parameter(target, parameters)
+        weight = parameters[resolved_target]
         lora_a = state[lora_a_name]
         lora_b = state[lora_b_name]
         if tuple(lora_b.shape[:-1] + lora_a.shape[1:]) != tuple(weight.shape):
             raise RuntimeError(
-                f"shape mismatch for {target}: B{tuple(lora_b.shape)} @ A{tuple(lora_a.shape)} "
+                f"shape mismatch for {resolved_target}: B{tuple(lora_b.shape)} @ A{tuple(lora_a.shape)} "
                 f"does not match W{tuple(weight.shape)}"
             )
         if not torch.count_nonzero(lora_b):
@@ -171,7 +183,7 @@ def merge_direct_lora(model: torch.nn.Module, adapter_dir: Path, guard: Resource
             continue
         delta = torch.matmul(lora_b.float(), lora_a.float()).mul_(scaling)
         if safe_merge and not torch.isfinite(delta).all():
-            raise RuntimeError(f"non-finite LoRA delta for {target}")
+            raise RuntimeError(f"non-finite LoRA delta for {resolved_target}")
         weight.data.add_(delta.to(dtype=weight.dtype, device=weight.device))
         merged += 1
         del delta, lora_a, lora_b
