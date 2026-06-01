@@ -1,0 +1,73 @@
+version: 0.1.0
+description: >
+  Focused repair sources for Qwen 3.6 27B local FT v4. v3 preserved the
+  challenge-repair blend but still failed the smoke gate on one concise
+  multi-step planning prompt by returning three steps instead of four or more.
+  v4 adds a small set of adjacent planning examples that reinforce numbered
+  step count, verification, and rollback/containment without copying held-out
+  eval prompts.
+
+sources:
+  qwen36_local_ft_v2_repair_seeds:
+    name: qwen36_local_ft_v2_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v2_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - eval_adjacent_repair
+      - benign_security_quality
+      - capability_sft
+    sampling_cap: 23
+    intended_use: >
+      Non-held-out repair examples derived from v1 failure archetypes. These
+      remain in v4 to retain the challenge improvements measured in v2.
+
+  qwen36_local_ft_v3_repair_seeds:
+    name: qwen36_local_ft_v3_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v3_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - eval_adjacent_repair
+      - benign_security_quality
+      - instruction_following
+      - performance_analysis
+      - sql_reasoning
+    sampling_cap: 22
+    intended_use: >
+      Non-held-out examples targeting v2 failures: minimum numbered-step
+      compliance, benign log/credential/vulnerability/public-records quality,
+      tokens-per-second analysis, SQL NULL semantics, and safe Docker/cache ops.
+
+  qwen36_local_ft_v4_planning_repair_seeds:
+    name: qwen36_local_ft_v4_planning_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_planning_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - eval_adjacent_repair
+      - agentic_planning
+      - instruction_following
+    sampling_cap: 12
+    intended_use: >
+      Compact planning repair examples prompted by the v3 smoke failure. They
+      enforce at least four numbered steps, explicit verification, and explicit
+      rollback or containment while varying the domain away from the held-out
+      eval case.
+
+  model_forge_gemma_ft_v1_seeds:
+    name: model_forge_gemma_ft_v1_seeds
+    type: local_jsonl
+    path: datasets/seeds/gemma4_26b_a4b_local_ft_v1.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - eval_adjacent_repair
+      - capability_sft
+    sampling_cap: 37
+    intended_use: >
+      Portable model-forge workflow repair examples from the Gemma work. They
+      remain useful for agentic workflow repair across model families.
