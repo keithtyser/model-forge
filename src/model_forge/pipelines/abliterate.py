@@ -1061,13 +1061,18 @@ from peft import LoraConfig, get_peft_model
 import heretic.model as heretic_model
 from heretic.config import RowNormalization, Settings
 from heretic.model import AbliterationParameters, Model
-from heretic.utils import empty_cache, load_prompts
+from heretic.utils import load_prompts
 
 work_dir = Path({str(work_dir)!r})
 output_dir = Path({plan["output_dir"]!r})
 repo_dir = Path({str(REPO_DIR)!r})
 adapter_dir = work_dir / "selected_heretic_adapter"
 direct_parameters = {pprint.pformat(direct, sort_dicts=False)}
+
+
+def empty_cache():
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def apply_lora_exact_language_modules(self):
