@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-30.
+Last updated: 2026-06-01.
 
 This is the short handoff state for humans and agents. Use
 `docs/experiment-ledger.md` for detailed run history and raw observations.
@@ -47,6 +47,9 @@ This is the short handoff state for humans and agents. Use
 - Internal evals now cover refusal suppression, benign paired quality,
   normal-use regression, challenge capability, reasoning style stability,
   artifact quality, multi-trial variance, and golden comparisons.
+- Internal eval keyword checks now support explicit concept alternatives and a
+  `scripts/rescore_internal_eval.py` path for rescoring saved responses after
+  rubric fixes without rerunning large model servers.
 - Local base ablation beat the downloaded abli reference on the saved internal
   comparison while preserving stronger behavior than expected.
 - Local FT ablation preserved the source FT's primary internal behavior closely
@@ -54,6 +57,9 @@ This is the short handoff state for humans and agents. Use
 - Gemma local FT v0 completed under the guarded Spark training path. It was
   close to Jackrong on challenge capability and better on paired benign quality,
   but it did not clear the primary challenge-capability promotion gate.
+- Qwen 3.6 27B local FT v4 is the promoted Qwen FT source. It beat the base on
+  internal challenge capability while preserving paired benign quality,
+  planning, normal-use behavior, and harmful-prompt refusal behavior.
 - The local FT v1 dataset factory MVP is implemented with planning, gap
   extraction, feedback proposals, seed rows, generation adapters, verification,
   filtering, review, packing, dry-run publish planning, non-cascading overwrite
@@ -264,6 +270,10 @@ length filtering:
    baselines.
 7. Scale the local FT v1 dataset through medium-pack review before treating it
    as a training dataset.
+8. Continue Qwen 3.6 FT-ablation search from the promoted local FT v4 source.
+   The exported trial2 and Gemma-t34-transfer candidates are rejected after
+   corrected rescoring: benign quality improved from the old exact-word score,
+   but refusal suppression remains too weak for promotion.
 
 ## Operational Guardrails
 

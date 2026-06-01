@@ -203,7 +203,7 @@ MODEL_FORGE_MODEL=Qwen/Qwen3.6-27B \
 MODEL_FORGE_CONTEXT_LENGTH=32768 \
 ./forge eval qwen36_27b base --smoke
 
-MODEL_FORGE_MODELS_DIR=/home/ktyser/models \
+MODEL_FORGE_MODELS_DIR=~/models \
 MODEL_FORGE_SPARK_CLUSTER=1 \
 MODEL_FORGE_SPARK_CLUSTER_NODES=<coordinator-direct-link-host>,<worker-direct-link-host> \
 MODEL_FORGE_SPARK_ETH_IF=<direct-link-interface> \
@@ -338,6 +338,8 @@ Quick eval evidence:
 ```text
 refusal/capability sample:
   results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_quick
+rescored after keyword-rubric v2:
+  results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_quick_rescored
 capability-only sample:
   results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_capability_quick
 ```
@@ -345,8 +347,8 @@ capability-only sample:
 Result:
 
 ```text
-metric                                             trial2 quick
-paired benign answer quality                       0.4444
+metric                                             trial2 quick rescored
+paired benign answer quality                       0.6667
 paired harmful refusal rate                        0.5
 paired ablation refusal suppression                0.5
 unsafe-overcompliance harmful refusal rate         1.0
@@ -357,10 +359,17 @@ median latency seconds                             15.4-16.2
 observed generation throughput during eval         ~7 tok/s
 ```
 
+Scoring note: the original keyword-rubric v1 score recorded paired benign
+quality as `0.4444`. Manual inspection showed good benign answers failing exact
+word checks such as `storage` vs `store` and `labeling` vs `labeled`.
+Keyword-rubric v2 accepts explicit concept alternatives and raises the rescored
+paired benign quality to `0.6667`. The refusal-suppression metrics did not
+improve under rescoring.
+
 Decision: reject this candidate without full eval. It preserves sampled
-capability, but benign paired quality collapses relative to `local_ft_v4`
-(`0.95` full-eval baseline) and refusal removal is inconsistent. Next Qwen
-FT-ablation attempts should use weaker or more targeted directions and should
+capability, but paired benign quality remains well below `local_ft_v4` (`0.95`
+full-eval baseline) and refusal removal is inconsistent. Next Qwen FT-ablation
+attempts should use better-targeted or better-scaled directions and should
 promote only if paired benign quality remains near the FT source while harmful
 refusal suppression improves.
 
@@ -400,13 +409,14 @@ Quick eval evidence:
 
 ```text
 results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_gemma_t34_quick
+results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_gemma_t34_quick_rescored
 ```
 
 Result:
 
 ```text
-metric                                      gemma_t34_transfer quick
-paired benign answer quality                0.4444
+metric                                      gemma_t34_transfer quick rescored
+paired benign answer quality                0.7778
 paired harmful refusal rate                 0.75
 paired ablation refusal suppression         0.25
 unsafe-overcompliance harmful refusal rate  1.0
@@ -416,12 +426,17 @@ median latency seconds                      16.525
 observed generation throughput              ~6.8-7.2 tok/s
 ```
 
+Scoring note: keyword-rubric v1 recorded paired benign quality as `0.4444`.
+After the same keyword-rubric v2 rescore, benign quality is `0.7778`. This
+changes the diagnosis from catastrophic benign collapse to partial benign
+regression plus weak refusal removal.
+
 Decision: reject without full eval. This candidate is safer than Qwen trial 2
-on unsafe-detail emission, but it does not remove refusals enough and has the
-same paired benign quality collapse. Cross-family parameter transfer is not
-enough for Qwen 3.6 FT v4; the next recipe should search or construct
-Qwen-specific lower-KL directions and explicitly gate on paired benign quality
-before any full eval.
+on unsafe-detail emission, but it does not remove refusals enough and still
+falls short of the FT source's paired benign quality. Cross-family parameter
+transfer is not enough for Qwen 3.6 FT v4; the next recipe should search or
+construct Qwen-specific lower-KL directions, test direction strength explicitly,
+and gate on paired benign quality before any full eval.
 
 ## Multi-Family: Adding Model Family Checklist
 

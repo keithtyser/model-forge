@@ -18,6 +18,9 @@ wrappers, operational helpers, or hardware-specific launchers.
   unsupported or inconvenient.
 - `publish_hf_artifact.py`: Hugging Face upload helper for completed models,
   datasets, or durable report bundles.
+- `rescore_internal_eval.py`: re-score an existing internal eval run from its
+  saved `responses.jsonl` after rubric/check changes, without querying the
+  model again.
 - `model_forge_watchdog.py`: optional host-side emergency brake for long jobs.
 - `mock_openai_server.py`: local test server for OpenAI-compatible eval paths.
 
@@ -31,3 +34,5 @@ wrappers, operational helpers, or hardware-specific launchers.
 - Keep one large model server or training process active at a time.
 - If a script becomes the recommended user path, expose it through `./forge` or
   document why it remains a lower-level helper.
+- When changing internal eval rubrics, use `rescore_internal_eval.py` on
+  affected saved runs before interpreting old candidates as regressions.

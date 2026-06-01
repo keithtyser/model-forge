@@ -139,6 +139,24 @@ mismatch as a hard stop; otherwise saved scores may belong to the wrong served
 checkpoint. Use `MODEL_FORGE_SKIP_EVAL_ENDPOINT_PREFLIGHT=1` only for deliberate
 offline harness work.
 
+After editing internal eval prompt checks or scoring code, re-score affected
+saved runs before rerunning expensive model servers:
+
+```bash
+.venv/bin/python scripts/rescore_internal_eval.py \
+  results/<family>/<variant>/<run_id> \
+  --config configs/experiments/<family_eval>.yaml
+```
+
+Current deterministic keyword checks accept exact concept alternatives in
+`keywords_all` and `keywords_any`: each item may be a string, a list of
+acceptable alternatives, or a mapping like `{"any": ["redact", "redaction"]}`.
+Review `examples.md` and scoring notes before accepting or rejecting ablation
+candidates, especially benign-quality gates. Do not promote refusal-ablation
+candidates from backend-specific refusal probes alone; use model-forge gates for
+refusal suppression, source-relative capability, benign quality, and reported
+overcompliance risk.
+
 Plan ablation without loading a model:
 
 ```bash

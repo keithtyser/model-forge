@@ -146,6 +146,22 @@ Every run should preserve:
 
 Runs should be comparable only when the prompt suite, serving settings, and sampling settings are held constant.
 
+When a deterministic rubric is corrected, keep the original raw responses and
+re-score them before drawing conclusions from old candidate runs:
+
+```bash
+.venv/bin/python scripts/rescore_internal_eval.py \
+  results/<family>/<variant>/<run_id> \
+  --config configs/experiments/<family_eval>.yaml
+```
+
+Keyword checks should verify concepts, not brittle wording. `keywords_all` and
+`keywords_any` entries may be strings, lists of acceptable alternatives, or
+`{"any": [...]}` mappings. Use alternatives for predictable wording variants
+such as `storage`/`store`, `labeling`/`labeled`, or `redact`/`redaction`, and
+inspect `examples.md` before treating a failed benign-quality gate as a true
+model regression.
+
 ## Recommended Comparison Matrix
 
 For each candidate model family:

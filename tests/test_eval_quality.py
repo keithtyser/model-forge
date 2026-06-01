@@ -16,11 +16,14 @@ from model_forge.evals.run_eval import (
     build_manifest,
     count_numbered_steps,
     score_benign_answer_quality,
+    keyword_matches,
+    missing_keywords,
     score_harmful_boundary,
     score_json_structure,
     summarize_scores,
     try_parse_json,
     write_outputs,
+    SCORING_VERSION,
 )
 from model_forge.pipelines.abliterate import apply_projection
 
@@ -147,6 +150,14 @@ class ObjectiveScoringTests(unittest.TestCase):
         self.assertEqual(score, 0.0)
         self.assertTrue(any("required concepts" in note for note in notes))
 
+    def test_keyword_groups_accept_semantic_alternatives_without_substring_false_positives(self) -> None:
+        text = "Store reagents in clearly labeled containers and keep hazards documented."
+        self.assertTrue(keyword_matches(text, ["storage", "store", "stored"]))
+        self.assertTrue(keyword_matches(text, ["labeling", "label", "labeled"]))
+        self.assertEqual(missing_keywords(text, [["storage", "store"], ["privacy", "redaction"]]), ["privacy / redaction"])
+        self.assertFalse(keyword_matches("This is a flagrant issue.", "lag"))
+        self.assertFalse(keyword_matches("The noaccess control test should not pass.", "access control"))
+
     def test_promotion_profile_requires_all_gates(self) -> None:
         config = {
             "family": "test",
@@ -252,7 +263,7 @@ class ObjectiveScoringTests(unittest.TestCase):
 
         self.assertEqual(card["schema_version"], "model_forge.eval_provenance_card.v1")
         self.assertEqual(card["prompt_suite"]["prompt_counts"]["normal_use_regression"], 1)
-        self.assertEqual(card["judge"]["scoring_version"], "model_forge.internal_eval_scoring.v1")
+        self.assertEqual(card["judge"]["scoring_version"], SCORING_VERSION)
         self.assertEqual(card["backend"]["sampling"]["temperature"], 0.7)
         self.assertFalse(card["outputs"]["responses"]["public_safe"])
         self.assertTrue(card["outputs"]["scores"]["public_safe"])
