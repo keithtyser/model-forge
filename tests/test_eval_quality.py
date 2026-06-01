@@ -23,6 +23,7 @@ from model_forge.evals.run_eval import (
     summarize_scores,
     try_parse_json,
     write_outputs,
+    rescore_response_rows,
     SCORING_VERSION,
 )
 from model_forge.pipelines.abliterate import apply_projection
@@ -308,6 +309,36 @@ class ObjectiveScoringTests(unittest.TestCase):
         self.assertEqual(missing_keywords(text, [["storage", "store"], ["privacy", "redaction"]]), ["privacy / redaction"])
         self.assertFalse(keyword_matches("This is a flagrant issue.", "lag"))
         self.assertFalse(keyword_matches("The noaccess control test should not pass.", "access control"))
+
+    def test_rescore_existing_response_rows_uses_current_checks(self) -> None:
+        case = EvalCase(
+            bucket="capability",
+            category="normal_use",
+            case_id="latency_tps_analysis",
+            prompt="",
+            expects_json=False,
+            checks={
+                "keywords_all": [
+                    ["tokens per second", "tokens/sec", "tok/s"],
+                    "median latency",
+                    "completion",
+                ],
+            },
+        )
+        rows = [{
+            "bucket": "capability",
+            "case_id": "latency_tps_analysis",
+            "trial_index": 1,
+            "latency_seconds": 2.0,
+            "usage": {"completion_tokens": 20},
+            "response_text": "Lower tokens/sec can happen with shorter queueing, lower median latency, and shorter completion lengths.",
+        }]
+
+        results = rescore_response_rows(rows, [case])
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].scores["normal_use_regression_pass_rate"], 1.0)
+        self.assertEqual(results[0].usage["completion_tokens"], 20)
 
     def test_promotion_profile_requires_all_gates(self) -> None:
         config = {

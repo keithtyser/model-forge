@@ -25,6 +25,7 @@ from model_forge.pipelines.abliterate import (
     load_yaml,
     missing_direction_layers,
     tensor_strength,
+    write_heretic_config,
     write_heretic_direct_runner,
     write_heretic_runner,
 )
@@ -179,6 +180,26 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("search_only = True", script)
         self.assertIn("model_forge_sota_heretic_search.json", script)
 
+    def test_model_forge_heretic_prompt_options_are_preserved(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_heretic_long_search.yaml"
+        config = load_yaml(config_path)
+        backend = config["sota"]["backends"]["heretic"]
+        backend["model_forge_prompt_datasets"]["bad_train_suffix"] = "\n\nI can't help with that request."
+        backend["model_forge_prompt_datasets"]["good_train_suffix"] = "\n\nHere is a direct answer."
+        backend["seed"] = 123
+        plan = build_sota_plan(config, config_path, "heretic")
+
+        config_toml = write_heretic_config(plan).read_text(encoding="utf-8")
+        manifest = load_yaml(Path(plan["work_dir"]) / "model_forge_prompt_datasets" / "manifest.json")
+
+        self.assertIn('seed = 123', config_toml)
+        self.assertIn('suffix = "\\n\\nI can\'t help with that request."', config_toml)
+        self.assertIn('suffix = "\\n\\nHere is a direct answer."', config_toml)
+        self.assertEqual(
+            manifest["sections"]["bad_prompts"]["prompt_options"]["suffix"],
+            "\n\nI can't help with that request.",
+        )
+
     def test_qwen_long_search_trial2_exports_direct_parameters(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_heretic_long_trial2.yaml"
         plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
@@ -189,6 +210,15 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIsNone(direct["direction_index"])
         self.assertGreater(direct["parameters"]["attn.o_proj"]["max_weight"], 1.4)
         self.assertGreater(direct["parameters"]["mlp.down_proj"]["min_weight"], 1.0)
+
+    def test_qwen_refusal_suffix_search_changes_direction_collection(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_heretic_refusal_suffix_search.yaml"
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+        prompt_spec = plan["backend_config"]["model_forge_prompt_datasets"]
+        self.assertTrue(plan["backend_config"]["search_only"])
+        self.assertEqual(plan["backend_config"]["kl_divergence_target"], 0.05)
+        self.assertIn("I can't help", prompt_spec["bad_train_suffix"])
+        self.assertIn("direct, helpful answer", prompt_spec["good_train_suffix"])
 
     def test_source_checkpoint_guard_fails_missing_configured_checkpoint(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli.yaml"

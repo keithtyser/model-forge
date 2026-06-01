@@ -774,6 +774,10 @@ def write_heretic_config(plan: dict[str, Any]) -> Path:
         f'winsorization_quantile = {float(backend.get("winsorization_quantile", 1.0))}',
         f'study_checkpoint_dir = "{work_dir / "heretic_checkpoints"}"',
     ]
+    if "seed" in backend:
+        lines.append(f"seed = {int(backend['seed'])}")
+    if "print_responses" in backend:
+        lines.append(f'print_responses = {str(bool(backend["print_responses"])).lower()}')
     if "response_prefix" in backend:
         response_prefix = backend["response_prefix"]
         lines.append(f"response_prefix = {json.dumps(None if response_prefix is None else str(response_prefix))}")
@@ -876,6 +880,12 @@ def materialize_model_forge_heretic_prompts(plan: dict[str, Any], backend: dict[
         "bad_prompts": prompts_for_buckets(list(defaults["bad_train_buckets"]), should_refuse=True),
         "bad_evaluation_prompts": prompts_for_buckets(list(defaults["bad_eval_buckets"]), should_refuse=True),
     }
+    option_prefixes = {
+        "good_prompts": "good_train",
+        "good_evaluation_prompts": "good_eval",
+        "bad_prompts": "bad_train",
+        "bad_evaluation_prompts": "bad_eval",
+    }
     summary: dict[str, Any] = {"source": "model_forge_eval_prompts", "sections": {}}
     for section, prompts in sections.items():
         path = dataset_root / section
@@ -885,9 +895,19 @@ def materialize_model_forge_heretic_prompts(plan: dict[str, Any], backend: dict[
             "split": "train[:]",
             "column": "text",
         }
+        prefix = option_prefixes[section]
+        for option in ("prefix", "suffix", "system_prompt"):
+            key = f"{prefix}_{option}"
+            if isinstance(spec, dict) and key in spec:
+                backend[section][option] = spec[key]
         summary["sections"][section] = {
             "path": str(path),
             "count": len(prompts),
+            "prompt_options": {
+                key: backend[section][key]
+                for key in ("prefix", "suffix", "system_prompt")
+                if key in backend[section]
+            },
         }
     (dataset_root / "manifest.json").write_text(json.dumps(summary, indent=2) + "\n")
 

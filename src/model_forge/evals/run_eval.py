@@ -20,7 +20,7 @@ import urllib.request
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 import yaml
 from rich import box
@@ -1466,6 +1466,62 @@ def run_case(case: EvalCase, cfg: EvalConfig, dry_run: bool, trial_index: int = 
     )
 
 
+def rescore_response_rows(rows: Iterable[dict[str, Any]], cases: list[EvalCase]) -> list[EvalResult]:
+    case_map = {(case.bucket, case.case_id): case for case in cases}
+    results: list[EvalResult] = []
+    for row in rows:
+        case = case_map.get((str(row.get("bucket", "")), str(row.get("case_id", ""))))
+        if case is None:
+            continue
+        response_text = str(row.get("response_text") or "")
+        parsed = None
+        if case.expects_json:
+            try:
+                parsed = try_parse_json(response_text)
+            except Exception:
+                parsed = None
+        scores, notes = score_case(case, response_text, parsed)
+        usage = row.get("usage") if isinstance(row.get("usage"), dict) else {}
+        try:
+            latency = float(row.get("latency_seconds") or 0.0)
+        except (TypeError, ValueError):
+            latency = 0.0
+        try:
+            trial_index = int(row.get("trial_index") or 1)
+        except (TypeError, ValueError):
+            trial_index = 1
+        results.append(EvalResult(
+            case=case,
+            response_text=response_text,
+            latency_seconds=latency,
+            usage=usage,
+            scores=scores,
+            notes=notes,
+            trial_index=trial_index,
+            parsed_json=parsed,
+        ))
+    return results
+
+
+def load_rescore_rows(path: Path) -> list[dict[str, Any]]:
+    responses_path = path / "responses.jsonl" if path.is_dir() else path
+    if not responses_path.exists():
+        raise SystemExit(f"missing responses file for rescore: {responses_path}")
+    rows: list[dict[str, Any]] = []
+    with responses_path.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise SystemExit(f"invalid JSON on {responses_path}:{line_number}: {exc}") from exc
+            if not isinstance(row, dict):
+                raise SystemExit(f"expected object row in {responses_path}:{line_number}")
+            rows.append(row)
+    return rows
+
+
 def run_cases_with_progress(cases: list[EvalCase], cfg: EvalConfig, dry_run: bool, trials: int) -> list[EvalResult]:
     total = len(cases) * trials
     results: list[EvalResult] = []
@@ -1541,6 +1597,7 @@ def main() -> None:
     parser.add_argument("--max-cases", type=int, default=None, help="Limit the number of eval cases")
     parser.add_argument("--trials", type=int, default=env_int("MODEL_FORGE_TRIALS", 1), help="Number of trials to run per eval case")
     parser.add_argument("--output-suffix", default=None, help="Append a suffix under the configured output directory")
+    parser.add_argument("--rescore-from", type=Path, default=None, help="Re-score an existing responses.jsonl or run directory without calling the model endpoint")
     args = parser.parse_args()
     if args.trials < 1:
         parser.error("--trials must be >= 1")
@@ -1551,7 +1608,9 @@ def main() -> None:
     prompt_root = repo_root / "evals" / "prompts"
     cases = collect_cases(prompt_root, cfg.prompt_sets)
     cases = filter_cases(cases, buckets=args.bucket, max_cases=args.max_cases)
-    if not args.dry_run:
+    if args.rescore_from is not None and args.dry_run:
+        parser.error("--rescore-from cannot be combined with --dry-run")
+    if not args.dry_run and args.rescore_from is None:
         assert_openai_model_advertised(cfg)
     manifest = build_manifest(
         cfg,
@@ -1561,8 +1620,24 @@ def main() -> None:
         config_path=config_path,
         command=sys.argv,
     )
-    results = run_cases_with_progress(cases, cfg, dry_run=args.dry_run, trials=args.trials)
     output_root = repo_root / cfg.output_dir
+    if args.rescore_from is not None:
+        rescore_path = args.rescore_from.expanduser()
+        if not rescore_path.is_absolute():
+            rescore_path = repo_root / rescore_path
+        source_dir = rescore_path if rescore_path.is_dir() else rescore_path.parent
+        if output_root.resolve() == source_dir.resolve():
+            parser.error("--rescore-from would overwrite its source run; pass --output-suffix")
+        rows = load_rescore_rows(rescore_path)
+        results = rescore_response_rows(rows, cases)
+        if not results:
+            raise SystemExit(f"no matching cases from {rescore_path} after bucket/max-case filters")
+        manifest["rescore_from"] = str(rescore_path)
+        manifest["total_cases"] = len(results)
+        manifest["trials"] = len({result.trial_index for result in results}) or 1
+        manifest["runtime"]["rescore_from"] = str(rescore_path)
+    else:
+        results = run_cases_with_progress(cases, cfg, dry_run=args.dry_run, trials=args.trials)
     write_outputs(output_root, manifest, results)
 
     print_run_summary(config_path, output_root, manifest, cases, args)
