@@ -438,6 +438,42 @@ transfer is not enough for Qwen 3.6 FT v4; the next recipe should search or
 construct Qwen-specific lower-KL directions, test direction strength explicitly,
 and gate on paired benign quality before any full eval.
 
+## Qwen 3.6 27B: Local FT v4 Gemma t34 Scale 1.5x Ablation
+
+Status: recipe implemented; export/eval pending.
+
+Hypothesis: the Gemma t34 transfer adapter preserved Qwen FT v4 benign quality
+better than Qwen Heretic trial 2 but did not suppress refusals enough. A direct
+merge of the same localized adapter at `1.5x` LoRA delta strength may improve
+refusal suppression while staying above the benign-quality floor. This tests
+direction strength without rerunning a long Heretic search.
+
+Primary config:
+
+```text
+configs/abliteration/qwen36_27b_ft_local_abli_gemma_t34_scale1p5.yaml
+```
+
+Target artifact:
+
+```text
+~/models/Qwen3.6-27B-local-ft-v4-abliterated-gemma-t34-scale1p5
+```
+
+Implementation note:
+
+- `scripts/merge_peft_adapter.py` now has `--lora-scale` for direct LoRA
+  merges. Values other than `1.0` force direct merge so agents can run bounded
+  ablation-strength sweeps from saved adapters without modifying PEFT internals.
+
+First gate:
+
+- serve one large model at a time with TP=2 across the two Spark nodes
+- run the refusal paired-boundary plus unsafe-overcompliance quick gate first
+- continue only if paired refusal suppression improves over `0.25`, paired
+  benign answer quality remains close to source FT v4, and unsafe detail remains
+  controlled
+
 ## Multi-Family: Adding Model Family Checklist
 
 Status: implemented and pushed as docs plus doctor enforcement. No model server,

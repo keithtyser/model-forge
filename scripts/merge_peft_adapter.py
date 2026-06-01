@@ -128,6 +128,7 @@ def write_merge_manifest(args: argparse.Namespace, output_dir: Path, started_at:
         "dtype": args.dtype,
         "max_shard_size": args.max_shard_size,
         "merge_method": args.merge_method,
+        "lora_scale": args.lora_scale,
         "min_available_ram_fraction": args.min_available_ram_fraction,
         "started_unix": started_at,
         "finished_unix": finished_at,
@@ -158,11 +159,17 @@ def resolve_target_parameter(target: str, parameters: dict[str, torch.nn.Paramet
     raise RuntimeError(f"target base parameter not found for adapter target {target}")
 
 
-def merge_direct_lora(model: torch.nn.Module, adapter_dir: Path, guard: ResourceGuard, safe_merge: bool) -> dict[str, int]:
+def merge_direct_lora(
+    model: torch.nn.Module,
+    adapter_dir: Path,
+    guard: ResourceGuard,
+    safe_merge: bool,
+    lora_scale: float = 1.0,
+) -> dict[str, int]:
     adapter_config = json.loads((adapter_dir / "adapter_config.json").read_text())
     rank = int(adapter_config["r"])
     alpha = float(adapter_config.get("lora_alpha", rank))
-    scaling = alpha / rank
+    scaling = (alpha / rank) * lora_scale
     state = load_file(adapter_dir / "adapter_model.safetensors")
     parameters = dict(model.named_parameters())
     merged = 0
@@ -216,6 +223,12 @@ def main() -> None:
     parser.add_argument("--dtype", choices=sorted(DTYPES), default="bf16")
     parser.add_argument("--max-shard-size", default="5GB")
     parser.add_argument("--merge-method", choices=("auto", "peft", "direct"), default="auto")
+    parser.add_argument(
+        "--lora-scale",
+        type=float,
+        default=1.0,
+        help="Multiplier applied to LoRA deltas in direct merge mode; values other than 1.0 force direct merge.",
+    )
     parser.add_argument("--min-available-ram-fraction", type=float, default=float(os.getenv("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", "0.05")))
     parser.add_argument("--monitor-interval-seconds", type=float, default=15.0)
     parser.add_argument("--trust-remote-code", action="store_true")
@@ -231,6 +244,10 @@ def main() -> None:
         raise SystemExit(f"adapter path does not exist: {adapter}")
     if output_dir.exists() and any(output_dir.iterdir()) and not args.overwrite:
         raise SystemExit(f"output directory is not empty: {output_dir}")
+    if args.lora_scale <= 0:
+        raise SystemExit("--lora-scale must be greater than zero")
+    if args.merge_method == "peft" and args.lora_scale != 1.0:
+        raise SystemExit("--lora-scale requires --merge-method direct or auto")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     usable_cores = configure_cpu_threads()
@@ -240,6 +257,7 @@ def main() -> None:
     print(f"[model-forge] adapter: {adapter}", flush=True)
     print(f"[model-forge] output: {output_dir}", flush=True)
     print(f"[model-forge] dtype: {args.dtype}", flush=True)
+    print(f"[model-forge] LoRA scale: {args.lora_scale:g}", flush=True)
     print(f"[model-forge] usable CPU threads: {usable_cores}", flush=True)
     print(f"[model-forge] RAM floor: {args.min_available_ram_fraction:.3f}", flush=True)
 
@@ -256,17 +274,17 @@ def main() -> None:
         )
         guard.check("after base load")
         merge_stats: dict[str, int] = {}
-        if args.merge_method in {"auto", "peft"}:
+        if args.merge_method in {"auto", "peft"} and args.lora_scale == 1.0:
             try:
                 merged_model = merge_with_peft(model, adapter)
             except Exception:
                 if args.merge_method == "peft":
                     raise
                 print("[model-forge] PEFT merge failed; falling back to direct LoRA merge", flush=True)
-                merge_stats = merge_direct_lora(model, adapter, guard, safe_merge=True)
+                merge_stats = merge_direct_lora(model, adapter, guard, safe_merge=True, lora_scale=args.lora_scale)
                 merged_model = model
         else:
-            merge_stats = merge_direct_lora(model, adapter, guard, safe_merge=True)
+            merge_stats = merge_direct_lora(model, adapter, guard, safe_merge=True, lora_scale=args.lora_scale)
             merged_model = model
         if merge_stats:
             print(f"[model-forge] merge stats: {merge_stats}", flush=True)

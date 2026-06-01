@@ -6,6 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import torch
+from safetensors.torch import save_file
+
 
 REPO_DIR = Path(__file__).resolve().parents[1]
 
@@ -124,6 +127,43 @@ class MergePeftAdapterTests(unittest.TestCase):
         )
         with self.assertRaises(RuntimeError):
             module.resolve_target_parameter("model.layers.1.weight", parameters)
+
+    def test_direct_merge_applies_lora_scale(self) -> None:
+        module = load_merge_module()
+
+        class Guard:
+            def check(self, phase: str) -> None:
+                return None
+
+        class TinyModel(torch.nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.model = torch.nn.Module()
+                self.model.layers = torch.nn.ModuleList([torch.nn.Linear(2, 2, bias=False)])
+                self.model.layers[0].weight.data.zero_()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter = Path(tmp)
+            (adapter / "adapter_config.json").write_text(
+                json.dumps({"r": 1, "lora_alpha": 1}),
+                encoding="utf-8",
+            )
+            save_file(
+                {
+                    "base_model.model.model.layers.0.lora_A.weight": torch.tensor([[1.0, 2.0]]),
+                    "base_model.model.model.layers.0.lora_B.weight": torch.tensor([[3.0], [4.0]]),
+                },
+                adapter / "adapter_model.safetensors",
+            )
+
+            model = TinyModel()
+            stats = module.merge_direct_lora(model, adapter, Guard(), safe_merge=True, lora_scale=0.5)
+
+        self.assertEqual(stats, {"merged_tensors": 1, "skipped_zero_tensors": 0})
+        torch.testing.assert_close(
+            model.model.layers[0].weight,
+            torch.tensor([[1.5, 3.0], [2.0, 4.0]]),
+        )
 
 
 if __name__ == "__main__":
