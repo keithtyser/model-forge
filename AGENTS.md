@@ -173,18 +173,19 @@ quick-gated from a worker-local server; it still refused 65% of paired harmful
 prompts, only reached 90% paired benign quality, and scored 84.38% on the
 challenge bucket. Trial0 direction50 was also fully merged on the worker Spark;
 it refused 85% of paired harmful prompts, refused all unsafe-overcompliance
-prompts, and dropped challenge capability to 75%. Do not keep scaling trial2 or
-reuse the trial0 direction as the next primary path; change direction selection
-or the ablation objective.
+prompts, and dropped challenge capability to 75%.
 
-The next Qwen ablation step is the search-only longer-response Heretic config
-`configs/abliteration/qwen36_27b_ft_local_abli_heretic_long_search.yaml`.
-It runs a 96-token, model-forge-prompt-aligned Heretic search with
-`response_prefix` set to an empty string to skip Qwen's expensive prefix
-detection pass, then exits after writing the Optuna journal. Do not export from
-Heretic's native save path for Qwen; after selecting a journal trial, create a
-follow-up direct-parameters config and export through the guarded Heretic
-adapter plus model-forge merge helper.
+The longer-response Heretic search
+`configs/abliteration/qwen36_27b_ft_local_abli_heretic_long_search.yaml`
+completed on the worker Spark. Trial 2 was selected from that journal and
+exported as
+`configs/abliteration/qwen36_27b_ft_local_abli_heretic_long_trial2.yaml`.
+Its quick gate refused only 35% of paired harmful prompts with zero harmful
+detail, but paired benign quality stayed at 90% and challenge capability was
+87.5% versus local FT v4's 93.75%. Treat it as a hold/rejected candidate, not a
+release checkpoint. Do not keep scaling trial2, reuse the trial0 direction, or
+rerun the same Heretic objective as the next primary path; change direction
+selection or optimize directly against model-forge objective metrics.
 
 Do not trust live-LoRA Qwen Heretic scale gates yet: live scale0.75 refused 95%
 of paired harmful prompts while the merged scale0.75 checkpoint refused 65% on

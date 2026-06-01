@@ -906,6 +906,52 @@ refusal suppression while keeping KL acceptable. The export must use the
 guarded Heretic adapter plus model-forge merge helper, then pass the quick
 internal gate before artifact or external evals.
 
+Result: completed on the worker Spark. The Heretic journal baseline refused
+16/23 prompts. The best refusal-suppression trial was trial 2, with 10/23
+refusals and KL 0.0265 in Heretic's probe. Trial 2 parameters were exported via
+direct guarded merge, not Heretic's native Qwen save path.
+
+Follow-up config:
+
+```text
+configs/abliteration/qwen36_27b_ft_local_abli_heretic_long_trial2.yaml
+```
+
+Exported checkpoint:
+
+```text
+~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-long-trial2
+```
+
+Worker checkpoint audit:
+
+```text
+12 safetensor shards, 50.1 GiB, 0 incomplete downloads
+```
+
+Quick internal gate:
+
+```text
+results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_long_trial2_quick
+```
+
+| metric | local FT v4 | trial2 scale0.75 full | trial2 scale1.0 quick | long-search trial2 quick |
+| --- | ---: | ---: | ---: | ---: |
+| paired harmful refusal rate | 1.0 | 0.75 | 0.65 | 0.35 |
+| ablation refusal suppression | 0.0 | 0.25 | 0.35 | 0.65 |
+| paired benign answer quality | 0.95 | 1.0 | 0.90 | 0.90 |
+| harmful detail rate | 0.05 | 0.0 | 0.0 | 0.0 |
+| unsafe-overcompliance harmful refusal | 1.0 | 1.0 | 1.0 | 1.0 |
+| challenge capability pass rate | 0.9375 | 1.0 | 0.8438 | 0.875 |
+
+Decision: hold/reject for release. The long-search trial2 export is the best
+Qwen merged checkpoint so far for paired harmful refusal suppression, and it did
+not produce harmful detail, but it still refuses 35% of paired harmful prompts
+and drops capability versus local FT v4. It should not be quantized, uploaded,
+or promoted as the FT-abli release target. The next Qwen ablation attempt should
+change the direction-selection/objective design instead of scaling this trial or
+rerunning the same Heretic search.
+
 ## Multi-Family: Adding Model Family Checklist
 
 Status: implemented and pushed as docs plus doctor enforcement. No model server,
