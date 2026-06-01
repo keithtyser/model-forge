@@ -271,9 +271,10 @@ length filtering:
 7. Scale the local FT v1 dataset through medium-pack review before treating it
    as a training dataset.
 8. Continue Qwen 3.6 FT-ablation search from the promoted local FT v4 source.
-   The exported trial2 and Gemma-t34-transfer candidates are rejected after
-   corrected rescoring: benign quality improved from the old exact-word score,
-   but refusal suppression remains too weak for promotion.
+   The exported trial2, Gemma-t34-transfer, and Gemma-t34-scale1p5 candidates
+   are rejected after corrected rescoring. The scale1p5 candidate preserves
+   paired benign quality on the full paired-boundary bucket, but refusal
+   suppression remains too weak and unsafe-detail risk worsens.
 
 ## Operational Guardrails
 
