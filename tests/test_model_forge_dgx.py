@@ -201,6 +201,8 @@ class ModelForgeDgxServeTests(unittest.TestCase):
         self.assertIn('DEFAULT_CHAT_TEMPLATE_KWARGS=${VLLM_DEFAULT_CHAT_TEMPLATE_KWARGS:-"{\\"enable_thinking\\": ${QWEN_ENABLE_THINKING}}"}', script)
         self.assertIn('--default-chat-template-kwargs "$DEFAULT_CHAT_TEMPLATE_KWARGS"', script)
         self.assertIn("VLLM_EXTRA_ARGS", script)
+        self.assertIn('read -r -a lora_modules <<< "$MODEL_FORGE_LORA_MODULES"', script)
+        self.assertIn('VLLM_ARGS+=(--lora-modules "${lora_modules[@]}")', script)
 
     def test_family_serving_defaults_are_applied_before_hardware_recommendations(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

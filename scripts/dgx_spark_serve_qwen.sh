@@ -102,7 +102,8 @@ fi
 if [[ "${VLLM_ENABLE_LORA:-0}" == "1" || "${VLLM_ENABLE_LORA:-false}" == "true" ]]; then
   VLLM_ARGS+=(--enable-lora)
   if [[ -n "${MODEL_FORGE_LORA_MODULES:-}" ]]; then
-    VLLM_ARGS+=(--lora-modules "$MODEL_FORGE_LORA_MODULES")
+    read -r -a lora_modules <<< "$MODEL_FORGE_LORA_MODULES"
+    VLLM_ARGS+=(--lora-modules "${lora_modules[@]}")
   fi
   if [[ -n "${VLLM_MAX_LORAS:-}" ]]; then
     VLLM_ARGS+=(--max-loras "$VLLM_MAX_LORAS")
