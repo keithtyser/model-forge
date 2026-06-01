@@ -95,6 +95,10 @@ fi
 if [[ -n "${VLLM_SPECULATIVE_CONFIG:-}" ]]; then
   VLLM_ARGS+=(--speculative-config "$VLLM_SPECULATIVE_CONFIG")
 fi
+if [[ -n "${VLLM_EXTRA_ARGS:-}" ]]; then
+  read -r -a extra_vllm_args <<< "$VLLM_EXTRA_ARGS"
+  VLLM_ARGS+=("${extra_vllm_args[@]}")
+fi
 if [[ "${VLLM_ENABLE_LORA:-0}" == "1" || "${VLLM_ENABLE_LORA:-false}" == "true" ]]; then
   VLLM_ARGS+=(--enable-lora)
   if [[ -n "${MODEL_FORGE_LORA_MODULES:-}" ]]; then

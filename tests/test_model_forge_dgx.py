@@ -200,6 +200,7 @@ class ModelForgeDgxServeTests(unittest.TestCase):
         script = (REPO_DIR / "scripts" / "dgx_spark_serve_qwen.sh").read_text(encoding="utf-8")
         self.assertIn('DEFAULT_CHAT_TEMPLATE_KWARGS=${VLLM_DEFAULT_CHAT_TEMPLATE_KWARGS:-"{\\"enable_thinking\\": ${QWEN_ENABLE_THINKING}}"}', script)
         self.assertIn('--default-chat-template-kwargs "$DEFAULT_CHAT_TEMPLATE_KWARGS"', script)
+        self.assertIn("VLLM_EXTRA_ARGS", script)
 
     def test_family_serving_defaults_are_applied_before_hardware_recommendations(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
