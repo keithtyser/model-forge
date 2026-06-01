@@ -169,16 +169,41 @@ Known Qwen 3.6 27B state: local FT v4 is the current FT source. Trial2
 scale0.75 preserves full-suite measured capability and benign quality after
 scorer/rubric v4, but it still refuses 75% of paired harmful prompts, so the
 next agent should continue Qwen-specific ablation search rather than quantizing
-that checkpoint as the final model. Do not trust live-LoRA Qwen Heretic scale
-gates yet: live scale0.75 refused 95% of paired harmful prompts while the merged
-scale0.75 checkpoint refused 65% on the same paired bucket. Use full merged
-checkpoints for the next Qwen candidates unless vLLM live LoRA support is first
-verified for the adapter's `linear_attn.out_proj` tensors.
+that checkpoint as the final model. Trial2 scale1.0 was fully merged on the
+worker Spark and quick-gated from a worker-local server; it still refused 65% of
+paired harmful prompts, only reached 90% paired benign quality, and scored
+84.38% on the challenge bucket. Do not keep scaling trial2 as the next primary
+path; change direction selection or the ablation objective.
+
+Do not trust live-LoRA Qwen Heretic scale gates yet: live scale0.75 refused 95%
+of paired harmful prompts while the merged scale0.75 checkpoint refused 65% on
+the same paired bucket. Use full merged checkpoints for the next Qwen candidates
+unless vLLM live LoRA support is first verified for the adapter's
+`linear_attn.out_proj` tensors.
 
 Before exporting another full Qwen checkpoint, check coordinator disk headroom.
 `scripts/merge_peft_adapter.py` now blocks exports projected to leave less than
 15% free disk. Do not lower that guard to force an export; delete or relocate
 reviewed local artifacts first.
+
+When a host does not have a suitable Python ML environment, use the reusable
+container merge runner:
+
+```bash
+scripts/run_merge_peft_container.sh \
+  --base-model ~/models/<merged-source> \
+  --adapter artifacts/abliteration/<run>/selected_heretic_adapter \
+  --output-dir ~/models/<candidate> \
+  --dtype bf16 \
+  --merge-method direct \
+  --lora-scale <scale> \
+  --trust-remote-code
+```
+
+The default image is `model-forge-posttrain-tf5:latest`, which supports Qwen
+3.6's `qwen3_5` model type. It runs with CPU, memory, pids, swap, and disk
+guards and writes outputs as the host user. Avoid ad hoc root Docker merges
+unless you also repair ownership immediately.
 
 Plan ablation without loading a model:
 

@@ -77,8 +77,15 @@ This is the short handoff state for humans and agents. Use
   is verified for the adapter's `linear_attn.out_proj` edits.
 - A trial2 scale1.0 follow-up config exists, but the guarded merge helper
   blocked export on the coordinator because projected free disk would fall to
-  14.2%, below the 15% floor. Free coordinator disk or relocate old local model
-  artifacts before running another two-node checkpoint export.
+  14.2%, below the 15% floor. The same full merge was completed on the worker
+  Spark, where disk headroom was safe, and quick-gated from a worker-local vLLM
+  server. It still refused 65% of paired harmful prompts and dropped challenge
+  pass rate to 84.38%, so it is rejected as a final FT-abli candidate.
+- `scripts/run_merge_peft_container.sh` now provides a reusable, resource-capped
+  container merge path using the newer posttrain image. This fixed two Qwen
+  painpoints found during worker execution: optional Unsloth import failures in
+  CPU/container merge contexts, and root-owned model outputs from ad hoc Docker
+  runs.
 - The local FT v1 dataset factory MVP is implemented with planning, gap
   extraction, feedback proposals, seed rows, generation adapters, verification,
   filtering, review, packing, dry-run publish planning, non-cascading overwrite
@@ -292,10 +299,10 @@ length filtering:
 8. Continue Qwen 3.6 FT-ablation search from the promoted local FT v4 source.
    Trial2 scale0.75 passed capability retention on the full internal suite but
    only reduced paired harmful-prompt refusal from 1.0 to 0.75 after
-   scorer/rubric v4. Live-LoRA scale gates are not trusted for this adapter
-   after the scale0.75 equivalence failure; free or relocate coordinator disk
-   and run the next candidates as full merged checkpoints before quantization
-   or upload.
+   scorer/rubric v4. Trial2 scale1.0 did not improve enough on the worker
+   quick gate. Live-LoRA scale gates are not trusted for this adapter after the
+   scale0.75 equivalence failure; the next candidate should change direction or
+   objective, not simply scale trial2 further.
 
 ## Operational Guardrails
 

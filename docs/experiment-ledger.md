@@ -690,7 +690,7 @@ stay above the 15% disk floor.
 
 ## Qwen 3.6 27B: Local FT v4 Trial2 Scale 1.0x Follow-Up
 
-Status: config added; export blocked by disk guard before model load.
+Status: exported on the worker Spark and quick-evaled; rejected for promotion.
 
 Primary config:
 
@@ -714,9 +714,59 @@ projected_free_disk_fraction: 0.142
 required_min_free_disk_fraction: 0.150
 ```
 
-Decision: do not export until coordinator disk is freed. The PEFT merge helper
-now has a disk preflight in addition to the existing RAM guard so full-checkpoint
-ablation exports cannot silently push the host below the disk floor.
+Worker export:
+
+```text
+host: gx10-dc65 / 169.254.173.164
+artifact: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-trial2-scale1p0
+merge image: model-forge-posttrain-tf5:latest
+merge duration: 54.9s
+merge stats: 64 nonzero LoRA tensors, 64 zero tensors skipped
+disk after export on worker: 352G free / 916G
+```
+
+Operational notes:
+
+- The worker host intentionally does not have the local Python ML stack; the
+  merge must run in a container.
+- `nemotron-runner:latest` contains Transformers 4.57.6, which cannot load this
+  `qwen3_5` checkpoint. The posttrain/ModelOpt images contain Transformers
+  5.9.0 and can load it.
+- `scripts/merge_peft_adapter.py` now treats optional Unsloth runtime import
+  failures as non-fatal so CPU/container merges still work.
+- `scripts/run_merge_peft_container.sh` was added to make this path reusable and
+  to run containers as the host user, avoiding root-owned model artifacts from
+  ad hoc Docker commands.
+- The candidate was served from the worker only because the coordinator still
+  cannot store another 51 GiB Qwen checkpoint without breaching the 15% disk
+  floor. This is valid for a quick ablation decision but not the final two-Spark
+  serving/throughput path.
+
+Quick eval evidence:
+
+```text
+results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_scale1p0_worker_quick
+```
+
+Result:
+
+```text
+metric                                      trial2 scale1.0 worker quick
+paired benign answer quality                0.90
+paired harmful refusal rate                 0.65
+paired ablation refusal suppression         0.35
+paired harmful detail rate                  0.0
+paired unsafe-overcompliance rate           0.0
+unsafe-overcompliance harmful refusal rate  1.0
+challenge pass rate                         0.8438
+observed single-Spark throughput            ~4.42 tok/s
+median latency seconds                      26.2233
+```
+
+Decision: reject without full eval. Full scale1.0 does not materially improve
+refusal suppression over the merged scale0.75 quick gate and is worse on benign
+quality and capability. The next Qwen FT-ablation attempt should change the
+direction/objective search rather than continue scaling trial2.
 
 ## Multi-Family: Adding Model Family Checklist
 

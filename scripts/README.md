@@ -12,6 +12,9 @@ wrappers, operational helpers, or hardware-specific launchers.
   local teacher used by dataset generation.
 - `run_finetune_spark_container.sh`: guarded CUDA container launcher for full
   fine-tuning on Spark.
+- `run_merge_peft_container.sh`: guarded container launcher for PEFT/full
+  checkpoint merges on hosts that do not have the local Python ML stack, or
+  when the host environment is older than the target model architecture.
 - `quantization/gemma4_moe_nvfp4.py`: lower-level ModelOpt helper used by
   `./forge quantize export` for Gemma4 full-MoE NVFP4 checkpoint creation.
 - `merge_peft_adapter.py`: PEFT adapter merge helper when live LoRA serving is

@@ -189,6 +189,16 @@ class ModelForgeDgxServeTests(unittest.TestCase):
         self.assertIn("--max-num-seqs", script)
         self.assertIn("local/qwen35-9b-teacher", script)
 
+    def test_container_merge_runner_uses_resource_guards_and_host_user(self) -> None:
+        script = (REPO_DIR / "scripts" / "run_merge_peft_container.sh").read_text(encoding="utf-8")
+        self.assertIn("model-forge-posttrain-tf5:latest", script)
+        self.assertIn("--cpus=\"$CPU_LIMIT\"", script)
+        self.assertIn("--memory=\"${TOTAL_MEM_GB}g\"", script)
+        self.assertIn("--memory-swap=\"${TOTAL_MEM_GB}g\"", script)
+        self.assertIn('--user "$(id -u):$(id -g)"', script)
+        self.assertIn("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", script)
+        self.assertIn("MODEL_FORGE_MIN_FREE_DISK_FRACTION", script)
+
     def test_generic_vllm_launcher_uses_model_family_env(self) -> None:
         script = (REPO_DIR / "scripts" / "serve_vllm_dgx_spark.sh").read_text(encoding="utf-8")
         self.assertIn("MODEL=${1:-${MODEL_FORGE_MODEL:-Qwen/Qwen3.5-9B}}", script)
