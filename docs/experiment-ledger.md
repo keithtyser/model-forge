@@ -302,6 +302,61 @@ Decision: promote `local_ft_v4` as the Qwen FT source for the FT-to-ablated
 candidate. The generic `local_ft_abli` variant now points at the v4-based
 ablation target so downstream quantization uses the promoted FT source.
 
+## Qwen 3.6 27B: Local FT v4 TP=2 Training Probe
+
+Status: completed on the two-DGX-Spark cluster; rejected as a TP path.
+
+Purpose: compare the completed two-node DDP QLoRA recipe against a bounded
+tensor-parallel training attempt over the same Qwen v4 repair data without
+overwriting the promoted adapter.
+
+Primary recipe:
+
+```text
+configs/finetuning/qwen36_27b_local_ft_v4_tp2_probe.yaml
+```
+
+Runtime:
+
+```text
+training launch: 2-node torchrun on DGX Spark x2
+requested train TP size: 2
+steps: 10
+benchmark_only: true
+save_strategy: no
+log: logs/qwen36_tp2_probe_20260601T104248Z.log
+result: runs/finetune/qwen36_27b_local_ft_v4_tp2_probe/training_result.json
+```
+
+Observed result:
+
+```text
+train_runtime: 88.1554s
+train_steps_per_second: 0.113
+train_loss: 5.1075
+containers after run: stopped on both nodes
+```
+
+Comparison:
+
+```text
+completed DDP v4 run: 120 steps / 885.1s = ~0.136 steps/s
+TP=2 probe attempt:   10 steps / 88.1554s = 0.113 steps/s
+```
+
+Important warning from the TP probe:
+
+```text
+The model parameters are not sharded by DTensor, we skip the TP preparation.
+```
+
+Interpretation: this is not valid evidence that tensor parallel training works
+for Qwen 3.6 27B in the current Hugging Face/PEFT runner. The current path
+launches on both Sparks but does not actually shard the model by DTensor, and it
+is slower than the completed DDP run. Keep Qwen fine-tuning on the DDP QLoRA
+path until a true TP/FSDP/ZeRO/Megatron-style backend proves sharding in logs and
+beats the DDP steps/sec baseline under the same resource contract.
+
 ## Qwen 3.6 27B: Local FT v4 Heretic Ablation Trial 2
 
 Status: exported and quick-evaled on the two-DGX-Spark cluster; rejected for

@@ -508,6 +508,12 @@ worker head or dirty worktree, commit the coordinator changes, run
 `./forge cluster sync --config <cluster.yaml> --execute`, then run health again.
 Before claiming that a training, quantization, or benchmark job used both Spark
 nodes, run `./forge cluster torchrun-smoke` and cite the generated evidence path.
+For training, also verify that the requested parallelism was actually applied in
+the backend logs. Qwen 3.6 27B TP=2 probing on 2026-06-01 launched on both
+Sparks but logged `The model parameters are not sharded by DTensor, we skip the
+TP preparation` and ran slower than the completed DDP run (`0.113` vs about
+`0.136` steps/s). Keep Qwen FT on two-node DDP QLoRA until a replacement backend
+proves real sharding and better steps/sec under the same resource contract.
 
 For Qwen-family serving on Spark, `configs/model_families/qwen35_9b.yaml` and
 `configs/model_families/qwen36_27b.yaml` use the generic
