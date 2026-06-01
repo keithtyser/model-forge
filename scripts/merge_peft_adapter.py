@@ -15,8 +15,11 @@ import torch
 
 try:
     import unsloth  # noqa: F401
-except ImportError:
+except Exception as exc:  # optional accelerator; CPU/container merges must still work
     unsloth = None
+    UNSLOTH_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
+else:
+    UNSLOTH_IMPORT_ERROR = ""
 
 from peft import PeftModel
 from safetensors.torch import load_file
@@ -305,6 +308,8 @@ def main() -> None:
     print(f"[model-forge] LoRA scale: {args.lora_scale:g}", flush=True)
     print(f"[model-forge] usable CPU threads: {usable_cores}", flush=True)
     print(f"[model-forge] RAM floor: {args.min_available_ram_fraction:.3f}", flush=True)
+    if UNSLOTH_IMPORT_ERROR:
+        print(f"[model-forge] optional Unsloth import skipped: {UNSLOTH_IMPORT_ERROR}", flush=True)
     disk_report = check_disk_preflight(base_model, output_dir, args.min_free_disk_fraction)
     print(
         "[model-forge] disk preflight: "
