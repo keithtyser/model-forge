@@ -82,6 +82,13 @@ def adapter_module_name(family: dict[str, Any], variant: str) -> str:
     return cfg.get("adapter_module_name") or served_model_name(family, variant)
 
 
+def live_lora_base_path(family: dict[str, Any], base_variant: str) -> Path:
+    base_cfg = variant_config(family, base_variant)
+    if base_cfg.get("adapter") and base_cfg.get("merged_local_dir"):
+        return local_dir_path(family, str(base_cfg["merged_local_dir"]))
+    return variant_local_path(family, base_variant)
+
+
 def format_template(template: str, family_name: str, variant: str) -> str:
     return template.format(family=family_name, variant=variant)
 
@@ -205,9 +212,12 @@ def configure_serving_variant(family: dict[str, Any], variant: str, env: dict[st
                 "base_variant": str(base_variant),
             })
             return details
-        base_path = variant_local_path(family, str(base_variant))
+        base_path = live_lora_base_path(family, str(base_variant))
         if not base_path.is_dir():
-            raise SystemExit(f"adapter base model path does not exist: {base_path}")
+            raise SystemExit(
+                f"adapter base model path does not exist: {base_path}\n"
+                f"if {base_variant!r} is itself an adapter, create its merged_local_dir before stacking another LoRA"
+            )
         module = f"{adapter_module_name(family, variant)}={path}"
         env["MODEL_FORGE_MODEL"] = str(base_path)
         env["MODEL_FORGE_SERVED_MODEL_NAME"] = cfg.get("base_served_model_name") or served_model_name(family, str(base_variant))

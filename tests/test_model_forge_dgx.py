@@ -99,6 +99,50 @@ class ModelForgeDgxServeTests(unittest.TestCase):
             self.assertNotIn("MODEL_FORGE_LORA_MODULES", env)
             self.assertEqual(details["adapter"], f"merged from {root / 'adapter-model'}")
 
+    def test_live_lora_on_adapter_base_uses_merged_base_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "base-model").mkdir()
+            (root / "ft-adapter").mkdir()
+            (root / "ft-merged").mkdir()
+            (root / "abli-adapter").mkdir()
+            family = {
+                "models_dir_env": "MODEL_FORGE_TEST_MODELS_DIR",
+                "default_models_dir": str(root),
+                "architecture": {},
+                "variants": {
+                    "base": {
+                        "repo_id": "org/base",
+                        "local_dir": "base-model",
+                        "served_model_name": "org/base",
+                    },
+                    "local_ft": {
+                        "repo_id": "org/base",
+                        "local_dir": "ft-adapter",
+                        "merged_local_dir": "ft-merged",
+                        "served_model_name": "local/ft",
+                        "adapter": True,
+                        "base_variant": "base",
+                    },
+                    "local_ft_abli_lora": {
+                        "repo_id": "org/base",
+                        "local_dir": "abli-adapter",
+                        "served_model_name": "local/ft-abli-lora",
+                        "adapter": True,
+                        "base_variant": "local_ft",
+                        "lora_rank": 3,
+                    },
+                },
+            }
+            env: dict[str, str] = {}
+            details = model_forge_dgx.configure_serving_variant(family, "local_ft_abli_lora", env)
+
+            self.assertEqual(env["MODEL_FORGE_MODEL"], str(root / "ft-merged"))
+            self.assertEqual(env["MODEL_FORGE_SERVED_MODEL_NAME"], "local/ft")
+            self.assertEqual(env["MODEL_FORGE_LORA_MODULES"], f"local/ft-abli-lora={root / 'abli-adapter'}")
+            self.assertEqual(env["VLLM_MAX_LORA_RANK"], "3")
+            self.assertEqual(details["base_variant"], "local_ft")
+
     def test_full_model_variant_serves_its_local_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

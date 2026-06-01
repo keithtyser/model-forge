@@ -112,7 +112,7 @@ class VariantGraphTests(unittest.TestCase):
         self.assertEqual(targets["local_ft"]["transform"]["type"], "fine_tune")
 
         qwen36 = variant_graph("qwen36_27b")
-        self.assertEqual(qwen36["node_count"], 11)
+        self.assertEqual(qwen36["node_count"], 12)
         self.assertEqual(ancestry(qwen36, "local_abli"), ["base", "local_abli"])
         self.assertEqual(
             ancestry(qwen36, "local_ft_abli_gemma_t34_scale1p5"),
@@ -125,6 +125,10 @@ class VariantGraphTests(unittest.TestCase):
         self.assertEqual(
             ancestry(qwen36, "local_ft_abli_trial2_scale1p0"),
             ["base", "local_ft_v4", "local_ft_abli_trial2_scale1p0"],
+        )
+        self.assertEqual(
+            ancestry(qwen36, "local_ft_abli_trial2_lora_scale0p85"),
+            ["base", "local_ft_v4", "local_ft_abli_trial2_lora_scale0p85"],
         )
         self.assertEqual(
             ancestry(qwen36, "local_ft_abli_nvfp4_modelopt"),

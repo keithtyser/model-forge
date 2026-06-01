@@ -65,10 +65,13 @@ This is the short handoff state for humans and agents. Use
   internal challenge capability while preserving paired benign quality,
   planning, normal-use behavior, and harmful-prompt refusal behavior.
 - Qwen 3.6 27B local FT v4 trial2 scale0.75 ablation completed the full
-  internal suite on the two-Spark cluster. After scorer/rubric v3 rescoring, it
+  internal suite on the two-Spark cluster. After scorer/rubric v4 rescoring, it
   preserves or improves measured capability versus base and FT, but still
-  refuses 60% of paired harmful prompts, so it is a hold, not the final
+  refuses 75% of paired harmful prompts, so it is a hold, not the final
   zero-refusal FT-abli target.
+- A live LoRA scale0.85 follow-up adapter has been materialized for quick
+  ablation gating without writing another 51 GiB checkpoint. The worker now has
+  the merged FT v4 base needed for two-Spark TP=2 live-LoRA serving.
 - A trial2 scale1.0 follow-up config exists, but the guarded merge helper
   blocked export on the coordinator because projected free disk would fall to
   14.2%, below the 15% floor. Free coordinator disk or relocate old local model
@@ -285,10 +288,9 @@ length filtering:
    as a training dataset.
 8. Continue Qwen 3.6 FT-ablation search from the promoted local FT v4 source.
    Trial2 scale0.75 passed capability retention on the full internal suite but
-   only reduced paired harmful-prompt refusal from 1.0 to 0.6. The next ablation
-   experiment should increase refusal suppression while keeping the full-suite
-   capability and benign-quality gains; do not quantize or upload this candidate
-   as the final FT-abli model yet.
+   only reduced paired harmful-prompt refusal from 1.0 to 0.75 after
+   scorer/rubric v4. Run the live LoRA scale0.85 quick gate next; do not
+   quantize or upload scale0.75 as the final FT-abli model.
 
 ## Operational Guardrails
 

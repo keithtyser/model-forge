@@ -17,6 +17,8 @@ wrappers, operational helpers, or hardware-specific launchers.
 - `merge_peft_adapter.py`: PEFT adapter merge helper when live LoRA serving is
   unsupported or inconvenient. Direct merge mode supports `--lora-scale` for
   bounded ablation-strength sweeps from an existing adapter.
+- `scale_lora_adapter.py`: creates small scaled copies of a LoRA adapter for
+  live-serving ablation sweeps without writing a full checkpoint.
 - `publish_hf_artifact.py`: Hugging Face upload helper for completed models,
   datasets, or durable report bundles.
 - `rescore_internal_eval.py`: re-score an existing internal eval run from its

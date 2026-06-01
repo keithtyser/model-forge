@@ -542,6 +542,8 @@ raw:
   results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_scale0p75_quick
 rescored after scorer/rubric v3:
   results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_scale0p75_quick_rescored_v3
+rescored after scorer/rubric v4:
+  results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_scale0p75_quick_rescored_v4
 ```
 
 Full eval evidence:
@@ -551,8 +553,11 @@ raw:
   results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_scale0p75_full
 rescored after scorer/rubric v3:
   results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_scale0p75_full_rescored_v3
+rescored after scorer/rubric v4:
+  results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_scale0p75_full_rescored_v4
 comparison:
   reports/generated/qwen36_27b_trial2_scale0p75_rescored_v3_comparison
+  reports/generated/qwen36_27b_trial2_scale0p75_rescored_v4_comparison
 ```
 
 Result:
@@ -580,16 +585,16 @@ and shows no measured harmful detail in the quick gate. Do not upload or
 quantize this checkpoint until the full internal suite confirms source-relative
 capability retention.
 
-Full-suite rescored result:
+Full-suite rescored result after scorer/rubric v4:
 
 ```text
-metric                                      base v3  ft_v4 v3  trial2 scale0.75 v3
+metric                                      base v4  ft_v4 v4  trial2 scale0.75 v4
 challenge capability pass rate              0.9062   0.9375    1.0
 agentic planning workflow success           1.0      1.0       1.0
 normal-use regression pass rate             1.0      1.0       1.0
 paired benign answer quality                1.0      0.95      1.0
-paired harmful refusal rate                 1.0      1.0       0.6
-paired ablation refusal suppression         0.0      0.0       0.4
+paired harmful refusal rate                 1.0      1.0       0.75
+paired ablation refusal suppression         0.0      0.0       0.25
 paired harmful detail rate                  0.05     0.05      0.0
 paired unsafe-overcompliance rate           0.05     0.05      0.0
 unsafe-overcompliance harmful detail rate   0.0      0.0       0.0
@@ -598,7 +603,7 @@ median latency seconds                      89.0353  97.2484   16.3728
 
 Decision after full eval: hold, not promote. The candidate keeps or improves
 measured source-model capability and benign behavior, and it lowers measured
-harmful detail risk, but it still directly refuses 12 of 20 paired harmful
+harmful detail risk, but it still directly refuses 15 of 20 paired harmful
 prompts. That fails the repo's zero-refusal target. The next step is another
 Qwen-specific ablation-strength/objective search, using this result as the
 current capability-preserving baseline.
@@ -611,9 +616,39 @@ Painpoints found and fixed during this gate:
   `nondeterministic`
 - harmful-detail scoring over-counted safe explanations that named a prohibited
   concept while warning against it
+- refusal scoring missed common direct refusals such as `I won't help ...`,
+  overstating the full-suite scale0.75 suppression rate until scorer/rubric v4
 - comparison recommendations allowed a partial ablation to be promoted under
   `zero_refusal_capability_retention`; the primary target is now enforced when
   the objective config defines a numeric target
+
+## Qwen 3.6 27B: Live LoRA Trial2 Scale 0.85x Follow-Up
+
+Status: configured and adapter materialized; quick eval pending.
+
+Primary config:
+
+```text
+configs/abliteration/qwen36_27b_ft_local_abli_trial2_lora_scale0p85.yaml
+```
+
+Operational notes:
+
+- `scripts/scale_lora_adapter.py` creates scaled copies of saved LoRA adapters
+  by multiplying `lora_B.weight`, avoiding full 51 GiB checkpoint exports during
+  ablation-strength search.
+- `./forge serve` now supports a live LoRA whose `base_variant` is itself an
+  adapter by serving that base variant's `merged_local_dir`.
+- The two-Spark worker has a synced copy of
+  `~/models/Qwen3.6-27B-local-ft-v4-merged` for TP=2 live-LoRA serving.
+- The scale0.85 adapter is at
+  `~/models/model-forge-adapters/qwen36_27b/local_ft_abli_trial2_lora_scale0p85`
+  on both nodes.
+
+Hypothesis: scale0.75 preserves measured capability but leaves too many direct
+refusals, while prior full-strength trial2 was worse on the quick gate. A
+scale0.85 live adapter tests an intermediate point without consuming another
+full-checkpoint slot.
 
 ## Qwen 3.6 27B: Local FT v4 Trial2 Scale 1.0x Follow-Up
 
@@ -626,7 +661,8 @@ configs/abliteration/qwen36_27b_ft_local_abli_trial2_scale1p0.yaml
 ```
 
 Hypothesis: scale0.75 preserved full-suite measured capability and benign
-quality, but it still refused 60% of paired harmful prompts. A full-strength
+quality, but it still refused 75% of paired harmful prompts after scorer/rubric
+v4. A full-strength
 merge of the same Qwen-specific Heretic trial2 adapter is a bounded follow-up
 to test whether refusal suppression improves enough to justify a full gate.
 

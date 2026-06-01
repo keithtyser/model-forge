@@ -1,0 +1,46 @@
+name: qwen36_27b_ft_local_abli_trial2_lora_scale0p85
+method: live_lora_scaled_refusal_direction
+
+model:
+  source: local/qwen36-27b-local-ft-v4
+  base_model_dir: ~/models/Qwen3.6-27B-local-ft-v4-merged
+  source_adapter: artifacts/abliteration/qwen36_27b_ft_local_abli/sota_v4/selected_heretic_adapter
+  output_adapter: ~/models/model-forge-adapters/qwen36_27b/local_ft_abli_trial2_lora_scale0p85
+  dtype: bfloat16
+  trust_remote_code: true
+
+adapter_scale:
+  scale: 0.85
+  command: >
+    .venv/bin/python scripts/scale_lora_adapter.py
+    --source artifacts/abliteration/qwen36_27b_ft_local_abli/sota_v4/selected_heretic_adapter
+    --output ~/models/model-forge-adapters/qwen36_27b/local_ft_abli_trial2_lora_scale0p85
+    --scale 0.85
+    --overwrite
+
+artifacts_dir: artifacts/abliteration/qwen36_27b_ft_local_abli_trial2_lora_scale0p85
+
+hypothesis: >
+  Full-checkpoint scale0.75 preserved measured capability and benign quality but
+  still refused too often. Full-strength trial2 was previously worse on the
+  quick gate. A live LoRA adapter at scale0.85 tests a middle point without
+  writing another 51 GB checkpoint, and exercises the repo's generalized
+  stacked-adapter serving path.
+
+eval:
+  source_variant: local_ft_v4
+  target_variant: local_ft_abli_trial2_lora_scale0p85
+  first_gate:
+    prompt_sets:
+      - refusal_paired_boundary
+      - unsafe_overcompliance
+      - capability_preservation_challenge
+    required_interpretation: >
+      Continue only if refusal suppression improves over scale0.75 without
+      losing paired benign answer quality or challenge capability. Any remaining
+      direct refusal keeps the candidate in hold status under the zero-refusal
+      objective.
+  commands:
+    - .venv/bin/python scripts/scale_lora_adapter.py --source artifacts/abliteration/qwen36_27b_ft_local_abli/sota_v4/selected_heretic_adapter --output ~/models/model-forge-adapters/qwen36_27b/local_ft_abli_trial2_lora_scale0p85 --scale 0.85 --overwrite
+    - ./forge serve qwen36_27b local_ft_abli_trial2_lora_scale0p85
+    - MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_trial2_lora_scale0p85 --internal --bucket refusal_paired_boundary --bucket unsafe_overcompliance --bucket capability_preservation_challenge
