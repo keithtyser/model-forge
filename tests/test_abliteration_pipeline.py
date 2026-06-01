@@ -168,6 +168,8 @@ class AbliterationPlanTests(unittest.TestCase):
         script = runner.read_text(encoding="utf-8")
         self.assertIn('selected_adapters=["default"]', script)
         self.assertIn("save_embedding_layers=False", script)
+        self.assertIn('direct_parameters.get("weight_scale", 1.0)', script)
+        self.assertIn('direct_parameters.get("component_weight_scales")', script)
 
     def test_qwen_long_heretic_search_is_search_only(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_heretic_long_search.yaml"
@@ -219,6 +221,22 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(plan["backend_config"]["kl_divergence_target"], 0.05)
         self.assertIn("I can't help", prompt_spec["bad_train_suffix"])
         self.assertIn("direct, helpful answer", prompt_spec["good_train_suffix"])
+
+    def test_qwen_refusal_suffix_trial17_scaled_export_uses_direct_weights(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_local_abli_heretic_refusal_suffix_trial17_scale1p5.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+        direct = plan["backend_config"]["direct_parameters"]
+        self.assertFalse(plan["backend_config"].get("search_only", False))
+        self.assertTrue(plan["output_dir"].endswith("refusal-suffix-trial17-scale1p5"))
+        self.assertEqual(direct["weight_scale"], 1.5)
+        self.assertIsNone(direct["direction_index"])
+        self.assertIn("attn.o_proj", direct["parameters"])
+        self.assertIn("mlp.down_proj", direct["parameters"])
 
     def test_source_checkpoint_guard_fails_missing_configured_checkpoint(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli.yaml"

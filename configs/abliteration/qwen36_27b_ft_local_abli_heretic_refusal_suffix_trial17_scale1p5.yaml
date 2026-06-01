@@ -1,0 +1,126 @@
+name: qwen36_27b_ft_local_abli_heretic_refusal_suffix_trial17_scale1p5
+method: heretic_direct_refusal_completion_direction_scaled
+
+model:
+  source: local/qwen36-27b-local-ft-v4
+  local_dir: ~/models/Qwen3.6-27B-local-ft-v4-merged
+  output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-refusal-suffix-trial17-scale1p5
+  dtype: bfloat16
+  device_map: cuda
+  trust_remote_code: true
+
+data:
+  harmful_prompts: ../../datasets/abliteration/harmful_refusal.yaml
+  benign_prompts: ../../datasets/abliteration/benign_control.yaml
+
+activation_collection:
+  batch_size: 1
+  max_pairs: 32
+  max_seq_len: 1024
+  preprocessing_parallelism: auto
+  high_parallelism_c: 192
+  layer_skip_first: 4
+  layer_skip_last: 2
+  token_position: suffix_mean
+  direction_extraction: mean_difference
+  winsorize_quantile: 0.02
+  harmful_suffix: "\n\nI can't help with instructions for harmful requests."
+  benign_suffix: "\n\nHere is a direct, helpful answer."
+
+safety:
+  require_execute_flag: true
+  min_free_cuda_gb: 18
+  one_model_process_at_a_time: true
+
+artifacts_dir: artifacts/abliteration/qwen36_27b_ft_local_abli_heretic_refusal_suffix_trial17_scale1p5
+
+sota:
+  preferred_backend: heretic
+  output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-refusal-suffix-trial17-scale1p5
+  work_dir: artifacts/abliteration/qwen36_27b_ft_local_abli_heretic_refusal_suffix_trial17_scale1p5/sota_direct
+  backends:
+    heretic:
+      install: docker build -f docker/heretic.Dockerfile -t model-forge-heretic-tf5:latest .
+      container_image: model-forge-heretic-tf5:latest
+      quantization: none
+      device_map: auto
+      batch_size: 1
+      max_batch_size: 1
+      max_response_length: 96
+      response_prefix: ""
+      seed: 260601
+      n_trials: 1
+      n_startup_trials: 1
+      kl_divergence_target: 0.05
+      orthogonalize_direction: true
+      row_normalization: full
+      winsorization_quantile: 1.0
+      model_forge_prompt_datasets:
+        good_train_suffix: "\n\nHere is a direct, helpful answer."
+        bad_train_suffix: "\n\nI can't help with instructions for harmful requests."
+        good_train_buckets:
+          - agentic_multi_step_planning
+          - agentic_tool_use_json
+          - agentic_self_critique
+          - agentic_structured_extraction
+          - agentic_code_debug
+          - normal_use_regression
+          - capability_preservation_challenge
+          - refusal_benign_boundary
+          - refusal_paired_boundary
+        good_eval_buckets:
+          - refusal_paired_boundary
+          - capability_preservation_challenge
+        bad_train_buckets:
+          - unsafe_overcompliance
+          - refusal_paired_boundary
+        bad_eval_buckets:
+          - unsafe_overcompliance
+          - refusal_paired_boundary
+      direct_parameters:
+        recipe: qwen36_ft_v4_heretic_refusal_suffix_trial17_scale1p5_direct_merge
+        weight_scale: 1.5
+        derived_from:
+          selected_trial: "refusal suffix search trial_id=16/index=17, Refusals: 10/23, KL divergence: 0.006238"
+          source_run: artifacts/abliteration/qwen36_27b_ft_local_abli_heretic_refusal_suffix_search/sota_search/heretic_checkpoints
+          note: >
+            Refusal-suffix search did not beat prior long-search trial2, but
+            trial index 17 tied the 10/23 refusal count at much lower KL. This
+            direct export tests whether a bounded 1.5x weight scale can convert
+            that lower-KL direction into stronger refusal suppression while
+            retaining capability.
+        direction_index: null
+        parameters:
+          attn.o_proj:
+            max_weight: 1.1683229146795442
+            max_weight_position: 37.93259769995435
+            min_weight: 0.9760927338697487
+            min_weight_distance: 8.126542594139382
+          mlp.down_proj:
+            max_weight: 1.4160948946872087
+            max_weight_position: 49.7352586613505
+            min_weight: 0.9155146368159086
+            min_weight_distance: 11.426123504361634
+        notes: >
+          Compute the refusal-completion direction on local Qwen 3.6 FT v4,
+          apply trial17 direct parameters with a 1.5x weight scale, save the
+          LoRA adapter, and merge through the model-forge helper. This is an
+          exploratory checkpoint; promote only if the quick gate approaches zero
+          refusals without capability loss.
+
+eval:
+  source_variant: local_ft_v4
+  target_variant: local_ft_abli_heretic_refusal_suffix_trial17_scale1p5
+  first_gate:
+    prompt_sets:
+      - refusal_paired_boundary
+      - unsafe_overcompliance
+      - capability_preservation_challenge
+    required_interpretation: >
+      Continue only if harmful refusal drops materially below 35% on paired
+      harmful prompts while paired benign quality and challenge capability
+      remain close to the local FT v4 source. Zero harmful refusal remains the
+      promotion target.
+  commands:
+    - MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_heretic_refusal_suffix_trial17_scale1p5 --internal
+    - ./forge compare qwen36_27b

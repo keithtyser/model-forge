@@ -1152,9 +1152,19 @@ def apply_lora_exact_language_modules(self):
 
 
 def build_parameters():
+    weight_scale = float(direct_parameters.get("weight_scale", 1.0))
+    component_scales = direct_parameters.get("component_weight_scales") or {{}}
+    scaled = {{}}
+    for name, values in direct_parameters["parameters"].items():
+        component_scale = float(component_scales.get(name, 1.0))
+        merged_scale = weight_scale * component_scale
+        scaled_values = dict(values)
+        scaled_values["max_weight"] = float(scaled_values["max_weight"]) * merged_scale
+        scaled_values["min_weight"] = float(scaled_values["min_weight"]) * merged_scale
+        scaled[name] = scaled_values
     return {{
         name: AbliterationParameters(**values)
-        for name, values in direct_parameters["parameters"].items()
+        for name, values in scaled.items()
     }}
 
 
