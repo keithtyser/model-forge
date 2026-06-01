@@ -69,6 +69,10 @@ This is the short handoff state for humans and agents. Use
   preserves or improves measured capability versus base and FT, but still
   refuses 60% of paired harmful prompts, so it is a hold, not the final
   zero-refusal FT-abli target.
+- A trial2 scale1.0 follow-up config exists, but the guarded merge helper
+  blocked export on the coordinator because projected free disk would fall to
+  14.2%, below the 15% floor. Free coordinator disk or relocate old local model
+  artifacts before running another two-node checkpoint export.
 - The local FT v1 dataset factory MVP is implemented with planning, gap
   extraction, feedback proposals, seed rows, generation adapters, verification,
   filtering, review, packing, dry-run publish planning, non-cascading overwrite
@@ -290,6 +294,9 @@ length filtering:
 
 - Run only one large model server or training job at a time.
 - Do not bypass guarded run scripts for full training.
+- Do not bypass the PEFT merge disk preflight for full-checkpoint ablation
+  exports. If it blocks at the 15% floor, clear reviewed local artifacts first
+  rather than lowering the guard.
 - Keep `runs/`, `results/`, `reports/generated/`, and local model artifacts out
   of Git unless a small reusable file is intentionally moved into `recipes/`.
 - Check `docs/artifact-retention.md` before deleting or uploading artifacts.

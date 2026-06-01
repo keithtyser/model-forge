@@ -35,6 +35,50 @@ def available_fraction() -> float:
     return mem.available / mem.total
 
 
+def directory_size_bytes(path: Path) -> int:
+    if not path.exists():
+        return 0
+    if path.is_file():
+        return path.stat().st_size
+    total = 0
+    for item in path.rglob("*"):
+        try:
+            if item.is_file():
+                total += item.stat().st_size
+        except OSError:
+            continue
+    return total
+
+
+def check_disk_preflight(
+    base_model: Path,
+    output_dir: Path,
+    min_free_disk_fraction: float,
+) -> dict[str, float | int | str]:
+    output_parent = output_dir if output_dir.exists() else output_dir.parent
+    output_parent.mkdir(parents=True, exist_ok=True)
+    usage = shutil.disk_usage(output_parent)
+    expected_write_bytes = max(0, directory_size_bytes(base_model) - directory_size_bytes(output_dir))
+    projected_free = usage.free - expected_write_bytes
+    projected_fraction = projected_free / usage.total
+    report: dict[str, float | int | str] = {
+        "path": str(output_parent),
+        "free_bytes": usage.free,
+        "total_bytes": usage.total,
+        "expected_write_bytes": expected_write_bytes,
+        "projected_free_bytes": projected_free,
+        "projected_free_fraction": projected_fraction,
+        "min_free_disk_fraction": min_free_disk_fraction,
+    }
+    if projected_fraction < min_free_disk_fraction:
+        raise RuntimeError(
+            "disk preflight would breach free-space floor after merge: "
+            f"{projected_fraction:.3f} < {min_free_disk_fraction:.3f} "
+            f"(free={usage.free}, expected_write={expected_write_bytes}, path={output_parent})"
+        )
+    return report
+
+
 class ResourceGuard:
     def __init__(self, min_available_ram_fraction: float, interval_seconds: float) -> None:
         self.min_available_ram_fraction = min_available_ram_fraction
@@ -230,6 +274,7 @@ def main() -> None:
         help="Multiplier applied to LoRA deltas in direct merge mode; values other than 1.0 force direct merge.",
     )
     parser.add_argument("--min-available-ram-fraction", type=float, default=float(os.getenv("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", "0.05")))
+    parser.add_argument("--min-free-disk-fraction", type=float, default=float(os.getenv("MODEL_FORGE_MIN_FREE_DISK_FRACTION", "0.15")))
     parser.add_argument("--monitor-interval-seconds", type=float, default=15.0)
     parser.add_argument("--trust-remote-code", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
@@ -260,6 +305,13 @@ def main() -> None:
     print(f"[model-forge] LoRA scale: {args.lora_scale:g}", flush=True)
     print(f"[model-forge] usable CPU threads: {usable_cores}", flush=True)
     print(f"[model-forge] RAM floor: {args.min_available_ram_fraction:.3f}", flush=True)
+    disk_report = check_disk_preflight(base_model, output_dir, args.min_free_disk_fraction)
+    print(
+        "[model-forge] disk preflight: "
+        f"projected free {disk_report['projected_free_fraction']:.3f}, "
+        f"floor {args.min_free_disk_fraction:.3f}",
+        flush=True,
+    )
 
     guard.start()
     try:

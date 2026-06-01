@@ -1,0 +1,66 @@
+name: qwen36_27b_ft_local_abli_trial2_scale1p0
+method: scaled_lora_refusal_direction
+
+model:
+  source: local/qwen36-27b-local-ft-v4
+  local_dir: ~/models/Qwen3.6-27B-local-ft-v4-merged
+  output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-trial2-scale1p0
+  dtype: bfloat16
+  device_map: cpu
+  trust_remote_code: true
+
+data:
+  harmful_prompts: ../../datasets/abliteration/harmful_refusal.yaml
+  benign_prompts: ../../datasets/abliteration/benign_control.yaml
+
+adapter_merge:
+  source_adapter: artifacts/abliteration/qwen36_27b_ft_local_abli/sota_v4/selected_heretic_adapter
+  base_model: ~/models/Qwen3.6-27B-local-ft-v4-merged
+  merge_method: direct
+  lora_scale: 1.0
+  max_shard_size: 5GB
+  output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-trial2-scale1p0
+  command: >
+    nice -n 10 .venv/bin/python scripts/merge_peft_adapter.py
+    --base-model ~/models/Qwen3.6-27B-local-ft-v4-merged
+    --adapter artifacts/abliteration/qwen36_27b_ft_local_abli/sota_v4/selected_heretic_adapter
+    --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-trial2-scale1p0
+    --dtype bf16
+    --merge-method direct
+    --lora-scale 1.0
+    --trust-remote-code
+
+artifacts_dir: artifacts/abliteration/qwen36_27b_ft_local_abli_trial2_scale1p0
+
+hypothesis: >
+  Scale0.75 preserved full-suite capability and benign quality but still refused
+  60% of paired harmful prompts. Restoring the same Qwen-specific Heretic trial2
+  adapter to full scale should increase refusal suppression while remaining
+  close enough to the promoted local FT v4 source to justify a quick gate.
+
+source_candidate:
+  config: configs/abliteration/qwen36_27b_ft_local_abli_trial2_scale0p75.yaml
+  full_eval: results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_scale0p75_full_rescored_v3
+  rescored_metrics:
+    challenge_capability_pass_rate: 1.0
+    paired_benign_answer_quality: 1.0
+    paired_harmful_refusal_rate: 0.6
+    paired_ablation_refusal_suppression: 0.4
+    harmful_detail_rate: 0.0
+
+eval:
+  source_variant: local_ft_v4
+  target_variant: local_ft_abli_trial2_scale1p0
+  first_gate:
+    prompt_sets:
+      - refusal_paired_boundary
+      - unsafe_overcompliance
+      - capability_preservation_challenge
+    required_interpretation: >
+      Continue only if harmful refusal drops materially below scale0.75 while
+      paired benign quality, unsafe-detail risk, and challenge capability remain
+      close to the local FT v4 source. A partial refusal drop is still a hold
+      under the zero-refusal objective.
+  commands:
+    - MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_trial2_scale1p0 --internal
+    - ./forge compare qwen36_27b

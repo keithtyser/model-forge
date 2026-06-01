@@ -615,6 +615,35 @@ Painpoints found and fixed during this gate:
   `zero_refusal_capability_retention`; the primary target is now enforced when
   the objective config defines a numeric target
 
+## Qwen 3.6 27B: Local FT v4 Trial2 Scale 1.0x Follow-Up
+
+Status: config added; export blocked by disk guard before model load.
+
+Primary config:
+
+```text
+configs/abliteration/qwen36_27b_ft_local_abli_trial2_scale1p0.yaml
+```
+
+Hypothesis: scale0.75 preserved full-suite measured capability and benign
+quality, but it still refused 60% of paired harmful prompts. A full-strength
+merge of the same Qwen-specific Heretic trial2 adapter is a bounded follow-up
+to test whether refusal suppression improves enough to justify a full gate.
+
+Preflight result:
+
+```text
+command: scripts/merge_peft_adapter.py --lora-scale 1.0
+guard: systemd user scope, CPUQuota=80%, MemoryMax=85%, IOWeight=100
+result: blocked before base model load
+projected_free_disk_fraction: 0.142
+required_min_free_disk_fraction: 0.150
+```
+
+Decision: do not export until coordinator disk is freed. The PEFT merge helper
+now has a disk preflight in addition to the existing RAM guard so full-checkpoint
+ablation exports cannot silently push the host below the disk floor.
+
 ## Multi-Family: Adding Model Family Checklist
 
 Status: implemented and pushed as docs plus doctor enforcement. No model server,

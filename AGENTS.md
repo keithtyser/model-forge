@@ -171,6 +171,11 @@ scorer/rubric v3, but it still refuses 60% of paired harmful prompts, so the
 next agent should continue Qwen-specific ablation search rather than quantizing
 that checkpoint as the final model.
 
+Before exporting another full Qwen checkpoint, check coordinator disk headroom.
+`scripts/merge_peft_adapter.py` now blocks exports projected to leave less than
+15% free disk. Do not lower that guard to force an export; delete or relocate
+reviewed local artifacts first.
+
 Plan ablation without loading a model:
 
 ```bash

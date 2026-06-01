@@ -4,7 +4,9 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
+from unittest.mock import patch
 
 import torch
 from safetensors.torch import save_file
@@ -164,6 +166,35 @@ class MergePeftAdapterTests(unittest.TestCase):
             model.model.layers[0].weight,
             torch.tensor([[1.5, 3.0], [2.0, 4.0]]),
         )
+
+    def test_disk_preflight_blocks_projected_floor_breach(self) -> None:
+        module = load_merge_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = root / "base"
+            base.mkdir()
+            (base / "model.safetensors").write_bytes(b"0" * 80)
+
+            with patch.object(module.shutil, "disk_usage", return_value=SimpleNamespace(total=100, used=20, free=80)):
+                with self.assertRaisesRegex(RuntimeError, "disk preflight"):
+                    module.check_disk_preflight(base, root / "output", 0.15)
+
+    def test_disk_preflight_accounts_for_existing_output_size(self) -> None:
+        module = load_merge_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = root / "base"
+            output = root / "output"
+            base.mkdir()
+            output.mkdir()
+            (base / "model.safetensors").write_bytes(b"0" * 80)
+            (output / "old.safetensors").write_bytes(b"0" * 70)
+
+            with patch.object(module.shutil, "disk_usage", return_value=SimpleNamespace(total=100, used=20, free=80)):
+                report = module.check_disk_preflight(base, output, 0.15)
+
+        self.assertEqual(report["expected_write_bytes"], 10)
+        self.assertEqual(report["projected_free_bytes"], 70)
 
 
 if __name__ == "__main__":
