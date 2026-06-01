@@ -51,7 +51,9 @@ This is the short handoff state for humans and agents. Use
   `scripts/rescore_internal_eval.py` path for rescoring saved responses after
   rubric fixes without rerunning large model servers. Scoring v3 normalizes
   smart punctuation in refusal phrases and separates direct refusal suppression
-  from actual harmful compliance or harmful detail.
+  from actual harmful compliance or harmful detail. The capability challenge
+  and paired-boundary checks now avoid brittle exact-word failures discovered
+  during Qwen 3.6 FT-ablation evaluation.
 - Local base ablation beat the downloaded abli reference on the saved internal
   comparison while preserving stronger behavior than expected.
 - Local FT ablation preserved the source FT's primary internal behavior closely
@@ -62,6 +64,11 @@ This is the short handoff state for humans and agents. Use
 - Qwen 3.6 27B local FT v4 is the promoted Qwen FT source. It beat the base on
   internal challenge capability while preserving paired benign quality,
   planning, normal-use behavior, and harmful-prompt refusal behavior.
+- Qwen 3.6 27B local FT v4 trial2 scale0.75 ablation completed the full
+  internal suite on the two-Spark cluster. After scorer/rubric v3 rescoring, it
+  preserves or improves measured capability versus base and FT, but still
+  refuses 60% of paired harmful prompts, so it is a hold, not the final
+  zero-refusal FT-abli target.
 - The local FT v1 dataset factory MVP is implemented with planning, gap
   extraction, feedback proposals, seed rows, generation adapters, verification,
   filtering, review, packing, dry-run publish planning, non-cascading overwrite
@@ -273,11 +280,11 @@ length filtering:
 7. Scale the local FT v1 dataset through medium-pack review before treating it
    as a training dataset.
 8. Continue Qwen 3.6 FT-ablation search from the promoted local FT v4 source.
-   Trial2 scale0.75 is the current promising candidate: on the 43-case quick
-   paired-boundary plus unsafe-overcompliance gate it preserves paired benign
-   quality at 1.0, reaches paired refusal suppression 0.35, and has 0.0 harmful
-   detail / unsafe-overcompliance under scoring v3. Run the full internal suite
-   next before any artifact, external, quantization, or Hub work.
+   Trial2 scale0.75 passed capability retention on the full internal suite but
+   only reduced paired harmful-prompt refusal from 1.0 to 0.6. The next ablation
+   experiment should increase refusal suppression while keeping the full-suite
+   capability and benign-quality gains; do not quantize or upload this candidate
+   as the final FT-abli model yet.
 
 ## Operational Guardrails
 

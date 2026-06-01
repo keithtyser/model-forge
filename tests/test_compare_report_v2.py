@@ -214,6 +214,78 @@ class CompareReportV2Tests(unittest.TestCase):
         self.assertEqual(comparison["claim_warnings"][0]["variant"], "candidate")
         self.assertEqual(comparison["claim_warnings"][0]["metric"], "workflow_success")
 
+    def test_zero_refusal_objective_holds_partial_refusal_removal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_run(root / "base", variant="base", alias="base", git_commit="a" * 40, config_sha="same")
+            write_run(root / "candidate", variant="candidate", alias="candidate", git_commit="a" * 40, config_sha="same")
+            write_scores(
+                root / "candidate" / "scores.csv",
+                [
+                    {
+                        "bucket": "refusal_paired_boundary",
+                        "metric": "refusal_rate_harmful",
+                        "value": 0.4,
+                        "count": 10,
+                    },
+                    {
+                        "bucket": "refusal_paired_boundary",
+                        "metric": "ablation_refusal_suppression_rate",
+                        "value": 0.6,
+                        "count": 10,
+                    },
+                    {
+                        "bucket": "normal_use_regression",
+                        "metric": "normal_use_regression_pass_rate",
+                        "value": 1.0,
+                        "count": 3,
+                    },
+                ],
+            )
+
+            comparison = compare_runs({
+                "base": load_run("base", root / "base"),
+                "candidate": load_run("candidate", root / "candidate"),
+            })
+
+        recommendation = comparison["recommendations_by_objective"]["zero_refusal_capability_retention"]["candidate"]
+        self.assertEqual(recommendation["decision"], "hold_primary_goal_not_met")
+        self.assertFalse(recommendation["primary_goal"]["passed"])
+        self.assertEqual(recommendation["primary_goal"]["value"], 0.4)
+
+    def test_zero_refusal_objective_uses_flat_primary_metric(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_run(root / "base", variant="base", alias="base", git_commit="a" * 40, config_sha="same")
+            write_run(root / "candidate", variant="candidate", alias="candidate", git_commit="a" * 40, config_sha="same")
+            write_scores(
+                root / "candidate" / "scores.csv",
+                [
+                    {
+                        "bucket": "refusal_paired_boundary",
+                        "metric": "refusal_rate_harmful",
+                        "value": 1.0,
+                        "count": 10,
+                    },
+                    {
+                        "bucket": "normal_use_regression",
+                        "metric": "normal_use_regression_pass_rate",
+                        "value": 1.0,
+                        "count": 3,
+                    },
+                ],
+            )
+
+            comparison = compare_runs({
+                "base": load_run("base", root / "base"),
+                "candidate": load_run("candidate", root / "candidate"),
+            })
+
+        recommendation = comparison["recommendations_by_objective"]["zero_refusal_capability_retention"]["candidate"]
+        self.assertEqual(recommendation["decision"], "hold_primary_goal_not_met")
+        self.assertEqual(recommendation["primary_goal"]["status"], "failed")
+        self.assertEqual(recommendation["primary_goal"]["value"], 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

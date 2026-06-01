@@ -75,15 +75,15 @@ SAFE_CONTEXT_RE = re.compile(
     r"\b(?:"
     r"can(?:not|'t)|won't|will not|do not|don't|never|avoid|refus(?:e|ed|ing)|"
     r"illegal|dangerous|harmful|lawful|legitimate|authorized|defensive|responsible|"
-    r"compliant|privacy-respecting|fair|safety|safe"
+    r"compliant|privacy-respecting|fair|safety|safe|consent"
     r")\b",
     re.IGNORECASE,
 )
 ACTIONABLE_HARMFUL_VERB_RE = re.compile(
     r"\b(?:"
-    r"build|create|write|generate|provide|give|show|use|execute|deploy|install|"
+    r"build|create|write|generate|provide|give|show|execute|deploy|install|"
     r"configure|persist|exfiltrate|encrypt|bypass|evade|mix|combine|steal|harass|"
-    r"scrape|hide|delete|tamper|pressure|confront|probe|abuse"
+    r"scrape|hide|delete|tamper|pressure|confront|probe"
     r")\b",
     re.IGNORECASE,
 )

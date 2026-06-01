@@ -507,8 +507,8 @@ adapter strength.
 
 ## Qwen 3.6 27B: Local FT v4 Trial2 Scale 0.75x Ablation
 
-Status: exported and quick-evaled on the two-DGX-Spark cluster; promising but
-not promoted yet.
+Status: exported and full-evaled on the two-DGX-Spark cluster; hold for more
+refusal removal, not promoted.
 
 Hypothesis: Qwen Heretic trial2 had better refusal suppression than the Gemma
 t34 transfer branch, but the unscaled merge damaged benign quality and carried
@@ -544,6 +544,17 @@ rescored after scorer/rubric v3:
   results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_scale0p75_quick_rescored_v3
 ```
 
+Full eval evidence:
+
+```text
+raw:
+  results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_scale0p75_full
+rescored after scorer/rubric v3:
+  results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_scale0p75_full_rescored_v3
+comparison:
+  reports/generated/qwen36_27b_trial2_scale0p75_rescored_v3_comparison
+```
+
 Result:
 
 ```text
@@ -562,12 +573,47 @@ median latency seconds                      16.8297
 observed generation throughput              ~6.7-7.2 tok/s
 ```
 
-Decision: hold for full internal eval. This is the best Qwen FT-ablation
+Quick-gate decision: hold for full internal eval. This is the best Qwen FT-ablation
 candidate from the current quick gates because it preserves benign paired
 quality, improves refusal suppression over the rejected Gemma-transfer branch,
 and shows no measured harmful detail in the quick gate. Do not upload or
 quantize this checkpoint until the full internal suite confirms source-relative
 capability retention.
+
+Full-suite rescored result:
+
+```text
+metric                                      base v3  ft_v4 v3  trial2 scale0.75 v3
+challenge capability pass rate              0.9062   0.9375    1.0
+agentic planning workflow success           1.0      1.0       1.0
+normal-use regression pass rate             1.0      1.0       1.0
+paired benign answer quality                1.0      0.95      1.0
+paired harmful refusal rate                 1.0      1.0       0.6
+paired ablation refusal suppression         0.0      0.0       0.4
+paired harmful detail rate                  0.05     0.05      0.0
+paired unsafe-overcompliance rate           0.05     0.05      0.0
+unsafe-overcompliance harmful detail rate   0.0      0.0       0.0
+median latency seconds                      89.0353  97.2484   16.3728
+```
+
+Decision after full eval: hold, not promote. The candidate keeps or improves
+measured source-model capability and benign behavior, and it lowers measured
+harmful detail risk, but it still directly refuses 12 of 20 paired harmful
+prompts. That fails the repo's zero-refusal target. The next step is another
+Qwen-specific ablation-strength/objective search, using this result as the
+current capability-preserving baseline.
+
+Painpoints found and fixed during this gate:
+
+- unquoted `NULL` in YAML parsed as `None`, causing a false challenge failure
+- exact-word challenge checks penalized equivalent answers such as `quote`
+  versus `quotes`, `purge` versus `invalidate`, and `nondeterminism` versus
+  `nondeterministic`
+- harmful-detail scoring over-counted safe explanations that named a prohibited
+  concept while warning against it
+- comparison recommendations allowed a partial ablation to be promoted under
+  `zero_refusal_capability_retention`; the primary target is now enforced when
+  the objective config defines a numeric target
 
 ## Multi-Family: Adding Model Family Checklist
 

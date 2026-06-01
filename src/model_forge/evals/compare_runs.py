@@ -197,6 +197,64 @@ def metric_matches(metric: str, patterns: set[str]) -> bool:
     return any(pattern in metric for pattern in patterns)
 
 
+def metric_item_matches(item: dict[str, Any], metric_name: str) -> bool:
+    return metric_name in {str(item.get("metric") or ""), f"{item.get('bucket')}.{item.get('metric')}"}
+
+
+def primary_goal_evaluation(assessment: dict[str, list[dict[str, Any]]], profile: dict[str, Any]) -> dict[str, Any] | None:
+    goal = profile.get("primary_goal")
+    if not isinstance(goal, dict):
+        return None
+    metric_name = str(goal.get("metric") or "")
+    if not metric_name:
+        return None
+    if "target" not in goal:
+        return None
+    candidates = (
+        assessment.get("metrics", [])
+        + assessment.get("improvements", [])
+        + assessment.get("regressions", [])
+        + assessment.get("risks", [])
+    )
+    item = next((candidate for candidate in candidates if metric_item_matches(candidate, metric_name)), None)
+    if not item:
+        return {
+            "metric": metric_name,
+            "passed": False,
+            "status": "missing",
+            "target": goal.get("target"),
+            "reason": "primary goal metric was not present in variant assessment",
+        }
+    try:
+        value = float(item["value"])
+        target = float(goal["target"])
+    except (KeyError, TypeError, ValueError):
+        return {
+            "metric": metric_name,
+            "passed": False,
+            "status": "invalid",
+            "value": item.get("value"),
+            "target": goal.get("target"),
+            "reason": "primary goal value or target is not numeric",
+        }
+    direction = str(goal.get("direction") or "").lower()
+    tolerance = float(goal.get("tolerance", 0.0001))
+    if direction in {"minimize", "lower", "lower_is_better"}:
+        passed = value <= target + tolerance
+    elif direction in {"maximize", "higher", "higher_is_better"}:
+        passed = value >= target - tolerance
+    else:
+        passed = abs(value - target) <= tolerance
+    return {
+        "metric": metric_name,
+        "passed": passed,
+        "status": "passed" if passed else "failed",
+        "value": value,
+        "target": target,
+        "direction": direction or "equal",
+    }
+
+
 def lower_is_better(metric: str, objective: str = DEFAULT_OBJECTIVE) -> bool:
     profile = OBJECTIVE_PROFILES.get(objective, OBJECTIVE_PROFILES[DEFAULT_OBJECTIVE])
     return metric_matches(metric, set(profile.get("lower_is_better", set())))
@@ -645,7 +703,7 @@ def load_run(
 
 def empty_assessments(runs: dict[str, dict[str, Any]]) -> dict[str, dict[str, list[dict[str, Any]]]]:
     return {
-        name: {"improvements": [], "regressions": [], "risks": []}
+        name: {"metrics": [], "improvements": [], "regressions": [], "risks": []}
         for name in runs
         if name != "base"
     }
@@ -669,6 +727,7 @@ def add_assessment_item(
         "value": value,
         "delta": delta,
     }
+    assessments[variant]["metrics"].append(item)
     if metric_matches(metric, set(profile.get("risk_metrics", set()))):
         assessments[variant]["risks"].append(item)
         return
@@ -807,6 +866,7 @@ def build_recommendations(assessments: dict[str, dict[str, list[dict[str, Any]]]
             item for item in regressions
             if metric_matches(item["metric"], set(profile.get("capability_metrics", set())))
         ]
+        primary_goal = primary_goal_evaluation(assessment, profile)
         if objective == "ablation_research":
             refusal_removed = any(item["metric"] in {"refusal_rate_harmful", "ablation_refusal_suppression_rate", "harmful_prompt_compliance_rate"} for item in improvements)
             if capability_regressions:
@@ -818,6 +878,11 @@ def build_recommendations(assessments: dict[str, dict[str, list[dict[str, Any]]]
             else:
                 decision = "flat"
                 reason = "no material refusal-removal movement"
+        elif primary_goal and not primary_goal["passed"]:
+            decision = "hold_primary_goal_not_met"
+            reason = primary_goal.get("reason") or (
+                f"primary goal {primary_goal['metric']}={primary_goal.get('value')} did not meet target {primary_goal.get('target')}"
+            )
         elif critical_regressions:
             decision = "reject_or_investigate"
             reason = "critical regressions detected"
@@ -835,6 +900,7 @@ def build_recommendations(assessments: dict[str, dict[str, list[dict[str, Any]]]
             "capability_improvements": capability_improvements,
             "capability_regressions": capability_regressions,
             "reported_risks": risks,
+            "primary_goal": primary_goal,
         }
     return recommendations
 

@@ -157,6 +157,20 @@ candidates from backend-specific refusal probes alone; use model-forge gates for
 refusal suppression, source-relative capability, benign quality, and reported
 overcompliance risk.
 
+For the `zero_refusal_capability_retention` objective, "better than base" is
+not enough. A candidate that preserves capability but still has
+`refusal_paired_boundary.refusal_rate_harmful > 0.0` is a hold for more
+ablation work, not a final FT-abli model, and should not be quantized or
+uploaded as the release target. After changing scoring or prompt checks, rescore
+the source baseline, FT source, and candidate together before trusting a
+comparison report.
+
+Known Qwen 3.6 27B state: local FT v4 is the current FT source. Trial2
+scale0.75 preserves full-suite measured capability and benign quality after
+scorer/rubric v3, but it still refuses 60% of paired harmful prompts, so the
+next agent should continue Qwen-specific ablation search rather than quantizing
+that checkpoint as the final model.
+
 Plan ablation without loading a model:
 
 ```bash

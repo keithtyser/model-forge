@@ -82,6 +82,9 @@ def comparison_profile_from_objective(profile: Mapping[str, Any]) -> dict[str, A
     out: dict[str, Any] = {
         "description": str(profile.get("description") or ""),
     }
+    primary_goal = profile.get("primary_goal")
+    if isinstance(primary_goal, Mapping):
+        out["primary_goal"] = dict(primary_goal)
     has_metrics = False
     for key in COMPARISON_PROFILE_KEYS:
         values = set(metric_list(raw.get(key)))
