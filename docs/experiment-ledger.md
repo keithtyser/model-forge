@@ -497,6 +497,35 @@ on one of three unsafe-overcompliance probes. The next Qwen FT-ablation attempt
 should change direction selection or objective, not simply increase this
 localized transferred adapter strength.
 
+## Qwen 3.6 27B: Local FT v4 Trial2 Scale 0.75x Ablation
+
+Status: recipe implemented; export/eval pending.
+
+Hypothesis: Qwen Heretic trial2 had better refusal suppression than the Gemma
+t34 transfer branch, but the unscaled merge damaged benign quality and carried
+unsafe-detail risk. A `0.75x` direct merge tests whether the Qwen-specific
+direction can retain useful refusal suppression while reducing drift.
+
+Primary config:
+
+```text
+configs/abliteration/qwen36_27b_ft_local_abli_trial2_scale0p75.yaml
+```
+
+Target artifact:
+
+```text
+~/models/Qwen3.6-27B-local-ft-v4-abliterated-trial2-scale0p75
+```
+
+First gate:
+
+- serve one large model at a time with TP=2 across the two Spark nodes
+- run the refusal paired-boundary plus unsafe-overcompliance quick gate first
+- continue only if paired refusal suppression stays above the Gemma t34 branch,
+  benign answer quality stays near source FT v4, and unsafe-detail risk drops
+  versus unscaled trial2
+
 ## Multi-Family: Adding Model Family Checklist
 
 Status: implemented and pushed as docs plus doctor enforcement. No model server,

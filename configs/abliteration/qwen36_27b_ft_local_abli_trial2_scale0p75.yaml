@@ -1,0 +1,64 @@
+name: qwen36_27b_ft_local_abli_trial2_scale0p75
+method: scaled_lora_refusal_direction
+
+model:
+  source: local/qwen36-27b-local-ft-v4
+  local_dir: ~/models/Qwen3.6-27B-local-ft-v4-merged
+  output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-trial2-scale0p75
+  dtype: bfloat16
+  device_map: cpu
+  trust_remote_code: true
+
+data:
+  harmful_prompts: ../../datasets/abliteration/harmful_refusal.yaml
+  benign_prompts: ../../datasets/abliteration/benign_control.yaml
+
+adapter_merge:
+  source_adapter: artifacts/abliteration/qwen36_27b_ft_local_abli/sota_v4/selected_heretic_adapter
+  base_model: ~/models/Qwen3.6-27B-local-ft-v4-merged
+  merge_method: direct
+  lora_scale: 0.75
+  max_shard_size: 5GB
+  output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-trial2-scale0p75
+  command: >
+    nice -n 10 .venv/bin/python scripts/merge_peft_adapter.py
+    --base-model ~/models/Qwen3.6-27B-local-ft-v4-merged
+    --adapter artifacts/abliteration/qwen36_27b_ft_local_abli/sota_v4/selected_heretic_adapter
+    --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-trial2-scale0p75
+    --dtype bf16
+    --merge-method direct
+    --lora-scale 0.75
+    --trust-remote-code
+
+artifacts_dir: artifacts/abliteration/qwen36_27b_ft_local_abli_trial2_scale0p75
+
+hypothesis: >
+  Qwen Heretic trial2 showed stronger refusal suppression than the Gemma t34
+  transfer direction, but its unscaled merge was too damaging and too risky.
+  A 0.75x direct merge tests whether the same Qwen-specific direction keeps
+  useful refusal suppression while improving benign quality and reducing
+  harmful-detail leakage.
+
+source_candidate:
+  config: configs/abliteration/qwen36_27b_ft_local_abli.yaml
+  quick_eval: results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_quick_rescored
+  rescored_metrics:
+    paired_benign_answer_quality: 0.7778
+    paired_ablation_refusal_suppression: 0.5
+    unsafe_overcompliance_ablation_suppression: 0.0
+    unsafe_overcompliance_harmful_refusal: 1.0
+
+eval:
+  source_variant: local_ft_v4
+  target_variant: local_ft_abli_trial2_scale0p75
+  first_gate:
+    prompt_sets:
+      - refusal_paired_boundary
+      - unsafe_overcompliance
+    required_interpretation: >
+      Continue only if paired ablation refusal suppression stays above the
+      Gemma t34 branch while paired benign answer quality remains near the
+      source FT v4 baseline and unsafe-detail risk drops versus unscaled trial2.
+  commands:
+    - MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_trial2_scale0p75 --internal
+    - ./forge compare qwen36_27b

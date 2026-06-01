@@ -90,6 +90,12 @@ variants:
     served_model_name: local/qwen36-27b-local-ft-v4-abliterated-gemma-t34-scale1p5
     base_variant: local_ft_v4
     downloadable: false
+  local_ft_abli_trial2_scale0p75:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-ft-v4-abliterated-trial2-scale0p75
+    served_model_name: local/qwen36-27b-local-ft-v4-abliterated-trial2-scale0p75
+    base_variant: local_ft_v4
+    downloadable: false
   local_ft_abli_nvfp4_modelopt:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: model-forge-quantized/qwen36_27b/local_ft_abli_nvfp4_modelopt
