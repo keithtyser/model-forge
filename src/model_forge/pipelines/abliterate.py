@@ -895,6 +895,7 @@ def write_heretic_runner(plan: dict[str, Any]) -> Path:
     work_dir.mkdir(parents=True, exist_ok=True)
     runner = work_dir / "run_heretic_auto.py"
     selected_trial_index = backend.get("selected_trial_index")
+    search_only = bool(backend.get("search_only", False))
     script = f'''from __future__ import annotations
 
 import json
@@ -914,7 +915,8 @@ from peft import LoraConfig, PeftModel, get_peft_model
 work_dir = Path({str(work_dir)!r})
 output_dir = Path({plan["output_dir"]!r})
 selected_trial_index = {selected_trial_index!r}
-state = {{"selected_trial": None, "save_requested": False, "saved": False}}
+search_only = {search_only!r}
+state = {{"selected_trial": None, "save_requested": False, "saved": False, "search_only_finished": False}}
 
 
 def _choice_title(choice):
@@ -929,6 +931,9 @@ def prompt_select(message, choices):
     if message == "How would you like to proceed?":
         return "continue"
     if message == "Which trial do you want to use?":
+        if search_only:
+            state["search_only_finished"] = True
+            return ""
         if state["saved"]:
             return ""
         fallback = None
@@ -1015,6 +1020,23 @@ def main():
     heretic_model.Model._apply_lora = apply_lora_exact_language_modules
     questionary.select = lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("unexpected interactive prompt"))
     heretic_main.run()
+    if search_only:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        summary_path = output_dir / "model_forge_sota_heretic_search.json"
+        summary_path.write_text(json.dumps({{
+            "backend": "heretic",
+            "mode": "search_only",
+            "source_model": {plan["source_model"]!r},
+            "output_dir": str(output_dir),
+            "work_dir": str(work_dir),
+            "selected_trial": state["selected_trial"],
+            "saved": state["saved"],
+            "search_only_finished": state["search_only_finished"],
+            "config": str(work_dir / "config.toml"),
+            "journal_dir": str(work_dir / "heretic_checkpoints"),
+        }}, indent=2) + "\\n")
+        print(f"Wrote {{summary_path}}")
+        return
     if not state["saved"]:
         raise SystemExit("Heretic exited before a model was saved")
     output_dir.mkdir(parents=True, exist_ok=True)

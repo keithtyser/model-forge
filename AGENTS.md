@@ -167,18 +167,23 @@ comparison report.
 
 Known Qwen 3.6 27B state: local FT v4 is the current FT source. Trial2
 scale0.75 preserves full-suite measured capability and benign quality after
-scorer/rubric v4, but it still refuses 75% of paired harmful prompts, so the
-next agent should continue Qwen-specific ablation search rather than quantizing
-that checkpoint as the final model. Trial2 scale1.0 was fully merged on the
-worker Spark and quick-gated from a worker-local server; it still refused 65% of
-paired harmful prompts, only reached 90% paired benign quality, and scored
-84.38% on the challenge bucket. Do not keep scaling trial2 as the next primary
-path; change direction selection or the ablation objective.
-The next bounded Qwen candidate is
-`configs/abliteration/qwen36_27b_ft_local_abli_trial0_direction50.yaml`, which
-uses the completed Heretic trial0 global direction instead of trial2. Build the
-Heretic CUDA image and run the generated direct runner on the worker Spark first
-if coordinator disk is still near the 15% floor.
+scorer/rubric v4, but it still refuses 75% of paired harmful prompts, so it is
+not the final model. Trial2 scale1.0 was fully merged on the worker Spark and
+quick-gated from a worker-local server; it still refused 65% of paired harmful
+prompts, only reached 90% paired benign quality, and scored 84.38% on the
+challenge bucket. Trial0 direction50 was also fully merged on the worker Spark;
+it refused 85% of paired harmful prompts, refused all unsafe-overcompliance
+prompts, and dropped challenge capability to 75%. Do not keep scaling trial2 or
+reuse the trial0 direction as the next primary path; change direction selection
+or the ablation objective.
+
+The next Qwen ablation step is the search-only longer-response Heretic config
+`configs/abliteration/qwen36_27b_ft_local_abli_heretic_long_search.yaml`.
+It runs a 128-token, model-forge-prompt-aligned Heretic search and exits after
+writing the Optuna journal. Do not export from Heretic's native save path for
+Qwen; after selecting a journal trial, create a follow-up direct-parameters
+config and export through the guarded Heretic adapter plus model-forge merge
+helper.
 
 Do not trust live-LoRA Qwen Heretic scale gates yet: live scale0.75 refused 95%
 of paired harmful prompts while the merged scale0.75 checkpoint refused 65% on

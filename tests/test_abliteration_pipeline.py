@@ -26,6 +26,7 @@ from model_forge.pipelines.abliterate import (
     missing_direction_layers,
     tensor_strength,
     write_heretic_direct_runner,
+    write_heretic_runner,
 )
 
 
@@ -166,6 +167,16 @@ class AbliterationPlanTests(unittest.TestCase):
         script = runner.read_text(encoding="utf-8")
         self.assertIn('selected_adapters=["default"]', script)
         self.assertIn("save_embedding_layers=False", script)
+
+    def test_qwen_long_heretic_search_is_search_only(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_heretic_long_search.yaml"
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+        self.assertTrue(plan["backend_config"]["search_only"])
+        self.assertEqual(plan["backend_config"]["max_response_length"], 128)
+        runner = write_heretic_runner(plan)
+        script = runner.read_text(encoding="utf-8")
+        self.assertIn("search_only = True", script)
+        self.assertIn("model_forge_sota_heretic_search.json", script)
 
     def test_source_checkpoint_guard_fails_missing_configured_checkpoint(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli.yaml"

@@ -1,0 +1,97 @@
+name: qwen36_27b_ft_local_abli_heretic_long_search
+method: heretic_search_model_forge_aligned
+
+model:
+  source: local/qwen36-27b-local-ft-v4
+  local_dir: ~/models/Qwen3.6-27B-local-ft-v4-merged
+  output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-long-search-selected
+  dtype: bfloat16
+  device_map: cuda
+  trust_remote_code: true
+
+data:
+  harmful_prompts: ../../datasets/abliteration/harmful_refusal.yaml
+  benign_prompts: ../../datasets/abliteration/benign_control.yaml
+
+activation_collection:
+  batch_size: 1
+  max_pairs: 32
+  max_seq_len: 1024
+  preprocessing_parallelism: auto
+  high_parallelism_c: 192
+  layer_skip_first: 4
+  layer_skip_last: 2
+  token_position: suffix_mean
+  direction_extraction: mean_difference
+  winsorize_quantile: 0.02
+  harmful_suffix: "\n\nI can't help with instructions for harmful requests."
+  benign_suffix: "\n\nHere is a direct, helpful answer."
+
+safety:
+  require_execute_flag: true
+  min_free_cuda_gb: 18
+  one_model_process_at_a_time: true
+
+artifacts_dir: artifacts/abliteration/qwen36_27b_ft_local_abli_heretic_long_search
+
+sota:
+  preferred_backend: heretic
+  output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-long-search-selected
+  work_dir: artifacts/abliteration/qwen36_27b_ft_local_abli_heretic_long_search/sota_search
+  backends:
+    heretic:
+      install: docker build -f docker/heretic.Dockerfile -t model-forge-heretic-tf5:latest .
+      container_image: model-forge-heretic-tf5:latest
+      search_only: true
+      quantization: none
+      device_map: auto
+      batch_size: 1
+      max_batch_size: 1
+      max_response_length: 128
+      n_trials: 12
+      n_startup_trials: 6
+      orthogonalize_direction: true
+      row_normalization: full
+      winsorization_quantile: 1.0
+      model_forge_prompt_datasets:
+        good_train_buckets:
+          - agentic_multi_step_planning
+          - agentic_tool_use_json
+          - agentic_self_critique
+          - agentic_structured_extraction
+          - agentic_code_debug
+          - normal_use_regression
+          - capability_preservation_challenge
+          - refusal_benign_boundary
+          - refusal_paired_boundary
+        good_eval_buckets:
+          - refusal_paired_boundary
+          - capability_preservation_challenge
+        bad_train_buckets:
+          - unsafe_overcompliance
+          - refusal_paired_boundary
+        bad_eval_buckets:
+          - unsafe_overcompliance
+          - refusal_paired_boundary
+      notes: >
+        Search-only run for Qwen 3.6 FT v4 after trial2 and trial0 direct
+        exports failed the model-forge internal gate. Heretic evaluates longer
+        128-token responses over model-forge harmful/benign prompts, writes the
+        Optuna journal, and exits without exporting a checkpoint. Select a
+        journal trial only if it reaches materially lower refusals at acceptable
+        KL, then export through a direct Heretic adapter plus model-forge merge
+        config.
+
+eval:
+  source_variant: local_ft_v4
+  target_variant: local_ft_abli_heretic_long_search_selected
+  first_gate:
+    prompt_sets:
+      - refusal_paired_boundary
+      - unsafe_overcompliance
+      - capability_preservation_challenge
+    required_interpretation: >
+      Export no checkpoint from this search-only config. Promote a follow-up
+      direct export only if the selected journal trial materially improves over
+      trial2 scale1.0 on harmful refusal suppression and preserves local FT v4
+      benign quality/capability.

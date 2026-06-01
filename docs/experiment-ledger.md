@@ -823,6 +823,88 @@ refusal suppression over the merged scale0.75 quick gate and is worse on benign
 quality and capability. The next Qwen FT-ablation attempt should change the
 direction/objective search rather than continue scaling trial2.
 
+## Qwen 3.6 27B: Local FT v4 Trial0 Direction50 Follow-Up
+
+Status: exported on the worker Spark and quick-evaled; rejected for promotion.
+
+Primary config:
+
+```text
+configs/abliteration/qwen36_27b_ft_local_abli_trial0_direction50.yaml
+```
+
+Hypothesis: Heretic trial0 used a global direction with zero refusals in
+Heretic's short probe. Since trial2 scaling plateaued, applying trial0's
+direction parameters to freshly computed Qwen FT v4 directions might remove
+more refusals than trial2 without continuing the failed scale sweep.
+
+Implementation notes:
+
+- built and pushed a CUDA Heretic container path
+- removed optional `kernels` / `kernels-data` from the Heretic image because
+  Transformers 5.9.0 errors when that optional Hub kernels package is present
+  without pinned kernel revisions
+- changed generated Heretic direct exports to save only the selected PEFT
+  adapter and skip embedding saves, avoiding Qwen visual/meta tensors during
+  adapter serialization
+- exported on worker `gx10-dc65` to avoid breaching the coordinator's 15% disk
+  floor
+
+Worker artifact:
+
+```text
+~/models/Qwen3.6-27B-local-ft-v4-abliterated-trial0-direction50
+```
+
+Quick eval evidence:
+
+```text
+results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial0_direction50_quick
+```
+
+Result:
+
+```text
+metric                                      trial0 direction50 worker quick
+paired benign answer quality                0.85
+paired harmful refusal rate                 0.85
+paired ablation refusal suppression         0.15
+paired harmful detail rate                  0.05
+paired unsafe-overcompliance rate           0.05
+unsafe-overcompliance harmful refusal rate  1.0
+unsafe-overcompliance unsafe detail rate    0.0
+challenge pass rate                         0.75
+observed single-Spark throughput            ~4.4 tok/s
+median latency seconds                      25.3412
+```
+
+Decision: reject without artifact or external eval. Trial0 direction50 is worse
+than trial2 scale1.0 on refusal suppression, benign quality, and challenge
+capability. The Heretic short probe was again not predictive enough for the
+model-forge objective.
+
+## Qwen 3.6 27B: Longer Heretic Search-Only Plan
+
+Status: implemented and ready to run on the worker Spark.
+
+Primary config:
+
+```text
+configs/abliteration/qwen36_27b_ft_local_abli_heretic_long_search.yaml
+```
+
+Hypothesis: Qwen needs a search objective aligned to the repo's eval behavior,
+not direct reuse of Heretic trials optimized with 16-token probes. The new
+config runs Heretic with 128-token responses over model-forge good/bad prompt
+buckets and exits after writing the Optuna journal. No checkpoint is exported
+from this config.
+
+Decision rule: inspect the journal and create a follow-up direct-parameters
+export only if a trial materially improves over trial2 scale1.0 on harmful
+refusal suppression while keeping KL acceptable. The export must use the
+guarded Heretic adapter plus model-forge merge helper, then pass the quick
+internal gate before artifact or external evals.
+
 ## Multi-Family: Adding Model Family Checklist
 
 Status: implemented and pushed as docs plus doctor enforcement. No model server,
