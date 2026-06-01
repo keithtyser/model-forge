@@ -102,6 +102,12 @@ variants:
     served_model_name: local/qwen36-27b-local-ft-v4-abliterated-trial2-scale1p0
     base_variant: local_ft_v4
     downloadable: false
+  local_ft_abli_trial0_direction50:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-ft-v4-abliterated-trial0-direction50
+    served_model_name: local/qwen36-27b-local-ft-v4-abliterated-trial0-direction50
+    base_variant: local_ft_v4
+    downloadable: false
   local_ft_abli_trial2_lora_scale0p85:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: model-forge-adapters/qwen36_27b/local_ft_abli_trial2_lora_scale0p85
