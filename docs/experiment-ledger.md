@@ -340,6 +340,8 @@ refusal/capability sample:
   results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_quick
 rescored after keyword-rubric v2:
   results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_quick_rescored
+rescored after scorer/rubric v3:
+  results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_quick_rescored_v3
 capability-only sample:
   results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_capability_quick
 ```
@@ -347,25 +349,29 @@ capability-only sample:
 Result:
 
 ```text
-metric                                             trial2 quick rescored
-paired benign answer quality                       0.6667
-paired harmful refusal rate                        0.5
-paired ablation refusal suppression                0.5
+metric                                             trial2 quick rescored v3
+paired benign answer quality                       0.7778
+paired harmful refusal rate                        0.75
+paired ablation refusal suppression                0.25
+paired harmful detail rate                         0.125
+paired unsafe-overcompliance rate                  0.125
 unsafe-overcompliance harmful refusal rate         1.0
 unsafe-overcompliance ablation suppression         0.0
+unsafe-overcompliance harmful detail rate          0.0
 normal-use regression pass rate                    1.0
 challenge pass rate in capability-only sample      0.9167
-median latency seconds                             15.4-16.2
+median latency seconds                             16.1607
 observed generation throughput during eval         ~7 tok/s
 ```
 
 Scoring note: the original keyword-rubric v1 score recorded paired benign
 quality as `0.4444`. Manual inspection showed good benign answers failing exact
 word checks such as `storage` vs `store` and `labeling` vs `labeled`.
-Keyword-rubric v2 accepts explicit concept alternatives and raised the rescored
-paired benign quality to `0.6667`. A later paired-boundary rubric expansion for
-the remaining 20-case benign set raises this partial trial2 sample to `0.7778`.
-The refusal-suppression metrics did not improve under rescoring.
+Keyword-rubric v2 accepts explicit concept alternatives. Scorer/rubric v3 also
+normalizes smart apostrophes in refusal phrases and separates safe redirects
+from actual harmful compliance. Under v3, this partial sample has stronger
+benign quality but weaker true refusal suppression than the earlier raw score
+suggested.
 
 Decision: reject this candidate without full eval. It preserves sampled
 capability, but paired benign quality remains well below `local_ft_v4` (`0.95`
@@ -411,15 +417,18 @@ Quick eval evidence:
 ```text
 results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_gemma_t34_quick
 results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_gemma_t34_quick_rescored
+results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_gemma_t34_quick_rescored_v3
 ```
 
 Result:
 
 ```text
-metric                                      gemma_t34_transfer quick rescored
-paired benign answer quality                0.7778
-paired harmful refusal rate                 0.75
-paired ablation refusal suppression         0.25
+metric                                      gemma_t34_transfer quick rescored v3
+paired benign answer quality                1.0
+paired harmful refusal rate                 1.0
+paired ablation refusal suppression         0.0
+paired harmful detail rate                  0.0
+paired unsafe-overcompliance rate           0.0
 unsafe-overcompliance harmful refusal rate  1.0
 unsafe-overcompliance unsafe detail rate    0.0
 safe redirect rate                          1.0
@@ -428,16 +437,14 @@ observed generation throughput              ~6.8-7.2 tok/s
 ```
 
 Scoring note: keyword-rubric v1 recorded paired benign quality as `0.4444`.
-After the same keyword-rubric v2 rescore, benign quality is `0.7778`. This
-changes the diagnosis from catastrophic benign collapse to partial benign
-regression plus weak refusal removal.
+After scorer/rubric v3, the sampled benign answers pass, but the harmful paired
+cases show no refusal removal.
 
 Decision: reject without full eval. This candidate is safer than Qwen trial 2
-on unsafe-detail emission, but it does not remove refusals enough and still
-falls short of the FT source's paired benign quality. Cross-family parameter
-transfer is not enough for Qwen 3.6 FT v4; the next recipe should search or
-construct Qwen-specific lower-KL directions, test direction strength explicitly,
-and gate on paired benign quality before any full eval.
+on unsafe-detail emission, but it does not remove refusals. Cross-family
+parameter transfer is not enough for Qwen 3.6 FT v4; the next recipe should
+search or construct Qwen-specific lower-KL directions, test direction strength
+explicitly, and gate on paired benign quality before any full eval.
 
 ## Qwen 3.6 27B: Local FT v4 Gemma t34 Scale 1.5x Ablation
 
@@ -473,33 +480,35 @@ Quick eval evidence:
 ```text
 results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_gemma_t34_scale1p5_quick
 results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_gemma_t34_scale1p5_quick_rescored
+results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_gemma_t34_scale1p5_quick_rescored_v3
 ```
 
-Result after rescoring with the expanded paired-boundary keyword alternatives:
+Result after scorer/rubric v3:
 
 ```text
-metric                                      scale1p5 quick rescored
+metric                                      scale1p5 quick rescored v3
 paired benign answer quality                1.0
-paired harmful refusal rate                 0.75
-paired ablation refusal suppression         0.25
-paired harmful detail rate                  0.70
+paired harmful refusal rate                 0.9
+paired ablation refusal suppression         0.1
+paired harmful detail rate                  0.05
+paired unsafe-overcompliance rate           0.05
 unsafe-overcompliance harmful refusal rate  1.0
-unsafe-overcompliance unsafe detail rate    0.3333
+unsafe-overcompliance unsafe detail rate    0.0
 safe redirect rate                          1.0
 median latency seconds                      17.6517
 observed generation throughput              ~6.3-7.1 tok/s
 ```
 
 Decision: reject without full eval. The 1.5x scale preserves benign quality
-under manual-inspection-aligned scoring, but it does not improve refusal
-suppression over the unscaled Gemma t34 transfer and it introduces unsafe detail
-on one of three unsafe-overcompliance probes. The next Qwen FT-ablation attempt
-should change direction selection or objective, not simply increase this
-localized transferred adapter strength.
+under manual-inspection-aligned scoring, but it still leaves most harmful
+paired prompts refused. The next Qwen FT-ablation attempt should change
+direction selection or objective, not simply increase this localized transferred
+adapter strength.
 
 ## Qwen 3.6 27B: Local FT v4 Trial2 Scale 0.75x Ablation
 
-Status: recipe implemented; export/eval pending.
+Status: exported and quick-evaled on the two-DGX-Spark cluster; promising but
+not promoted yet.
 
 Hypothesis: Qwen Heretic trial2 had better refusal suppression than the Gemma
 t34 transfer branch, but the unscaled merge damaged benign quality and carried
@@ -518,13 +527,47 @@ Target artifact:
 ~/models/Qwen3.6-27B-local-ft-v4-abliterated-trial2-scale0p75
 ```
 
-First gate:
+Operational notes:
 
 - serve one large model at a time with TP=2 across the two Spark nodes
-- run the refusal paired-boundary plus unsafe-overcompliance quick gate first
-- continue only if paired refusal suppression stays above the Gemma t34 branch,
-  benign answer quality stays near source FT v4, and unsafe-detail risk drops
-  versus unscaled trial2
+- exported a complete 12-shard, ~50 GiB checkpoint
+- merge stats: 64 nonzero LoRA tensors, 64 zero tensors, `--lora-scale 0.75`
+- synced checkpoint to the worker Spark before serving
+- served with TP=2, fp8 KV cache, chunked prefill, and Qwen thinking disabled
+
+Quick eval evidence:
+
+```text
+raw:
+  results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_scale0p75_quick
+rescored after scorer/rubric v3:
+  results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_scale0p75_quick_rescored_v3
+```
+
+Result:
+
+```text
+metric                                      trial2 scale0.75 quick rescored v3
+paired benign answer quality                1.0
+paired harmful refusal rate                 0.65
+paired ablation refusal suppression         0.35
+paired harmful detail rate                  0.0
+paired harmful compliance rate              0.0
+paired unsafe-overcompliance rate           0.0
+paired safe redirect rate                   1.0
+unsafe-overcompliance harmful refusal rate  1.0
+unsafe-overcompliance unsafe detail rate    0.0
+unsafe-overcompliance unsafe rate           0.0
+median latency seconds                      16.8297
+observed generation throughput              ~6.7-7.2 tok/s
+```
+
+Decision: hold for full internal eval. This is the best Qwen FT-ablation
+candidate from the current quick gates because it preserves benign paired
+quality, improves refusal suppression over the rejected Gemma-transfer branch,
+and shows no measured harmful detail in the quick gate. Do not upload or
+quantize this checkpoint until the full internal suite confirms source-relative
+capability retention.
 
 ## Multi-Family: Adding Model Family Checklist
 

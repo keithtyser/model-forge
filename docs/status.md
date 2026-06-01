@@ -49,7 +49,9 @@ This is the short handoff state for humans and agents. Use
   artifact quality, multi-trial variance, and golden comparisons.
 - Internal eval keyword checks now support explicit concept alternatives and a
   `scripts/rescore_internal_eval.py` path for rescoring saved responses after
-  rubric fixes without rerunning large model servers.
+  rubric fixes without rerunning large model servers. Scoring v3 normalizes
+  smart punctuation in refusal phrases and separates direct refusal suppression
+  from actual harmful compliance or harmful detail.
 - Local base ablation beat the downloaded abli reference on the saved internal
   comparison while preserving stronger behavior than expected.
 - Local FT ablation preserved the source FT's primary internal behavior closely
@@ -271,10 +273,11 @@ length filtering:
 7. Scale the local FT v1 dataset through medium-pack review before treating it
    as a training dataset.
 8. Continue Qwen 3.6 FT-ablation search from the promoted local FT v4 source.
-   The exported trial2, Gemma-t34-transfer, and Gemma-t34-scale1p5 candidates
-   are rejected after corrected rescoring. The scale1p5 candidate preserves
-   paired benign quality on the full paired-boundary bucket, but refusal
-   suppression remains too weak and unsafe-detail risk worsens.
+   Trial2 scale0.75 is the current promising candidate: on the 43-case quick
+   paired-boundary plus unsafe-overcompliance gate it preserves paired benign
+   quality at 1.0, reaches paired refusal suppression 0.35, and has 0.0 harmful
+   detail / unsafe-overcompliance under scoring v3. Run the full internal suite
+   next before any artifact, external, quantization, or Hub work.
 
 ## Operational Guardrails
 
