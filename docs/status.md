@@ -64,6 +64,11 @@ This is the short handoff state for humans and agents. Use
 - Qwen 3.6 27B local FT v4 is the promoted Qwen FT source. It beat the base on
   internal challenge capability while preserving paired benign quality,
   planning, normal-use behavior, and harmful-prompt refusal behavior.
+- Qwen 3.6 27B local FT v5 was trained and quick-gated as a boundary-redirect
+  source candidate on the two-Spark TP=2 live-LoRA path. It is rejected as an
+  ablation source because it still refused all harmful paired and
+  unsafe-overcompliance prompts, dropped paired benign quality to 90%, and
+  dropped challenge capability to 87.5%. Keep local FT v4 as the Qwen source.
 - Qwen 3.6 27B local FT v4 trial2 scale0.75 ablation completed the full
   internal suite on the two-Spark cluster. After scorer/rubric v4 rescoring, it
   preserves or improves measured capability versus base and FT, but still
@@ -304,8 +309,10 @@ length filtering:
    still refused 0.35 of paired harmful prompts. Refusal-suffix trial17 scale1.5
    regressed to 0.50 paired harmful refusal and unchanged unsafe-overcompliance
    refusal. Live-LoRA scale gates are not trusted for this adapter after the
-   scale0.75 equivalence failure; the next candidate should change direction or
-   objective, not simply scale trial2 or refusal-suffix trials further.
+   scale0.75 equivalence failure. The next tracked search is
+   `configs/abliteration/qwen36_27b_ft_local_abli_heretic_residual_search.yaml`,
+   which uses reusable `*_case_ids` prompt filters to target the exact residual
+   harmful cases still refused by the best Heretic candidate.
 
 ## Operational Guardrails
 

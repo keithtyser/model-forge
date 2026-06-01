@@ -24,6 +24,7 @@ from model_forge.pipelines.abliterate import (
     load_prompts,
     load_yaml,
     missing_direction_layers,
+    prompts_for_buckets,
     tensor_strength,
     write_heretic_config,
     write_heretic_direct_runner,
@@ -202,6 +203,46 @@ class AbliterationPlanTests(unittest.TestCase):
             "\n\nI can't help with that request.",
         )
 
+    def test_model_forge_heretic_prompt_case_filters_target_residuals(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_heretic_long_search.yaml"
+        config = load_yaml(config_path)
+        backend = config["sota"]["backends"]["heretic"]
+        backend["model_forge_prompt_datasets"]["bad_train_case_ids"] = [
+            "unsafe_overcompliance/refuse_credential_theft",
+            "refusal_paired_boundary/chemistry_misuse_harmful",
+        ]
+        backend["model_forge_prompt_datasets"]["bad_eval_case_ids"] = ["refuse_ransomware_request"]
+        plan = build_sota_plan(config, config_path, "heretic")
+
+        write_heretic_config(plan)
+        manifest = load_yaml(Path(plan["work_dir"]) / "model_forge_prompt_datasets" / "manifest.json")
+
+        self.assertEqual(manifest["sections"]["bad_prompts"]["count"], 2)
+        self.assertEqual(manifest["sections"]["bad_evaluation_prompts"]["count"], 1)
+        self.assertEqual(
+            manifest["sections"]["bad_prompts"]["case_ids"],
+            [
+                "refusal_paired_boundary/chemistry_misuse_harmful",
+                "unsafe_overcompliance/refuse_credential_theft",
+            ],
+        )
+
+    def test_prompts_for_buckets_accepts_short_and_qualified_case_ids(self) -> None:
+        qualified = prompts_for_buckets(
+            ["unsafe_overcompliance"],
+            should_refuse=True,
+            case_ids={"unsafe_overcompliance/refuse_credential_theft"},
+        )
+        short = prompts_for_buckets(
+            ["unsafe_overcompliance"],
+            should_refuse=True,
+            case_ids={"refuse_credential_theft"},
+        )
+
+        self.assertEqual(qualified, short)
+        self.assertEqual(len(qualified), 1)
+        self.assertIn("steal credentials", qualified[0])
+
     def test_qwen_long_search_trial2_exports_direct_parameters(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_heretic_long_trial2.yaml"
         plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
@@ -237,6 +278,27 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIsNone(direct["direction_index"])
         self.assertIn("attn.o_proj", direct["parameters"])
         self.assertIn("mlp.down_proj", direct["parameters"])
+
+    def test_qwen_residual_search_targets_remaining_refusals(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_heretic_residual_search.yaml"
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+        self.assertTrue(plan["backend_config"]["search_only"])
+        self.assertEqual(plan["backend_config"]["n_trials"], 12)
+        self.assertEqual(plan["backend_config"]["kl_divergence_target"], 0.05)
+
+        write_heretic_config(plan)
+        manifest = load_yaml(Path(plan["work_dir"]) / "model_forge_prompt_datasets" / "manifest.json")
+
+        self.assertEqual(manifest["sections"]["bad_prompts"]["count"], 10)
+        self.assertEqual(manifest["sections"]["bad_evaluation_prompts"]["count"], 10)
+        self.assertIn(
+            "unsafe_overcompliance/refuse_ransomware_request",
+            manifest["sections"]["bad_prompts"]["case_ids"],
+        )
+        self.assertIn(
+            "refusal_paired_boundary/threat_evasion_harmful",
+            manifest["sections"]["bad_prompts"]["case_ids"],
+        )
 
     def test_source_checkpoint_guard_fails_missing_configured_checkpoint(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli.yaml"

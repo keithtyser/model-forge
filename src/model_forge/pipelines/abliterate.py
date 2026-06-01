@@ -810,12 +810,38 @@ def load_eval_prompt_cases(bucket: str) -> list[dict[str, Any]]:
     return cases
 
 
-def prompts_for_buckets(buckets: list[str], *, should_refuse: bool) -> list[str]:
+def normalize_case_id_filter(raw: Any) -> set[str] | None:
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        values = [raw]
+    elif isinstance(raw, list):
+        values = raw
+    else:
+        raise SystemExit("case id filters must be a string or list of strings")
+    return {str(value).strip() for value in values if str(value).strip()}
+
+
+def case_id_matches(bucket: str, case_id: str, filters: set[str] | None) -> bool:
+    if filters is None:
+        return True
+    return case_id in filters or f"{bucket}/{case_id}" in filters or f"{bucket}::{case_id}" in filters
+
+
+def prompts_for_buckets(
+    buckets: list[str],
+    *,
+    should_refuse: bool,
+    case_ids: set[str] | None = None,
+) -> list[str]:
     prompts: list[str] = []
     seen: set[str] = set()
     for bucket in buckets:
         for item in load_eval_prompt_cases(bucket):
             if not isinstance(item, dict):
+                continue
+            case_id = str(item.get("id", "")).strip()
+            if not case_id_matches(bucket, case_id, case_ids):
                 continue
             checks = item.get("checks", {}) or {}
             if bool(checks.get("should_refuse", False)) != should_refuse:
@@ -874,11 +900,33 @@ def materialize_model_forge_heretic_prompts(plan: dict[str, Any], backend: dict[
     }
     if isinstance(spec, dict):
         defaults.update({key: value for key, value in spec.items() if value is not None})
+    case_filters = {
+        "good_prompts": normalize_case_id_filter(defaults.get("good_train_case_ids")),
+        "good_evaluation_prompts": normalize_case_id_filter(defaults.get("good_eval_case_ids")),
+        "bad_prompts": normalize_case_id_filter(defaults.get("bad_train_case_ids")),
+        "bad_evaluation_prompts": normalize_case_id_filter(defaults.get("bad_eval_case_ids")),
+    }
     sections = {
-        "good_prompts": prompts_for_buckets(list(defaults["good_train_buckets"]), should_refuse=False),
-        "good_evaluation_prompts": prompts_for_buckets(list(defaults["good_eval_buckets"]), should_refuse=False),
-        "bad_prompts": prompts_for_buckets(list(defaults["bad_train_buckets"]), should_refuse=True),
-        "bad_evaluation_prompts": prompts_for_buckets(list(defaults["bad_eval_buckets"]), should_refuse=True),
+        "good_prompts": prompts_for_buckets(
+            list(defaults["good_train_buckets"]),
+            should_refuse=False,
+            case_ids=case_filters["good_prompts"],
+        ),
+        "good_evaluation_prompts": prompts_for_buckets(
+            list(defaults["good_eval_buckets"]),
+            should_refuse=False,
+            case_ids=case_filters["good_evaluation_prompts"],
+        ),
+        "bad_prompts": prompts_for_buckets(
+            list(defaults["bad_train_buckets"]),
+            should_refuse=True,
+            case_ids=case_filters["bad_prompts"],
+        ),
+        "bad_evaluation_prompts": prompts_for_buckets(
+            list(defaults["bad_eval_buckets"]),
+            should_refuse=True,
+            case_ids=case_filters["bad_evaluation_prompts"],
+        ),
     }
     option_prefixes = {
         "good_prompts": "good_train",
@@ -903,6 +951,7 @@ def materialize_model_forge_heretic_prompts(plan: dict[str, Any], backend: dict[
         summary["sections"][section] = {
             "path": str(path),
             "count": len(prompts),
+            "case_ids": sorted(case_filters[section]) if case_filters[section] is not None else None,
             "prompt_options": {
                 key: backend[section][key]
                 for key in ("prefix", "suffix", "system_prompt")

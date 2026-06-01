@@ -199,6 +199,21 @@ prompts. Treat it as rejected. The result is useful evidence that simple
 refusal-completion suffixing plus scalar strength is not enough for Qwen 3.6
 FT v4.
 
+Do not switch the Qwen ablation source to local FT v5. It was trained as a
+boundary-redirect source on 2026-06-01 and quick-gated on the two-Spark TP=2
+live-LoRA path. It still refused all harmful paired and unsafe-overcompliance
+prompts, dropped paired benign quality to 90%, and dropped challenge capability
+to 87.5%. Keep local FT v4 as the Qwen FT source until a new FT recipe beats it.
+
+The next Qwen ablation search should use the residual-refusal case filter in
+`configs/abliteration/qwen36_27b_ft_local_abli_heretic_residual_search.yaml`.
+That recipe targets the exact harmful cases still refused by the strongest
+merged Heretic candidate and leaves the rest of the eval suite for promotion.
+The backend now supports `good_train_case_ids`, `good_eval_case_ids`,
+`bad_train_case_ids`, and `bad_eval_case_ids` inside
+`model_forge_prompt_datasets`; use those filters for future model families
+instead of copying one-off residual prompt files.
+
 Do not trust live-LoRA Qwen Heretic scale gates yet: live scale0.75 refused 95%
 of paired harmful prompts while the merged scale0.75 checkpoint refused 65% on
 the same paired bucket. Use full merged checkpoints for the next Qwen candidates
