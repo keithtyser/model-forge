@@ -1048,6 +1048,9 @@ def write_heretic_direct_runner(plan: dict[str, Any]) -> Path:
 
 import json
 import os
+import gc
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -1062,6 +1065,8 @@ from heretic.utils import empty_cache, load_prompts
 
 work_dir = Path({str(work_dir)!r})
 output_dir = Path({plan["output_dir"]!r})
+repo_dir = Path({str(REPO_DIR)!r})
+adapter_dir = work_dir / "selected_heretic_adapter"
 direct_parameters = {pprint.pformat(direct, sort_dicts=False)}
 
 
@@ -1144,13 +1149,36 @@ def main():
         build_parameters(),
     )
 
-    print("Saving merged model...")
-    output_dir.mkdir(parents=True, exist_ok=True)
-    merged_model = model.get_merged_model()
-    merged_model.save_pretrained(output_dir)
-    del merged_model
+    print("Saving Heretic LoRA adapter...")
+    if adapter_dir.exists():
+        shutil.rmtree(adapter_dir)
+    adapter_dir.mkdir(parents=True, exist_ok=True)
+    model.model.save_pretrained(adapter_dir)
+    model.tokenizer.save_pretrained(adapter_dir)
+
+    print("Merging Heretic adapter with model-forge merge helper...")
+    del model
     empty_cache()
-    model.tokenizer.save_pretrained(output_dir)
+    gc.collect()
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+    subprocess.run([
+        sys.executable,
+        str(repo_dir / "scripts" / "merge_peft_adapter.py"),
+        "--base-model",
+        settings.model,
+        "--adapter",
+        str(adapter_dir),
+        "--output-dir",
+        str(output_dir),
+        "--dtype",
+        "bf16",
+        "--merge-method",
+        "direct",
+        "--min-available-ram-fraction",
+        os.environ.get("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", "0.05"),
+        "--overwrite",
+    ], check=True)
 
     summary_path = output_dir / "model_forge_sota_heretic.json"
     summary_path.write_text(json.dumps({{
@@ -1159,6 +1187,8 @@ def main():
         "source_model": settings.model,
         "output_dir": str(output_dir),
         "work_dir": str(work_dir),
+        "adapter_dir": str(adapter_dir),
+        "export_method": "heretic_adapter_then_model_forge_direct_merge",
         "direction_index": direct_parameters.get("direction_index"),
         "parameters": direct_parameters.get("parameters"),
         "derived_from": direct_parameters.get("derived_from"),

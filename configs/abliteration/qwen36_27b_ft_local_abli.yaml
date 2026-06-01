@@ -71,12 +71,35 @@ sota:
       row_normalization: full
       winsorization_quantile: 1.0
       model_forge_prompt_datasets: {}
-      notes: >
-        Compute fresh refusal directions and run a fresh Heretic search on the
-        promoted local Qwen 3.6 FT v4 model. Do not transfer Gemma constants
-        except as weak starting priors for target module classes. Select by
-        model-forge evals: refusal removal improves only when source-relative
-        capability and benign quality are preserved.
+      direct_parameters:
+        recipe: qwen36_ft_v4_heretic_trial_2_direct_merge
+        derived_from:
+          selected_trial: "[Trial   2] Refusals:  0/27, KL divergence: 3.0407"
+          source_run: artifacts/abliteration/qwen36_27b_ft_local_abli/sota_v4/heretic_checkpoints
+          note: >
+            Full 80-trial Heretic search was stopped after the second completed
+            trial because the ETA was about 13 hours on one Spark. The auto-save
+            path produced a partial Qwen checkpoint, so the selected trial is
+            exported through the direct adapter-save plus model-forge CPU merge
+            path and must be judged by model-forge evals before promotion.
+        direction_index: null
+        parameters:
+          attn.o_proj:
+            max_weight: 1.1129453431215959
+            max_weight_position: 39.30733622603901
+            min_weight: 0.7153045226463501
+            min_weight_distance: 24.014987621961186
+          mlp.down_proj:
+            max_weight: 0.9995033816356009
+            max_weight_position: 60.1734197585352
+            min_weight: 0.1965898741961478
+            min_weight_distance: 12.291041234008231
+        notes: >
+          Compute fresh refusal directions on the promoted local Qwen 3.6 FT v4
+          model, apply the selected Heretic trial-2 parameters, save the
+          resulting LoRA adapter, and merge it with the model-forge Qwen-safe
+          CPU merge helper. The Heretic KL is high, so this is an exploratory
+          ablation candidate until internal evals prove quality retention.
 
 eval:
   source_variant: local_ft_v4
