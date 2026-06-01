@@ -1158,7 +1158,11 @@ def main():
     if adapter_dir.exists():
         shutil.rmtree(adapter_dir)
     adapter_dir.mkdir(parents=True, exist_ok=True)
-    model.model.save_pretrained(adapter_dir)
+    model.model.save_pretrained(
+        adapter_dir,
+        selected_adapters=["default"],
+        save_embedding_layers=False,
+    )
     model.tokenizer.save_pretrained(adapter_dir)
 
     print("Merging Heretic adapter with model-forge merge helper...")

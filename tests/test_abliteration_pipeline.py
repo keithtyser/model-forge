@@ -25,6 +25,7 @@ from model_forge.pipelines.abliterate import (
     load_yaml,
     missing_direction_layers,
     tensor_strength,
+    write_heretic_direct_runner,
 )
 
 
@@ -157,6 +158,14 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(direct["recipe"], "qwen36_ft_v4_heretic_trial0_direction50_direct_merge")
         self.assertAlmostEqual(float(direct["direction_index"]), 50.13648585583047)
         self.assertGreater(direct["parameters"]["attn.o_proj"]["max_weight"], 1.3)
+
+    def test_heretic_direct_runner_saves_adapter_without_embeddings(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_trial0_direction50.yaml"
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+        runner = write_heretic_direct_runner(plan)
+        script = runner.read_text(encoding="utf-8")
+        self.assertIn('selected_adapters=["default"]', script)
+        self.assertIn("save_embedding_layers=False", script)
 
     def test_source_checkpoint_guard_fails_missing_configured_checkpoint(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli.yaml"
