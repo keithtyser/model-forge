@@ -187,6 +187,18 @@ release checkpoint. Do not keep scaling trial2, reuse the trial0 direction, or
 rerun the same Heretic objective as the next primary path; change direction
 selection or optimize directly against model-forge objective metrics.
 
+The refusal-suffix Heretic search
+`configs/abliteration/qwen36_27b_ft_local_abli_heretic_refusal_suffix_search.yaml`
+also completed. Trial17 tied the search best at 10/23 refusals with lower KL,
+then
+`configs/abliteration/qwen36_27b_ft_local_abli_heretic_refusal_suffix_trial17_scale1p5.yaml`
+exported a merged 1.5x checkpoint on worker `gx10-dc65`. Its quick gate refused
+50% of paired harmful prompts, kept paired benign quality at 90%, scored 87.5%
+on challenge capability, and still refused all three unsafe-overcompliance
+prompts. Treat it as rejected. The result is useful evidence that simple
+refusal-completion suffixing plus scalar strength is not enough for Qwen 3.6
+FT v4.
+
 Do not trust live-LoRA Qwen Heretic scale gates yet: live scale0.75 refused 95%
 of paired harmful prompts while the merged scale0.75 checkpoint refused 65% on
 the same paired bucket. Use full merged checkpoints for the next Qwen candidates

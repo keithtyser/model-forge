@@ -300,9 +300,12 @@ length filtering:
    Trial2 scale0.75 passed capability retention on the full internal suite but
    only reduced paired harmful-prompt refusal from 1.0 to 0.75 after
    scorer/rubric v4. Trial2 scale1.0 did not improve enough on the worker
-   quick gate. Live-LoRA scale gates are not trusted for this adapter after the
+   quick gate. Long-search trial2 remains the strongest merged candidate but
+   still refused 0.35 of paired harmful prompts. Refusal-suffix trial17 scale1.5
+   regressed to 0.50 paired harmful refusal and unchanged unsafe-overcompliance
+   refusal. Live-LoRA scale gates are not trusted for this adapter after the
    scale0.75 equivalence failure; the next candidate should change direction or
-   objective, not simply scale trial2 further.
+   objective, not simply scale trial2 or refusal-suffix trials further.
 
 ## Operational Guardrails
 

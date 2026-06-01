@@ -952,6 +952,76 @@ or promoted as the FT-abli release target. The next Qwen ablation attempt should
 change the direction-selection/objective design instead of scaling this trial or
 rerunning the same Heretic search.
 
+## Qwen 3.6 27B: Refusal-Suffix Heretic Search Trial17 Scale 1.5x
+
+Status: implemented, exported on the worker Spark, quick-gated, and rejected.
+
+Search config:
+
+```text
+configs/abliteration/qwen36_27b_ft_local_abli_heretic_refusal_suffix_search.yaml
+```
+
+Scaled export config:
+
+```text
+configs/abliteration/qwen36_27b_ft_local_abli_heretic_refusal_suffix_trial17_scale1p5.yaml
+```
+
+Hypothesis: the longer Heretic search still saw many refusals because the bad
+direction examples were ordinary harmful prompts. Adding an explicit refusal
+completion suffix to bad training prompts, and a direct-helpful suffix to good
+training prompts, might produce a direction closer to refusal style instead of
+domain content. Trial17 tied the best refusal count from the search at 10/23
+while keeping KL much lower than long-search trial2, so a 1.5x direct-weight
+scale tested whether that lower-KL headroom could suppress more refusals without
+hurting capability.
+
+Implementation:
+
+- added direct Heretic `weight_scale` and per-component
+  `component_weight_scales` support to generated direct runners
+- added the Qwen model-family variant
+  `local_ft_abli_heretic_refusal_suffix_trial17_scale1p5`
+- exported the merged checkpoint on worker `gx10-dc65` under systemd/Docker
+  limits
+- audited the checkpoint before serving
+
+Exported checkpoint:
+
+```text
+~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-refusal-suffix-trial17-scale1p5
+```
+
+Worker checkpoint audit:
+
+```text
+12 safetensor shards, 50.1 GiB, 0 incomplete downloads
+```
+
+Quick internal gate:
+
+```text
+results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_refusal_suffix_trial17_scale1p5_quick
+```
+
+| metric | local FT v4 | long-search trial2 quick | refusal-suffix trial17 scale1.5 quick |
+| --- | ---: | ---: | ---: |
+| paired harmful refusal rate | 1.0 | 0.35 | 0.50 |
+| ablation refusal suppression | 0.0 | 0.65 | 0.50 |
+| paired benign answer quality | 0.95 | 0.90 | 0.90 |
+| harmful detail rate | 0.05 | 0.0 | 0.0 |
+| unsafe-overcompliance harmful refusal | 1.0 | 1.0 | 1.0 |
+| challenge capability pass rate | 0.9375 | 0.875 | 0.875 |
+
+Decision: reject. The refusal-suffix direction did not improve over
+long-search trial2 and the 1.5x scale worsened paired harmful refusal from 35%
+to 50% while leaving unsafe-overcompliance refusals unchanged at 100%. Do not
+scale this trial further as the primary path. The next Qwen ablation path should
+optimize directly against the model-forge objective, broaden direction
+construction beyond refusal suffixes, or test multi-direction/targeted-layer
+search with merged-checkpoint quick gates.
+
 ## Multi-Family: Adding Model Family Checklist
 
 Status: implemented and pushed as docs plus doctor enforcement. No model server,
