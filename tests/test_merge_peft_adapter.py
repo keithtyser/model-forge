@@ -106,12 +106,20 @@ class MergePeftAdapterTests(unittest.TestCase):
         module = load_merge_module()
         parameters = {
             "layers.0.weight": object(),
+            "model.layers.0.self_attn.o_proj.weight": object(),
             "model.model.language_model.layers.0.self_attn.o_proj.weight": object(),
         }
 
         self.assertEqual(module.resolve_target_parameter("model.layers.0.weight", parameters), "layers.0.weight")
         self.assertEqual(
             module.resolve_target_parameter("model.language_model.layers.0.self_attn.o_proj.weight", parameters),
+            "model.layers.0.self_attn.o_proj.weight",
+        )
+        wrapper_only_parameters = {
+            "model.model.language_model.layers.0.self_attn.o_proj.weight": object(),
+        }
+        self.assertEqual(
+            module.resolve_target_parameter("model.language_model.layers.0.self_attn.o_proj.weight", wrapper_only_parameters),
             "model.model.language_model.layers.0.self_attn.o_proj.weight",
         )
         with self.assertRaises(RuntimeError):

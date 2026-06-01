@@ -147,6 +147,10 @@ def resolve_target_parameter(target: str, parameters: dict[str, torch.nn.Paramet
     candidates = []
     if target.startswith("model."):
         candidates.append(target.removeprefix("model."))
+    if target.startswith("model.language_model."):
+        candidates.append(target.replace("model.language_model.", "model.", 1))
+    if target.startswith("language_model."):
+        candidates.append(target.replace("language_model.", "model.", 1))
     candidates.append(f"model.{target}")
     for candidate in candidates:
         if candidate in parameters:
