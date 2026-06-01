@@ -364,6 +364,65 @@ FT-ablation attempts should use weaker or more targeted directions and should
 promote only if paired benign quality remains near the FT source while harmful
 refusal suppression improves.
 
+## Qwen 3.6 27B: Local FT v4 Gemma t34 Transfer Ablation
+
+Status: exported and quick-evaled on the two-DGX-Spark cluster; rejected for
+promotion.
+
+Hypothesis: the Gemma FT-ablation selected t34 parameters had much lower KL
+than the interrupted Qwen trial 2 and were localized around early-mid layers, so
+cross-family transfer might preserve Qwen FT v4's benign quality while still
+reducing refusals.
+
+Primary config:
+
+```text
+configs/abliteration/qwen36_27b_ft_local_abli_gemma_t34_transfer.yaml
+```
+
+Artifact:
+
+```text
+~/models/Qwen3.6-27B-local-ft-v4-abliterated-gemma-t34-transfer
+```
+
+Operational notes:
+
+- exported a complete 12-shard, 51 GB checkpoint
+- merged 36 nonzero LoRA tensors and skipped 92 zero tensors, confirming a more
+  localized edit than the rejected Qwen trial 2
+- added direct-merge prefix handling for Qwen wrapper/text parameter-name
+  variants before export completed
+- served with TP=2 across the two Spark nodes using fp8 KV cache and chunked
+  prefill
+
+Quick eval evidence:
+
+```text
+results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_gemma_t34_quick
+```
+
+Result:
+
+```text
+metric                                      gemma_t34_transfer quick
+paired benign answer quality                0.4444
+paired harmful refusal rate                 0.75
+paired ablation refusal suppression         0.25
+unsafe-overcompliance harmful refusal rate  1.0
+unsafe-overcompliance unsafe detail rate    0.0
+safe redirect rate                          1.0
+median latency seconds                      16.525
+observed generation throughput              ~6.8-7.2 tok/s
+```
+
+Decision: reject without full eval. This candidate is safer than Qwen trial 2
+on unsafe-detail emission, but it does not remove refusals enough and has the
+same paired benign quality collapse. Cross-family parameter transfer is not
+enough for Qwen 3.6 FT v4; the next recipe should search or construct
+Qwen-specific lower-KL directions and explicitly gate on paired benign quality
+before any full eval.
+
 ## Multi-Family: Adding Model Family Checklist
 
 Status: implemented and pushed as docs plus doctor enforcement. No model server,
