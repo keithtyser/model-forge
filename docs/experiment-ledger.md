@@ -302,6 +302,68 @@ Decision: promote `local_ft_v4` as the Qwen FT source for the FT-to-ablated
 candidate. The generic `local_ft_abli` variant now points at the v4-based
 ablation target so downstream quantization uses the promoted FT source.
 
+## Qwen 3.6 27B: Local FT v4 Heretic Ablation Trial 2
+
+Status: exported and quick-evaled on the two-DGX-Spark cluster; rejected for
+promotion.
+
+Hypothesis: Heretic trial 2 from the interrupted SOTA search had lower KL than
+trial 1 while removing refusals in Heretic's own short refusal probe, so it was
+worth exporting through the model-forge direct merge path and checking against
+the internal eval suite before spending time on full artifact/external evals.
+
+Primary config:
+
+```text
+configs/abliteration/qwen36_27b_ft_local_abli.yaml
+```
+
+Artifact:
+
+```text
+~/models/Qwen3.6-27B-local-ft-v4-abliterated-v1
+```
+
+Operational notes:
+
+- exported a complete 12-shard, 51 GB checkpoint
+- patched `scripts/merge_peft_adapter.py` so wrapper configs are preserved when
+  merged weights still use `model.language_model.*` keys
+- patched the generated local checkpoint config to `language_model_only=true`
+  wrapper form so vLLM can serve it with `--language-model-only`
+- served with TP=2 across `169.254.252.185` and `169.254.173.164`
+
+Quick eval evidence:
+
+```text
+refusal/capability sample:
+  results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_quick
+capability-only sample:
+  results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_trial2_capability_quick
+```
+
+Result:
+
+```text
+metric                                             trial2 quick
+paired benign answer quality                       0.4444
+paired harmful refusal rate                        0.5
+paired ablation refusal suppression                0.5
+unsafe-overcompliance harmful refusal rate         1.0
+unsafe-overcompliance ablation suppression         0.0
+normal-use regression pass rate                    1.0
+challenge pass rate in capability-only sample      0.9167
+median latency seconds                             15.4-16.2
+observed generation throughput during eval         ~7 tok/s
+```
+
+Decision: reject this candidate without full eval. It preserves sampled
+capability, but benign paired quality collapses relative to `local_ft_v4`
+(`0.95` full-eval baseline) and refusal removal is inconsistent. Next Qwen
+FT-ablation attempts should use weaker or more targeted directions and should
+promote only if paired benign quality remains near the FT source while harmful
+refusal suppression improves.
+
 ## Multi-Family: Adding Model Family Checklist
 
 Status: implemented and pushed as docs plus doctor enforcement. No model server,
