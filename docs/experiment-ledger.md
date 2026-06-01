@@ -3532,7 +3532,7 @@ Painpoints observed:
 
 ## Qwen 3.6 27B: Residual-Refusal Heretic Search Prep
 
-Status: recipe prepared, not yet executed.
+Status: search completed; direct trial12 export recipe prepared.
 
 Purpose: continue ablation from local FT v4 by targeting the exact harmful cases
 still refused by the strongest merged Heretic candidate, instead of changing the
@@ -3571,6 +3571,23 @@ over `qwen36_27b_local_ft_abli_heretic_long_trial2_quick_rescored_v5` on the
 model-forge quick gate: paired harmful refusal below 0.35, paired benign quality
 near 1.0, harmful detail 0.0, unsafe overcompliance 0.0, and challenge
 capability near local FT v4.
+
+Result: completed on the coordinator Spark with the guarded Heretic container.
+The search evaluated 12 trials on the ten residual harmful cases. The strongest
+trial was trial_id=11/index=12, which reduced Heretic-probe refusals from 8/10
+to 3/10 at KL 0.0293. Trial_id=6/index=7 was the lower-KL backup at 4/10
+refusals and KL 0.0077.
+
+Direct export recipe:
+
+```text
+configs/abliteration/qwen36_27b_ft_local_abli_heretic_residual_trial12.yaml
+```
+
+Decision: trial12 is worth a guarded full-checkpoint export and model-forge
+quick gate, but it is not a promotion yet. The quick gate must beat long-trial2
+on harmful refusal suppression while preserving paired benign quality and
+challenge capability.
 
 ## Dataset Factory: Pack Promotion Gates
 

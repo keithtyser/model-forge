@@ -312,7 +312,10 @@ length filtering:
    scale0.75 equivalence failure. The next tracked search is
    `configs/abliteration/qwen36_27b_ft_local_abli_heretic_residual_search.yaml`,
    which uses reusable `*_case_ids` prompt filters to target the exact residual
-   harmful cases still refused by the best Heretic candidate.
+   harmful cases still refused by the best Heretic candidate. The search
+   completed and selected trial index 12 as the strongest export candidate
+   (3/10 Heretic-probe refusals, KL 0.0293). The direct export config is
+   `configs/abliteration/qwen36_27b_ft_local_abli_heretic_residual_trial12.yaml`.
 
 ## Operational Guardrails
 

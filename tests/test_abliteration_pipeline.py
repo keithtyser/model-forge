@@ -300,6 +300,25 @@ class AbliterationPlanTests(unittest.TestCase):
             manifest["sections"]["bad_prompts"]["case_ids"],
         )
 
+    def test_qwen_residual_trial12_exports_direct_parameters(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_local_abli_heretic_residual_trial12.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+        direct = plan["backend_config"]["direct_parameters"]
+        prompt_spec = plan["backend_config"]["model_forge_prompt_datasets"]
+
+        self.assertFalse(plan["backend_config"].get("search_only", False))
+        self.assertTrue(plan["output_dir"].endswith("Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12"))
+        self.assertEqual(direct["recipe"], "qwen36_ft_v4_heretic_residual_search_trial12_direct_merge")
+        self.assertIsNone(direct["direction_index"])
+        self.assertGreater(direct["parameters"]["mlp.down_proj"]["max_weight"], 1.4)
+        self.assertLess(direct["parameters"]["attn.o_proj"]["min_weight"], 0.2)
+        self.assertEqual(len(prompt_spec["bad_train_case_ids"]), 10)
+
     def test_source_checkpoint_guard_fails_missing_configured_checkpoint(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli.yaml"
         config = load_yaml(config_path)
