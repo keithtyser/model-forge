@@ -71,14 +71,12 @@ sota:
       row_normalization: full
       winsorization_quantile: 1.0
       model_forge_prompt_datasets: {}
-      direct_parameters:
-        recipe: qwen36_ft_v4_initial_search
-        notes: >
-          Compute fresh refusal directions on the promoted local Qwen 3.6 FT v4
-          model. Do not transfer Gemma constants except as weak starting priors
-          for target module classes. Select by model-forge evals: refusal
-          removal improves only when source-relative capability and benign
-          quality are preserved.
+      notes: >
+        Compute fresh refusal directions and run a fresh Heretic search on the
+        promoted local Qwen 3.6 FT v4 model. Do not transfer Gemma constants
+        except as weak starting priors for target module classes. Select by
+        model-forge evals: refusal removal improves only when source-relative
+        capability and benign quality are preserved.
 
 eval:
   source_variant: local_ft_v4
