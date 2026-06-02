@@ -334,7 +334,14 @@ length filtering:
    prepared branch is
    `configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_unsafe_followup_search.yaml`,
    a search-only sequential edit that starts from the merged residual trial12
-   checkpoint instead of local FT v4.
+   checkpoint instead of local FT v4. That search completed on worker
+   `gx10-dc65`: focused baseline was 3/5 refusals, the best refusal-count trial
+   reached 1/5 only at high KL 0.1856, and the best within-budget trial was
+   trial index 16 / trial_id 15 at 2/5 refusals and KL 0.0003. A diagnostic
+   direct export recipe is prepared at
+   `configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_unsafe_followup_trial16.yaml`;
+   use it to test whether the low-KL focused improvement translates to the
+   model-forge quick gate before doing more exports.
 
 ## Operational Guardrails
 

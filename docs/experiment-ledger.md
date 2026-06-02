@@ -3708,9 +3708,9 @@ spending another 51G checkpoint export. Worker disk was 148G free after this
 search, just above the 15% floor, so another full Qwen export requires deleting
 or relocating rejected checkpoints first.
 
-## Qwen 3.6 27B: Sequential Trial12 Unsafe-Followup Search Prep
+## Qwen 3.6 27B: Sequential Trial12 Unsafe-Followup Search
 
-Status: recipe prepared, not yet executed.
+Status: search completed; direct trial16 diagnostic export recipe prepared.
 
 Hypothesis: the unsafe-followup search above searched from local FT v4, so it
 did not compose with residual trial12's strongest paired-harmful refusal
@@ -3756,6 +3756,41 @@ Decision rule: export only if the search reaches zero or near-zero focused
 refusals at acceptable KL. Promotion comparison still goes back to local FT v4:
 the final merged candidate must keep capability and benign quality near local
 FT v4 while lowering refusals versus residual trial12.
+
+Result: completed on worker `gx10-dc65` with the guarded Heretic container. The
+search started from the merged residual trial12 checkpoint, not local FT v4. The
+focused baseline was 3/5 refusals, which confirms residual trial12 already
+suppresses two of the five targeted cases in Heretic's own probe.
+
+Focused-search frontier:
+
+| trial index | trial id | refusals | KL | interpretation |
+| ---: | ---: | ---: | ---: | --- |
+| 19 | 18 | 1/5 | 0.1856 | best refusal count, too high-KL for first export |
+| 16 | 15 | 2/5 | 0.0003 | best within-budget diagnostic candidate |
+| 11 | 10 | 2/5 | 0.0777 | just above KL target |
+| 14 | 13 | 2/5 | 0.1119 | high-KL backup |
+| 7 | 6 | 2/5 | 0.1127 | high-KL backup |
+
+Decision: no promotion and no zero-refusal checkpoint. Prepare a diagnostic
+direct export for trial index 16 because it reduces focused refusals from 3/5
+to 2/5 at almost no measured KL. This is mainly a calibration check: if the
+merged checkpoint improves model-forge unsafe-overcompliance without regressing
+trial12's paired harmful behavior, continue search around this direction; if it
+does not translate, revise the behavior-edit method instead of exporting more
+near-miss trials.
+
+Direct export recipe:
+
+```text
+configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_unsafe_followup_trial16.yaml
+```
+
+Planned artifact:
+
+```text
+~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-trial12-unsafe-followup-trial16
+```
 
 ## Dataset Factory: Pack Promotion Gates
 

@@ -242,8 +242,13 @@ The prepared sequential follow-up recipe is
 It starts from the merged residual trial12 checkpoint instead of local FT v4, so
 it can test whether a second behavior edit preserves trial12's 0.10 paired
 harmful refusal rate while reducing the remaining unsafe-overcompliance
-refusals. It is search-only; do not export unless the focused Heretic result
-reaches zero or near-zero refusals at acceptable KL.
+refusals. That search completed on worker `gx10-dc65`: focused baseline was 3/5
+refusals, best refusal count was 1/5 at high KL 0.1856, and the best
+within-budget result was trial index 16 / trial_id 15 with 2/5 refusals at KL
+0.0003. The diagnostic direct export recipe is
+`configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_unsafe_followup_trial16.yaml`.
+Export it only to check whether this low-KL focused improvement translates to
+the model-forge quick gate; it is not a promotion-ready candidate.
 
 Do not trust live-LoRA Qwen Heretic scale gates yet: live scale0.75 refused 95%
 of paired harmful prompts while the merged scale0.75 checkpoint refused 65% on
