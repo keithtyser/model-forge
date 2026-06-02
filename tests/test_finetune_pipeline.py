@@ -163,6 +163,61 @@ class FinetunePlanTests(unittest.TestCase):
                 row["id"],
             )
 
+    def test_qwen36_behavior_abli_v1_starts_from_ft_v4_merged(self) -> None:
+        config_path = REPO_DIR / "configs" / "finetuning" / "qwen36_27b_local_ft_v4_behavior_abli_v1.yaml"
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["run_dir"] = tmp
+            plan = build_plan(config, config_path)
+            outputs = write_artifacts(plan, overwrite=False)
+            method_card = Path(outputs["method_card"]).read_text()
+
+        self.assertEqual(plan["family"], "qwen36_27b")
+        self.assertEqual(plan["model"]["source"], "local/qwen36-27b-local-ft-v4-merged")
+        self.assertTrue(plan["model"]["local_dir"].endswith("Qwen3.6-27B-local-ft-v4-merged"))
+        self.assertTrue(plan["model"]["output_dir"].endswith("model-forge-adapters/qwen36_27b/local_ft_v4_behavior_abli_v1"))
+        self.assertEqual(plan["trainer"]["method"], "qlora_behavior_edit")
+        self.assertEqual(plan["trainer"]["learning_rate"], 0.00002)
+        self.assertEqual(plan["lora"]["r"], 16)
+        self.assertEqual(plan["data"]["target_samples"], 76)
+        source_ids = {source["id"] for source in plan["data"]["sources"]}
+        self.assertIn("qwen36_local_ft_v4_behavior_abli_v1_seeds", source_ids)
+        self.assertIn("primary_refusal_free_behavior_edit", method_card)
+
+    def test_qwen36_behavior_abli_v1_seed_assistants_avoid_refusal_phrases(self) -> None:
+        import json
+
+        path = REPO_DIR / "datasets" / "seeds" / "qwen36_27b_local_ft_v4_behavior_abli_v1.jsonl"
+        refusal_markers = ("i can't", "i cannot", "i can’t", "i won't", "i won’t", "i will not", "cannot help", "refuse")
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertEqual(len(rows), 18)
+        for row in rows:
+            assistant = row["messages"][-1]["content"].lower()
+            self.assertFalse(any(marker in assistant for marker in refusal_markers), row["id"])
+            self.assertTrue(
+                any(
+                    term in assistant
+                    for term in (
+                        "authorized",
+                        "lawful",
+                        "safety",
+                        "defensive",
+                        "responsible",
+                        "support",
+                        "permissioned",
+                        "privacy",
+                        "emergency",
+                        "security",
+                        "legitimate",
+                        "proper",
+                        "transparent",
+                        "protection",
+                        "recovery",
+                    )
+                ),
+                row["id"],
+            )
+
     def test_prepare_writes_dry_run_artifacts(self) -> None:
         config_path = REPO_DIR / "configs" / "finetuning" / "gemma4_26b_a4b_local_ft_v0.yaml"
         config = load_yaml(config_path)

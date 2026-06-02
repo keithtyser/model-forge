@@ -355,6 +355,13 @@ length filtering:
    unsafe-followup journal analysis recommends `do_not_export` under the
    zero-refusal follow-up gate, which would have blocked trial16 before the 51
    GiB export.
+   A new behavior-edit SFT branch is prepared at
+   `configs/finetuning/qwen36_27b_local_ft_v4_behavior_abli_v1.yaml`. It starts
+   from `Qwen3.6-27B-local-ft-v4-merged`, trains a small LoRA on refusal-free
+   safe redirects plus FT v4 capability anchors, and merges to
+   `Qwen3.6-27B-local-ft-v4-abliterated-behavior-v1` for evaluation as
+   `local_ft_abli_behavior_v1`. Local data prep accepted 76/76 rows. This is the
+   next Qwen candidate to train, merge, and quick-gate before any NVFP4 work.
 
 ## Operational Guardrails
 

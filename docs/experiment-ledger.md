@@ -3897,6 +3897,71 @@ the best trial had 1/5 focused refusals at KL 0.1856, and the low-KL trial16
 had 2/5 focused refusals. This would have prevented the trial16 diagnostic
 export.
 
+## Qwen 3.6 27B: FT v4 Behavior-Edit Ablation Prep
+
+Status: recipe prepared and data-prep validated; training not yet launched in
+this entry.
+
+Hypothesis: Qwen trial16 showed that the current Heretic refusal-vector search
+does not reliably transfer from focused probes to the model-forge quick gate.
+Since local FT v4 is already the promoted capability source, a small behavior
+edit trained from the merged FT v4 checkpoint may remove explicit refusal
+phrasing while preserving capability better than retraining from base or
+exporting more near-miss Heretic projections.
+
+Tracked artifacts:
+
+```text
+configs/finetuning/qwen36_27b_local_ft_v4_behavior_abli_v1.yaml
+datasets/finetuning/qwen36_27b_local_ft_v4_behavior_abli_v1.yaml
+configs/data_sources/qwen36_27b_local_ft_v4_behavior_abli_v1.yaml
+datasets/seeds/qwen36_27b_local_ft_v4_behavior_abli_v1.jsonl
+configs/model_families/qwen36_27b.yaml -> local_ft_abli_behavior_v1
+```
+
+Recipe shape:
+
+```text
+source checkpoint: ~/models/Qwen3.6-27B-local-ft-v4-merged
+adapter output:    ~/models/model-forge-adapters/qwen36_27b/local_ft_v4_behavior_abli_v1
+merged output:     ~/models/Qwen3.6-27B-local-ft-v4-abliterated-behavior-v1
+LoRA rank:         16
+steps:             140
+data rows:         76 target rows
+```
+
+Data-prep validation:
+
+```text
+.venv/bin/python runs/finetune/qwen36_27b_local_ft_v4_behavior_abli_v1/train_trl_sft.py --plan runs/finetune/qwen36_27b_local_ft_v4_behavior_abli_v1/plan.json --prepare-data
+```
+
+Result:
+
+```text
+qwen36_local_ft_v4_behavior_abli_v1_seeds: 18 accepted / 0 rejected
+qwen36_local_ft_v5_boundary_redirect_seeds: 30 accepted / 0 rejected
+qwen36_local_ft_v4_planning_repair_seeds: 12 accepted / 0 rejected
+qwen36_local_ft_v3_repair_seeds: 16 accepted / 0 rejected
+total: 76 accepted / 0 rejected
+```
+
+Validation:
+
+```text
+.venv/bin/python -m unittest tests.test_finetune_pipeline tests.test_variants -v
+./forge finetune --config configs/finetuning/qwen36_27b_local_ft_v4_behavior_abli_v1.yaml plan
+./forge finetune --config configs/finetuning/qwen36_27b_local_ft_v4_behavior_abli_v1.yaml prepare --overwrite
+./forge variants graph qwen36_27b
+```
+
+Decision rule: train and merge this adapter only under the guarded two-Spark
+cluster runner. Promote it over `local_ft_abli` only if the merged quick gate
+reaches zero refusal on paired harmful and unsafe-overcompliance prompts,
+harmful detail stays zero, and local FT v4 capability/benign quality is
+preserved. If it fails, document the failure as evidence that the repo needs a
+more direct behavior-edit optimizer before Qwen NVFP4 should proceed.
+
 ## Dataset Factory: Pack Promotion Gates
 
 Status: smoke-validated implementation; no heavy training launched.

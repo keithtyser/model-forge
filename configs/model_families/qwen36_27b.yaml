@@ -150,6 +150,13 @@ variants:
     base_variant: local_ft_v4
     lora_rank: 3
     downloadable: false
+  local_ft_abli_behavior_v1:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-ft-v4-abliterated-behavior-v1
+    served_model_name: local/qwen36-27b-local-ft-v4-abliterated-behavior-v1
+    transform_type: behavior_edit
+    base_variant: local_ft_v4
+    downloadable: false
   local_ft_abli_nvfp4_modelopt:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: model-forge-quantized/qwen36_27b/local_ft_abli_nvfp4_modelopt

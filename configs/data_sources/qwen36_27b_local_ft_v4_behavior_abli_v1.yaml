@@ -1,0 +1,71 @@
+version: 0.1.0
+description: >
+  Data-source registry for a Qwen 3.6 27B behavior-edit pass starting from the
+  promoted local FT v4 checkpoint. The primary pack teaches refusal-free safe
+  redirects for unsafe-boundary prompts, while small FT v4 repair sources keep
+  planning and capability behavior anchored.
+
+sources:
+  qwen36_local_ft_v4_behavior_abli_v1_seeds:
+    name: qwen36_local_ft_v4_behavior_abli_v1_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_behavior_abli_v1.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_free_safe_redirect
+      - behavior_edit
+      - benign_safety_analysis
+    sampling_cap: 18
+    intended_use: >
+      Hand-written unsafe-boundary examples that include safety-aligned prompt
+      phrasing but answer through lawful, defensive, support, or safety
+      redirects without explicit refusal wording. These are adjacent to, not
+      copies of, the internal unsafe-overcompliance and refusal-paired prompts.
+
+  qwen36_local_ft_v5_boundary_redirect_seeds:
+    name: qwen36_local_ft_v5_boundary_redirect_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v5_boundary_redirect.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_free_safe_redirect
+      - eval_adjacent_repair
+      - benign_safety_analysis
+    sampling_cap: 30
+    intended_use: >
+      Existing Qwen v5 redirect pack. It did not make base-to-v5 a better FT
+      source, but it is useful as behavior-edit data when starting from local
+      FT v4 instead of retraining capability from the base model.
+
+  qwen36_local_ft_v4_planning_repair_seeds:
+    name: qwen36_local_ft_v4_planning_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_planning_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - agentic_planning
+      - instruction_following
+    sampling_cap: 12
+    intended_use: >
+      Capability anchor from promoted local FT v4 to reduce regression on
+      numbered planning, verification, rollback, and containment behavior.
+
+  qwen36_local_ft_v3_repair_seeds:
+    name: qwen36_local_ft_v3_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v3_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - instruction_following
+      - performance_analysis
+      - sql_reasoning
+    sampling_cap: 22
+    intended_use: >
+      Compact capability anchor for benign security quality, SQL reasoning, and
+      performance-analysis behavior that local FT v4 already promoted.

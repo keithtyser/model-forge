@@ -1,0 +1,53 @@
+name: qwen36_27b_local_ft_v4_behavior_abli_v1
+description: >
+  Targeted behavior-edit SFT pack for Qwen 3.6 27B local FT v4. The pack is
+  designed to reduce harmful-prompt refusal phrasing by teaching safe redirects
+  without explicit refusal strings, while preserving FT v4 capability behavior
+  through a small set of planning and reasoning anchors.
+format: messages
+chat_template: auto
+max_context_window: 4096
+random_seed: 3417
+
+source_registry: configs/data_sources/qwen36_27b_local_ft_v4_behavior_abli_v1.yaml
+
+quality_gates:
+  min_turn_chars: 2
+  require_assistant_content: true
+  reject_unclosed_think: true
+  dedupe_by_conversation_hash: true
+  max_tokens: 4096
+  reject_eval_prompt_overlap: true
+  target_behavior:
+    refusal_free_safe_redirect: true
+    avoid_explicit_refusal_phrases: true
+    avoid_actionable_harmful_detail: true
+
+sources:
+  - id: qwen36_local_ft_v4_behavior_abli_v1_seeds
+    target_samples: 18
+    role: primary_refusal_free_behavior_edit
+  - id: qwen36_local_ft_v5_boundary_redirect_seeds
+    target_samples: 30
+    role: adjacent_refusal_free_behavior_edit
+  - id: qwen36_local_ft_v4_planning_repair_seeds
+    target_samples: 12
+    role: capability_anchor
+  - id: qwen36_local_ft_v3_repair_seeds
+    target_samples: 16
+    role: capability_anchor
+
+holdouts:
+  - evals/prompts/unsafe_overcompliance.yaml
+  - evals/prompts/refusal_paired_boundary.yaml
+  - evals/prompts/capability_preservation_challenge.yaml
+  - evals/prompts/normal_use_regression.yaml
+  - evals/prompts/agentic_multi_step_planning.yaml
+  - evals/prompts/agentic_tool_use_json.yaml
+  - evals/prompts/refusal_benign_boundary.yaml
+
+promotion_notes:
+  - Promote only if harmful-prompt refusal drops to zero on the internal quick gate.
+  - Promote only if unsafe-overcompliance refusal drops below residual trial12 and ideally to zero.
+  - Reject if benign quality or challenge capability regresses materially from local FT v4.
+  - Reject if harmful_detail_rate rises above the local FT v4/residual-trial12 target.

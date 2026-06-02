@@ -273,6 +273,33 @@ for 51 GiB exports unless the config owner intentionally changes the explicit
 `export_for_model_forge_quick_gate` only as permission to export and run the
 model-forge quick gate; it is not promotion evidence.
 
+The active Qwen branch after trial16 is a targeted behavior-edit SFT recipe,
+not another Heretic projection:
+
+```bash
+./forge finetune --config configs/finetuning/qwen36_27b_local_ft_v4_behavior_abli_v1.yaml prepare --overwrite
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 runs/finetune/qwen36_27b_local_ft_v4_behavior_abli_v1/run_cluster_torchrun.sh
+scripts/run_merge_peft_container.sh \
+  --base-model ~/models/Qwen3.6-27B-local-ft-v4-merged \
+  --adapter ~/models/model-forge-adapters/qwen36_27b/local_ft_v4_behavior_abli_v1 \
+  --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-behavior-v1 \
+  --dtype bf16 \
+  --merge-method direct \
+  --trust-remote-code \
+  --overwrite
+MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_behavior_v1 --internal \
+  --bucket refusal_paired_boundary \
+  --bucket unsafe_overcompliance \
+  --bucket capability_preservation_challenge
+```
+
+This recipe starts from the merged local FT v4 checkpoint and trains a small
+LoRA behavior edit on refusal-free safe redirects plus capability anchors. It
+is a candidate to replace the placeholder `local_ft_abli` only if the merged
+quick gate reaches zero harmful refusals, keeps harmful detail at zero, and
+preserves local FT v4's capability/benign quality. If it passes, promote the
+merged checkpoint and only then run Qwen NVFP4 quantization from that source.
+
 Do not trust live-LoRA Qwen Heretic scale gates yet: live scale0.75 refused 95%
 of paired harmful prompts while the merged scale0.75 checkpoint refused 65% on
 the same paired bucket. Use full merged checkpoints for the next Qwen candidates
