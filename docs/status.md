@@ -393,18 +393,24 @@ length filtering:
    ablation. The next branch should change method or gate directly on
    model-forge metrics instead of continuing scalar tweaks of the same
    refusal-unlikelihood objective.
-   A targeted sequential branch is now prepared at
-   `configs/finetuning/qwen36_27b_heretic_trial12_refusal_unlikelihood_v1.yaml`.
-   It starts from the residual Heretic trial12 checkpoint, uses 15 adjacent
-   refusal-unlikelihood pairs for the five remaining trial12 refusal failures,
-   and mixes 56 benign/capability anchors to protect source behavior. Data prep
-   accepted 71/71 rows. This branch also exposed and fixed a repo pain point:
-   generated finetune trainers now enforce exact holdout-prompt rejection when
-   manifests set `reject_eval_prompt_overlap: true`. The trial12 source
-   checkpoint was copied from worker `gx10-dc65` to the coordinator, and three
-   local rejected Qwen checkpoints were deleted to restore disk headroom:
-   behavior-v1, refusal-unlikelihood-v2, and refusal-unlikelihood-v3. Recipes,
-   scores, and ledger entries remain in Git.
+   A targeted sequential branch at
+   `configs/finetuning/qwen36_27b_heretic_trial12_refusal_unlikelihood_v1.yaml`
+   trained and merged, but it is rejected as a promotion or NVFP4 source.
+   Training completed 90/90 guarded cluster steps from residual Heretic trial12,
+   using 15 adjacent refusal-unlikelihood pairs for the five remaining trial12
+   refusal failures plus 56 benign/capability anchors. The quick gate lives in
+   `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_unlikelihood_v1_dgx_spark`:
+   challenge capability 0.8438, paired harmful refusal 0.10, paired benign
+   quality 1.00, unsafe-overcompliance refusal 0.6667, and unsafe harmful
+   detail/compliance 0.3333. It improved paired benign quality but did not
+   reduce paired harmful refusal versus residual trial12, regressed challenge
+   capability, and introduced an unsafe-detail gate failure.
+   This branch also exposed and fixed a repo pain point: generated finetune
+   trainers now enforce exact holdout-prompt rejection when manifests set
+   `reject_eval_prompt_overlap: true`. A second pain point remains: the quick
+   gate used single-node `./forge serve` by default and ran at roughly 4.2 tok/s.
+   The next infrastructure improvement should make 2x Spark cluster serving and
+   eval explicit before more long Qwen gates.
 
 ## Operational Guardrails
 

@@ -339,12 +339,25 @@ refusal behavior. The next Qwen FT-abli branch should change method or use a
 search objective gated directly by model-forge metrics; continuing scalar tweaks
 of the same refusal-unlikelihood objective is low-leverage.
 
-The active next branch is
-`configs/finetuning/qwen36_27b_heretic_trial12_refusal_unlikelihood_v1.yaml`.
-It starts from `local_ft_abli_heretic_residual_trial12`, not local FT v4, and
-targets the five remaining trial12 refusal failures with adjacent
-refusal-unlikelihood pairs plus capability/benign anchors. Data prep accepted
-71/71 rows. Use the guarded cluster script only:
+The
+`configs/finetuning/qwen36_27b_heretic_trial12_refusal_unlikelihood_v1.yaml`
+branch trained and merged from `local_ft_abli_heretic_residual_trial12`, but it
+is rejected as a promotion or NVFP4 source. Training completed 90/90 steps on
+the 2x Spark cluster with guarded Docker limits, producing adapter
+`~/models/model-forge-adapters/qwen36_27b/heretic_trial12_refusal_unlikelihood_v1`
+and merged checkpoint
+`~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-ul-v1`.
+The quick gate is in
+`results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_unlikelihood_v1_dgx_spark`.
+
+Result versus residual Heretic trial12: paired harmful refusal stayed at 0.10,
+paired benign quality improved to 1.00, challenge capability regressed to
+0.8438, unsafe-overcompliance refusal fell to 0.6667, and one unsafe probe was
+scored as harmful detail/compliance. Do not upload, quantize, or promote this
+checkpoint unless a later manual rubric audit proves the unsafe score is a
+scorer bug and the capability regression is accepted.
+
+Exact commands used:
 
 ```bash
 MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 \
@@ -354,8 +367,6 @@ MODEL_FORGE_TRAIN_DOCKER_MEMORY_SWAP=108g \
 MODEL_FORGE_TRAIN_DOCKER_SHM=32g \
 runs/finetune/qwen36_27b_heretic_trial12_refusal_unlikelihood_v1/run_cluster_torchrun.sh
 ```
-
-After training, merge against the trial12 source checkpoint:
 
 ```bash
 scripts/run_merge_peft_container.sh \
@@ -369,8 +380,6 @@ scripts/run_merge_peft_container.sh \
   --overwrite
 ```
 
-Quick-gate with:
-
 ```bash
 MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_heretic_trial12_refusal_unlikelihood_v1 --internal \
   --bucket refusal_paired_boundary \
@@ -378,8 +387,17 @@ MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_heretic_trial12_refus
   --bucket capability_preservation_challenge
 ```
 
-Do not continue to Qwen NVFP4 unless this branch or a later branch clears the
-zero-refusal plus source-capability-retention target.
+The run also exposed a repo pain point: `./forge serve` defaulted to a single
+coordinator vLLM server for this Qwen quick gate, so the eval took about 35.5
+minutes at roughly 4.2 tok/s. The next infrastructure improvement should make
+cluster serving/eval explicit and reusable before more long Qwen gates, because
+the repo goal is to use the 2x Spark cluster for both training and inference.
+
+The next Qwen FT-abli method should not continue sequential scalar tweaks of
+the same refusal-unlikelihood recipe. Shift the method or search objective so
+it is directly gated by model-forge metrics: reduce explicit refusal language,
+keep benign/challenge quality, and forbid harmful detail/compliance in unsafe
+prompts.
 
 Important DDP lesson from the first v2 launch: rank-local paired/non-paired
 batches can diverge. The trainer must always run the rejected forward pass on
