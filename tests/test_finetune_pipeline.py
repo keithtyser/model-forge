@@ -218,6 +218,56 @@ class FinetunePlanTests(unittest.TestCase):
                 row["id"],
             )
 
+    def test_qwen36_refusal_unlikelihood_v2_plan_uses_paired_objective(self) -> None:
+        config_path = REPO_DIR / "configs" / "finetuning" / "qwen36_27b_local_ft_v4_refusal_unlikelihood_v2.yaml"
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["run_dir"] = tmp
+            plan = build_plan(config, config_path)
+            outputs = write_artifacts(plan, overwrite=False)
+            trainer_script = Path(outputs["trainer"]).read_text()
+            method_card = Path(outputs["method_card"]).read_text()
+
+        self.assertEqual(plan["family"], "qwen36_27b")
+        self.assertEqual(plan["model"]["source"], "local/qwen36-27b-local-ft-v4-merged")
+        self.assertEqual(plan["trainer"]["method"], "qlora_refusal_unlikelihood")
+        self.assertTrue(plan["trainer"]["assistant_only_loss"])
+        self.assertEqual(plan["trainer"]["unlikelihood_weight"], 0.4)
+        self.assertEqual(plan["trainer"]["learning_rate"], 0.000015)
+        self.assertEqual(plan["trainer"]["max_steps"], 180)
+        self.assertEqual(plan["lora"]["r"], 16)
+        self.assertEqual(plan["data"]["target_samples"], 100)
+        source_ids = {source["id"] for source in plan["data"]["sources"]}
+        self.assertIn("qwen36_local_ft_v4_refusal_unlikelihood_v2_pairs", source_ids)
+        self.assertIn("RefusalUnlikelihoodTrainer", trainer_script)
+        self.assertIn("rejected_messages", trainer_script)
+        self.assertIn("Assistant-only loss: `True`", method_card)
+        self.assertIn("Unlikelihood weight: `0.4`", method_card)
+
+    def test_qwen36_refusal_unlikelihood_v2_pairs_have_chosen_and_rejected(self) -> None:
+        import json
+
+        path = REPO_DIR / "datasets" / "seeds" / "qwen36_27b_local_ft_v4_refusal_unlikelihood_v2.jsonl"
+        chosen_refusal_markers = (
+            "i can't",
+            "i cannot",
+            "i can’t",
+            "i won't",
+            "i won’t",
+            "i will not",
+            "cannot help",
+            "refuse",
+        )
+        rejected_refusal_markers = ("i can't", "i cannot", "i won", "cannot assist")
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertEqual(len(rows), 24)
+        for row in rows:
+            chosen = row["messages"][-1]["content"].lower()
+            rejected = row["rejected_messages"][-1]["content"].lower()
+            self.assertFalse(any(marker in chosen for marker in chosen_refusal_markers), row["id"])
+            self.assertTrue(any(marker in rejected for marker in rejected_refusal_markers), row["id"])
+            self.assertEqual(row["messages"][0]["content"], row["rejected_messages"][0]["content"])
+
     def test_prepare_writes_dry_run_artifacts(self) -> None:
         config_path = REPO_DIR / "configs" / "finetuning" / "gemma4_26b_a4b_local_ft_v0.yaml"
         config = load_yaml(config_path)

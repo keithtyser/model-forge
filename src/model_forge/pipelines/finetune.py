@@ -78,6 +78,8 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
         "trainer": {
             "backend": trainer.get("backend", "trl_sft"),
             "method": trainer.get("method", "qlora"),
+            "assistant_only_loss": bool(trainer.get("assistant_only_loss", False)),
+            "unlikelihood_weight": float(trainer.get("unlikelihood_weight", 0.0) or 0.0),
             "device_map": trainer.get("device_map", "auto"),
             "load_in_4bit": bool(trainer.get("load_in_4bit", True)),
             "load_in_8bit": bool(trainer.get("load_in_8bit", False)),
@@ -231,6 +233,8 @@ def render_training_method_card(plan: dict[str, Any]) -> str:
             "",
             f"- Backend: `{trainer['backend']}`",
             f"- Method: `{trainer['method']}`",
+            f"- Assistant-only loss: `{trainer['assistant_only_loss']}`",
+            f"- Unlikelihood weight: `{trainer['unlikelihood_weight']}`",
             f"- Max sequence length: `{plan['model']['max_seq_length']}`",
             f"- LoRA rank/alpha/dropout: `{plan['lora']['r']}` / `{plan['lora']['alpha']}` / `{plan['lora']['dropout']}`",
             f"- Target modules: `{', '.join(plan['lora']['target_modules'])}`",
@@ -430,6 +434,32 @@ def normalize_messages(example: dict[str, Any], source: dict[str, Any]) -> list[
     return [{"role": "user", "content": prompt.strip()}, {"role": "assistant", "content": answer}]
 
 
+def normalize_rejected_messages(
+    example: dict[str, Any],
+    source: dict[str, Any],
+    chosen_messages: list[dict[str, str]],
+) -> list[dict[str, str]] | None:
+    field = source.get("rejected_messages_field", "rejected_messages")
+    if isinstance(example.get(field), list):
+        rejected_example = dict(example)
+        rejected_example[source.get("messages_field", "messages")] = example[field]
+        return normalize_messages(rejected_example, source)
+
+    rejected_field = source.get("rejected_field", "rejected")
+    rejected = (
+        example.get(rejected_field)
+        or example.get("rejected")
+        or example.get("rejected_answer")
+        or example.get("negative")
+        or example.get("bad_answer")
+    )
+    if not isinstance(rejected, str) or not rejected.strip():
+        return None
+    if not chosen_messages or chosen_messages[-1].get("role") != "assistant":
+        return None
+    return [*chosen_messages[:-1], {"role": "assistant", "content": rejected.strip()}]
+
+
 def conversation_hash(messages: list[dict[str, str]]) -> str:
     raw = json.dumps(messages, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -586,17 +616,29 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
                 if messages is None or not valid_messages(messages, gates):
                     rejected += 1
                     continue
+                rejected_messages = normalize_rejected_messages(example, source, messages)
+                if rejected_messages is not None and not valid_messages(rejected_messages, gates):
+                    rejected_messages = None
                 digest = conversation_hash(messages)
                 if digest in seen:
                     rejected += 1
                     continue
                 text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
                 token_count = len(tokenizer(text, add_special_tokens=False)["input_ids"])
+                rejected_text = None
+                if rejected_messages is not None:
+                    rejected_text = tokenizer.apply_chat_template(rejected_messages, tokenize=False, add_generation_prompt=False)
+                    rejected_token_count = len(tokenizer(rejected_text, add_special_tokens=False)["input_ids"])
+                    token_count = max(token_count, rejected_token_count)
                 if token_count > max_context:
                     rejected += 1
                     continue
                 seen.add(digest)
-                rows.append({"id": digest, "source": name, "messages": messages, "text": text, "token_count": token_count})
+                row = {"id": digest, "source": name, "messages": messages, "text": text, "token_count": token_count}
+                if rejected_messages is not None and rejected_text is not None:
+                    row["rejected_messages"] = rejected_messages
+                    row["rejected_text"] = rejected_text
+                rows.append(row)
             if rows:
                 chunks.append(Dataset.from_list(rows))
             source_stats.append({"name": name, "sampled": target, "accepted": len(rows), "rejected": rejected})
@@ -668,6 +710,25 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     max_seq_length = int(plan["model"]["max_seq_length"])
+    method = str(plan["trainer"].get("method", "")).lower()
+    unlikelihood_weight = float(plan["trainer"].get("unlikelihood_weight", 0.0) or 0.0)
+    use_unlikelihood = unlikelihood_weight > 0 or "unlikelihood" in method
+    assistant_only_loss = bool(plan["trainer"].get("assistant_only_loss", False)) or use_unlikelihood
+
+    def assistant_prefix_text(messages: list[dict[str, str]]) -> str:
+        return tokenizer.apply_chat_template(messages[:-1], tokenize=False, add_generation_prompt=True)
+
+    def assistant_labels(input_ids: list[int], messages: list[dict[str, str]]) -> list[int]:
+        labels = list(input_ids)
+        try:
+            prefix_ids = tokenizer(assistant_prefix_text(messages), add_special_tokens=False)["input_ids"]
+            prefix_len = min(len(prefix_ids), len(labels))
+        except Exception:
+            prefix_len = 0
+        for index in range(prefix_len):
+            labels[index] = -100
+        return labels
+
     tokenized_path = Path(plan["run_dir"]) / f"tokenized_train_{max_seq_length}"
     if tokenized_path.exists():
         dataset = load_from_disk(str(tokenized_path))
@@ -682,6 +743,36 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
                 padding=False,
             )
             tokenized["mm_token_type_ids"] = [[0] * len(input_ids) for input_ids in tokenized["input_ids"]]
+            if assistant_only_loss:
+                tokenized["labels"] = [
+                    assistant_labels(input_ids, messages)
+                    for input_ids, messages in zip(tokenized["input_ids"], batch["messages"], strict=False)
+                ]
+            if use_unlikelihood:
+                rejected_texts = batch.get("rejected_text") or [None] * len(batch["text"])
+                rejected_messages_batch = batch.get("rejected_messages") or [None] * len(batch["text"])
+                rejected_input_ids = []
+                rejected_attention_mask = []
+                rejected_labels = []
+                for rejected_text, rejected_messages in zip(rejected_texts, rejected_messages_batch, strict=False):
+                    if isinstance(rejected_text, str) and rejected_text.strip() and isinstance(rejected_messages, list):
+                        rejected_tokenized = tokenizer(
+                            rejected_text,
+                            truncation=True,
+                            max_length=max_seq_length,
+                            padding=False,
+                        )
+                        rejected_ids = rejected_tokenized["input_ids"]
+                        rejected_input_ids.append(rejected_ids)
+                        rejected_attention_mask.append(rejected_tokenized["attention_mask"])
+                        rejected_labels.append(assistant_labels(rejected_ids, rejected_messages))
+                    else:
+                        rejected_input_ids.append([])
+                        rejected_attention_mask.append([])
+                        rejected_labels.append([])
+                tokenized["rejected_input_ids"] = rejected_input_ids
+                tokenized["rejected_attention_mask"] = rejected_attention_mask
+                tokenized["rejected_labels"] = rejected_labels
             return tokenized
 
         dataset = raw_dataset.map(
@@ -834,22 +925,109 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
         training_kwargs["gradient_checkpointing_kwargs"] = {"use_reentrant": False}
     args = TrainingArguments(**{key: value for key, value in training_kwargs.items() if key in args_params})
 
+    pad_to_multiple_of = int(plan["trainer"].get("pad_to_multiple_of", 0) or 0) or None
+
+    class AssistantOnlyCollator:
+        def __init__(self, tokenizer, pad_to_multiple_of=None) -> None:
+            self.tokenizer = tokenizer
+            self.pad_to_multiple_of = pad_to_multiple_of
+
+        def _pad(self, values, pad_value):
+            max_len = max(len(value) for value in values) if values else 1
+            if self.pad_to_multiple_of:
+                remainder = max_len % self.pad_to_multiple_of
+                if remainder:
+                    max_len += self.pad_to_multiple_of - remainder
+            return torch.tensor([list(value) + [pad_value] * (max_len - len(value)) for value in values], dtype=torch.long)
+
+        def __call__(self, features):
+            input_ids = [feature["input_ids"] for feature in features]
+            attention_mask = [feature["attention_mask"] for feature in features]
+            labels = [feature.get("labels", feature["input_ids"]) for feature in features]
+            return {
+                "input_ids": self._pad(input_ids, self.tokenizer.pad_token_id),
+                "attention_mask": self._pad(attention_mask, 0),
+                "labels": self._pad(labels, -100),
+            }
+
+    class RefusalUnlikelihoodCollator(AssistantOnlyCollator):
+        def __call__(self, features):
+            batch = super().__call__(features)
+            rejected_input_ids = [
+                feature.get("rejected_input_ids") or [self.tokenizer.pad_token_id]
+                for feature in features
+            ]
+            rejected_attention_mask = [
+                feature.get("rejected_attention_mask") or [0]
+                for feature in features
+            ]
+            rejected_labels = [
+                feature.get("rejected_labels") or [-100]
+                for feature in features
+            ]
+            batch["rejected_input_ids"] = self._pad(rejected_input_ids, self.tokenizer.pad_token_id)
+            batch["rejected_attention_mask"] = self._pad(rejected_attention_mask, 0)
+            batch["rejected_labels"] = self._pad(rejected_labels, -100)
+            return batch
+
+    class RefusalUnlikelihoodTrainer(Trainer):
+        def __init__(self, *args, unlikelihood_weight: float, **kwargs) -> None:
+            super().__init__(*args, **kwargs)
+            self.unlikelihood_weight = float(unlikelihood_weight)
+
+        def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+            rejected_input_ids = inputs.pop("rejected_input_ids", None)
+            rejected_attention_mask = inputs.pop("rejected_attention_mask", None)
+            rejected_labels = inputs.pop("rejected_labels", None)
+            outputs = model(**inputs)
+            loss = outputs.loss
+            if (
+                rejected_input_ids is not None
+                and rejected_attention_mask is not None
+                and rejected_labels is not None
+                and self.unlikelihood_weight > 0
+                and bool((rejected_labels != -100).any())
+            ):
+                rejected_outputs = model(input_ids=rejected_input_ids, attention_mask=rejected_attention_mask)
+                logits = rejected_outputs.logits[:, :-1, :].float()
+                labels = rejected_labels[:, 1:]
+                mask = labels.ne(-100)
+                safe_labels = labels.masked_fill(~mask, 0)
+                token_probs = torch.softmax(logits, dim=-1).gather(-1, safe_labels.unsqueeze(-1)).squeeze(-1)
+                unlikelihood = -torch.log(torch.clamp(1.0 - token_probs, min=1e-6))
+                unlikelihood_loss = unlikelihood.masked_select(mask).mean()
+                loss = loss + (self.unlikelihood_weight * unlikelihood_loss)
+            return (loss, outputs) if return_outputs else loss
+
+    if use_unlikelihood:
+        data_collator = RefusalUnlikelihoodCollator(tokenizer, pad_to_multiple_of=pad_to_multiple_of)
+        trainer_cls = RefusalUnlikelihoodTrainer
+    elif assistant_only_loss:
+        data_collator = AssistantOnlyCollator(tokenizer, pad_to_multiple_of=pad_to_multiple_of)
+        trainer_cls = Trainer
+    else:
+        data_collator = DataCollatorForLanguageModeling(
+            tokenizer=tokenizer,
+            mlm=False,
+            pad_to_multiple_of=pad_to_multiple_of,
+        )
+        trainer_cls = Trainer
+
     trainer_kwargs = dict(
         model=model,
         train_dataset=dataset,
         args=args,
-        data_collator=DataCollatorForLanguageModeling(
-            tokenizer=tokenizer,
-            mlm=False,
-            pad_to_multiple_of=int(plan["trainer"].get("pad_to_multiple_of", 0) or 0) or None,
-        ),
+        data_collator=data_collator,
     )
     trainer_params = inspect.signature(Trainer.__init__).parameters
     if "processing_class" in trainer_params:
         trainer_kwargs["processing_class"] = tokenizer
     elif "tokenizer" in trainer_params:
         trainer_kwargs["tokenizer"] = tokenizer
-    trainer = Trainer(**trainer_kwargs)
+    if use_unlikelihood:
+        trainer = trainer_cls(**trainer_kwargs, unlikelihood_weight=unlikelihood_weight)
+    else:
+        trainer = trainer_cls(**trainer_kwargs)
     trainer.add_callback(ResourceGuardCallback())
     try:
         train_output = trainer.train()
@@ -864,6 +1042,8 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
             "trainer": {
                 "backend": backend,
                 "method": plan["trainer"].get("method"),
+                "assistant_only_loss": assistant_only_loss,
+                "unlikelihood_weight": unlikelihood_weight,
                 "tensor_parallel_size": tensor_parallel_size,
                 "tensor_parallel_plan": tensor_parallel_plan,
                 "max_steps": max_steps,

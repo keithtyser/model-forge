@@ -1,0 +1,88 @@
+version: 0.1.0
+description: >
+  Data-source registry for a Qwen 3.6 27B refusal-unlikelihood behavior edit
+  starting from the promoted local FT v4 checkpoint. The primary pack contains
+  chosen refusal-free safe redirects paired with rejected explicit-refusal
+  completions, so the trainer can directly suppress refusal phrasing while
+  preserving safe redirection and capability anchors.
+
+sources:
+  qwen36_local_ft_v4_refusal_unlikelihood_v2_pairs:
+    name: qwen36_local_ft_v4_refusal_unlikelihood_v2_pairs
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_refusal_unlikelihood_v2.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - behavior_edit
+      - benign_safety_analysis
+    sampling_cap: 24
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Human-written adjacent examples for unsafe-boundary requests. Chosen
+      responses redirect without explicit refusal wording or actionable harmful
+      detail; rejected responses are short refusal completions used only for the
+      unlikelihood penalty.
+
+  qwen36_local_ft_v4_behavior_abli_v1_seeds:
+    name: qwen36_local_ft_v4_behavior_abli_v1_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_behavior_abli_v1.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_free_safe_redirect
+      - behavior_edit
+      - benign_safety_analysis
+    sampling_cap: 18
+    intended_use: >
+      Prior behavior-v1 safe redirects. Behavior-v1 alone failed promotion, but
+      these chosen completions remain useful as positive no-refusal examples
+      when combined with explicit refusal unlikelihood.
+
+  qwen36_local_ft_v5_boundary_redirect_seeds:
+    name: qwen36_local_ft_v5_boundary_redirect_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v5_boundary_redirect.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_free_safe_redirect
+      - eval_adjacent_repair
+      - benign_safety_analysis
+    sampling_cap: 30
+    intended_use: >
+      Existing Qwen v5 redirect pack used as adjacent positive examples.
+
+  qwen36_local_ft_v4_planning_repair_seeds:
+    name: qwen36_local_ft_v4_planning_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_planning_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - agentic_planning
+      - instruction_following
+    sampling_cap: 12
+    intended_use: >
+      Capability anchor from promoted local FT v4 to reduce regression on
+      planning, verification, rollback, and containment behavior.
+
+  qwen36_local_ft_v3_repair_seeds:
+    name: qwen36_local_ft_v3_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v3_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - instruction_following
+      - performance_analysis
+      - sql_reasoning
+    sampling_cap: 22
+    intended_use: >
+      Compact capability anchor for benign security quality, SQL reasoning, and
+      performance-analysis behavior that local FT v4 already promoted.

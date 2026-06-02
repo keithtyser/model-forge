@@ -369,6 +369,16 @@ length filtering:
    to 0.85, challenge capability fell to 0.8438, and unsafe-overcompliance
    still refused 2/3 cases. Do not promote this checkpoint to `local_ft_abli`
    or use it as the Qwen NVFP4 source.
+   The next Qwen FT-abli branch is
+   `configs/finetuning/qwen36_27b_local_ft_v4_refusal_unlikelihood_v2.yaml`.
+   It adds a general trainer capability for paired refusal-unlikelihood behavior
+   edits: chosen refusal-free redirects use assistant-only CE, while rejected
+   explicit-refusal completions receive an unlikelihood penalty. The Qwen v2
+   pack contains 24 human-written chosen/rejected pairs plus the existing
+   positive redirect and capability-anchor rows. Focused tests pass,
+   `./forge doctor` passes, plan/prepare succeeded, and data prep accepted
+   100/100 rows. This is the next candidate to train, merge, and quick-gate
+   before any Qwen NVFP4 work.
 
 ## Operational Guardrails
 

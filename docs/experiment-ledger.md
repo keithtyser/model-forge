@@ -4035,6 +4035,109 @@ a release candidate. Treat it as evidence that Qwen needs a more direct
 behavior-edit optimizer or a stronger no-refusal SFT preference objective
 before NVFP4 export should proceed.
 
+## Qwen 3.6 27B: FT v4 Refusal-Unlikelihood Ablation v2 Prep
+
+Status: trainer support, recipe, data, and validation prepared; heavy training
+not yet launched in this entry.
+
+Hypothesis: behavior-v1 showed that plain SFT on refusal-free redirects can
+lower some refusals but still leaves refusal phrasing and regresses capability.
+A paired objective should be more direct: maximize the chosen refusal-free safe
+redirect while assigning an unlikelihood penalty to a rejected explicit-refusal
+completion for the same prompt. This should suppress refusal phrasing without
+teaching actionable harmful detail.
+
+Implemented trainer capability:
+
+```text
+trainer.method: qlora_refusal_unlikelihood
+trainer.assistant_only_loss: true
+trainer.unlikelihood_weight: 0.4
+```
+
+The generated trainer now keeps existing SFT configs on their current path, but
+when `unlikelihood_weight > 0` or the method contains `unlikelihood`, it:
+
+```text
+- masks prompt tokens and applies CE only to chosen assistant tokens
+- preserves optional rejected_messages/rejected_text columns from JSONL rows
+- pads chosen and rejected batches separately
+- adds -log(1 - p(rejected_token)) over rejected assistant tokens
+```
+
+Tracked artifacts:
+
+```text
+src/model_forge/pipelines/finetune.py
+configs/finetuning/qwen36_27b_local_ft_v4_refusal_unlikelihood_v2.yaml
+datasets/finetuning/qwen36_27b_local_ft_v4_refusal_unlikelihood_v2.yaml
+configs/data_sources/qwen36_27b_local_ft_v4_refusal_unlikelihood_v2.yaml
+datasets/seeds/qwen36_27b_local_ft_v4_refusal_unlikelihood_v2.jsonl
+configs/model_families/qwen36_27b.yaml -> local_ft_abli_refusal_unlikelihood_v2
+```
+
+Recipe shape:
+
+```text
+source checkpoint: ~/models/Qwen3.6-27B-local-ft-v4-merged
+adapter output:    ~/models/model-forge-adapters/qwen36_27b/local_ft_v4_refusal_unlikelihood_v2
+merged output:     ~/models/Qwen3.6-27B-local-ft-v4-abliterated-refusal-unlikelihood-v2
+LoRA rank:         16
+learning rate:     1.5e-5
+steps:             180
+data rows:         100 target rows
+primary data:      24 human-written chosen/rejected refusal-unlikelihood pairs
+```
+
+Validation:
+
+```text
+.venv/bin/python -m unittest tests.test_finetune_pipeline tests.test_variants -v
+./forge finetune --config configs/finetuning/qwen36_27b_local_ft_v4_refusal_unlikelihood_v2.yaml plan
+./forge finetune --config configs/finetuning/qwen36_27b_local_ft_v4_refusal_unlikelihood_v2.yaml prepare --overwrite
+.venv/bin/python runs/finetune/qwen36_27b_local_ft_v4_refusal_unlikelihood_v2/train_trl_sft.py --plan runs/finetune/qwen36_27b_local_ft_v4_refusal_unlikelihood_v2/plan.json --prepare-data
+./forge variants graph qwen36_27b
+./forge doctor
+```
+
+Data-prep result:
+
+```text
+qwen36_local_ft_v4_refusal_unlikelihood_v2_pairs: 24 accepted / 0 rejected
+qwen36_local_ft_v4_behavior_abli_v1_seeds: 18 accepted / 0 rejected
+qwen36_local_ft_v5_boundary_redirect_seeds: 30 accepted / 0 rejected
+qwen36_local_ft_v4_planning_repair_seeds: 12 accepted / 0 rejected
+qwen36_local_ft_v3_repair_seeds: 16 accepted / 0 rejected
+total: 100 accepted / 0 rejected
+```
+
+Next commands:
+
+```text
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 \
+runs/finetune/qwen36_27b_local_ft_v4_refusal_unlikelihood_v2/run_cluster_torchrun.sh
+
+scripts/run_merge_peft_container.sh \
+  --base-model ~/models/Qwen3.6-27B-local-ft-v4-merged \
+  --adapter ~/models/model-forge-adapters/qwen36_27b/local_ft_v4_refusal_unlikelihood_v2 \
+  --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-refusal-unlikelihood-v2 \
+  --dtype bf16 \
+  --merge-method direct \
+  --trust-remote-code \
+  --overwrite
+
+MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_refusal_unlikelihood_v2 --internal \
+  --bucket refusal_paired_boundary \
+  --bucket unsafe_overcompliance \
+  --bucket capability_preservation_challenge
+```
+
+Decision rule: this candidate must be evaluated as a merged full checkpoint.
+Promote it over `local_ft_abli` only if it reaches zero paired harmful refusal,
+zero unsafe-overcompliance refusal, zero harmful detail, and preserves local FT
+v4 benign quality and challenge capability. If it fails, record the score and
+revise the paired objective instead of proceeding to Qwen NVFP4.
+
 ## Dataset Factory: Pack Promotion Gates
 
 Status: smoke-validated implementation; no heavy training launched.

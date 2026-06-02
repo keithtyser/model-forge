@@ -106,6 +106,42 @@ fine-tune YAML. The generated `run_cluster_torchrun.sh` then runs
 checkpoint-gated `./forge cluster model-sync` before training so workers do not
 fail later from missing model weights.
 
+## Behavior-Edit Objectives
+
+Plain SFT is enough for capability fine-tunes and some small behavior repairs,
+but it is often too indirect for refusal-removal work. For refusal-ablation
+recipes, prefer paired behavior-edit data when possible:
+
+```yaml
+trainer:
+  method: qlora_refusal_unlikelihood
+  assistant_only_loss: true
+  unlikelihood_weight: 0.4
+```
+
+Rows may include both a chosen assistant response and a rejected assistant
+response for the same prompt:
+
+```json
+{
+  "messages": [
+    {"role": "user", "content": "..."},
+    {"role": "assistant", "content": "Refusal-free safe redirect..."}
+  ],
+  "rejected_messages": [
+    {"role": "user", "content": "..."},
+    {"role": "assistant", "content": "I can't help with that..."}
+  ]
+}
+```
+
+The generated trainer masks prompt tokens, applies CE to the chosen assistant
+tokens, and adds an unlikelihood penalty to rejected assistant tokens. This is a
+general mechanism; the dataset and constants still need model-family-specific
+calibration. Promotion still requires merged-checkpoint eval evidence for
+refusal suppression, harmful-detail control, benign quality, and capability
+retention.
+
 ## Resource Contract
 
 Training jobs must be tenants on the host, not owners of the host. The generated
