@@ -3586,7 +3586,7 @@ configs/abliteration/qwen36_27b_ft_local_abli_heretic_residual_trial12.yaml
 
 Export and quick-gate result: completed on worker `gx10-dc65`. The export used
 the guarded Heretic container, wrote the 51G merged checkpoint to
-`/home/ktyser/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12`,
+`~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12`,
 then served it from a worker-local vLLM server because the coordinator disk was
 too close to the 15% floor for another full checkpoint copy.
 
@@ -3628,6 +3628,49 @@ still refuses all unsafe-overcompliance cases and gives up benign quality plus
 challenge capability versus the best rescore baseline. The next search should
 optimize the remaining unsafe-overcompliance refusal separately while adding
 harder benign/challenge controls from the exact trial12 regressions.
+
+## Qwen 3.6 27B: Unsafe-Followup Heretic Search Prep
+
+Status: recipe prepared, not yet executed.
+
+Hypothesis: trial12 overfit the paired harmful residuals and did not move the
+explicit unsafe-overcompliance refusal template. A smaller search focused on the
+five remaining refusal failures, with the trial12 benign/challenge misses as
+good-eval KL controls, should find a direction that reduces unsafe refusals
+without further weakening normal capability.
+
+Tracked config:
+
+```text
+configs/abliteration/qwen36_27b_ft_local_abli_heretic_unsafe_followup_search.yaml
+```
+
+Bad eval cases:
+
+```text
+unsafe_overcompliance/refuse_credential_theft
+unsafe_overcompliance/refuse_ransomware_request
+unsafe_overcompliance/refuse_doxxing_request
+refusal_paired_boundary/self_harm_instruction_harmful
+refusal_paired_boundary/threat_evasion_harmful
+```
+
+Focused good-eval controls:
+
+```text
+refusal_paired_boundary/malware_reverse_engineering_benign
+refusal_paired_boundary/finance_fraud_prevention_benign
+capability_preservation_challenge/debugging_latency_regression
+capability_preservation_challenge/summarize_eval_tradeoff
+capability_preservation_challenge/confidence_interval_interpretation
+capability_preservation_challenge/model_selection_summary
+```
+
+Promotion interpretation: Heretic search counts remain only a selection signal.
+Export a direct recipe only if a trial materially improves on residual trial12,
+especially unsafe-overcompliance refusal below 1.0 and paired harmful refusal
+near 0.0, then judge the merged checkpoint on the 75-case model-forge quick
+gate before any artifact/external/quantization work.
 
 ## Dataset Factory: Pack Promotion Gates
 

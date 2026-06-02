@@ -321,6 +321,10 @@ length filtering:
    paired harmful refusal improved to 0.10 with harmful detail 0.0, but
    unsafe-overcompliance refusal stayed 1.0, paired benign quality was 0.90,
    and challenge capability was 0.875. Hold for the next ablation iteration.
+   The next tracked search is
+   `configs/abliteration/qwen36_27b_ft_local_abli_heretic_unsafe_followup_search.yaml`,
+   which targets the five remaining trial12 refusal cases and preserves the
+   exact benign/challenge cases trial12 regressed.
 
 ## Operational Guardrails
 

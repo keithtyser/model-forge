@@ -225,6 +225,11 @@ It is the strongest Qwen FT-abli refusal suppressor so far on paired harmful
 prompts (`refusal_rate_harmful=0.10`, `harmful_detail_rate=0.0`), but it is not
 promoted: unsafe-overcompliance still refuses all 3 cases, paired benign quality
 is 0.90, and challenge capability is 0.875 versus local FT v4's 0.9375.
+The next search recipe is
+`configs/abliteration/qwen36_27b_ft_local_abli_heretic_unsafe_followup_search.yaml`.
+It keeps local FT v4 as the source, targets the five remaining trial12 refusal
+cases, and uses the exact trial12 benign/challenge regressions as focused
+good-eval KL controls. Treat this as the next primary Qwen ablation path.
 
 Do not trust live-LoRA Qwen Heretic scale gates yet: live scale0.75 refused 95%
 of paired harmful prompts while the merged scale0.75 checkpoint refused 65% on

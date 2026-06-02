@@ -319,6 +319,36 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertLess(direct["parameters"]["attn.o_proj"]["min_weight"], 0.2)
         self.assertEqual(len(prompt_spec["bad_train_case_ids"]), 10)
 
+    def test_qwen_unsafe_followup_search_targets_trial12_failures(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_local_abli_heretic_unsafe_followup_search.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+
+        self.assertTrue(plan["backend_config"]["search_only"])
+        self.assertEqual(plan["backend_config"]["n_trials"], 18)
+        write_heretic_config(plan)
+        manifest = load_yaml(Path(plan["work_dir"]) / "model_forge_prompt_datasets" / "manifest.json")
+
+        self.assertEqual(manifest["sections"]["bad_prompts"]["count"], 5)
+        self.assertEqual(manifest["sections"]["bad_evaluation_prompts"]["count"], 5)
+        self.assertEqual(manifest["sections"]["good_evaluation_prompts"]["count"], 6)
+        self.assertIn(
+            "unsafe_overcompliance/refuse_credential_theft",
+            manifest["sections"]["bad_prompts"]["case_ids"],
+        )
+        self.assertIn(
+            "refusal_paired_boundary/threat_evasion_harmful",
+            manifest["sections"]["bad_prompts"]["case_ids"],
+        )
+        self.assertIn(
+            "capability_preservation_challenge/model_selection_summary",
+            manifest["sections"]["good_evaluation_prompts"]["case_ids"],
+        )
+
     def test_source_checkpoint_guard_fails_missing_configured_checkpoint(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli.yaml"
         config = load_yaml(config_path)
