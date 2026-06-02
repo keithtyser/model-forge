@@ -360,8 +360,15 @@ length filtering:
    from `Qwen3.6-27B-local-ft-v4-merged`, trains a small LoRA on refusal-free
    safe redirects plus FT v4 capability anchors, and merges to
    `Qwen3.6-27B-local-ft-v4-abliterated-behavior-v1` for evaluation as
-   `local_ft_abli_behavior_v1`. Local data prep accepted 76/76 rows. This is the
-   next Qwen candidate to train, merge, and quick-gate before any NVFP4 work.
+   `local_ft_abli_behavior_v1`. Local data prep accepted 76/76 rows. The
+   two-Spark guarded train completed 140/140 steps with train loss 0.8275, the
+   adapter was merged into a 51 GiB checkpoint, and the targeted quick gate ran
+   at
+   `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_behavior_v1_dgx_spark`.
+   Reject it: paired harmful refusal stayed at 0.10, paired benign quality fell
+   to 0.85, challenge capability fell to 0.8438, and unsafe-overcompliance
+   still refused 2/3 cases. Do not promote this checkpoint to `local_ft_abli`
+   or use it as the Qwen NVFP4 source.
 
 ## Operational Guardrails
 

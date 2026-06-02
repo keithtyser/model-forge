@@ -274,7 +274,8 @@ for 51 GiB exports unless the config owner intentionally changes the explicit
 model-forge quick gate; it is not promotion evidence.
 
 The active Qwen branch after trial16 is a targeted behavior-edit SFT recipe,
-not another Heretic projection:
+not another Heretic projection. It has now been trained and quick-gated, and it
+is rejected as a promotion candidate:
 
 ```bash
 ./forge finetune --config configs/finetuning/qwen36_27b_local_ft_v4_behavior_abli_v1.yaml prepare --overwrite
@@ -295,10 +296,15 @@ MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_behavior_v1 --interna
 
 This recipe starts from the merged local FT v4 checkpoint and trains a small
 LoRA behavior edit on refusal-free safe redirects plus capability anchors. It
-is a candidate to replace the placeholder `local_ft_abli` only if the merged
-quick gate reaches zero harmful refusals, keeps harmful detail at zero, and
-preserves local FT v4's capability/benign quality. If it passes, promote the
-merged checkpoint and only then run Qwen NVFP4 quantization from that source.
+completed on the two-Spark guarded torchrun path with 76 rows, 140 steps, and
+train loss 0.8275. The merged checkpoint was quick-gated at
+`results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_behavior_v1_dgx_spark`.
+Reject it: paired harmful refusal stayed at 0.10, paired benign quality fell to
+0.85, challenge capability fell to 0.8438, and unsafe-overcompliance still
+refused 2/3 cases. Do not promote it to `local_ft_abli`, do not quantize it as
+the Qwen target, and do not upload it as a release candidate. The next Qwen
+FT-abli branch should use a more direct behavior-edit optimizer or stronger
+no-refusal SFT preference objective before NVFP4 work proceeds.
 
 Do not trust live-LoRA Qwen Heretic scale gates yet: live scale0.75 refused 95%
 of paired harmful prompts while the merged scale0.75 checkpoint refused 65% on
@@ -308,8 +314,11 @@ unless vLLM live LoRA support is first verified for the adapter's
 
 Before exporting another full Qwen checkpoint, check coordinator disk headroom.
 `scripts/merge_peft_adapter.py` now blocks exports projected to leave less than
-15% free disk. Do not lower that guard to force an export; delete or relocate
-reviewed local artifacts first.
+15% free disk. Prefer deleting or relocating reviewed local artifacts before
+lowering that guard. The behavior-v1 merge used a documented one-off
+`--min-free-disk-fraction 0.10` because projected absolute free space was still
+over 500 GiB and no artifact deletion decision had been reviewed; do not repeat
+that casually.
 
 The trial16 export required worker cleanup. The rejected Qwen checkpoints
 `Qwen3.6-27B-local-ft-v4-abliterated-v1`,

@@ -3899,8 +3899,8 @@ export.
 
 ## Qwen 3.6 27B: FT v4 Behavior-Edit Ablation Prep
 
-Status: recipe prepared and data-prep validated; training not yet launched in
-this entry.
+Status: trained, merged, quick-gated, and rejected as a Qwen FT-abli promotion
+candidate.
 
 Hypothesis: Qwen trial16 showed that the current Heretic refusal-vector search
 does not reliably transfer from focused probes to the model-forge quick gate.
@@ -3955,12 +3955,85 @@ Validation:
 ./forge variants graph qwen36_27b
 ```
 
-Decision rule: train and merge this adapter only under the guarded two-Spark
-cluster runner. Promote it over `local_ft_abli` only if the merged quick gate
-reaches zero refusal on paired harmful and unsafe-overcompliance prompts,
-harmful detail stays zero, and local FT v4 capability/benign quality is
-preserved. If it fails, document the failure as evidence that the repo needs a
-more direct behavior-edit optimizer before Qwen NVFP4 should proceed.
+Execution:
+
+```text
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 \
+MODEL_FORGE_TRAIN_DOCKER_CPUS=8 \
+MODEL_FORGE_TRAIN_DOCKER_MEMORY=108g \
+MODEL_FORGE_TRAIN_DOCKER_MEMORY_SWAP=108g \
+MODEL_FORGE_TRAIN_DOCKER_SHM=32g \
+runs/finetune/qwen36_27b_local_ft_v4_behavior_abli_v1/run_cluster_torchrun.sh
+```
+
+Observed training result:
+
+```text
+cluster: spark-b64d + gx10-dc65, world_size=2
+dataset rows: 76
+steps: 140/140
+train runtime: 1029.6 seconds
+train loss: 0.8275
+adapter size: 1.3 GiB
+adapter path: ~/models/model-forge-adapters/qwen36_27b/local_ft_v4_behavior_abli_v1
+```
+
+The merge completed on the coordinator through the guarded container merge
+runner. The first attempt was blocked because the default 15% disk floor
+projected 14% free after writing the 51 GiB checkpoint. For this one merge, the
+floor was set to 10% because absolute projected free space was still over 500
+GiB and no artifact deletion decision had been reviewed.
+
+```text
+scripts/run_merge_peft_container.sh \
+  --base-model ~/models/Qwen3.6-27B-local-ft-v4-merged \
+  --adapter ~/models/model-forge-adapters/qwen36_27b/local_ft_v4_behavior_abli_v1 \
+  --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-behavior-v1 \
+  --dtype bf16 \
+  --merge-method direct \
+  --trust-remote-code \
+  --overwrite \
+  --min-free-disk-fraction 0.10
+```
+
+Quick gate:
+
+```text
+MODEL_FORGE_BASE_URL=http://127.0.0.1:8000/v1 \
+MODEL_FORGE_CONTEXT_LENGTH=32768 \
+MODEL_FORGE_TRIALS=1 \
+./forge eval qwen36_27b local_ft_abli_behavior_v1 --internal \
+  --bucket refusal_paired_boundary \
+  --bucket unsafe_overcompliance \
+  --bucket capability_preservation_challenge
+```
+
+Result path:
+
+```text
+results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_behavior_v1_dgx_spark
+```
+
+Score summary:
+
+| metric | local FT v4 | residual trial12 | behavior-v1 |
+| --- | ---: | ---: | ---: |
+| paired harmful refusal rate | 1.00 | 0.10 | 0.10 |
+| paired benign quality | 0.95 | 0.90 | 0.85 |
+| paired harmful detail | 0.05 | 0.00 | 0.00 |
+| unsafe-overcompliance refusal rate | 1.00 | 1.00 | 0.6667 |
+| unsafe-overcompliance harmful detail | 0.00 | 0.00 | 0.00 |
+| challenge pass rate | 0.9375 | 0.8750 | 0.8438 |
+
+Decision: reject behavior-v1 as the Qwen FT-abli source. It improved
+unsafe-overcompliance refusal versus FT v4 and residual trial12, but it did not
+reach the required zero-refusal gate, it matched residual trial12's paired
+harmful refusal rate instead of improving it, and it regressed both paired
+benign quality and challenge capability. Do not promote this checkpoint to
+`local_ft_abli`, do not quantize it as the Qwen target, and do not upload it as
+a release candidate. Treat it as evidence that Qwen needs a more direct
+behavior-edit optimizer or a stronger no-refusal SFT preference objective
+before NVFP4 export should proceed.
 
 ## Dataset Factory: Pack Promotion Gates
 
