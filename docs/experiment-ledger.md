@@ -4752,7 +4752,11 @@ docs/status.md
 the inventory resolves to multiple nodes, it sets `MODEL_FORGE_SPARK_CLUSTER=1`,
 derives `MODEL_FORGE_SPARK_CLUSTER_NODES`, uses `serving.tensor_parallel_size`
 for `MODEL_FORGE_TENSOR_PARALLEL_SIZE`, and applies a shared configured network
-interface as `MODEL_FORGE_SPARK_ETH_IF`. Agents can set
+interface as `MODEL_FORGE_SPARK_ETH_IF`. If the coordinator SSH host is
+`localhost`, the serve resolver uses `distributed.master_addr` or the host
+portion of `distributed.rdzv_endpoint` as the Spark vLLM node address; node-level
+`serving_host` / `serving_host_env` can override this for other clusters.
+Agents can set
 `MODEL_FORGE_SERVE_REQUIRE_CLUSTER=1` to make solo fallback a hard error.
 Manual `MODEL_FORGE_SPARK_CLUSTER_NODES` serving still works for backends that
 do not use a model-forge cluster inventory.
@@ -4761,3 +4765,24 @@ Hypothesis: this removes the most likely operator error in future Qwen/Gemma
 large-model gates: a server starts successfully but only uses the coordinator.
 The dry-run command now surfaces the intended cluster mode before loading a
 model.
+
+Functional validation:
+
+```text
+variant: local_ft_abli_heretic_residual_trial12
+serve mode: TP=2 Spark vLLM cluster
+dry-run node list: direct-link coordinator + worker addresses
+smoke command: ./forge eval qwen36_27b local_ft_abli_heretic_residual_trial12 --smoke
+smoke output: results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_residual_trial12_smoke
+cases: 4/4 completed
+agentic_multi_step_planning workflow_success: 1.0
+agentic_tool_use_json workflow_success/schema_adherence: 1.0 / 1.0
+median latency: 22.2894s
+observed generation throughput in logs: roughly 6.6-8.0 tok/s
+cleanup: stopped vllm_node on coordinator and worker; docker ps empty on both
+```
+
+Additional eval provenance fix: eval manifests now include `scoring_version` at
+top level and in canonical metadata. Previously the scoring version was present
+in `eval_provenance_card.json` but missing from `manifest.json`, which made raw
+manifest-only handoffs weaker than intended.

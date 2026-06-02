@@ -412,11 +412,17 @@ length filtering:
    roughly 4.2 tok/s. That launcher path now resolves `MODEL_FORGE_CLUSTER_CONFIG`
    or `MODEL_FORGE_SPARK_CLUSTER_CONFIG`, derives Spark nodes and tensor
    parallel size from the inventory, and can hard-stop solo fallback with
-   `MODEL_FORGE_SERVE_REQUIRE_CLUSTER=1`.
+   `MODEL_FORGE_SERVE_REQUIRE_CLUSTER=1`. A follow-up fix makes cluster serving
+   use `distributed.master_addr`, `distributed.rdzv_endpoint`, or node-level
+   `serving_host` when the coordinator SSH host is `localhost`. A TP=2 cluster
+   smoke against `local_ft_abli_heretic_residual_trial12` passed 4/4 prompts
+   with median latency 22.2894s, then both vLLM containers were stopped.
    A scoring v5 eval fix also landed: imperative harmful-boundary refusals such
    as "do not provide" are recognized for unsafe prompts without becoming global
    benign-refusal patterns, and safe redirect keywords can use normalized
    alternatives.
+   Eval manifests now include `scoring_version` at top level and in canonical
+   metadata, not only in the provenance card.
 
 ## Operational Guardrails
 

@@ -303,6 +303,53 @@ def _node_network_interfaces(cluster: dict[str, Any], env: dict[str, str]) -> li
     return interfaces
 
 
+def _env_backed_node_value(raw_node: dict[str, Any], key: str, env: dict[str, str]) -> str | None:
+    env_key = raw_node.get(f"{key}_env")
+    if env_key and env.get(str(env_key)):
+        return env[str(env_key)]
+    value = raw_node.get(key)
+    return str(value) if value not in {None, ""} else None
+
+
+def _distributed_master_addr(cluster: dict[str, Any], env: dict[str, str]) -> str | None:
+    distributed = cluster.get("distributed") or {}
+    value = distributed.get("master_addr")
+    env_key = distributed.get("master_addr_env")
+    if env_key and env.get(str(env_key)):
+        value = env[str(env_key)]
+    if value:
+        return str(value)
+    endpoint = distributed.get("rdzv_endpoint")
+    endpoint_env = distributed.get("rdzv_endpoint_env")
+    if endpoint_env and env.get(str(endpoint_env)):
+        endpoint = env[str(endpoint_env)]
+    if endpoint and ":" in str(endpoint):
+        return str(endpoint).rsplit(":", 1)[0]
+    return None
+
+
+def _serving_node_hosts(cluster: dict[str, Any], planned_nodes: list[dict[str, Any]], env: dict[str, str]) -> list[str]:
+    master_addr = _distributed_master_addr(cluster, env)
+    hosts: list[str] = []
+    raw_nodes = [node for node in cluster.get("nodes", []) if isinstance(node, dict)]
+    for index, node in enumerate(planned_nodes):
+        raw_node = raw_nodes[index] if index < len(raw_nodes) else {}
+        serving_host = _env_backed_node_value(raw_node, "serving_host", env)
+        if serving_host:
+            hosts.append(serving_host)
+            continue
+        host = str(node.get("host") or "")
+        if node.get("role") == "coordinator" and is_local_serving_host(host) and master_addr:
+            hosts.append(master_addr)
+        else:
+            hosts.append(host)
+    return hosts
+
+
+def is_local_serving_host(host: str | None) -> bool:
+    return host in {None, "", "localhost", "127.0.0.1", "::1"}
+
+
 def configure_cluster_serving_env(env: dict[str, str]) -> dict[str, str]:
     """Derive Spark vLLM launcher env from a generic cluster inventory."""
 
@@ -333,7 +380,7 @@ def configure_cluster_serving_env(env: dict[str, str]) -> dict[str, str]:
         raise SystemExit(f"cluster serving config failed doctor checks: {messages}")
 
     planned_nodes = [node_plan(raw_node, cluster, env) for raw_node in cluster.get("nodes", []) if isinstance(raw_node, dict)]
-    hosts = [str(node.get("host") or "") for node in planned_nodes]
+    hosts = _serving_node_hosts(cluster, planned_nodes, env)
     unresolved = [str(node.get("name") or index) for index, host in enumerate(hosts) if not host or host.startswith("$")]
     if unresolved:
         raise SystemExit(f"cluster serving config has unresolved node host values: {', '.join(unresolved)}")

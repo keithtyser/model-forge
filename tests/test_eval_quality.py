@@ -472,9 +472,12 @@ class ObjectiveScoringTests(unittest.TestCase):
             root = Path(tmp)
             manifest = build_manifest(cfg, [case], dry_run=True, trials=1, command=["unit"])
             write_outputs(root, manifest, [result])
+            saved_manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
             card = json.loads((root / "eval_provenance_card.json").read_text(encoding="utf-8"))
             markdown = (root / "eval_provenance_card.md").read_text(encoding="utf-8")
 
+        self.assertEqual(saved_manifest["scoring_version"], SCORING_VERSION)
+        self.assertEqual(saved_manifest["canonical"]["metadata"]["scoring_version"], SCORING_VERSION)
         self.assertEqual(card["schema_version"], "model_forge.eval_provenance_card.v1")
         self.assertEqual(card["prompt_suite"]["prompt_counts"]["normal_use_regression"], 1)
         self.assertEqual(card["judge"]["scoring_version"], SCORING_VERSION)

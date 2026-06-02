@@ -756,6 +756,7 @@ def build_manifest(
             "dry_run": dry_run,
             "prompt_sets": cfg.prompt_sets,
             "trials": trials,
+            "scoring_version": SCORING_VERSION,
         },
     )
     return {
@@ -769,6 +770,7 @@ def build_manifest(
         "trials": trials,
         "total_cases": len(cases) * trials,
         "metrics": cfg.metrics,
+        "scoring_version": SCORING_VERSION,
         "dry_run": dry_run,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "runtime": collect_runtime_metadata(cfg, dry_run),

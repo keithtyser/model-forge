@@ -794,7 +794,12 @@ When `MODEL_FORGE_CLUSTER_CONFIG` or `MODEL_FORGE_SPARK_CLUSTER_CONFIG` is set,
 `./forge serve` resolves node hosts from the cluster inventory, sets
 `MODEL_FORGE_SPARK_CLUSTER=1`, derives `MODEL_FORGE_SPARK_CLUSTER_NODES`, uses
 `serving.tensor_parallel_size` for TP, and applies a shared configured network
-interface when one is available. Manual env still works as a fallback:
+interface when one is available. If the coordinator SSH host is `localhost`,
+the serve resolver uses `distributed.master_addr` or the host portion of
+`distributed.rdzv_endpoint` as the Spark vLLM node address. A node-level
+`serving_host` or `serving_host_env` can override SSH host resolution for vLLM
+without changing how `cluster sync` or `cluster health` connect. Manual env
+still works as a fallback:
 `MODEL_FORGE_SPARK_CLUSTER=1`,
 `MODEL_FORGE_SPARK_CLUSTER_NODES=<coordinator-host>,<worker-host>`,
 `MODEL_FORGE_SPARK_ETH_IF=<direct-link-interface>`, and
@@ -835,6 +840,12 @@ generic hardware recommendations. For Qwen 3.6 27B the repo defaults to the
 Transformers-5 Spark vLLM image, `GPU_MEMORY_UTILIZATION=0.78`,
 `MAX_NUM_BATCHED_TOKENS=16384`, and `VLLM_MAX_NUM_SEQS=4`; raise them only after
 baseline serving works and a benchmark proves the change helps.
+
+Latest functional check: `local_ft_abli_heretic_residual_trial12` served
+successfully with TP=2 across the 2x Spark cluster after the resolver fix, then
+`./forge eval qwen36_27b local_ft_abli_heretic_residual_trial12 --smoke`
+completed 4/4 prompts with workflow/schema pass rates of 1.0 and median latency
+22.2894s. The server was stopped on both nodes afterwards.
 
 Benchmark serving only after an endpoint is already running:
 

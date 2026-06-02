@@ -331,6 +331,50 @@ class ModelForgeDgxServeTests(unittest.TestCase):
         self.assertEqual(env["MODEL_FORGE_SPARK_CLUSTER"], "1")
         self.assertEqual(details["nodes"], "spark-a,spark-b")
 
+    def test_cluster_serving_uses_master_addr_for_local_coordinator_node(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "cluster.yaml"
+            config.write_text(
+                """
+id: unit_cluster
+hardware_profile: configs/hardware/dgx_spark.yaml
+launchers:
+  default: ssh
+  supported: [ssh, vllm]
+resource_policy:
+  max_concurrent_large_jobs: 1
+  require_job_lock: true
+nodes:
+  - name: spark0
+    role: coordinator
+    launcher: ssh
+    host: localhost
+    network_interface: eth-direct
+    gpu_count: 1
+  - name: spark1
+    role: worker
+    launcher: ssh
+    host: spark-b
+    network_interface: eth-direct
+    gpu_count: 1
+distributed:
+  nnodes: 2
+  nproc_per_node: 1
+  master_addr: 169.254.252.185
+  master_port: 29500
+serving:
+  tensor_parallel_size: 2
+""".lstrip(),
+                encoding="utf-8",
+            )
+            env = {"MODEL_FORGE_CLUSTER_CONFIG": str(config)}
+            details = model_forge_dgx.configure_cluster_serving_env(env)
+
+        self.assertEqual(details["mode"], "cluster-config")
+        self.assertEqual(env["MODEL_FORGE_SPARK_CLUSTER_NODES"], "169.254.252.185,spark-b")
+        self.assertEqual(env["MODEL_FORGE_SPARK_ETH_IF"], "eth-direct")
+        self.assertEqual(env["MODEL_FORGE_TENSOR_PARALLEL_SIZE"], "2")
+
     def test_full_checkpoint_serve_runs_checkpoint_audit(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
