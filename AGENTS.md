@@ -229,7 +229,13 @@ The next search recipe is
 `configs/abliteration/qwen36_27b_ft_local_abli_heretic_unsafe_followup_search.yaml`.
 It keeps local FT v4 as the source, targets the five remaining trial12 refusal
 cases, and uses the exact trial12 benign/challenge regressions as focused
-good-eval KL controls. Treat this as the next primary Qwen ablation path.
+good-eval KL controls. That search completed on worker `gx10-dc65`: baseline
+focused refusals were 4/5, no trial reached zero, and the best low-KL candidate
+was trial index 15 / trial_id 14 with 1/5 refusals at KL 0.0095. Treat this as
+useful search evidence, not a promotion-ready candidate. The next branch is
+either to free reviewed worker disk and export trial15 for a merged model-forge
+quick gate, or revise the search space until the focused Heretic probe reaches
+0/5 before paying for another 51G checkpoint.
 
 Do not trust live-LoRA Qwen Heretic scale gates yet: live scale0.75 refused 95%
 of paired harmful prompts while the merged scale0.75 checkpoint refused 65% on

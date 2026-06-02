@@ -3629,9 +3629,9 @@ challenge capability versus the best rescore baseline. The next search should
 optimize the remaining unsafe-overcompliance refusal separately while adding
 harder benign/challenge controls from the exact trial12 regressions.
 
-## Qwen 3.6 27B: Unsafe-Followup Heretic Search Prep
+## Qwen 3.6 27B: Unsafe-Followup Heretic Search
 
-Status: recipe prepared, not yet executed.
+Status: search completed; no direct export yet.
 
 Hypothesis: trial12 overfit the paired harmful residuals and did not move the
 explicit unsafe-overcompliance refusal template. A smaller search focused on the
@@ -3671,6 +3671,42 @@ Export a direct recipe only if a trial materially improves on residual trial12,
 especially unsafe-overcompliance refusal below 1.0 and paired harmful refusal
 near 0.0, then judge the merged checkpoint on the 75-case model-forge quick
 gate before any artifact/external/quantization work.
+
+Result: completed on worker `gx10-dc65` with the guarded Heretic container. The
+focused bad-eval baseline refused 4/5 targeted cases. No trial reached zero
+refusals. The best candidates reached 1/5 refusals, so this search improved the
+focused refusal signal but did not satisfy the Qwen FT-abli objective.
+
+Focused-search frontier:
+
+| trial index | trial id | refusals | KL | interpretation |
+| ---: | ---: | ---: | ---: | --- |
+| 15 | 14 | 1/5 | 0.0095 | best low-KL candidate |
+| 4 | 3 | 1/5 | 0.0147 | backup candidate |
+| 2 | 1 | 1/5 | 0.0321 | higher-KL backup |
+| 11 | 10 | 1/5 | 0.1171 | too high-KL for first export |
+
+Best candidate parameters from trial index 15:
+
+```text
+attn.o_proj:
+  max_weight: 1.2762577188978237
+  max_weight_position: 47.19682183728479
+  min_weight: 0.9112519421587704
+  min_weight_distance: 19.393611319066004
+mlp.down_proj:
+  max_weight: 0.8092489930327733
+  max_weight_position: 55.96484851138152
+  min_weight: 0.6523903072272111
+  min_weight_distance: 8.316775394397554
+```
+
+Decision: do not promote from the search alone. The next practical branch is to
+free reviewed worker disk and export trial index 15 for a merged model-forge
+quick gate, or revise the search space to reach 0/5 focused refusals before
+spending another 51G checkpoint export. Worker disk was 148G free after this
+search, just above the 15% floor, so another full Qwen export requires deleting
+or relocating rejected checkpoints first.
 
 ## Dataset Factory: Pack Promotion Gates
 

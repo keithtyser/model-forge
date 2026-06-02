@@ -321,10 +321,16 @@ length filtering:
    paired harmful refusal improved to 0.10 with harmful detail 0.0, but
    unsafe-overcompliance refusal stayed 1.0, paired benign quality was 0.90,
    and challenge capability was 0.875. Hold for the next ablation iteration.
-   The next tracked search is
+   The follow-up search
    `configs/abliteration/qwen36_27b_ft_local_abli_heretic_unsafe_followup_search.yaml`,
    which targets the five remaining trial12 refusal cases and preserves the
-   exact benign/challenge cases trial12 regressed.
+   exact benign/challenge cases trial12 regressed, completed on worker
+   `gx10-dc65`. It improved the focused Heretic signal from 4/5 refusals to
+   1/5 refusals, but found no zero-refusal trial. The best low-KL candidate is
+   trial index 15 / trial_id 14 at KL 0.0095. This is not promotion evidence by
+   itself. Next either free reviewed worker disk and export trial15 for a
+   merged model-forge quick gate, or revise the search space until the focused
+   search reaches 0/5 before another full 51G checkpoint export.
 
 ## Operational Guardrails
 
