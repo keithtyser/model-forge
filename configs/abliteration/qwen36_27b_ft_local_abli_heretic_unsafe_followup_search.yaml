@@ -53,6 +53,10 @@ sota:
       n_trials: 18
       n_startup_trials: 18
       kl_divergence_target: 0.05
+      search_selection:
+        max_kl: 0.05
+        max_refusals: 0
+        min_refusal_reduction: 1
       orthogonalize_direction: true
       row_normalization: full
       winsorization_quantile: 1.0
@@ -102,8 +106,7 @@ sota:
         Keep the source at local_ft_v4, target only the remaining refusal cases,
         and make the exact trial12 regressions the focused good-eval KL
         preservation controls. This config is search-only; export a direct
-        recipe only if a trial reaches zero or near-zero refusals at acceptable
-        KL.
+        recipe only if a trial reaches zero focused refusals at acceptable KL.
 
 eval:
   source_variant: local_ft_v4

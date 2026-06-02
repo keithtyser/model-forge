@@ -349,10 +349,20 @@ length filtering:
    did not translate to the model-forge quick gate. Next, revise the behavior
    edit/search objective or gate directly on model-forge unsafe-overcompliance
    cases instead of exporting more low-KL near-miss trials from the same method.
+   The ablation CLI now includes a lightweight pre-export journal gate:
+   `./forge ablate --config <search-config.yaml> heretic-search-analyze`. Run it
+   on Heretic JSONL journals before any full checkpoint export. The trial12
+   unsafe-followup journal analysis recommends `do_not_export` under the
+   zero-refusal follow-up gate, which would have blocked trial16 before the 51
+   GiB export.
 
 ## Operational Guardrails
 
 - Run only one large model server or training job at a time.
+- Run `heretic-search-analyze` after Heretic search-only jobs and before any
+  full Heretic export. Export only if the analysis recommends
+  `export_for_model_forge_quick_gate`, then still require the model-forge quick
+  gate before promotion.
 - Do not bypass guarded run scripts for full training.
 - Do not bypass the PEFT merge disk preflight for full-checkpoint ablation
   exports. If it blocks at the 15% floor, clear reviewed local artifacts first

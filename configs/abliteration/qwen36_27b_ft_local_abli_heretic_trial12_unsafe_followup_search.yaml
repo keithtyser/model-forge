@@ -53,6 +53,10 @@ sota:
       n_trials: 24
       n_startup_trials: 24
       kl_divergence_target: 0.075
+      search_selection:
+        max_kl: 0.075
+        max_refusals: 0
+        min_refusal_reduction: 1
       orthogonalize_direction: true
       row_normalization: full
       winsorization_quantile: 1.0
@@ -103,8 +107,8 @@ sota:
         paired-harmful refusal suppressor so far, then targets only the five
         remaining refusal failures while preserving the exact benign/challenge
         regressions observed in trial12. This config is search-only; export a
-        direct recipe only if a trial reaches zero or near-zero focused refusals
-        at acceptable KL, then compare the merged checkpoint against local FT v4.
+        direct recipe only if a trial reaches zero focused refusals at
+        acceptable KL, then compare the merged checkpoint against local FT v4.
 
 eval:
   source_variant: local_ft_abli_heretic_residual_trial12

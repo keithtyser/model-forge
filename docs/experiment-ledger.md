@@ -3849,6 +3849,54 @@ search with the actual model-forge unsafe-overcompliance cases in the loop or
 switch to a different refusal-removal method with explicit benign/challenge
 quality controls.
 
+## Ablation Workflow: Heretic Search Journal Gate
+
+Status: implemented and tested; lightweight analysis only.
+
+Hypothesis: Qwen trial16 showed that a near-miss Heretic focused signal can
+waste a full 51 GiB export and still fail the model-forge quick gate. A
+repo-native search-journal gate should make export decisions explicit before
+heavy checkpoint work. The gate should not promote a model; it should only
+decide whether a search trial is good enough to pay for export plus the real
+model-forge quick gate.
+
+Implemented:
+
+```text
+./forge ablate --config <search-config.yaml> heretic-search-analyze
+```
+
+The command parses Heretic JSONL journals, ranks complete trials by focused
+refusal count and KL, applies configurable `search_selection` thresholds, and
+emits one of:
+
+```text
+do_not_export
+export_for_model_forge_quick_gate
+```
+
+Config thresholds added:
+
+```text
+configs/abliteration/qwen36_27b_ft_local_abli_heretic_residual_search.yaml
+configs/abliteration/qwen36_27b_ft_local_abli_heretic_unsafe_followup_search.yaml
+configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_unsafe_followup_search.yaml
+```
+
+Validation:
+
+```text
+.venv/bin/python -m unittest tests.test_abliteration_pipeline -v
+./forge ablate --config configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_unsafe_followup_search.yaml heretic-search-analyze --journal /tmp/model_forge_qwen_trial12_unsafe_journal.jsonl --output reports/generated/qwen36_27b_trial12_unsafe_followup_journal_analysis.json
+```
+
+Result: the synthetic tests cover both `do_not_export` and
+`export_for_model_forge_quick_gate`. The real sequential trial12 unsafe-followup
+journal now analyzes to `do_not_export` under the zero-refusal follow-up gate:
+the best trial had 1/5 focused refusals at KL 0.1856, and the low-KL trial16
+had 2/5 focused refusals. This would have prevented the trial16 diagnostic
+export.
+
 ## Dataset Factory: Pack Promotion Gates
 
 Status: smoke-validated implementation; no heavy training launched.

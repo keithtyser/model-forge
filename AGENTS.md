@@ -258,6 +258,21 @@ unsafe-overcompliance still refused all 3 cases, and harmful detail rose to
 objective; revise the behavior-edit method or gate search directly on
 model-forge unsafe-overcompliance cases.
 
+Before exporting another Heretic search result into a full checkpoint, run the
+repo-native journal gate:
+
+```bash
+./forge ablate --config <search-config.yaml> heretic-search-analyze \
+  --journal <path-to-heretic-jsonl> \
+  --output reports/generated/<run>_journal_analysis.json
+```
+
+The command only reads the JSONL journal. Treat `do_not_export` as a hard stop
+for 51 GiB exports unless the config owner intentionally changes the explicit
+`search_selection` thresholds and documents why. Treat
+`export_for_model_forge_quick_gate` only as permission to export and run the
+model-forge quick gate; it is not promotion evidence.
+
 Do not trust live-LoRA Qwen Heretic scale gates yet: live scale0.75 refused 95%
 of paired harmful prompts while the merged scale0.75 checkpoint refused 65% on
 the same paired bucket. Use full merged checkpoints for the next Qwen candidates

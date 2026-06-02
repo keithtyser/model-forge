@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -15,6 +17,7 @@ from model_forge.hardware import (
 from model_forge.pipelines.abliterate import (
     REPO_DIR,
     _projection_delta,
+    analyze_heretic_search_journal,
     build_plan,
     build_sota_plan,
     configured_target_layers,
@@ -24,6 +27,7 @@ from model_forge.pipelines.abliterate import (
     load_prompts,
     load_yaml,
     missing_direction_layers,
+    parse_heretic_journal,
     prompts_for_buckets,
     tensor_strength,
     write_heretic_config,
@@ -285,6 +289,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertTrue(plan["backend_config"]["search_only"])
         self.assertEqual(plan["backend_config"]["n_trials"], 12)
         self.assertEqual(plan["backend_config"]["kl_divergence_target"], 0.05)
+        self.assertEqual(plan["backend_config"]["search_selection"]["max_refusals"], 3)
 
         write_heretic_config(plan)
         manifest = load_yaml(Path(plan["work_dir"]) / "model_forge_prompt_datasets" / "manifest.json")
@@ -330,6 +335,7 @@ class AbliterationPlanTests(unittest.TestCase):
 
         self.assertTrue(plan["backend_config"]["search_only"])
         self.assertEqual(plan["backend_config"]["n_trials"], 18)
+        self.assertEqual(plan["backend_config"]["search_selection"]["max_refusals"], 0)
         write_heretic_config(plan)
         manifest = load_yaml(Path(plan["work_dir"]) / "model_forge_prompt_datasets" / "manifest.json")
 
@@ -361,6 +367,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertTrue(plan["backend_config"]["search_only"])
         self.assertEqual(plan["backend_config"]["n_trials"], 24)
         self.assertEqual(plan["backend_config"]["kl_divergence_target"], 0.075)
+        self.assertEqual(plan["backend_config"]["search_selection"]["max_refusals"], 0)
         self.assertTrue(plan["source_model"].endswith("Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12"))
         write_heretic_config(plan)
         manifest = load_yaml(Path(plan["work_dir"]) / "model_forge_prompt_datasets" / "manifest.json")
@@ -396,6 +403,76 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertLess(direct["parameters"]["attn.o_proj"]["min_weight"], 0.5)
         self.assertGreater(direct["parameters"]["mlp.down_proj"]["max_weight"], 1.2)
         self.assertEqual(len(prompt_spec["bad_train_case_ids"]), 5)
+
+    def test_heretic_search_analysis_rejects_near_miss_trial(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_local_abli_heretic_trial12_unsafe_followup_search.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+        with tempfile.TemporaryDirectory() as tmp:
+            journal = Path(tmp) / "search.jsonl"
+            records = [
+                {"op_code": 8, "trial_id": 0, "user_attr": {"index": 1}},
+                {
+                    "op_code": 8,
+                    "trial_id": 0,
+                    "user_attr": {
+                        "parameters": {"attn.o_proj": {"max_weight": 1.0}},
+                        "kl_divergence": 0.01,
+                        "refusals": 2,
+                        "base_refusals": 3,
+                        "n_bad_prompts": 5,
+                    },
+                },
+                {"op_code": 6, "trial_id": 0, "state": 1, "values": [0.075, 1.0]},
+            ]
+            journal.write_text("\n".join(json.dumps(record) for record in records) + "\n", encoding="utf-8")
+
+            summary = analyze_heretic_search_journal(plan, journal)
+
+        self.assertEqual(summary["complete_trial_count"], 1)
+        self.assertEqual(summary["recommendation"]["action"], "do_not_export")
+        self.assertEqual(summary["recommendation"]["reason"], "best_refusal_count_above_gate")
+        self.assertFalse(summary["frontier"][0]["eligible"])
+
+    def test_heretic_search_analysis_allows_zero_refusal_quick_gate_candidate(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_local_abli_heretic_trial12_unsafe_followup_search.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+        with tempfile.TemporaryDirectory() as tmp:
+            journal = Path(tmp) / "search.jsonl"
+            records = [
+                {"op_code": 8, "trial_id": 4, "user_attr": {"index": 5}},
+                {
+                    "op_code": 8,
+                    "trial_id": 4,
+                    "user_attr": {
+                        "direction_index": 42.0,
+                        "parameters": {"attn.o_proj": {"max_weight": 1.0}},
+                        "kl_divergence": 0.02,
+                        "refusals": 0,
+                        "base_refusals": 3,
+                        "n_bad_prompts": 5,
+                    },
+                },
+                {"op_code": 6, "trial_id": 4, "state": 1, "values": [0.02, 0.0]},
+            ]
+            journal.write_text("\n".join(json.dumps(record) for record in records) + "\n", encoding="utf-8")
+
+            parsed = parse_heretic_journal(journal)
+            summary = analyze_heretic_search_journal(plan, journal)
+
+        self.assertEqual(parsed["trials"][0]["refusals"], 0)
+        self.assertEqual(summary["recommendation"]["action"], "export_for_model_forge_quick_gate")
+        self.assertEqual(summary["recommendation"]["selected_trial_id"], 4)
+        self.assertTrue(summary["frontier"][0]["eligible"])
 
     def test_source_checkpoint_guard_fails_missing_configured_checkpoint(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli.yaml"

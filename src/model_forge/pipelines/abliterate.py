@@ -1370,6 +1370,267 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
     return {"plan": selected_plan, "paths": paths, "readme": str(readme)}
 
 
+def _as_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_heretic_journal(path: Path) -> dict[str, Any]:
+    trials: dict[int, dict[str, Any]] = {}
+    study_attrs: dict[str, Any] = {}
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"invalid Heretic journal JSON at {path}:{line_number}: {exc}") from exc
+        trial_id = record.get("trial_id")
+        if trial_id is None:
+            if isinstance(record.get("user_attr"), dict):
+                study_attrs.update(record["user_attr"])
+            continue
+        trial_key = int(trial_id)
+        trial = trials.setdefault(trial_key, {"trial_id": trial_key})
+        if isinstance(record.get("user_attr"), dict):
+            trial.update(record["user_attr"])
+        if "state" in record:
+            trial["state"] = record["state"]
+        if "values" in record:
+            trial["values"] = record["values"]
+    normalized_trials = []
+    for trial in trials.values():
+        values = trial.get("values")
+        inferred_kl = None
+        if isinstance(values, list) and values:
+            inferred_kl = _as_float(values[0])
+        kl = _as_float(trial.get("kl_divergence"))
+        normalized_trials.append({
+            **trial,
+            "index": _as_int(trial.get("index")),
+            "trial_id": _as_int(trial.get("trial_id")),
+            "kl_divergence": kl if kl is not None else inferred_kl,
+            "refusals": _as_int(trial.get("refusals")),
+            "base_refusals": _as_int(trial.get("base_refusals")),
+            "n_bad_prompts": _as_int(trial.get("n_bad_prompts")),
+            "complete": trial.get("state") in {None, 1},
+            "has_direct_parameters": isinstance(trial.get("parameters"), dict) and bool(trial.get("parameters")),
+        })
+    normalized_trials.sort(key=lambda item: (
+        item["index"] is None,
+        item["index"] if item["index"] is not None else item["trial_id"] or 10**9,
+    ))
+    return {"journal": str(path), "study_attrs": study_attrs, "trials": normalized_trials}
+
+
+def default_heretic_journal_path(plan: dict[str, Any]) -> Path:
+    journal_dir = Path(plan["work_dir"]) / "heretic_checkpoints"
+    journals = sorted(journal_dir.glob("*.jsonl"), key=lambda item: item.stat().st_mtime, reverse=True)
+    if not journals:
+        raise SystemExit(f"no Heretic journal found in {journal_dir}; pass --journal explicitly")
+    return journals[0]
+
+
+def analyze_heretic_search_journal(
+    plan: dict[str, Any],
+    journal_path: Path,
+    *,
+    max_kl: float | None = None,
+    max_refusals: int | None = None,
+    min_refusal_reduction: int | None = None,
+    top_k: int = 8,
+) -> dict[str, Any]:
+    backend = plan["backend_config"]
+    selection = backend.get("search_selection") or {}
+    effective_max_kl = float(max_kl if max_kl is not None else selection.get("max_kl", backend.get("kl_divergence_target", 0.01)))
+    effective_max_refusals = int(max_refusals if max_refusals is not None else selection.get("max_refusals", 0))
+    effective_min_reduction = int(min_refusal_reduction if min_refusal_reduction is not None else selection.get("min_refusal_reduction", 1))
+    parsed = parse_heretic_journal(journal_path)
+    complete_trials = [
+        trial for trial in parsed["trials"]
+        if trial["complete"] and trial["refusals"] is not None and trial["kl_divergence"] is not None
+    ]
+    if not complete_trials:
+        return {
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "source_model": plan["source_model"],
+            "work_dir": plan["work_dir"],
+            "journal": str(journal_path),
+            "gates": {
+                "max_kl": effective_max_kl,
+                "max_refusals": effective_max_refusals,
+                "min_refusal_reduction": effective_min_reduction,
+            },
+            "trial_count": len(parsed["trials"]),
+            "complete_trial_count": 0,
+            "recommendation": {
+                "action": "do_not_export",
+                "reason": "no_complete_trials",
+            },
+            "frontier": [],
+        }
+    base_refusals = max(
+        (trial["base_refusals"] for trial in complete_trials if trial["base_refusals"] is not None),
+        default=None,
+    )
+
+    def enriched_trial_sort_key(trial: dict[str, Any]) -> tuple[int, float, int]:
+        return (
+            int(trial["refusals"]),
+            float(trial["kl_divergence"]),
+            int(trial["trial_index"] if trial["trial_index"] is not None else trial["trial_id"] or 10**9),
+        )
+
+    enriched = []
+    for trial in complete_trials:
+        refusal_reduction = None
+        if base_refusals is not None:
+            refusal_reduction = int(base_refusals) - int(trial["refusals"])
+        n_bad = trial["n_bad_prompts"]
+        refusal_rate = None if not n_bad else int(trial["refusals"]) / int(n_bad)
+        eligible = (
+            trial["has_direct_parameters"]
+            and float(trial["kl_divergence"]) <= effective_max_kl
+            and int(trial["refusals"]) <= effective_max_refusals
+            and (refusal_reduction is None or refusal_reduction >= effective_min_reduction)
+        )
+        enriched.append({
+            "trial_id": trial["trial_id"],
+            "trial_index": trial["index"],
+            "refusals": trial["refusals"],
+            "base_refusals": trial["base_refusals"],
+            "n_bad_prompts": n_bad,
+            "refusal_rate": refusal_rate,
+            "refusal_reduction": refusal_reduction,
+            "kl_divergence": trial["kl_divergence"],
+            "direction_index": trial.get("direction_index"),
+            "has_direct_parameters": trial["has_direct_parameters"],
+            "eligible": eligible,
+            "parameters": trial.get("parameters"),
+        })
+
+    enriched.sort(key=enriched_trial_sort_key)
+    eligible_trials = [trial for trial in enriched if trial["eligible"]]
+    best = enriched[0]
+    if eligible_trials:
+        selected = eligible_trials[0]
+        recommendation = {
+            "action": "export_for_model_forge_quick_gate",
+            "reason": "search_candidate_passes_journal_gates",
+            "selected_trial_id": selected["trial_id"],
+            "selected_trial_index": selected["trial_index"],
+            "refusals": selected["refusals"],
+            "kl_divergence": selected["kl_divergence"],
+        }
+    elif int(best["refusals"]) > effective_max_refusals:
+        recommendation = {
+            "action": "do_not_export",
+            "reason": "best_refusal_count_above_gate",
+            "best_refusals": best["refusals"],
+            "best_trial_id": best["trial_id"],
+            "best_trial_index": best["trial_index"],
+        }
+    elif float(best["kl_divergence"]) > effective_max_kl:
+        recommendation = {
+            "action": "do_not_export",
+            "reason": "best_candidate_above_kl_gate",
+            "best_kl_divergence": best["kl_divergence"],
+            "best_trial_id": best["trial_id"],
+            "best_trial_index": best["trial_index"],
+        }
+    else:
+        recommendation = {
+            "action": "do_not_export",
+            "reason": "best_candidate_missing_direct_parameters_or_reduction",
+            "best_trial_id": best["trial_id"],
+            "best_trial_index": best["trial_index"],
+        }
+    return {
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "source_model": plan["source_model"],
+        "work_dir": plan["work_dir"],
+        "journal": str(journal_path),
+        "gates": {
+            "max_kl": effective_max_kl,
+            "max_refusals": effective_max_refusals,
+            "min_refusal_reduction": effective_min_reduction,
+        },
+        "trial_count": len(parsed["trials"]),
+        "complete_trial_count": len(complete_trials),
+        "base_refusals": base_refusals,
+        "best_trial": best,
+        "recommendation": recommendation,
+        "frontier": enriched[: max(1, top_k)],
+    }
+
+
+def print_heretic_search_analysis(summary: dict[str, Any]) -> None:
+    gates = summary["gates"]
+    recommendation = summary["recommendation"]
+    console.print(Panel.fit(
+        "\n".join([
+            f"[bold]Journal[/bold]: {summary['journal']}",
+            f"[bold]Complete trials[/bold]: {summary['complete_trial_count']}/{summary['trial_count']}",
+            f"[bold]Gates[/bold]: refusals <= {gates['max_refusals']}, KL <= {gates['max_kl']}, reduction >= {gates['min_refusal_reduction']}",
+            f"[bold]Recommendation[/bold]: {recommendation['action']} ({recommendation['reason']})",
+        ]),
+        title="[bold cyan]Heretic Search Analysis[/bold cyan]",
+        border_style="cyan",
+    ))
+    table = Table(title="Search Frontier")
+    table.add_column("index")
+    table.add_column("trial id")
+    table.add_column("refusals")
+    table.add_column("KL")
+    table.add_column("reduction")
+    table.add_column("eligible")
+    for trial in summary["frontier"]:
+        table.add_row(
+            "" if trial["trial_index"] is None else str(trial["trial_index"]),
+            "" if trial["trial_id"] is None else str(trial["trial_id"]),
+            "" if trial["refusals"] is None else str(trial["refusals"]),
+            "" if trial["kl_divergence"] is None else f"{float(trial['kl_divergence']):.6f}",
+            "" if trial["refusal_reduction"] is None else str(trial["refusal_reduction"]),
+            str(bool(trial["eligible"])),
+        )
+    console.print(table)
+
+
+def command_heretic_search_analyze(args: argparse.Namespace) -> None:
+    config_path = resolve_repo_path(args.config)
+    plan = build_sota_plan(load_yaml(config_path), config_path, args.backend)
+    if plan["backend"] != "heretic":
+        raise SystemExit("heretic-search-analyze requires the Heretic backend")
+    journal_path = resolve_repo_path(args.journal) if args.journal else default_heretic_journal_path(plan)
+    summary = analyze_heretic_search_journal(
+        plan,
+        journal_path,
+        max_kl=args.max_kl,
+        max_refusals=args.max_refusals,
+        min_refusal_reduction=args.min_refusal_reduction,
+        top_k=args.top_k,
+    )
+    if args.output:
+        output_path = resolve_repo_path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(summary, indent=2) + "\n")
+    print_heretic_search_analysis(summary)
+
+
 def command_sota_plan(args: argparse.Namespace) -> None:
     config_path = resolve_repo_path(args.config)
     plan = build_sota_plan(load_yaml(config_path), config_path, args.backend)
@@ -1862,6 +2123,24 @@ def build_parser() -> argparse.ArgumentParser:
     sota_run.add_argument("--backend", choices=["obliteratus", "heretic"], default=None)
     sota_run.add_argument("--execute", action="store_true")
     sota_run.set_defaults(func=command_sota_run)
+
+    heretic_search = sub.add_parser(
+        "heretic-search-analyze",
+        help="Analyze a Heretic search journal before exporting a full checkpoint",
+    )
+    heretic_search.add_argument("--backend", choices=["heretic"], default="heretic")
+    heretic_search.add_argument("--journal", default=None, help="Path to a Heretic JSONL journal")
+    heretic_search.add_argument("--max-kl", type=float, default=None, help="Maximum KL allowed for export consideration")
+    heretic_search.add_argument("--max-refusals", type=int, default=None, help="Maximum focused refusals allowed")
+    heretic_search.add_argument(
+        "--min-refusal-reduction",
+        type=int,
+        default=None,
+        help="Minimum focused refusal reduction versus the journal baseline",
+    )
+    heretic_search.add_argument("--top-k", type=int, default=8, help="Number of frontier rows to print")
+    heretic_search.add_argument("--output", default=None, help="Optional JSON report path")
+    heretic_search.set_defaults(func=command_heretic_search_analyze)
     return parser
 
 

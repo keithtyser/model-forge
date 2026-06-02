@@ -52,6 +52,10 @@ sota:
       n_trials: 12
       n_startup_trials: 12
       kl_divergence_target: 0.05
+      search_selection:
+        max_kl: 0.05
+        max_refusals: 3
+        min_refusal_reduction: 1
       orthogonalize_direction: true
       row_normalization: full
       winsorization_quantile: 1.0
