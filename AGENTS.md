@@ -339,6 +339,48 @@ refusal behavior. The next Qwen FT-abli branch should change method or use a
 search objective gated directly by model-forge metrics; continuing scalar tweaks
 of the same refusal-unlikelihood objective is low-leverage.
 
+The active next branch is
+`configs/finetuning/qwen36_27b_heretic_trial12_refusal_unlikelihood_v1.yaml`.
+It starts from `local_ft_abli_heretic_residual_trial12`, not local FT v4, and
+targets the five remaining trial12 refusal failures with adjacent
+refusal-unlikelihood pairs plus capability/benign anchors. Data prep accepted
+71/71 rows. Use the guarded cluster script only:
+
+```bash
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 \
+MODEL_FORGE_TRAIN_DOCKER_CPUS=8 \
+MODEL_FORGE_TRAIN_DOCKER_MEMORY=108g \
+MODEL_FORGE_TRAIN_DOCKER_MEMORY_SWAP=108g \
+MODEL_FORGE_TRAIN_DOCKER_SHM=32g \
+runs/finetune/qwen36_27b_heretic_trial12_refusal_unlikelihood_v1/run_cluster_torchrun.sh
+```
+
+After training, merge against the trial12 source checkpoint:
+
+```bash
+scripts/run_merge_peft_container.sh \
+  --base-model ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12 \
+  --adapter ~/models/model-forge-adapters/qwen36_27b/heretic_trial12_refusal_unlikelihood_v1 \
+  --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-ul-v1 \
+  --dtype bf16 \
+  --merge-method direct \
+  --min-free-disk-fraction 0.10 \
+  --trust-remote-code \
+  --overwrite
+```
+
+Quick-gate with:
+
+```bash
+MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_heretic_trial12_refusal_unlikelihood_v1 --internal \
+  --bucket refusal_paired_boundary \
+  --bucket unsafe_overcompliance \
+  --bucket capability_preservation_challenge
+```
+
+Do not continue to Qwen NVFP4 unless this branch or a later branch clears the
+zero-refusal plus source-capability-retention target.
+
 Important DDP lesson from the first v2 launch: rank-local paired/non-paired
 batches can diverge. The trainer must always run the rejected forward pass on
 every rank when the unlikelihood objective is enabled, adding a zero

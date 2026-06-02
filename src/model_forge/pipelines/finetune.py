@@ -508,6 +508,37 @@ def valid_messages(messages: list[dict[str, str]], gates: dict[str, Any]) -> boo
     return True
 
 
+def normalized_prompt_for_overlap(text: str) -> str:
+    return re.sub(r"\s+", " ", text.strip().lower())
+
+
+def load_holdout_prompts(plan: dict[str, Any]) -> set[str]:
+    gates = plan.get("data", {}).get("quality_gates", {})
+    if not gates.get("reject_eval_prompt_overlap", False):
+        return set()
+    repo_root = Path(__file__).resolve().parents[3]
+    prompts: set[str] = set()
+    for raw_path in plan.get("data", {}).get("holdouts", []):
+        path = Path(str(raw_path)).expanduser()
+        if not path.is_absolute():
+            path = repo_root / path
+        if not path.exists():
+            continue
+        data = yaml.safe_load(path.read_text()) or {}
+        for case in data.get("cases", []):
+            prompt = case.get("prompt") if isinstance(case, dict) else None
+            if isinstance(prompt, str) and prompt.strip():
+                prompts.add(normalized_prompt_for_overlap(prompt))
+    return prompts
+
+
+def messages_overlap_holdout(messages: list[dict[str, str]], holdout_prompts: set[str]) -> bool:
+    if not holdout_prompts:
+        return False
+    user_text = "\n".join(item["content"] for item in messages if item.get("role") == "user")
+    return normalized_prompt_for_overlap(user_text) in holdout_prompts
+
+
 def tokenizer_source(plan: dict[str, Any]) -> str:
     local_dir = plan["model"].get("local_dir")
     source = local_dir if local_dir and Path(str(local_dir)).expanduser().exists() else plan["model"]["source"]
@@ -566,6 +597,7 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
         )
         max_context = int(plan["data"]["max_context_window"])
         gates = plan["data"].get("quality_gates", {})
+        holdout_prompts = load_holdout_prompts(plan)
         chunks = []
         source_stats = []
         seen: set[str] = set()
@@ -614,6 +646,9 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
                 guard.check_runtime_periodically()
                 messages = normalize_messages(example, source)
                 if messages is None or not valid_messages(messages, gates):
+                    rejected += 1
+                    continue
+                if messages_overlap_holdout(messages, holdout_prompts):
                     rejected += 1
                     continue
                 rejected_messages = normalize_rejected_messages(example, source, messages)

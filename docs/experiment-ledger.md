@@ -4604,3 +4604,68 @@ Next revision: change method or optimize directly against model-forge gates.
 The current evidence says simple behavior SFT, residual Heretic scalar exports,
 and paired refusal-unlikelihood scalar tweaks each hit different parts of the
 target but none clears refusal suppression plus source capability retention.
+
+## Qwen 3.6 27B: Residual Trial12 Refusal-Unlikelihood v1 Prep
+
+Status: prepared as the next Qwen FT-abli candidate branch. No training run has
+started yet.
+
+Hypothesis: residual Heretic trial12 already suppresses paired harmful refusal
+to 0.10 with zero harmful detail, but it still refuses all three
+unsafe-overcompliance probes and two paired harmful prompts. Starting from that
+merged checkpoint and applying a small low-LR refusal-unlikelihood LoRA to
+adjacent versions of only those residual failures should reduce the remaining
+explicit refusal phrasing while capability and benign anchors preserve the
+trial12/FT-v4 behavior.
+
+Primary files:
+
+```text
+datasets/seeds/qwen36_27b_heretic_trial12_refusal_unlikelihood_v1.jsonl
+configs/data_sources/qwen36_27b_heretic_trial12_refusal_unlikelihood_v1.yaml
+datasets/finetuning/qwen36_27b_heretic_trial12_refusal_unlikelihood_v1.yaml
+configs/finetuning/qwen36_27b_heretic_trial12_refusal_unlikelihood_v1.yaml
+configs/model_families/qwen36_27b.yaml -> local_ft_abli_heretic_trial12_refusal_unlikelihood_v1
+```
+
+Recipe:
+
+```text
+source checkpoint: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12
+adapter output:    ~/models/model-forge-adapters/qwen36_27b/heretic_trial12_refusal_unlikelihood_v1
+merged output:     ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-ul-v1
+method:            qlora_refusal_unlikelihood
+unlikelihood:      0.35
+LR / steps:        7e-6 / 90
+LoRA:              r12 alpha24, attention + MLP projection targets
+data blend:        23 new residual rows + 48 existing capability/boundary anchors
+```
+
+Validation:
+
+```text
+jq empty datasets/seeds/qwen36_27b_heretic_trial12_refusal_unlikelihood_v1.jsonl
+.venv/bin/python -m py_compile src/model_forge/pipelines/finetune.py
+.venv/bin/python -m unittest tests.test_finetune_pipeline tests.test_variants -v
+./forge variants graph qwen36_27b --variant local_ft_abli_heretic_trial12_refusal_unlikelihood_v1 --json
+./forge doctor
+git diff --check
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_unlikelihood_v1.yaml prepare --overwrite
+.venv/bin/python runs/finetune/qwen36_27b_heretic_trial12_refusal_unlikelihood_v1/train_trl_sft.py --plan runs/finetune/qwen36_27b_heretic_trial12_refusal_unlikelihood_v1/plan.json --prepare-data
+```
+
+Observed data prep: accepted 71/71 rows. The new residual source accepted
+23/23 rows and all anchor sources accepted their targets.
+
+Repo pain point found and fixed: fine-tune manifests already recorded holdout
+files and `reject_eval_prompt_overlap: true`, but the generated trainer did
+not enforce the setting. The trainer template now loads holdout prompt files
+and rejects exact normalized user-prompt matches during data prep.
+
+Operational note: the trial12 source checkpoint existed on worker
+`gx10-dc65` but not on the coordinator, so it was copied back to
+`~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12`.
+The copy exposed local disk pressure. Three documented rejected local
+checkpoints were deleted from the coordinator to restore headroom:
+behavior-v1, refusal-unlikelihood-v2, and refusal-unlikelihood-v3. Their
+recipes, score files, and ledger entries remain durable in Git.

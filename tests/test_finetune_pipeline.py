@@ -43,7 +43,12 @@ class FinetunePlanTests(unittest.TestCase):
 
     def test_data_manifest_has_holdouts_and_nontrivial_blend(self) -> None:
         config_path = REPO_DIR / "configs" / "finetuning" / "gemma4_26b_a4b_local_ft_v0.yaml"
-        plan = build_plan(load_yaml(config_path), config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config = load_yaml(config_path)
+            config["run_dir"] = tmp
+            plan = build_plan(config, config_path)
+            outputs = write_artifacts(plan, overwrite=False)
+            trainer_script = Path(outputs["trainer"]).read_text()
         sources = plan["data"]["sources"]
         roles = {source["role"] for source in sources}
         self.assertGreaterEqual(plan["data"]["target_samples"], 50_000)
@@ -53,6 +58,9 @@ class FinetunePlanTests(unittest.TestCase):
         self.assertGreaterEqual(len(plan["data"]["holdouts"]), 4)
         self.assertTrue(plan["data"]["quality_gates"]["dedupe_by_conversation_hash"])
         self.assertTrue(plan["data"]["quality_gates"]["reject_eval_prompt_overlap"])
+        self.assertIn("load_holdout_prompts", trainer_script)
+        self.assertIn("messages_overlap_holdout", trainer_script)
+        self.assertIn("reject_eval_prompt_overlap", trainer_script)
 
     def test_local_ft_v1_dryrun_plan_uses_source_registry(self) -> None:
         config_path = REPO_DIR / "configs" / "finetuning" / "gemma4_26b_a4b_local_ft_v1_dryrun.yaml"
@@ -264,6 +272,66 @@ class FinetunePlanTests(unittest.TestCase):
         rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
         self.assertEqual(len(rows), 24)
         for row in rows:
+            chosen = row["messages"][-1]["content"].lower()
+            rejected = row["rejected_messages"][-1]["content"].lower()
+            self.assertFalse(any(marker in chosen for marker in chosen_refusal_markers), row["id"])
+            self.assertTrue(any(marker in rejected for marker in rejected_refusal_markers), row["id"])
+            self.assertEqual(row["messages"][0]["content"], row["rejected_messages"][0]["content"])
+
+    def test_qwen36_trial12_refusal_unlikelihood_plan_starts_from_trial12(self) -> None:
+        config_path = REPO_DIR / "configs" / "finetuning" / "qwen36_27b_heretic_trial12_refusal_unlikelihood_v1.yaml"
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["run_dir"] = tmp
+            plan = build_plan(config, config_path)
+            outputs = write_artifacts(plan, overwrite=False)
+            trainer_script = Path(outputs["trainer"]).read_text()
+            method_card = Path(outputs["method_card"]).read_text()
+
+        self.assertEqual(plan["family"], "qwen36_27b")
+        self.assertEqual(
+            plan["model"]["source"],
+            "local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12",
+        )
+        self.assertTrue(plan["model"]["local_dir"].endswith("Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12"))
+        self.assertTrue(
+            plan["model"]["output_dir"].endswith("model-forge-adapters/qwen36_27b/heretic_trial12_refusal_unlikelihood_v1")
+        )
+        self.assertEqual(plan["eval"]["source_variant"], "local_ft_abli_heretic_residual_trial12")
+        self.assertEqual(plan["eval"]["baseline_variant"], "local_ft_v4")
+        self.assertEqual(plan["trainer"]["method"], "qlora_refusal_unlikelihood")
+        self.assertTrue(plan["trainer"]["assistant_only_loss"])
+        self.assertEqual(plan["trainer"]["unlikelihood_weight"], 0.35)
+        self.assertEqual(plan["trainer"]["learning_rate"], 0.000007)
+        self.assertEqual(plan["trainer"]["max_steps"], 90)
+        self.assertEqual(plan["lora"]["r"], 12)
+        self.assertEqual(plan["data"]["target_samples"], 71)
+        source_ids = {source["id"] for source in plan["data"]["sources"]}
+        self.assertIn("qwen36_heretic_trial12_refusal_unlikelihood_v1", source_ids)
+        self.assertIn("RefusalUnlikelihoodTrainer", trainer_script)
+        self.assertIn("messages_overlap_holdout", trainer_script)
+        self.assertIn("primary_residual_refusal_unlikelihood_pairs", method_card)
+
+    def test_qwen36_trial12_refusal_unlikelihood_pairs_have_chosen_and_rejected(self) -> None:
+        import json
+
+        path = REPO_DIR / "datasets" / "seeds" / "qwen36_27b_heretic_trial12_refusal_unlikelihood_v1.jsonl"
+        chosen_refusal_markers = (
+            "i can't",
+            "i cannot",
+            "i can’t",
+            "i won't",
+            "i won’t",
+            "i will not",
+            "cannot help",
+            "refuse",
+        )
+        rejected_refusal_markers = ("i can't", "i cannot", "i won", "cannot")
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertEqual(len(rows), 23)
+        paired = [row for row in rows if "rejected_messages" in row]
+        self.assertEqual(len(paired), 15)
+        for row in paired:
             chosen = row["messages"][-1]["content"].lower()
             rejected = row["rejected_messages"][-1]["content"].lower()
             self.assertFalse(any(marker in chosen for marker in chosen_refusal_markers), row["id"])

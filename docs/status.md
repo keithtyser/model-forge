@@ -393,6 +393,18 @@ length filtering:
    ablation. The next branch should change method or gate directly on
    model-forge metrics instead of continuing scalar tweaks of the same
    refusal-unlikelihood objective.
+   A targeted sequential branch is now prepared at
+   `configs/finetuning/qwen36_27b_heretic_trial12_refusal_unlikelihood_v1.yaml`.
+   It starts from the residual Heretic trial12 checkpoint, uses 15 adjacent
+   refusal-unlikelihood pairs for the five remaining trial12 refusal failures,
+   and mixes 56 benign/capability anchors to protect source behavior. Data prep
+   accepted 71/71 rows. This branch also exposed and fixed a repo pain point:
+   generated finetune trainers now enforce exact holdout-prompt rejection when
+   manifests set `reject_eval_prompt_overlap: true`. The trial12 source
+   checkpoint was copied from worker `gx10-dc65` to the coordinator, and three
+   local rejected Qwen checkpoints were deleted to restore disk headroom:
+   behavior-v1, refusal-unlikelihood-v2, and refusal-unlikelihood-v3. Recipes,
+   scores, and ledger entries remain in Git.
 
 ## Operational Guardrails
 
