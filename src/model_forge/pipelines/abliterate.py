@@ -1370,6 +1370,27 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
     return {"plan": selected_plan, "paths": paths, "readme": str(readme)}
 
 
+def heretic_execution_spec(plan: dict[str, Any], runner: str | Path) -> dict[str, Any]:
+    backend = plan["backend_config"]
+    runner_path = resolve_repo_path(runner)
+    image = backend.get("container_image")
+    if image:
+        env = os.environ.copy()
+        env["MODEL_FORGE_HERETIC_IMAGE"] = str(image)
+        return {
+            "mode": "guarded_container",
+            "command": [str(REPO_DIR / "scripts" / "run_heretic_direct_container.sh"), str(runner_path)],
+            "cwd": REPO_DIR,
+            "env": env,
+        }
+    return {
+        "mode": "host_python",
+        "command": [sys.executable, str(runner_path)],
+        "cwd": Path(plan["work_dir"]),
+        "env": None,
+    }
+
+
 def _as_float(value: Any) -> float | None:
     if value is None:
         return None
@@ -1667,7 +1688,14 @@ def command_sota_run(args: argparse.Namespace) -> None:
         runner = result["paths"].get("heretic_runner")
         if runner is None:
             raise SystemExit("missing generated Heretic runner")
-        subprocess.run([sys.executable, runner], cwd=Path(plan["work_dir"]), check=True)
+        execution = heretic_execution_spec(plan, runner)
+        console.print(f"[bold]Heretic execution mode[/bold]: {execution['mode']}")
+        subprocess.run(
+            execution["command"],
+            cwd=execution["cwd"],
+            env=execution["env"],
+            check=True,
+        )
     else:
         raise SystemExit(f"unsupported SOTA backend: {plan['backend']}")
 

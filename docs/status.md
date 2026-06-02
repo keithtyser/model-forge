@@ -432,6 +432,9 @@ length filtering:
   `export_for_model_forge_quick_gate`, then still require the model-forge quick
   gate before promotion.
 - Do not bypass guarded run scripts for full training.
+- Do not run generated Heretic search/direct Python directly for large models.
+  `./forge ablate ... sota-run --execute` now routes Heretic recipes with
+  `container_image` through the guarded Docker wrapper automatically.
 - Do not bypass the PEFT merge disk preflight for full-checkpoint ablation
   exports. If it blocks at the 15% floor, clear reviewed local artifacts first
   rather than lowering the guard.

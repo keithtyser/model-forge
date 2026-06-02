@@ -171,6 +171,12 @@ Run the preferred SOTA backend when the environment is ready:
 ./forge ablate gemma4_26b_a4b sota-run --execute
 ```
 
+For Heretic recipes with `container_image` set, `sota-run --execute` launches the
+generated search/direct runner through `scripts/run_heretic_direct_container.sh`.
+That wrapper applies Docker CPU, memory, swap, PID, HF-cache, RAM-floor, and
+disk-floor guardrails instead of running large model work through raw host
+Python.
+
 Select Heretic explicitly:
 
 ```bash

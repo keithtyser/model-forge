@@ -437,6 +437,11 @@ merged FT v4, trial2 scale0.75, heretic-long trial2, residual trial12, trial16
 diagnostic artifact, and search pointer directories unless a later cleanup
 ledger explicitly supersedes this.
 
+`./forge ablate ... sota-run --execute` now uses the guarded Heretic container
+automatically when a recipe sets `sota.backends.heretic.container_image`; do not
+run generated Heretic Python directly for large models unless you are debugging a
+small fixture.
+
 When a host does not have a suitable Python ML environment, use the reusable
 container merge runner:
 

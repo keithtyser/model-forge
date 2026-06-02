@@ -16,8 +16,9 @@ wrappers, operational helpers, or hardware-specific launchers.
   checkpoint merges on hosts that do not have the local Python ML stack, or
   when the host environment is older than the target model architecture.
 - `run_heretic_direct_container.sh`: guarded CUDA container launcher for
-  generated Heretic direct-parameter runners when host Python has CPU-only Torch
-  or lacks Heretic.
+  generated Heretic search or direct-parameter runners. `./forge ablate ...
+  sota-run --execute` uses it automatically when the recipe sets a Heretic
+  `container_image`.
 - `quantization/gemma4_moe_nvfp4.py`: lower-level ModelOpt helper used by
   `./forge quantize export` for Gemma4 full-MoE NVFP4 checkpoint creation.
 - `merge_peft_adapter.py`: PEFT adapter merge helper when live LoRA serving is

@@ -4786,3 +4786,44 @@ Additional eval provenance fix: eval manifests now include `scoring_version` at
 top level and in canonical metadata. Previously the scoring version was present
 in `eval_provenance_card.json` but missing from `manifest.json`, which made raw
 manifest-only handoffs weaker than intended.
+
+## Heretic SOTA Run Guardrail Fix
+
+Status: implemented after auditing the Qwen trial12 follow-up path.
+
+Hypothesis: future Heretic searches/exports should not rely on raw host Python
+for large checkpoints. The repo already had a guarded CUDA/Docker wrapper with
+CPU, memory, swap, PID, HF-cache, RAM-floor, and disk-floor controls, but
+`./forge ablate ... sota-run --execute` still launched generated Heretic runners
+directly through `sys.executable`. That left a sharp footgun for agents.
+
+Change:
+
+```text
+src/model_forge/pipelines/abliterate.py
+tests/test_abliteration_pipeline.py
+scripts/run_heretic_direct_container.sh
+scripts/README.md
+docs/abliteration.md
+AGENTS.md
+docs/status.md
+```
+
+Heretic `sota-run --execute` now uses
+`scripts/run_heretic_direct_container.sh` automatically when the selected
+Heretic backend config sets `container_image`. Recipes without a container image
+still fall back to host Python for small fixtures or intentionally managed local
+environments.
+
+Validation:
+
+```text
+.venv/bin/python -m unittest tests.test_abliteration_pipeline -v
+.venv/bin/python -m unittest tests.test_model_forge_dgx tests.test_eval_quality -v
+./forge ablate --config configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_unsafe_followup_search.yaml sota-run --backend heretic
+./forge doctor
+git diff --check
+```
+
+The dry `sota-run` regenerated Heretic artifacts and stopped before execution,
+so no model was loaded and no container was started.

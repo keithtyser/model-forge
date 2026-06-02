@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RUNNER="${1:?usage: scripts/run_heretic_direct_container.sh <generated-run_heretic_direct.py>}"
+RUNNER="${1:?usage: scripts/run_heretic_direct_container.sh <generated-run_heretic.py>}"
 IMAGE="${MODEL_FORGE_HERETIC_IMAGE:-model-forge-heretic-tf5:latest}"
 MODELS_DIR="${MODEL_FORGE_MODELS_DIR:-$HOME/models}"
 HF_CACHE="${HF_HOME:-$HOME/.cache/huggingface}"

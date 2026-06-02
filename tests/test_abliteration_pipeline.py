@@ -22,6 +22,7 @@ from model_forge.pipelines.abliterate import (
     build_sota_plan,
     configured_target_layers,
     guard_source_checkpoint,
+    heretic_execution_spec,
     intervention_direction,
     is_projection_target,
     load_prompts,
@@ -186,6 +187,19 @@ class AbliterationPlanTests(unittest.TestCase):
         script = runner.read_text(encoding="utf-8")
         self.assertIn("search_only = True", script)
         self.assertIn("model_forge_sota_heretic_search.json", script)
+
+    def test_heretic_sota_run_uses_guarded_container_when_configured(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_heretic_long_search.yaml"
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+        runner = Path(plan["work_dir"]) / "run_heretic_auto.py"
+
+        execution = heretic_execution_spec(plan, runner)
+
+        self.assertEqual(execution["mode"], "guarded_container")
+        self.assertEqual(execution["command"][0], str(REPO_DIR / "scripts" / "run_heretic_direct_container.sh"))
+        self.assertEqual(execution["command"][1], str((REPO_DIR / runner).resolve()))
+        self.assertEqual(execution["cwd"], REPO_DIR)
+        self.assertEqual(execution["env"]["MODEL_FORGE_HERETIC_IMAGE"], "model-forge-heretic-tf5:latest")
 
     def test_model_forge_heretic_prompt_options_are_preserved(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_heretic_long_search.yaml"
