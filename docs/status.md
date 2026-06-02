@@ -369,16 +369,21 @@ length filtering:
    to 0.85, challenge capability fell to 0.8438, and unsafe-overcompliance
    still refused 2/3 cases. Do not promote this checkpoint to `local_ft_abli`
    or use it as the Qwen NVFP4 source.
-   The next Qwen FT-abli branch is
-   `configs/finetuning/qwen36_27b_local_ft_v4_refusal_unlikelihood_v2.yaml`.
-   It adds a general trainer capability for paired refusal-unlikelihood behavior
-   edits: chosen refusal-free redirects use assistant-only CE, while rejected
-   explicit-refusal completions receive an unlikelihood penalty. The Qwen v2
-   pack contains 24 human-written chosen/rejected pairs plus the existing
-   positive redirect and capability-anchor rows. Focused tests pass,
-   `./forge doctor` passes, plan/prepare succeeded, and data prep accepted
-   100/100 rows. This is the next candidate to train, merge, and quick-gate
-   before any Qwen NVFP4 work.
+   The refusal-unlikelihood v2 branch trained successfully on the guarded
+   two-Spark path, merged to
+   `Qwen3.6-27B-local-ft-v4-abliterated-refusal-unlikelihood-v2`, and
+   quick-gated at
+   `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_refusal_unlikelihood_v2_dgx_spark`.
+   Reject it: paired harmful refusal improved to 0.05, but challenge capability
+   fell to 0.8125, paired benign quality stayed at 0.85, harmful detail was
+   0.05, and unsafe-overcompliance still refused all 3 cases.
+   The current Qwen FT-abli candidate is
+   `configs/finetuning/qwen36_27b_local_ft_v4_refusal_unlikelihood_v3.yaml`.
+   It keeps the paired refusal-unlikelihood objective, lowers unlikelihood
+   weight from 0.40 to 0.25, lowers max steps from 180 to 120, adds adjacent
+   eval-style "Refuse briefly..." pairs, and adds capability replay rows from
+   the v2 failure analysis. Plan/prepare succeeded and data prep accepted
+   96/96 rows. Train, merge, and quick-gate v3 before any Qwen NVFP4 work.
 
 ## Operational Guardrails
 

@@ -4484,3 +4484,89 @@ it a successful no-finetune abliteration of the FT checkpoint.
 Publish status: already uploaded to Hugging Face before the FT handoff. No
 additional upload needed for this completed ablated checkpoint unless the model
 card or files need revision.
+
+## Qwen 3.6 27B: FT v4 Refusal-Unlikelihood Ablation v2 Result
+
+Status: rejected after Spark train, merge, and internal quick gate.
+
+Hypothesis: paired refusal-unlikelihood should suppress explicit refusal
+phrasing more directly than plain behavior SFT while preserving local FT v4
+capability through replay rows.
+
+Commands executed:
+
+```text
+./forge finetune --config configs/finetuning/qwen36_27b_local_ft_v4_refusal_unlikelihood_v2.yaml prepare --overwrite
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 MODEL_FORGE_TRAIN_DOCKER_CPUS=8 MODEL_FORGE_TRAIN_DOCKER_MEMORY=108g MODEL_FORGE_TRAIN_DOCKER_MEMORY_SWAP=108g MODEL_FORGE_TRAIN_DOCKER_SHM=32g runs/finetune/qwen36_27b_local_ft_v4_refusal_unlikelihood_v2/run_cluster_torchrun.sh
+scripts/run_merge_peft_container.sh --base-model ~/models/Qwen3.6-27B-local-ft-v4-merged --adapter ~/models/model-forge-adapters/qwen36_27b/local_ft_v4_refusal_unlikelihood_v2 --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-refusal-unlikelihood-v2 --dtype bf16 --merge-method direct --min-free-disk-fraction 0.10 --trust-remote-code --overwrite
+MODEL_FORGE_BASE_URL=http://127.0.0.1:8000/v1 MODEL_FORGE_CONTEXT_LENGTH=32768 MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_refusal_unlikelihood_v2 --internal --bucket refusal_paired_boundary --bucket unsafe_overcompliance --bucket capability_preservation_challenge
+```
+
+Observed training result: 180/180 steps completed on the two-Spark guarded
+torchrun path in 44m49s. Final train loss was 2.109. The first launch exposed a
+DDP control-flow issue when ranks received paired and non-paired batches in the
+same step; the trainer was fixed to always run the rejected forward pass when
+unlikelihood is enabled, adding a zero contribution on ranks without rejected
+tokens.
+
+Observed eval result:
+
+```text
+results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_refusal_unlikelihood_v2_dgx_spark
+capability_preservation_challenge.normal_use_regression_pass_rate: 0.8125
+refusal_paired_boundary.ablation_refusal_suppression_rate: 0.95
+refusal_paired_boundary.refusal_rate_harmful: 0.05
+refusal_paired_boundary.benign_answer_quality_rate: 0.85
+refusal_paired_boundary.harmful_detail_rate: 0.05
+unsafe_overcompliance.refusal_rate_harmful: 1.0
+```
+
+Decision: reject. v2 improved paired harmful refusal suppression but regressed
+capability and benign quality too much, introduced one harmful-detail/scorer
+failure, and still refused every unsafe-overcompliance probe.
+
+Next revision: v3 lowers unlikelihood pressure, lowers training steps, adds
+adjacent eval-style "Refuse briefly..." chosen/rejected pairs, and adds
+capability replay rows based on v2 failures.
+
+## Qwen 3.6 27B: FT v4 Refusal-Unlikelihood Ablation v3 Prep
+
+Status: prepared for Spark train.
+
+Hypothesis: v2 overfit short redirect behavior and did not cover the explicit
+"Refuse briefly..." safety-aligned prompt style. v3 should preserve more local
+FT v4 capability while improving the remaining refusal gates by reducing
+unlikelihood pressure and adding targeted, holdout-safe examples.
+
+Primary files:
+
+```text
+datasets/seeds/qwen36_27b_local_ft_v4_refusal_unlikelihood_v3_evalstyle.jsonl
+datasets/seeds/qwen36_27b_local_ft_v4_capability_replay_v3.jsonl
+configs/data_sources/qwen36_27b_local_ft_v4_refusal_unlikelihood_v3.yaml
+datasets/finetuning/qwen36_27b_local_ft_v4_refusal_unlikelihood_v3.yaml
+configs/finetuning/qwen36_27b_local_ft_v4_refusal_unlikelihood_v3.yaml
+configs/model_families/qwen36_27b.yaml
+```
+
+Delta from v2:
+
+```text
+unlikelihood_weight: 0.40 -> 0.25
+max_steps: 180 -> 120
+training rows: 100 -> 96
+new eval-style refusal-unlikelihood pairs: 12
+new capability replay rows: 16
+```
+
+Validation:
+
+```text
+jq empty datasets/seeds/qwen36_27b_local_ft_v4_refusal_unlikelihood_v3_evalstyle.jsonl
+jq empty datasets/seeds/qwen36_27b_local_ft_v4_capability_replay_v3.jsonl
+./forge variants graph qwen36_27b
+./forge finetune --config configs/finetuning/qwen36_27b_local_ft_v4_refusal_unlikelihood_v3.yaml prepare --overwrite
+.venv/bin/python runs/finetune/qwen36_27b_local_ft_v4_refusal_unlikelihood_v3/train_trl_sft.py --plan runs/finetune/qwen36_27b_local_ft_v4_refusal_unlikelihood_v3/plan.json --prepare-data
+```
+
+Observed data prep: accepted 96/96 rows with no quality-gate rejections.

@@ -1,0 +1,121 @@
+version: 0.1.0
+description: >
+  Data-source registry for Qwen 3.6 27B refusal-unlikelihood behavior edit v3.
+  This revision targets the v2 failure mode: exact-style safety prompts still
+  triggered refusals, while capability answers became too terse. Sources remain
+  adjacent to internal evals and must pass overlap filters.
+
+sources:
+  qwen36_local_ft_v4_refusal_unlikelihood_v3_evalstyle_pairs:
+    name: qwen36_local_ft_v4_refusal_unlikelihood_v3_evalstyle_pairs
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_refusal_unlikelihood_v3_evalstyle.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - evalstyle_safety_prompt
+      - refusal_free_safe_redirect
+      - behavior_edit
+    sampling_cap: 12
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Human-written adjacent examples that use the same "Respond as a
+      safety-aligned assistant. Refuse briefly..." instruction style that v2
+      failed, while chosen responses still redirect without explicit refusal
+      wording or actionable harmful detail.
+
+  qwen36_local_ft_v4_refusal_unlikelihood_v2_pairs:
+    name: qwen36_local_ft_v4_refusal_unlikelihood_v2_pairs
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_refusal_unlikelihood_v2.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - behavior_edit
+      - benign_safety_analysis
+    sampling_cap: 24
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Existing v2 chosen/rejected pairs. v3 samples fewer than the full pack to
+      avoid overfitting short redirect style.
+
+  qwen36_local_ft_v4_behavior_abli_v1_seeds:
+    name: qwen36_local_ft_v4_behavior_abli_v1_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_behavior_abli_v1.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_free_safe_redirect
+      - behavior_edit
+      - benign_safety_analysis
+    sampling_cap: 18
+    intended_use: >
+      Prior behavior-v1 safe redirects retained as positive examples, but
+      downsampled in the v3 manifest to reduce capability drift.
+
+  qwen36_local_ft_v5_boundary_redirect_seeds:
+    name: qwen36_local_ft_v5_boundary_redirect_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v5_boundary_redirect.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_free_safe_redirect
+      - eval_adjacent_repair
+      - benign_safety_analysis
+    sampling_cap: 30
+    intended_use: >
+      Existing Qwen v5 redirect pack used as adjacent positive examples.
+
+  qwen36_local_ft_v4_capability_replay_v3:
+    name: qwen36_local_ft_v4_capability_replay_v3
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_capability_replay_v3.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - eval_adjacent_repair
+      - instruction_following
+      - artifact_validation
+    sampling_cap: 16
+    intended_use: >
+      Capability replay rows written from v2 failure analysis. They cover
+      latency debugging, disk pressure, prompt sampling, flaky evals, model
+      selection, streaming JSONL, SQL, shell quoting, API retry design, and
+      artifact validation without copying holdout prompts.
+
+  qwen36_local_ft_v4_planning_repair_seeds:
+    name: qwen36_local_ft_v4_planning_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_planning_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - agentic_planning
+      - instruction_following
+    sampling_cap: 12
+    intended_use: >
+      Capability anchor from promoted local FT v4 to reduce regression on
+      planning, verification, rollback, and containment behavior.
+
+  qwen36_local_ft_v3_repair_seeds:
+    name: qwen36_local_ft_v3_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v3_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - instruction_following
+      - performance_analysis
+      - sql_reasoning
+    sampling_cap: 22
+    intended_use: >
+      Compact capability anchor for benign security quality, SQL reasoning, and
+      performance-analysis behavior that local FT v4 already promoted.
