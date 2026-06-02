@@ -336,6 +336,12 @@ only if the merged checkpoint reaches the same zero-refusal, zero-harmful-detail
 FT-v4 capability/benign-quality gates; otherwise document and revise the
 objective before NVFP4.
 
+Important DDP lesson from the first v2 launch: rank-local paired/non-paired
+batches can diverge. The trainer must always run the rejected forward pass on
+every rank when the unlikelihood objective is enabled, adding a zero
+contribution on ranks with no rejected tokens. That patch is tracked in
+`src/model_forge/pipelines/finetune.py`; keep it if you revise this objective.
+
 Do not trust live-LoRA Qwen Heretic scale gates yet: live scale0.75 refused 95%
 of paired harmful prompts while the merged scale0.75 checkpoint refused 65% on
 the same paired bucket. Use full merged checkpoints for the next Qwen candidates

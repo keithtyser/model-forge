@@ -241,6 +241,8 @@ class FinetunePlanTests(unittest.TestCase):
         self.assertIn("qwen36_local_ft_v4_refusal_unlikelihood_v2_pairs", source_ids)
         self.assertIn("RefusalUnlikelihoodTrainer", trainer_script)
         self.assertIn("rejected_messages", trainer_script)
+        self.assertIn("Keep DDP ranks in the same forward/backward structure", trainer_script)
+        self.assertIn("rejected_outputs.logits.sum() * 0.0", trainer_script)
         self.assertIn("Assistant-only loss: `True`", method_card)
         self.assertIn("Unlikelihood weight: `0.4`", method_card)
 

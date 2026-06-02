@@ -4063,6 +4063,8 @@ when `unlikelihood_weight > 0` or the method contains `unlikelihood`, it:
 - preserves optional rejected_messages/rejected_text columns from JSONL rows
 - pads chosen and rejected batches separately
 - adds -log(1 - p(rejected_token)) over rejected assistant tokens
+- always performs the rejected forward pass on every DDP rank, adding zero
+  contribution on ranks with no rejected tokens
 ```
 
 Tracked artifacts:
@@ -4110,6 +4112,14 @@ qwen36_local_ft_v4_planning_repair_seeds: 12 accepted / 0 rejected
 qwen36_local_ft_v3_repair_seeds: 16 accepted / 0 rejected
 total: 100 accepted / 0 rejected
 ```
+
+Pain point found during first heavy launch: DDP ranks can receive different
+row types because paired refusal-unlikelihood rows are mixed with ordinary
+SFT anchor rows. The initial trainer skipped the rejected forward pass on ranks
+whose local batch had no rejected tokens, while another rank could run it for a
+paired batch. That created a distributed control-flow mismatch after the first
+few steps. The run was stopped cleanly, and the trainer now keeps the same
+forward/backward structure on all ranks.
 
 Next commands:
 

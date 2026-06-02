@@ -986,17 +986,21 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
                 and rejected_attention_mask is not None
                 and rejected_labels is not None
                 and self.unlikelihood_weight > 0
-                and bool((rejected_labels != -100).any())
             ):
                 rejected_outputs = model(input_ids=rejected_input_ids, attention_mask=rejected_attention_mask)
-                logits = rejected_outputs.logits[:, :-1, :].float()
-                labels = rejected_labels[:, 1:]
-                mask = labels.ne(-100)
-                safe_labels = labels.masked_fill(~mask, 0)
-                token_probs = torch.softmax(logits, dim=-1).gather(-1, safe_labels.unsqueeze(-1)).squeeze(-1)
-                unlikelihood = -torch.log(torch.clamp(1.0 - token_probs, min=1e-6))
-                unlikelihood_loss = unlikelihood.masked_select(mask).mean()
-                loss = loss + (self.unlikelihood_weight * unlikelihood_loss)
+                if bool((rejected_labels != -100).any()):
+                    logits = rejected_outputs.logits[:, :-1, :].float()
+                    labels = rejected_labels[:, 1:]
+                    mask = labels.ne(-100)
+                    safe_labels = labels.masked_fill(~mask, 0)
+                    token_probs = torch.softmax(logits, dim=-1).gather(-1, safe_labels.unsqueeze(-1)).squeeze(-1)
+                    unlikelihood = -torch.log(torch.clamp(1.0 - token_probs, min=1e-6))
+                    unlikelihood_loss = unlikelihood.masked_select(mask).mean()
+                    loss = loss + (self.unlikelihood_weight * unlikelihood_loss)
+                else:
+                    # Keep DDP ranks in the same forward/backward structure even
+                    # when only some ranks receive paired rejected completions.
+                    loss = loss + (rejected_outputs.logits.sum() * 0.0)
             return (loss, outputs) if return_outputs else loss
 
     if use_unlikelihood:
