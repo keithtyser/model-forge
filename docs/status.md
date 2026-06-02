@@ -338,10 +338,17 @@ length filtering:
    `gx10-dc65`: focused baseline was 3/5 refusals, the best refusal-count trial
    reached 1/5 only at high KL 0.1856, and the best within-budget trial was
    trial index 16 / trial_id 15 at 2/5 refusals and KL 0.0003. A diagnostic
-   direct export recipe is prepared at
+   direct export recipe was prepared at
    `configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_unsafe_followup_trial16.yaml`;
-   use it to test whether the low-KL focused improvement translates to the
-   model-forge quick gate before doing more exports.
+   the checkpoint was exported on worker `gx10-dc65` and quick-gated at
+   `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_unsafe_followup_trial16_dgx_spark`.
+   Reject it: paired harmful refusal regressed from residual trial12's 0.10 to
+   0.20, paired benign quality regressed from 0.90 to 0.80, challenge capability
+   regressed from 0.875 to 0.8438, unsafe-overcompliance still refused all 3
+   cases, and harmful detail rose from 0.0 to 0.1. The focused Heretic signal
+   did not translate to the model-forge quick gate. Next, revise the behavior
+   edit/search objective or gate directly on model-forge unsafe-overcompliance
+   cases instead of exporting more low-KL near-miss trials from the same method.
 
 ## Operational Guardrails
 

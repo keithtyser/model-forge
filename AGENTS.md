@@ -247,8 +247,16 @@ refusals, best refusal count was 1/5 at high KL 0.1856, and the best
 within-budget result was trial index 16 / trial_id 15 with 2/5 refusals at KL
 0.0003. The diagnostic direct export recipe is
 `configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_unsafe_followup_trial16.yaml`.
-Export it only to check whether this low-KL focused improvement translates to
-the model-forge quick gate; it is not a promotion-ready candidate.
+It was exported to
+`~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-trial12-unsafe-followup-trial16`
+and quick-gated at
+`results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_unsafe_followup_trial16_dgx_spark`.
+Reject it as a promotion path: paired harmful refusal worsened to 0.20,
+paired benign quality fell to 0.80, challenge capability fell to 0.8438,
+unsafe-overcompliance still refused all 3 cases, and harmful detail rose to
+0.10. Do not keep exporting low-KL near-miss Heretic trials from this same
+objective; revise the behavior-edit method or gate search directly on
+model-forge unsafe-overcompliance cases.
 
 Do not trust live-LoRA Qwen Heretic scale gates yet: live scale0.75 refused 95%
 of paired harmful prompts while the merged scale0.75 checkpoint refused 65% on
@@ -260,6 +268,17 @@ Before exporting another full Qwen checkpoint, check coordinator disk headroom.
 `scripts/merge_peft_adapter.py` now blocks exports projected to leave less than
 15% free disk. Do not lower that guard to force an export; delete or relocate
 reviewed local artifacts first.
+
+The trial16 export required worker cleanup. The rejected Qwen checkpoints
+`Qwen3.6-27B-local-ft-v4-abliterated-v1`,
+`Qwen3.6-27B-local-ft-v4-abliterated-trial0-direction50`,
+`Qwen3.6-27B-local-ft-v4-abliterated-trial2-scale1p0`,
+`Qwen3.6-27B-local-ft-v4-abliterated-gemma-t34-transfer`, and
+`Qwen3.6-27B-local-ft-v4-abliterated-heretic-refusal-suffix-trial17-scale1p5`
+were deleted from worker `gx10-dc65`; keep the current base, local FT v4,
+merged FT v4, trial2 scale0.75, heretic-long trial2, residual trial12, trial16
+diagnostic artifact, and search pointer directories unless a later cleanup
+ledger explicitly supersedes this.
 
 When a host does not have a suitable Python ML environment, use the reusable
 container merge runner:

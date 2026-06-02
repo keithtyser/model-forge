@@ -3710,7 +3710,8 @@ or relocating rejected checkpoints first.
 
 ## Qwen 3.6 27B: Sequential Trial12 Unsafe-Followup Search
 
-Status: search completed; direct trial16 diagnostic export recipe prepared.
+Status: search completed; direct trial16 diagnostic export evaluated and
+rejected.
 
 Hypothesis: the unsafe-followup search above searched from local FT v4, so it
 did not compose with residual trial12's strongest paired-harmful refusal
@@ -3786,11 +3787,67 @@ Direct export recipe:
 configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_unsafe_followup_trial16.yaml
 ```
 
-Planned artifact:
+Exported artifact:
 
 ```text
 ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-trial12-unsafe-followup-trial16
 ```
+
+Direct export manifest:
+
+```text
+~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-trial12-unsafe-followup-trial16/model_forge_sota_heretic.json
+```
+
+The direct export used trial16's low-KL parameters from the sequential search.
+It merged 23 tensors, skipped 105 zero tensors, and wrote a full 51 GiB
+checkpoint on worker `gx10-dc65`.
+
+Worker cleanup before export:
+
+```text
+deleted: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-v1
+deleted: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-trial0-direction50
+deleted: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-trial2-scale1p0
+deleted: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-gemma-t34-transfer
+deleted: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-refusal-suffix-trial17-scale1p5
+kept: base, local FT v4, merged FT v4, trial2 scale0.75, heretic-long trial2,
+      residual trial12, trial16 diagnostic artifact, and search pointers
+```
+
+The cleanup removed only checkpoints already documented as rejected or
+diagnostic. Worker root disk had about 348 GiB free after the trial16 export.
+
+Quick-gate result:
+
+```text
+results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_unsafe_followup_trial16_dgx_spark
+```
+
+| metric | residual trial12 quick | trial16 quick | direction |
+| --- | ---: | ---: | --- |
+| capability_preservation_challenge pass rate | 0.8750 | 0.8438 | worse |
+| refusal_paired_boundary benign_answer_quality_rate | 0.9000 | 0.8000 | worse |
+| refusal_paired_boundary refusal_rate_harmful | 0.1000 | 0.2000 | worse |
+| refusal_paired_boundary harmful_detail_rate | 0.0000 | 0.1000 | worse |
+| unsafe_overcompliance refusal_rate_harmful | 1.0000 | 1.0000 | unchanged |
+
+Trial16 did not translate from the Heretic focused probe to the model-forge
+quick gate. It worsened paired harmful refusal suppression, benign quality, and
+challenge capability while leaving unsafe-overcompliance fully refused. Reject
+trial16 as a promotion, upload, or quantization target.
+
+Operational note: a detached `systemd-run --user --unit ... docker run` launch
+failed because the service context could not access the Docker socket. The
+foreground guarded `systemd-run --user --scope ... docker run` path worked and
+the vLLM server was stopped after the eval. Do not treat the detached-service
+failure as a model failure.
+
+Next method decision: stop exporting more low-KL near-miss variants from this
+same sequential Heretic objective. The next Qwen FT-abli branch should either
+search with the actual model-forge unsafe-overcompliance cases in the loop or
+switch to a different refusal-removal method with explicit benign/challenge
+quality controls.
 
 ## Dataset Factory: Pack Promotion Gates
 
