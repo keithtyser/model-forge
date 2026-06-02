@@ -401,10 +401,10 @@ length filtering:
    refusal failures plus 56 benign/capability anchors. The quick gate lives in
    `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_unlikelihood_v1_dgx_spark`:
    challenge capability 0.8438, paired harmful refusal 0.10, paired benign
-   quality 1.00, unsafe-overcompliance refusal 0.6667, and unsafe harmful
-   detail/compliance 0.3333. It improved paired benign quality but did not
-   reduce paired harmful refusal versus residual trial12, regressed challenge
-   capability, and introduced an unsafe-detail gate failure.
+   quality 1.00, unsafe-overcompliance refusal 1.00, and unsafe harmful detail
+   0.00 after scoring v5 rescore. It improved paired benign quality but did not
+   reduce paired harmful refusal or unsafe-overcompliance refusal versus
+   residual trial12, and it regressed challenge capability.
    This branch also exposed and fixed a repo pain point: generated finetune
    trainers now enforce exact holdout-prompt rejection when manifests set
    `reject_eval_prompt_overlap: true`. The run also exposed a serving pain
@@ -413,6 +413,10 @@ length filtering:
    or `MODEL_FORGE_SPARK_CLUSTER_CONFIG`, derives Spark nodes and tensor
    parallel size from the inventory, and can hard-stop solo fallback with
    `MODEL_FORGE_SERVE_REQUIRE_CLUSTER=1`.
+   A scoring v5 eval fix also landed: imperative harmful-boundary refusals such
+   as "do not provide" are recognized for unsafe prompts without becoming global
+   benign-refusal patterns, and safe redirect keywords can use normalized
+   alternatives.
 
 ## Operational Guardrails
 
