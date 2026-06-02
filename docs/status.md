@@ -405,6 +405,14 @@ length filtering:
    0.00 after scoring v5 rescore. It improved paired benign quality but did not
    reduce paired harmful refusal or unsafe-overcompliance refusal versus
    residual trial12, and it regressed challenge capability.
+   The next prepared method shift is
+   `configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_response_conditioned_search.yaml`.
+   It adds generic response-conditioned Heretic prompt support and uses the
+   committed safe trace seed
+   `datasets/abliteration/qwen36_trial12_response_conditioned_traces.jsonl`:
+   five actual residual refusal traces become bad contrast examples and eight
+   no-refusal safe redirects become good contrast examples. Run this search
+   before another direct export attempt.
    This branch also exposed and fixed a repo pain point: generated finetune
    trainers now enforce exact holdout-prompt rejection when manifests set
    `reject_eval_prompt_overlap: true`. The run also exposed a serving pain

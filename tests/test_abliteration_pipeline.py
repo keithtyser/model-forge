@@ -30,6 +30,7 @@ from model_forge.pipelines.abliterate import (
     missing_direction_layers,
     parse_heretic_journal,
     prompts_for_buckets,
+    response_conditioned_prompts,
     tensor_strength,
     write_heretic_config,
     write_heretic_direct_runner,
@@ -221,6 +222,74 @@ class AbliterationPlanTests(unittest.TestCase):
             "\n\nI can't help with that request.",
         )
 
+    def test_response_conditioned_prompts_filter_eval_traces(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "responses.jsonl"
+            records = [
+                {
+                    "bucket": "unsafe_overcompliance",
+                    "case_id": "refuse_a",
+                    "prompt": "Harmful request A",
+                    "response_text": "I cannot help with A.",
+                    "checks": {"should_refuse": True},
+                    "scores": {"refusal_rate_harmful": 1.0},
+                },
+                {
+                    "bucket": "unsafe_overcompliance",
+                    "case_id": "refuse_b",
+                    "prompt": "Harmful request B",
+                    "response_text": "Defensive alternative B.",
+                    "checks": {"should_refuse": True},
+                    "scores": {"refusal_rate_harmful": 0.0},
+                },
+            ]
+            source.write_text("\n".join(json.dumps(record) for record in records) + "\n", encoding="utf-8")
+
+            prompts = response_conditioned_prompts(
+                source,
+                case_ids={"unsafe_overcompliance/refuse_a"},
+                should_refuse=True,
+                score_filters={"refusal_rate_harmful": {"eq": 1.0}},
+                template="Prompt: {prompt}\nResponse: {response_text}",
+            )
+
+        self.assertEqual(prompts, ["Prompt: Harmful request A\nResponse: I cannot help with A."])
+
+    def test_model_forge_heretic_response_conditioned_sections_are_materialized(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_heretic_long_search.yaml"
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "responses.jsonl"
+            source.write_text(
+                json.dumps({
+                    "bucket": "unsafe_overcompliance",
+                    "case_id": "refuse_a",
+                    "prompt": "Harmful request A",
+                    "response_text": "I cannot help with A.",
+                    "checks": {"should_refuse": True},
+                    "scores": {"refusal_rate_harmful": 1.0},
+                })
+                + "\n",
+                encoding="utf-8",
+            )
+            backend = config["sota"]["backends"]["heretic"]
+            prompt_spec = backend["model_forge_prompt_datasets"]
+            prompt_spec["bad_train_response_source"] = str(source)
+            prompt_spec["bad_train_response_case_ids"] = ["unsafe_overcompliance/refuse_a"]
+            prompt_spec["bad_train_response_score_filters"] = {"refusal_rate_harmful": {"eq": 1.0}}
+            prompt_spec["bad_train_response_template"] = "Prompt: {prompt}\nRefusal trace: {response_text}"
+
+            plan = build_sota_plan(config, config_path, "heretic")
+            write_heretic_config(plan)
+            manifest = load_yaml(Path(plan["work_dir"]) / "model_forge_prompt_datasets" / "manifest.json")
+
+        bad_section = manifest["sections"]["bad_prompts"]
+        self.assertEqual(bad_section["response_conditioned"]["count"], 1)
+        self.assertEqual(
+            bad_section["response_conditioned"]["case_ids"],
+            ["unsafe_overcompliance/refuse_a"],
+        )
+
     def test_model_forge_heretic_prompt_case_filters_target_residuals(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_heretic_long_search.yaml"
         config = load_yaml(config_path)
@@ -397,6 +466,26 @@ class AbliterationPlanTests(unittest.TestCase):
             "refusal_paired_boundary/finance_fraud_prevention_benign",
             manifest["sections"]["good_evaluation_prompts"]["case_ids"],
         )
+
+    def test_qwen_trial12_response_conditioned_search_adds_eval_traces(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_local_abli_heretic_trial12_response_conditioned_search.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+
+        self.assertTrue(plan["backend_config"]["search_only"])
+        self.assertEqual(plan["backend_config"]["n_trials"], 32)
+        self.assertTrue(plan["source_model"].endswith("Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12"))
+        write_heretic_config(plan)
+        manifest = load_yaml(Path(plan["work_dir"]) / "model_forge_prompt_datasets" / "manifest.json")
+
+        self.assertEqual(manifest["sections"]["bad_prompts"]["response_conditioned"]["count"], 5)
+        self.assertEqual(manifest["sections"]["good_prompts"]["response_conditioned"]["count"], 8)
+        self.assertEqual(manifest["sections"]["bad_evaluation_prompts"]["count"], 5)
+        self.assertEqual(manifest["sections"]["good_evaluation_prompts"]["count"], 6)
 
     def test_qwen_trial12_unsafe_followup_trial16_exports_direct_parameters(self) -> None:
         config_path = (

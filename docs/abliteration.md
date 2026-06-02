@@ -177,6 +177,15 @@ That wrapper applies Docker CPU, memory, swap, PID, HF-cache, RAM-floor, and
 disk-floor guardrails instead of running large model work through raw host
 Python.
 
+Recipes can also condition Heretic prompt sections on prior eval traces by
+setting keys such as `bad_train_response_source`,
+`bad_train_response_case_ids`, and `bad_train_response_score_filters` under
+`model_forge_prompt_datasets`. The source is JSONL with `bucket`, `case_id`,
+`prompt`, `response_text`, `checks`, and `scores`; matching traces are appended
+to the generated section using the configured response template. Use this when
+generic refusal/compliance suffixes are too weak and the next search should
+target the model's actual residual failure responses.
+
 Select Heretic explicitly:
 
 ```bash

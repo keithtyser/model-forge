@@ -4827,3 +4827,51 @@ git diff --check
 
 The dry `sota-run` regenerated Heretic artifacts and stopped before execution,
 so no model was loaded and no container was started.
+
+## Qwen Response-Conditioned Heretic Search Prep
+
+Status: implemented and dry-run validated; not yet promoted.
+
+Hypothesis: the prior Qwen Heretic follow-up searches improved Heretic's focused
+probe but still did not reach the zero-refusal export gate, and the sequential
+trial12 follow-up only reached 1/5 refusals at high KL. Generic refusal suffixes
+were likely too weak because they did not match the model's actual residual
+refusal style. A response-conditioned search should target the exact refusal
+traces left by residual trial12 while preserving traces where residual trial12
+already avoided explicit refusal without emitting harmful detail.
+
+Change:
+
+```text
+src/model_forge/pipelines/abliterate.py
+tests/test_abliteration_pipeline.py
+datasets/abliteration/qwen36_trial12_response_conditioned_traces.jsonl
+configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_response_conditioned_search.yaml
+docs/abliteration.md
+AGENTS.md
+docs/status.md
+```
+
+The new `model_forge_prompt_datasets` response-conditioning keys load eval-trace
+JSONL, filter by bucket/case/score, and append `prompt + response_text` examples
+to any Heretic prompt section. The Qwen recipe adds five residual trial12
+refusal traces to bad training prompts and eight no-refusal safe redirect traces
+to good training prompts.
+
+Dry validation:
+
+```text
+jq -c . datasets/abliteration/qwen36_trial12_response_conditioned_traces.jsonl >/dev/null
+./forge ablate --config configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_response_conditioned_search.yaml sota-run --backend heretic
+.venv/bin/python -m unittest tests.test_abliteration_pipeline tests.test_model_forge_dgx tests.test_eval_quality -v
+git diff --check
+```
+
+Dry prompt materialization counts:
+
+```text
+good train: 78
+good eval: 6
+bad train: 10
+bad eval: 5
+```

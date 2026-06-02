@@ -865,6 +865,114 @@ def save_heretic_prompt_dataset(path: Path, prompts: list[str]) -> None:
     Dataset.from_dict({"text": prompts}, split="train").save_to_disk(str(path))
 
 
+def response_score_matches(scores: dict[str, Any], filters: dict[str, Any]) -> bool:
+    for key, expected in filters.items():
+        actual = _as_float(scores.get(key))
+        if isinstance(expected, dict):
+            if "eq" in expected:
+                target = _as_float(expected["eq"])
+                if actual is None or target is None or abs(actual - target) > 1e-9:
+                    return False
+            if "min" in expected:
+                target = _as_float(expected["min"])
+                if actual is None or target is None or actual < target:
+                    return False
+            if "max" in expected:
+                target = _as_float(expected["max"])
+                if actual is None or target is None or actual > target:
+                    return False
+        else:
+            target = _as_float(expected)
+            if actual is None or target is None or abs(actual - target) > 1e-9:
+                return False
+    return True
+
+
+def response_conditioned_prompts(
+    source: str | Path,
+    *,
+    case_ids: set[str] | None = None,
+    buckets: set[str] | None = None,
+    should_refuse: bool | None = None,
+    score_filters: dict[str, Any] | None = None,
+    template: str | None = None,
+    max_response_chars: int | None = None,
+    limit: int | None = None,
+) -> list[str]:
+    path = resolve_repo_path(source)
+    if not path.exists():
+        raise SystemExit(f"missing response-conditioned prompt source: {path}")
+    prompt_template = template or "{prompt}\n\nAssistant response:\n{response_text}"
+    prompts: list[str] = []
+    seen: set[str] = set()
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"invalid response-conditioned JSONL at {path}:{line_number}: {exc}") from exc
+        bucket = str(record.get("bucket", "")).strip()
+        case_id = str(record.get("case_id", "")).strip()
+        if buckets is not None and bucket not in buckets:
+            continue
+        if not case_id_matches(bucket, case_id, case_ids):
+            continue
+        checks = record.get("checks") or {}
+        if should_refuse is not None and bool(checks.get("should_refuse", False)) != should_refuse:
+            continue
+        scores = record.get("scores") or {}
+        if score_filters and not response_score_matches(scores, score_filters):
+            continue
+        prompt = str(record.get("prompt", "")).strip()
+        response = str(record.get("response_text", "")).strip()
+        if not prompt or not response:
+            continue
+        if max_response_chars is not None and max_response_chars > 0:
+            response = response[:max_response_chars].strip()
+        try:
+            text = prompt_template.format(
+                bucket=bucket,
+                case_id=case_id,
+                prompt=prompt,
+                response_text=response,
+            ).strip()
+        except KeyError as exc:
+            raise SystemExit(f"unknown response-conditioned template field: {exc}") from exc
+        if text and text not in seen:
+            seen.add(text)
+            prompts.append(text)
+        if limit is not None and len(prompts) >= limit:
+            break
+    return prompts
+
+
+def response_conditioned_section_prompts(spec: dict[str, Any], prefix: str) -> tuple[list[str], dict[str, Any] | None]:
+    source = spec.get(f"{prefix}_response_source")
+    if not source:
+        return [], None
+    raw_max_chars = spec.get(f"{prefix}_response_max_chars")
+    raw_limit = spec.get(f"{prefix}_response_limit")
+    prompts = response_conditioned_prompts(
+        source,
+        case_ids=normalize_case_id_filter(spec.get(f"{prefix}_response_case_ids")),
+        buckets=normalize_case_id_filter(spec.get(f"{prefix}_response_buckets")),
+        should_refuse=spec.get(f"{prefix}_response_should_refuse"),
+        score_filters=spec.get(f"{prefix}_response_score_filters"),
+        template=spec.get(f"{prefix}_response_template"),
+        max_response_chars=int(raw_max_chars) if raw_max_chars is not None else None,
+        limit=int(raw_limit) if raw_limit is not None else None,
+    )
+    return prompts, {
+        "source": str(resolve_repo_path(source)),
+        "count": len(prompts),
+        "case_ids": sorted(normalize_case_id_filter(spec.get(f"{prefix}_response_case_ids")) or []),
+        "buckets": sorted(normalize_case_id_filter(spec.get(f"{prefix}_response_buckets")) or []),
+        "score_filters": spec.get(f"{prefix}_response_score_filters") or {},
+    }
+
+
 def materialize_model_forge_heretic_prompts(plan: dict[str, Any], backend: dict[str, Any], work_dir: Path) -> None:
     spec = backend.get("model_forge_prompt_datasets")
     if spec is None:
@@ -936,6 +1044,11 @@ def materialize_model_forge_heretic_prompts(plan: dict[str, Any], backend: dict[
     }
     summary: dict[str, Any] = {"source": "model_forge_eval_prompts", "sections": {}}
     for section, prompts in sections.items():
+        prefix = option_prefixes[section]
+        response_summary = None
+        if isinstance(spec, dict):
+            response_prompts, response_summary = response_conditioned_section_prompts(spec, prefix)
+            prompts = [*prompts, *response_prompts]
         path = dataset_root / section
         save_heretic_prompt_dataset(path, prompts)
         backend[section] = {
@@ -943,7 +1056,6 @@ def materialize_model_forge_heretic_prompts(plan: dict[str, Any], backend: dict[
             "split": "train[:]",
             "column": "text",
         }
-        prefix = option_prefixes[section]
         for option in ("prefix", "suffix", "system_prompt"):
             key = f"{prefix}_{option}"
             if isinstance(spec, dict) and key in spec:
@@ -958,6 +1070,8 @@ def materialize_model_forge_heretic_prompts(plan: dict[str, Any], backend: dict[
                 if key in backend[section]
             },
         }
+        if response_summary is not None:
+            summary["sections"][section]["response_conditioned"] = response_summary
     (dataset_root / "manifest.json").write_text(json.dumps(summary, indent=2) + "\n")
 
 
