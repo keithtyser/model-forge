@@ -360,7 +360,7 @@ nodes:
 distributed:
   nnodes: 2
   nproc_per_node: 1
-  master_addr: 169.254.252.185
+  master_addr: 192.0.2.10
   master_port: 29500
 serving:
   tensor_parallel_size: 2
@@ -371,7 +371,7 @@ serving:
             details = model_forge_dgx.configure_cluster_serving_env(env)
 
         self.assertEqual(details["mode"], "cluster-config")
-        self.assertEqual(env["MODEL_FORGE_SPARK_CLUSTER_NODES"], "169.254.252.185,spark-b")
+        self.assertEqual(env["MODEL_FORGE_SPARK_CLUSTER_NODES"], "192.0.2.10,spark-b")
         self.assertEqual(env["MODEL_FORGE_SPARK_ETH_IF"], "eth-direct")
         self.assertEqual(env["MODEL_FORGE_TENSOR_PARALLEL_SIZE"], "2")
 

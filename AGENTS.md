@@ -192,7 +192,7 @@ The refusal-suffix Heretic search
 also completed. Trial17 tied the search best at 10/23 refusals with lower KL,
 then
 `configs/abliteration/qwen36_27b_ft_local_abli_heretic_refusal_suffix_trial17_scale1p5.yaml`
-exported a merged 1.5x checkpoint on worker `gx10-dc65`. Its quick gate refused
+exported a merged 1.5x checkpoint on the Spark worker. Its quick gate refused
 50% of paired harmful prompts, kept paired benign quality at 90%, scored 87.5%
 on challenge capability, and still refused all three unsafe-overcompliance
 prompts. Treat it as rejected. The result is useful evidence that simple
@@ -218,7 +218,7 @@ Residual-refusal search completed with trial index 12 as the strongest signal:
 Heretic-probe refusals fell from 8/10 to 3/10 at KL 0.0293. The reproducible
 direct export recipe is
 `configs/abliteration/qwen36_27b_ft_local_abli_heretic_residual_trial12.yaml`.
-It was exported on worker `gx10-dc65` and quick-gated from a worker-local vLLM
+It was exported on the Spark worker and quick-gated from a worker-local vLLM
 server at
 `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_residual_trial12_quick`.
 It is the strongest Qwen FT-abli refusal suppressor so far on paired harmful
@@ -229,7 +229,7 @@ The next search recipe is
 `configs/abliteration/qwen36_27b_ft_local_abli_heretic_unsafe_followup_search.yaml`.
 It keeps local FT v4 as the source, targets the five remaining trial12 refusal
 cases, and uses the exact trial12 benign/challenge regressions as focused
-good-eval KL controls. That search completed on worker `gx10-dc65`: baseline
+good-eval KL controls. That search completed on the Spark worker: baseline
 focused refusals were 4/5, no trial reached zero, and the best low-KL candidate
 was trial index 15 / trial_id 14 with 1/5 refusals at KL 0.0095. Treat this as
 useful search evidence, not a promotion-ready candidate. The next branch is
@@ -242,7 +242,7 @@ The prepared sequential follow-up recipe is
 It starts from the merged residual trial12 checkpoint instead of local FT v4, so
 it can test whether a second behavior edit preserves trial12's 0.10 paired
 harmful refusal rate while reducing the remaining unsafe-overcompliance
-refusals. That search completed on worker `gx10-dc65`: focused baseline was 3/5
+refusals. That search completed on the Spark worker: focused baseline was 3/5
 refusals, best refusal count was 1/5 at high KL 0.1856, and the best
 within-budget result was trial index 16 / trial_id 15 with 2/5 refusals at KL
 0.0003. The diagnostic direct export recipe is
@@ -432,7 +432,7 @@ The trial16 export required worker cleanup. The rejected Qwen checkpoints
 `Qwen3.6-27B-local-ft-v4-abliterated-trial2-scale1p0`,
 `Qwen3.6-27B-local-ft-v4-abliterated-gemma-t34-transfer`, and
 `Qwen3.6-27B-local-ft-v4-abliterated-heretic-refusal-suffix-trial17-scale1p5`
-were deleted from worker `gx10-dc65`; keep the current base, local FT v4,
+were deleted from the Spark worker; keep the current base, local FT v4,
 merged FT v4, trial2 scale0.75, heretic-long trial2, residual trial12, trial16
 diagnostic artifact, and search pointer directories unless a later cleanup
 ledger explicitly supersedes this.

@@ -386,7 +386,7 @@ Operational notes:
   merged weights still use `model.language_model.*` keys
 - patched the generated local checkpoint config to `language_model_only=true`
   wrapper form so vLLM can serve it with `--language-model-only`
-- served with TP=2 across `169.254.252.185` and `169.254.173.164`
+- served with TP=2 across the coordinator and worker direct-link addresses
 
 Quick eval evidence:
 
@@ -772,7 +772,7 @@ required_min_free_disk_fraction: 0.150
 Worker export:
 
 ```text
-host: gx10-dc65 / 169.254.173.164
+host: Spark worker direct-link host
 artifact: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-trial2-scale1p0
 merge image: model-forge-posttrain-tf5:latest
 merge duration: 54.9s
@@ -847,7 +847,7 @@ Implementation notes:
 - changed generated Heretic direct exports to save only the selected PEFT
   adapter and skip embedding saves, avoiding Qwen visual/meta tensors during
   adapter serialization
-- exported on worker `gx10-dc65` to avoid breaching the coordinator's 15% disk
+- exported on the Spark worker to avoid breaching the coordinator's 15% disk
   floor
 
 Worker artifact:
@@ -983,7 +983,7 @@ Implementation:
   `component_weight_scales` support to generated direct runners
 - added the Qwen model-family variant
   `local_ft_abli_heretic_refusal_suffix_trial17_scale1p5`
-- exported the merged checkpoint on worker `gx10-dc65` under systemd/Docker
+- exported the merged checkpoint on the Spark worker under systemd/Docker
   limits
 - audited the checkpoint before serving
 
@@ -3584,7 +3584,7 @@ Direct export recipe:
 configs/abliteration/qwen36_27b_ft_local_abli_heretic_residual_trial12.yaml
 ```
 
-Export and quick-gate result: completed on worker `gx10-dc65`. The export used
+Export and quick-gate result: completed on the Spark worker. The export used
 the guarded Heretic container, wrote the 51G merged checkpoint to
 `~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12`,
 then served it from a worker-local vLLM server because the coordinator disk was
@@ -3672,7 +3672,7 @@ especially unsafe-overcompliance refusal below 1.0 and paired harmful refusal
 near 0.0, then judge the merged checkpoint on the 75-case model-forge quick
 gate before any artifact/external/quantization work.
 
-Result: completed on worker `gx10-dc65` with the guarded Heretic container. The
+Result: completed on the Spark worker with the guarded Heretic container. The
 focused bad-eval baseline refused 4/5 targeted cases. No trial reached zero
 refusals. The best candidates reached 1/5 refusals, so this search improved the
 focused refusal signal but did not satisfy the Qwen FT-abli objective.
@@ -3758,7 +3758,7 @@ refusals at acceptable KL. Promotion comparison still goes back to local FT v4:
 the final merged candidate must keep capability and benign quality near local
 FT v4 while lowering refusals versus residual trial12.
 
-Result: completed on worker `gx10-dc65` with the guarded Heretic container. The
+Result: completed on the Spark worker with the guarded Heretic container. The
 search started from the merged residual trial12 checkpoint, not local FT v4. The
 focused baseline was 3/5 refusals, which confirms residual trial12 already
 suppresses two of the five targeted cases in Heretic's own probe.
@@ -3801,7 +3801,7 @@ Direct export manifest:
 
 The direct export used trial16's low-KL parameters from the sequential search.
 It merged 23 tensors, skipped 105 zero tensors, and wrote a full 51 GiB
-checkpoint on worker `gx10-dc65`.
+checkpoint on the Spark worker.
 
 Worker cleanup before export:
 
@@ -3969,7 +3969,7 @@ runs/finetune/qwen36_27b_local_ft_v4_behavior_abli_v1/run_cluster_torchrun.sh
 Observed training result:
 
 ```text
-cluster: spark-b64d + gx10-dc65, world_size=2
+cluster: two-node DGX Spark cluster, world_size=2
 dataset rows: 76
 steps: 140/140
 train runtime: 1029.6 seconds
@@ -4662,8 +4662,8 @@ files and `reject_eval_prompt_overlap: true`, but the generated trainer did
 not enforce the setting. The trainer template now loads holdout prompt files
 and rejects exact normalized user-prompt matches during data prep.
 
-Operational note: the trial12 source checkpoint existed on worker
-`gx10-dc65` but not on the coordinator, so it was copied back to
+Operational note: the trial12 source checkpoint existed on the Spark worker
+but not on the coordinator, so it was copied back to
 `~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12`.
 The copy exposed local disk pressure. Three documented rejected local
 checkpoints were deleted from the coordinator to restore headroom:

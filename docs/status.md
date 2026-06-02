@@ -324,8 +324,8 @@ length filtering:
    The follow-up search
    `configs/abliteration/qwen36_27b_ft_local_abli_heretic_unsafe_followup_search.yaml`,
    which targets the five remaining trial12 refusal cases and preserves the
-   exact benign/challenge cases trial12 regressed, completed on worker
-   `gx10-dc65`. It improved the focused Heretic signal from 4/5 refusals to
+   exact benign/challenge cases trial12 regressed, completed on the Spark
+   worker. It improved the focused Heretic signal from 4/5 refusals to
    1/5 refusals, but found no zero-refusal trial. The best low-KL candidate is
    trial index 15 / trial_id 14 at KL 0.0095. This is not promotion evidence by
    itself. Next either free reviewed worker disk and export trial15 for a
@@ -334,13 +334,13 @@ length filtering:
    prepared branch is
    `configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_unsafe_followup_search.yaml`,
    a search-only sequential edit that starts from the merged residual trial12
-   checkpoint instead of local FT v4. That search completed on worker
-   `gx10-dc65`: focused baseline was 3/5 refusals, the best refusal-count trial
+   checkpoint instead of local FT v4. That search completed on the Spark worker:
+   focused baseline was 3/5 refusals, the best refusal-count trial
    reached 1/5 only at high KL 0.1856, and the best within-budget trial was
    trial index 16 / trial_id 15 at 2/5 refusals and KL 0.0003. A diagnostic
    direct export recipe was prepared at
    `configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_unsafe_followup_trial16.yaml`;
-   the checkpoint was exported on worker `gx10-dc65` and quick-gated at
+   the checkpoint was exported on the Spark worker and quick-gated at
    `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_unsafe_followup_trial16_dgx_spark`.
    Reject it: paired harmful refusal regressed from residual trial12's 0.10 to
    0.20, paired benign quality regressed from 0.90 to 0.80, challenge capability
