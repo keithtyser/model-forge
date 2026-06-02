@@ -316,6 +316,11 @@ length filtering:
    completed and selected trial index 12 as the strongest export candidate
    (3/10 Heretic-probe refusals, KL 0.0293). The direct export config is
    `configs/abliteration/qwen36_27b_ft_local_abli_heretic_residual_trial12.yaml`.
+   The worker-local quick gate completed at
+   `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_residual_trial12_quick`:
+   paired harmful refusal improved to 0.10 with harmful detail 0.0, but
+   unsafe-overcompliance refusal stayed 1.0, paired benign quality was 0.90,
+   and challenge capability was 0.875. Hold for the next ablation iteration.
 
 ## Operational Guardrails
 

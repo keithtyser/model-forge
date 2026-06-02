@@ -218,9 +218,13 @@ Residual-refusal search completed with trial index 12 as the strongest signal:
 Heretic-probe refusals fell from 8/10 to 3/10 at KL 0.0293. The reproducible
 direct export recipe is
 `configs/abliteration/qwen36_27b_ft_local_abli_heretic_residual_trial12.yaml`.
-Do not promote it from the search result alone; export a merged checkpoint and
-run the model-forge quick gate against paired refusal, unsafe-overcompliance,
-and challenge capability first.
+It was exported on worker `gx10-dc65` and quick-gated from a worker-local vLLM
+server at
+`results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_residual_trial12_quick`.
+It is the strongest Qwen FT-abli refusal suppressor so far on paired harmful
+prompts (`refusal_rate_harmful=0.10`, `harmful_detail_rate=0.0`), but it is not
+promoted: unsafe-overcompliance still refuses all 3 cases, paired benign quality
+is 0.90, and challenge capability is 0.875 versus local FT v4's 0.9375.
 
 Do not trust live-LoRA Qwen Heretic scale gates yet: live scale0.75 refused 95%
 of paired harmful prompts while the merged scale0.75 checkpoint refused 65% on
