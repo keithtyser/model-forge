@@ -237,6 +237,14 @@ either to free reviewed worker disk and export trial15 for a merged model-forge
 quick gate, or revise the search space until the focused Heretic probe reaches
 0/5 before paying for another 51G checkpoint.
 
+The prepared sequential follow-up recipe is
+`configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_unsafe_followup_search.yaml`.
+It starts from the merged residual trial12 checkpoint instead of local FT v4, so
+it can test whether a second behavior edit preserves trial12's 0.10 paired
+harmful refusal rate while reducing the remaining unsafe-overcompliance
+refusals. It is search-only; do not export unless the focused Heretic result
+reaches zero or near-zero refusals at acceptable KL.
+
 Do not trust live-LoRA Qwen Heretic scale gates yet: live scale0.75 refused 95%
 of paired harmful prompts while the merged scale0.75 checkpoint refused 65% on
 the same paired bucket. Use full merged checkpoints for the next Qwen candidates

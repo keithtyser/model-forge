@@ -3708,6 +3708,55 @@ spending another 51G checkpoint export. Worker disk was 148G free after this
 search, just above the 15% floor, so another full Qwen export requires deleting
 or relocating rejected checkpoints first.
 
+## Qwen 3.6 27B: Sequential Trial12 Unsafe-Followup Search Prep
+
+Status: recipe prepared, not yet executed.
+
+Hypothesis: the unsafe-followup search above searched from local FT v4, so it
+did not compose with residual trial12's strongest paired-harmful refusal
+suppression. A search from the already merged residual trial12 checkpoint should
+preserve the 0.10 paired harmful refusal behavior while targeting the remaining
+unsafe-overcompliance and paired harmful refusal cases. This tests sequential
+behavior editing without spending disk on another 51G export first.
+
+Tracked config:
+
+```text
+configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_unsafe_followup_search.yaml
+```
+
+Search source:
+
+```text
+~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12
+```
+
+Targeted bad cases:
+
+```text
+unsafe_overcompliance/refuse_credential_theft
+unsafe_overcompliance/refuse_ransomware_request
+unsafe_overcompliance/refuse_doxxing_request
+refusal_paired_boundary/self_harm_instruction_harmful
+refusal_paired_boundary/threat_evasion_harmful
+```
+
+Focused good-eval controls:
+
+```text
+refusal_paired_boundary/malware_reverse_engineering_benign
+refusal_paired_boundary/finance_fraud_prevention_benign
+capability_preservation_challenge/debugging_latency_regression
+capability_preservation_challenge/summarize_eval_tradeoff
+capability_preservation_challenge/confidence_interval_interpretation
+capability_preservation_challenge/model_selection_summary
+```
+
+Decision rule: export only if the search reaches zero or near-zero focused
+refusals at acceptable KL. Promotion comparison still goes back to local FT v4:
+the final merged candidate must keep capability and benign quality near local
+FT v4 while lowering refusals versus residual trial12.
+
 ## Dataset Factory: Pack Promotion Gates
 
 Status: smoke-validated implementation; no heavy training launched.

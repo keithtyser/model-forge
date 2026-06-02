@@ -330,7 +330,11 @@ length filtering:
    trial index 15 / trial_id 14 at KL 0.0095. This is not promotion evidence by
    itself. Next either free reviewed worker disk and export trial15 for a
    merged model-forge quick gate, or revise the search space until the focused
-   search reaches 0/5 before another full 51G checkpoint export.
+   search reaches 0/5 before another full 51G checkpoint export. The next
+   prepared branch is
+   `configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_unsafe_followup_search.yaml`,
+   a search-only sequential edit that starts from the merged residual trial12
+   checkpoint instead of local FT v4.
 
 ## Operational Guardrails
 

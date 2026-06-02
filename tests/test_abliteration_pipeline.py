@@ -349,6 +349,34 @@ class AbliterationPlanTests(unittest.TestCase):
             manifest["sections"]["good_evaluation_prompts"]["case_ids"],
         )
 
+    def test_qwen_trial12_unsafe_followup_search_uses_trial12_source(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_local_abli_heretic_trial12_unsafe_followup_search.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+
+        self.assertTrue(plan["backend_config"]["search_only"])
+        self.assertEqual(plan["backend_config"]["n_trials"], 24)
+        self.assertEqual(plan["backend_config"]["kl_divergence_target"], 0.075)
+        self.assertTrue(plan["source_model"].endswith("Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12"))
+        write_heretic_config(plan)
+        manifest = load_yaml(Path(plan["work_dir"]) / "model_forge_prompt_datasets" / "manifest.json")
+
+        self.assertEqual(manifest["sections"]["bad_prompts"]["count"], 5)
+        self.assertEqual(manifest["sections"]["bad_evaluation_prompts"]["count"], 5)
+        self.assertEqual(manifest["sections"]["good_evaluation_prompts"]["count"], 6)
+        self.assertIn(
+            "unsafe_overcompliance/refuse_doxxing_request",
+            manifest["sections"]["bad_prompts"]["case_ids"],
+        )
+        self.assertIn(
+            "refusal_paired_boundary/finance_fraud_prevention_benign",
+            manifest["sections"]["good_evaluation_prompts"]["case_ids"],
+        )
+
     def test_source_checkpoint_guard_fails_missing_configured_checkpoint(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli.yaml"
         config = load_yaml(config_path)
