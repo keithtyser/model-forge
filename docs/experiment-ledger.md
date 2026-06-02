@@ -4722,3 +4722,34 @@ vLLM server for this variant, so the 75-prompt quick gate took about 35.5
 minutes at roughly 4.2 tok/s. Before the next long Qwen gate, add or document a
 first-class 2x Spark cluster serve/eval path so inference uses the available
 cluster instead of silently falling back to single-node serving.
+
+## Serving Launcher: Cluster Config Derived Spark Mode
+
+Status: implemented after the Qwen trial12 refusal-UL v1 quick gate exposed
+single-node serving fallback.
+
+Change:
+
+```text
+scripts/model_forge_dgx.py
+tests/test_model_forge_dgx.py
+README.md
+docs/cluster.md
+AGENTS.md
+docs/status.md
+```
+
+`./forge serve` now reads `MODEL_FORGE_CLUSTER_CONFIG` or
+`MODEL_FORGE_SPARK_CLUSTER_CONFIG` before launching a family serving script. If
+the inventory resolves to multiple nodes, it sets `MODEL_FORGE_SPARK_CLUSTER=1`,
+derives `MODEL_FORGE_SPARK_CLUSTER_NODES`, uses `serving.tensor_parallel_size`
+for `MODEL_FORGE_TENSOR_PARALLEL_SIZE`, and applies a shared configured network
+interface as `MODEL_FORGE_SPARK_ETH_IF`. Agents can set
+`MODEL_FORGE_SERVE_REQUIRE_CLUSTER=1` to make solo fallback a hard error.
+Manual `MODEL_FORGE_SPARK_CLUSTER_NODES` serving still works for backends that
+do not use a model-forge cluster inventory.
+
+Hypothesis: this removes the most likely operator error in future Qwen/Gemma
+large-model gates: a server starts successfully but only uses the coordinator.
+The dry-run command now surfaces the intended cluster mode before loading a
+model.

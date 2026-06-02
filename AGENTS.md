@@ -774,16 +774,29 @@ proves real sharding and better steps/sec under the same resource contract.
 For Qwen-family serving on Spark, `configs/model_families/qwen35_9b.yaml` and
 `configs/model_families/qwen36_27b.yaml` use the generic
 `scripts/dgx_spark_serve_qwen.sh` launcher. It is solo by default. To use both
-Spark nodes, set `MODEL_FORGE_SPARK_CLUSTER=1`,
-`MODEL_FORGE_SPARK_CLUSTER_NODES=<coordinator-ip>,<worker-ip>`,
+Spark nodes, prefer a private model-forge cluster config and force cluster mode:
+
+```bash
+export MODEL_FORGE_CLUSTER_CONFIG=<private-cluster.yaml>
+export MODEL_FORGE_SERVE_REQUIRE_CLUSTER=1
+MODEL_FORGE_DRY_RUN=1 ./forge serve <family> <variant>
+./forge serve <family> <variant>
+```
+
+When `MODEL_FORGE_CLUSTER_CONFIG` or `MODEL_FORGE_SPARK_CLUSTER_CONFIG` is set,
+`./forge serve` resolves node hosts from the cluster inventory, sets
+`MODEL_FORGE_SPARK_CLUSTER=1`, derives `MODEL_FORGE_SPARK_CLUSTER_NODES`, uses
+`serving.tensor_parallel_size` for TP, and applies a shared configured network
+interface when one is available. Manual env still works as a fallback:
+`MODEL_FORGE_SPARK_CLUSTER=1`,
+`MODEL_FORGE_SPARK_CLUSTER_NODES=<coordinator-host>,<worker-host>`,
 `MODEL_FORGE_SPARK_ETH_IF=<direct-link-interface>`, and
-`MODEL_FORGE_TENSOR_PARALLEL_SIZE=2` outside Git, then run
-`./forge serve <family> <variant>`. The same model directory must exist on both
-nodes under `MODEL_FORGE_MODELS_DIR`; if only the coordinator has HF egress,
-download once there and run `./forge cluster model-sync --source <model-dir>
---execute` to copy the completed checkpoint to workers. Use `model-sync` instead
-of hand-written `rsync` where possible so generated evidence captures what was
-copied.
+`MODEL_FORGE_TENSOR_PARALLEL_SIZE=2`. The same model directory must exist on
+both nodes under `MODEL_FORGE_MODELS_DIR`; if only the coordinator has HF
+egress, download once there and run `./forge cluster model-sync --source
+<model-dir> --execute` to copy the completed checkpoint to workers. Use
+`model-sync` instead of hand-written `rsync` where possible so generated
+evidence captures what was copied.
 Do not run `model-sync` on an active or incomplete HF download; first run
 `./forge variants wait-checkpoint qwen36_27b --variant base`.
 When the source directory corresponds to a configured family variant, pass the
@@ -805,10 +818,8 @@ batched tokens, and max sequence count:
 
 ```bash
 MODEL_FORGE_DRY_RUN=1 \
-MODEL_FORGE_SPARK_CLUSTER=1 \
-MODEL_FORGE_SPARK_CLUSTER_NODES=<coordinator-ip>,<worker-ip> \
-MODEL_FORGE_SPARK_ETH_IF=<direct-link-interface> \
-MODEL_FORGE_TENSOR_PARALLEL_SIZE=2 \
+MODEL_FORGE_CLUSTER_CONFIG=<private-cluster.yaml> \
+MODEL_FORGE_SERVE_REQUIRE_CLUSTER=1 \
 ./forge serve qwen36_27b base
 ```
 

@@ -407,10 +407,12 @@ length filtering:
    capability, and introduced an unsafe-detail gate failure.
    This branch also exposed and fixed a repo pain point: generated finetune
    trainers now enforce exact holdout-prompt rejection when manifests set
-   `reject_eval_prompt_overlap: true`. A second pain point remains: the quick
-   gate used single-node `./forge serve` by default and ran at roughly 4.2 tok/s.
-   The next infrastructure improvement should make 2x Spark cluster serving and
-   eval explicit before more long Qwen gates.
+   `reject_eval_prompt_overlap: true`. The run also exposed a serving pain
+   point: the quick gate used single-node `./forge serve` by default and ran at
+   roughly 4.2 tok/s. That launcher path now resolves `MODEL_FORGE_CLUSTER_CONFIG`
+   or `MODEL_FORGE_SPARK_CLUSTER_CONFIG`, derives Spark nodes and tensor
+   parallel size from the inventory, and can hard-stop solo fallback with
+   `MODEL_FORGE_SERVE_REQUIRE_CLUSTER=1`.
 
 ## Operational Guardrails
 

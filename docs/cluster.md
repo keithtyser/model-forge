@@ -117,21 +117,40 @@ For Qwen-family models on DGX Spark, the generic launcher is:
 scripts/dgx_spark_serve_qwen.sh
 ```
 
-It runs solo by default. To use a two-node Spark cluster, set env-backed values
-outside Git:
+It runs solo by default. To use a two-node Spark cluster, prefer a private
+cluster inventory and require cluster mode so `./forge serve` cannot silently
+fall back to one node:
 
 ```bash
-export MODEL_FORGE_SPARK_CLUSTER=1
-export MODEL_FORGE_SPARK_CLUSTER_NODES=<coordinator-ip>,<worker-ip>
-export MODEL_FORGE_SPARK_ETH_IF=<direct-link-interface>
-export MODEL_FORGE_TENSOR_PARALLEL_SIZE=2
+export MODEL_FORGE_CLUSTER_CONFIG=configs/clusters/my_cluster.yaml
+export MODEL_FORGE_SERVE_REQUIRE_CLUSTER=1
 export MODEL_FORGE_MODELS_DIR=<same-model-root-on-each-node>
 ```
 
-Then start the configured variant:
+`./forge serve` resolves node hosts from the cluster config, sets
+`MODEL_FORGE_SPARK_CLUSTER=1`, derives `MODEL_FORGE_SPARK_CLUSTER_NODES`, uses
+`serving.tensor_parallel_size` for `MODEL_FORGE_TENSOR_PARALLEL_SIZE`, and sets
+`MODEL_FORGE_SPARK_ETH_IF` when every node resolves to the same configured
+network interface. Dry-run the exact vLLM launch before starting a large model:
+
+```bash
+MODEL_FORGE_DRY_RUN=1 ./forge serve qwen36_27b base
+```
+
+Then start the configured variant after the dry-run command is correct:
 
 ```bash
 ./forge serve qwen36_27b base
+```
+
+Manual env is still supported for backends that do not use a model-forge cluster
+inventory:
+
+```bash
+export MODEL_FORGE_SPARK_CLUSTER=1
+export MODEL_FORGE_SPARK_CLUSTER_NODES=<coordinator-host>,<worker-host>
+export MODEL_FORGE_SPARK_ETH_IF=<direct-link-interface>
+export MODEL_FORGE_TENSOR_PARALLEL_SIZE=2
 ```
 
 The launcher passes `--tensor-parallel-size 2` and

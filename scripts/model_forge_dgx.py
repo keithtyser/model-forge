@@ -28,6 +28,21 @@ except Exception:  # pragma: no cover - script fallback for partially installed 
     detect_hardware_profile = None
     recommended_vllm_env = None
 
+try:
+    from model_forge.cluster.cli import (
+        audit_cluster,
+        load_cluster_config,
+        load_hardware_profile,
+        node_plan,
+        total_declared_gpus,
+    )
+except Exception:  # pragma: no cover - cluster support is optional for local single-node use
+    audit_cluster = None
+    load_cluster_config = None
+    load_hardware_profile = None
+    node_plan = None
+    total_declared_gpus = None
+
 
 def load_family(name: str) -> dict[str, Any]:
     path = REPO_DIR / "configs" / "model_families" / f"{name}.yaml"
@@ -266,6 +281,101 @@ def configure_serving_variant(family: dict[str, Any], variant: str, env: dict[st
     return details
 
 
+def _truthy_env(env: dict[str, str], key: str) -> bool:
+    return env.get(key, "").lower() in {"1", "true", "yes", "on"}
+
+
+def _cluster_config_from_env(env: dict[str, str]) -> str | None:
+    return env.get("MODEL_FORGE_SPARK_CLUSTER_CONFIG") or env.get("MODEL_FORGE_CLUSTER_CONFIG")
+
+
+def _node_network_interfaces(cluster: dict[str, Any], env: dict[str, str]) -> list[str]:
+    interfaces: list[str] = []
+    for raw_node in cluster.get("nodes", []):
+        if not isinstance(raw_node, dict):
+            continue
+        value = raw_node.get("network_interface")
+        env_key = raw_node.get("network_interface_env")
+        if env_key:
+            value = env.get(str(env_key), value)
+        if value:
+            interfaces.append(str(value))
+    return interfaces
+
+
+def configure_cluster_serving_env(env: dict[str, str]) -> dict[str, str]:
+    """Derive Spark vLLM launcher env from a generic cluster inventory."""
+
+    cluster_config = _cluster_config_from_env(env)
+    if not cluster_config:
+        if _truthy_env(env, "MODEL_FORGE_SERVE_REQUIRE_CLUSTER") and not env.get("MODEL_FORGE_SPARK_CLUSTER_NODES"):
+            raise SystemExit("MODEL_FORGE_SERVE_REQUIRE_CLUSTER=1 but no MODEL_FORGE_CLUSTER_CONFIG or MODEL_FORGE_SPARK_CLUSTER_CONFIG is set")
+        if env.get("MODEL_FORGE_SPARK_CLUSTER_NODES"):
+            env.setdefault("MODEL_FORGE_SPARK_CLUSTER", "1")
+            return {
+                "mode": "cluster-env",
+                "config": "",
+                "nodes": env["MODEL_FORGE_SPARK_CLUSTER_NODES"],
+                "tensor_parallel_size": env.get("MODEL_FORGE_TENSOR_PARALLEL_SIZE") or env.get("TENSOR_PARALLEL_SIZE") or "",
+                "network_interface": env.get("MODEL_FORGE_SPARK_ETH_IF", ""),
+            }
+        return {"mode": "solo", "config": "", "nodes": "", "tensor_parallel_size": "", "network_interface": ""}
+
+    if load_cluster_config is None or load_hardware_profile is None or node_plan is None:
+        raise SystemExit("cluster serving config was requested, but model_forge.cluster support could not be imported")
+
+    cluster, path = load_cluster_config(cluster_config)
+    hardware = load_hardware_profile(cluster)
+    findings = audit_cluster(cluster, path, hardware=hardware, env=env, strict=False) if audit_cluster is not None else []
+    errors = [finding for finding in findings if getattr(finding, "severity", "") == "error"]
+    if errors:
+        messages = "; ".join(f"{finding.check}: {finding.message}" for finding in errors)
+        raise SystemExit(f"cluster serving config failed doctor checks: {messages}")
+
+    planned_nodes = [node_plan(raw_node, cluster, env) for raw_node in cluster.get("nodes", []) if isinstance(raw_node, dict)]
+    hosts = [str(node.get("host") or "") for node in planned_nodes]
+    unresolved = [str(node.get("name") or index) for index, host in enumerate(hosts) if not host or host.startswith("$")]
+    if unresolved:
+        raise SystemExit(f"cluster serving config has unresolved node host values: {', '.join(unresolved)}")
+
+    if len(hosts) <= 1:
+        if _truthy_env(env, "MODEL_FORGE_SERVE_REQUIRE_CLUSTER"):
+            raise SystemExit(f"MODEL_FORGE_SERVE_REQUIRE_CLUSTER=1 but cluster config {path} resolves to one node")
+        return {
+            "mode": "solo-config",
+            "config": str(path),
+            "nodes": ",".join(hosts),
+            "tensor_parallel_size": "1",
+            "network_interface": "",
+        }
+
+    nodes_value = ",".join(hosts)
+    env.setdefault("MODEL_FORGE_SPARK_CLUSTER", "1")
+    env.setdefault("MODEL_FORGE_SPARK_CLUSTER_NODES", nodes_value)
+
+    serving = cluster.get("serving") or {}
+    configured_tp = serving.get("tensor_parallel_size")
+    if configured_tp is None and total_declared_gpus is not None:
+        configured_tp = total_declared_gpus(cluster, hardware)
+    if configured_tp is None:
+        configured_tp = len(hosts)
+    if not env.get("MODEL_FORGE_TENSOR_PARALLEL_SIZE") and not env.get("TENSOR_PARALLEL_SIZE"):
+        env["MODEL_FORGE_TENSOR_PARALLEL_SIZE"] = str(configured_tp)
+
+    interfaces = _node_network_interfaces(cluster, env)
+    unique_interfaces = sorted(set(interfaces))
+    if len(unique_interfaces) == 1:
+        env.setdefault("MODEL_FORGE_SPARK_ETH_IF", unique_interfaces[0])
+
+    return {
+        "mode": "cluster-config",
+        "config": str(path),
+        "nodes": env.get("MODEL_FORGE_SPARK_CLUSTER_NODES", nodes_value),
+        "tensor_parallel_size": env.get("MODEL_FORGE_TENSOR_PARALLEL_SIZE") or env.get("TENSOR_PARALLEL_SIZE") or str(configured_tp),
+        "network_interface": env.get("MODEL_FORGE_SPARK_ETH_IF", ""),
+    }
+
+
 def action_serve(family: dict[str, Any], family_name: str, variant: str) -> None:
     serve = family["serve"]
     env = os.environ.copy()
@@ -295,6 +405,7 @@ def action_serve(family: dict[str, Any], family_name: str, variant: str) -> None
     if recommended_vllm_env is not None:
         for key, value in recommended_vllm_env(env).items():
             env.setdefault(key, value)
+    cluster_details = configure_cluster_serving_env(env)
     if detect_hardware_profile is not None:
         profile = detect_hardware_profile(env)
         console.print(Panel.fit(
@@ -306,6 +417,9 @@ def action_serve(family: dict[str, Any], family_name: str, variant: str) -> None
                 f"[bold]GPU memory util[/bold]: {env.get('GPU_MEMORY_UTILIZATION', '<unset>')}",
                 f"[bold]Max model len[/bold]: {env.get('MAX_MODEL_LEN', '<unset>')}",
                 f"[bold]Batched tokens[/bold]: {env.get('MAX_NUM_BATCHED_TOKENS', '<unset>')}",
+                f"[bold]Serve mode[/bold]: {cluster_details['mode']}",
+                f"[bold]Cluster nodes[/bold]: {cluster_details['nodes'] or '<none>'}",
+                f"[bold]Tensor parallel[/bold]: {cluster_details['tensor_parallel_size'] or '<unset>'}",
             ]),
             title="[bold cyan]Serving Hardware Profile[/bold cyan]",
             border_style="cyan",

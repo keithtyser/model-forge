@@ -98,6 +98,20 @@ Serve one model at a time:
 ./forge serve my_model base
 ```
 
+For multi-node serving, keep private hostnames/IPs in an untracked cluster
+config or env-backed example and make the serve path consume it:
+
+```bash
+export MODEL_FORGE_CLUSTER_CONFIG=configs/clusters/my_cluster.yaml
+export MODEL_FORGE_SERVE_REQUIRE_CLUSTER=1
+MODEL_FORGE_DRY_RUN=1 ./forge serve my_model base
+./forge serve my_model base
+```
+
+When a multi-node cluster config resolves successfully, `./forge serve` derives
+Spark cluster nodes and tensor parallel size from the inventory. It hard-stops
+instead of falling back to solo mode when `MODEL_FORGE_SERVE_REQUIRE_CLUSTER=1`.
+
 `./forge download` uses `HF_TOKEN`, `HUGGINGFACE_HUB_TOKEN`, or the cached token
 from `./forge hf login`. For unattended agent runs, set
 `MODEL_FORGE_HF_ALLOW_PROMPT=0` so missing auth fails fast. If Xet is slow or

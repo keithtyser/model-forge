@@ -270,6 +270,67 @@ class ModelForgeDgxServeTests(unittest.TestCase):
         self.assertEqual(captured_env["VLLM_MAX_NUM_SEQS"], "4")
         self.assertEqual(captured_env["MODEL_FORGE_SPARK_VLLM_IMAGE"], "vllm-node-tf5")
 
+    def test_cluster_config_env_derives_spark_serving_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "base-model").mkdir()
+            family = {
+                "models_dir_env": "MODEL_FORGE_TEST_MODELS_DIR",
+                "default_models_dir": str(root),
+                "architecture": {},
+                "variants": {
+                    "base": {
+                        "repo_id": "org/base",
+                        "local_dir": "base-model",
+                        "served_model_name": "org/base",
+                    },
+                },
+                "serve": {
+                    "script": "scripts/dgx_spark_serve_qwen.sh",
+                    "default_image": "vllm-node-tf5",
+                },
+            }
+            captured_env = {}
+
+            def fake_run(_cmd, env=None):
+                captured_env.update(env or {})
+
+            env = {
+                "MODEL_FORGE_CLUSTER_CONFIG": str(REPO_DIR / "configs/clusters/dgx_spark_x2.example.yaml"),
+                "MODEL_FORGE_NODE0_HOST": "spark-a",
+                "MODEL_FORGE_NODE1_HOST": "spark-b",
+                "MODEL_FORGE_NODE0_USER": "runner",
+                "MODEL_FORGE_NODE1_USER": "runner",
+                "MODEL_FORGE_CLUSTER_WORK_DIR": "/" + "work/model-forge",
+                "MODEL_FORGE_NODE0_NET_IFACE": "eth-direct",
+                "MODEL_FORGE_NODE1_NET_IFACE": "eth-direct",
+            }
+            with mock.patch.dict(model_forge_dgx.os.environ, env, clear=False):
+                with mock.patch.object(model_forge_dgx, "recommended_vllm_env", None):
+                    with mock.patch.object(model_forge_dgx, "detect_hardware_profile", None):
+                        with mock.patch.object(model_forge_dgx, "run_or_exit", return_value=None):
+                            with mock.patch.object(model_forge_dgx, "run", side_effect=fake_run):
+                                model_forge_dgx.action_serve(family, "test_family", "base")
+
+        self.assertEqual(captured_env["MODEL_FORGE_SPARK_CLUSTER"], "1")
+        self.assertEqual(captured_env["MODEL_FORGE_SPARK_CLUSTER_NODES"], "spark-a,spark-b")
+        self.assertEqual(captured_env["MODEL_FORGE_TENSOR_PARALLEL_SIZE"], "2")
+        self.assertEqual(captured_env["MODEL_FORGE_SPARK_ETH_IF"], "eth-direct")
+
+    def test_serve_require_cluster_rejects_solo_fallback(self) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            model_forge_dgx.configure_cluster_serving_env({"MODEL_FORGE_SERVE_REQUIRE_CLUSTER": "1"})
+
+        self.assertIn("no MODEL_FORGE_CLUSTER_CONFIG", str(raised.exception))
+
+    def test_existing_cluster_nodes_env_enables_cluster_without_inventory(self) -> None:
+        env = {"MODEL_FORGE_SPARK_CLUSTER_NODES": "spark-a,spark-b", "MODEL_FORGE_TENSOR_PARALLEL_SIZE": "2"}
+        details = model_forge_dgx.configure_cluster_serving_env(env)
+
+        self.assertEqual(details["mode"], "cluster-env")
+        self.assertEqual(env["MODEL_FORGE_SPARK_CLUSTER"], "1")
+        self.assertEqual(details["nodes"], "spark-a,spark-b")
+
     def test_full_checkpoint_serve_runs_checkpoint_audit(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
