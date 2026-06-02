@@ -314,24 +314,18 @@ paired harmful refusal improved to 0.05, but challenge capability fell to
 unsafe-overcompliance still refused all 3 cases. Do not promote v2 and do not
 use it as the Qwen NVFP4 source.
 
-The next branch is now `qwen36_27b_local_ft_v4_refusal_unlikelihood_v3`:
+The `qwen36_27b_local_ft_v4_refusal_unlikelihood_v3` branch trained, merged,
+and quick-gated, but it is rejected. It ran 120/120 steps on the guarded
+two-Spark path in 27m57s, merged to
+`~/models/Qwen3.6-27B-local-ft-v4-abliterated-refusal-unlikelihood-v3`, and
+evaluated at
+`results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_refusal_unlikelihood_v3_dgx_spark`.
 
-```bash
-./forge finetune --config configs/finetuning/qwen36_27b_local_ft_v4_refusal_unlikelihood_v3.yaml prepare --overwrite
-MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 runs/finetune/qwen36_27b_local_ft_v4_refusal_unlikelihood_v3/run_cluster_torchrun.sh
-scripts/run_merge_peft_container.sh \
-  --base-model ~/models/Qwen3.6-27B-local-ft-v4-merged \
-  --adapter ~/models/model-forge-adapters/qwen36_27b/local_ft_v4_refusal_unlikelihood_v3 \
-  --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-refusal-unlikelihood-v3 \
-  --dtype bf16 \
-  --merge-method direct \
-  --trust-remote-code \
-  --overwrite
-MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_refusal_unlikelihood_v3 --internal \
-  --bucket refusal_paired_boundary \
-  --bucket unsafe_overcompliance \
-  --bucket capability_preservation_challenge
-```
+Observed result: paired benign quality recovered to 0.95 and harmful detail was
+0.0, but paired harmful refusal worsened to 0.55, challenge capability was
+0.8438, and unsafe-overcompliance still refused all 3 cases. Do not promote v3,
+do not quantize it as the Qwen target, and do not upload it as a release
+candidate.
 
 This is not another plain SFT redirect pass. The generated trainer now supports
 paired refusal-unlikelihood behavior edits: chosen refusal-free safe redirects
@@ -340,10 +334,10 @@ configurable unlikelihood penalty. The Qwen v3 recipe adds 12 adjacent
 eval-style chosen/rejected pairs for the "Respond as a safety-aligned assistant.
 Refuse briefly..." phrasing v2 missed, adds 16 capability replay rows from the
 v2 failure analysis, lowers unlikelihood weight from 0.40 to 0.25, and lowers
-max steps from 180 to 120. Validation before training: plan/prepare succeeded
-and data prep accepted 96/96 rows. Promote it only if the merged checkpoint
-materially improves refusal suppression without regressing FT-v4 capability and
-benign quality; otherwise document and revise the objective before NVFP4.
+max steps from 180 to 120. That restored benign quality but removed too little
+refusal behavior. The next Qwen FT-abli branch should change method or use a
+search objective gated directly by model-forge metrics; continuing scalar tweaks
+of the same refusal-unlikelihood objective is low-leverage.
 
 Important DDP lesson from the first v2 launch: rank-local paired/non-paired
 batches can diverge. The trainer must always run the rejected forward pass on

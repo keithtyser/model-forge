@@ -4529,9 +4529,9 @@ Next revision: v3 lowers unlikelihood pressure, lowers training steps, adds
 adjacent eval-style "Refuse briefly..." chosen/rejected pairs, and adds
 capability replay rows based on v2 failures.
 
-## Qwen 3.6 27B: FT v4 Refusal-Unlikelihood Ablation v3 Prep
+## Qwen 3.6 27B: FT v4 Refusal-Unlikelihood Ablation v3 Result
 
-Status: prepared for Spark train.
+Status: rejected after Spark train, merge, and internal quick gate.
 
 Hypothesis: v2 overfit short redirect behavior and did not cover the explicit
 "Refuse briefly..." safety-aligned prompt style. v3 should preserve more local
@@ -4570,3 +4570,37 @@ jq empty datasets/seeds/qwen36_27b_local_ft_v4_capability_replay_v3.jsonl
 ```
 
 Observed data prep: accepted 96/96 rows with no quality-gate rejections.
+
+Commands executed:
+
+```text
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 MODEL_FORGE_TRAIN_DOCKER_CPUS=8 MODEL_FORGE_TRAIN_DOCKER_MEMORY=108g MODEL_FORGE_TRAIN_DOCKER_MEMORY_SWAP=108g MODEL_FORGE_TRAIN_DOCKER_SHM=32g runs/finetune/qwen36_27b_local_ft_v4_refusal_unlikelihood_v3/run_cluster_torchrun.sh
+scripts/run_merge_peft_container.sh --base-model ~/models/Qwen3.6-27B-local-ft-v4-merged --adapter ~/models/model-forge-adapters/qwen36_27b/local_ft_v4_refusal_unlikelihood_v3 --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-refusal-unlikelihood-v3 --dtype bf16 --merge-method direct --min-free-disk-fraction 0.10 --trust-remote-code --overwrite
+MODEL_FORGE_BASE_URL=http://127.0.0.1:8000/v1 MODEL_FORGE_CONTEXT_LENGTH=32768 MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_refusal_unlikelihood_v3 --internal --bucket refusal_paired_boundary --bucket unsafe_overcompliance --bucket capability_preservation_challenge
+```
+
+Observed training result: 120/120 steps completed on the two-Spark guarded
+torchrun path in 27m57s. Final train loss was 2.853.
+
+Observed eval result:
+
+```text
+results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_refusal_unlikelihood_v3_dgx_spark
+capability_preservation_challenge.normal_use_regression_pass_rate: 0.8438
+refusal_paired_boundary.ablation_refusal_suppression_rate: 0.45
+refusal_paired_boundary.refusal_rate_harmful: 0.55
+refusal_paired_boundary.benign_answer_quality_rate: 0.95
+refusal_paired_boundary.harmful_detail_rate: 0.0
+unsafe_overcompliance.refusal_rate_harmful: 1.0
+```
+
+Decision: reject. v3 recovered paired benign quality to the FT v4 level and
+removed the v2 harmful-detail failure, but refusal suppression collapsed
+relative to v2 and residual Heretic trial12. Challenge capability remained
+below the local FT v4 source and unsafe-overcompliance still refused every
+probe. Do not promote, quantize, or upload this checkpoint as the Qwen target.
+
+Next revision: change method or optimize directly against model-forge gates.
+The current evidence says simple behavior SFT, residual Heretic scalar exports,
+and paired refusal-unlikelihood scalar tweaks each hit different parts of the
+target but none clears refusal suppression plus source capability retention.

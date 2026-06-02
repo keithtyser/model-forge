@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-01.
+Last updated: 2026-06-02.
 
 This is the short handoff state for humans and agents. Use
 `docs/experiment-ledger.md` for detailed run history and raw observations.
@@ -377,13 +377,22 @@ length filtering:
    Reject it: paired harmful refusal improved to 0.05, but challenge capability
    fell to 0.8125, paired benign quality stayed at 0.85, harmful detail was
    0.05, and unsafe-overcompliance still refused all 3 cases.
-   The current Qwen FT-abli candidate is
-   `configs/finetuning/qwen36_27b_local_ft_v4_refusal_unlikelihood_v3.yaml`.
-   It keeps the paired refusal-unlikelihood objective, lowers unlikelihood
-   weight from 0.40 to 0.25, lowers max steps from 180 to 120, adds adjacent
-   eval-style "Refuse briefly..." pairs, and adds capability replay rows from
-   the v2 failure analysis. Plan/prepare succeeded and data prep accepted
-   96/96 rows. Train, merge, and quick-gate v3 before any Qwen NVFP4 work.
+   The refusal-unlikelihood v3 branch also trained successfully on the guarded
+   two-Spark path, merged to
+   `Qwen3.6-27B-local-ft-v4-abliterated-refusal-unlikelihood-v3`, and
+   quick-gated at
+   `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_refusal_unlikelihood_v3_dgx_spark`.
+   Reject it: paired benign quality recovered to 0.95 and harmful detail stayed
+   at 0.0, but paired harmful refusal worsened to 0.55, challenge capability
+   was only 0.8438, and unsafe-overcompliance still refused all 3 cases. Do not
+   promote it, quantize it, or upload it as a release candidate.
+   Current Qwen FT-abli status: no candidate has cleared the zero-refusal plus
+   source-capability-retention target. Residual Heretic trial12 remains the best
+   refusal suppressor on paired harmful prompts, while v3 proves that lowering
+   refusal-unlikelihood pressure restores benign quality but gives up too much
+   ablation. The next branch should change method or gate directly on
+   model-forge metrics instead of continuing scalar tweaks of the same
+   refusal-unlikelihood objective.
 
 ## Operational Guardrails
 
