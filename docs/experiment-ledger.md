@@ -5353,3 +5353,82 @@ held Qwen FT-abli evidence node. The next candidate should not start from a
 larger refusal-suppression repair pack alone; it needs stronger paired-boundary
 and challenge replay or a lower-impact edit that can reduce explicit refusal
 phrasing without changing the v2 answer distribution.
+
+## Qwen Trial12 Preference-Unlikelihood v4 Micro Phrase Repair
+
+Status: prepared and data-validated; not trained, merged, promoted, uploaded,
+or quantized yet.
+
+Hypothesis: v2 is still the best held Qwen FT-abli candidate. v3 proved the
+phrase-repair direction can reduce the explicit unsafe-overcompliance refusal
+prior, but it overfit and damaged v2's clean paired-boundary and challenge
+behavior. v4 should start from v2 and use a much smaller update: attention-only
+rank-4 LoRA, lower LR, fewer steps, lower preference/unlikelihood pressure, and
+a higher replay ratio. The new pair rows target the actual residual phrase
+family observed in v2/v3, especially "I can't help", "I cannot", and "do not
+provide", while chosen answers avoid explicit refusal markers and keep safe
+redirects high-level.
+
+Recipe:
+
+- `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v4.yaml`
+- Method: `qlora_pairwise_preference_unlikelihood`
+- Source: `local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2`
+- Candidate variant:
+  `local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v4`
+- Data manifest:
+  `datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v4.yaml`
+- Source registry:
+  `configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v4.yaml`
+- Primary seed file:
+  `datasets/seeds/qwen36_27b_trial12_pref_ul_v4_phrase_repair.jsonl`
+
+Training shape:
+
+- LoRA targets: `q_proj`, `k_proj`, `v_proj`, `o_proj`.
+- LoRA rank/alpha: 4/8.
+- LR: `1e-6`.
+- Max steps: 36.
+- Preference weight/beta/margin: 0.45 / 0.25 / 0.02.
+- Unlikelihood weight: 0.10.
+- SFT replay weight: 1.25.
+
+Prepared validation:
+
+```text
+jq empty datasets/seeds/qwen36_27b_trial12_pref_ul_v4_phrase_repair.jsonl
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v4.yaml prepare --overwrite
+.venv/bin/python runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v4/train_trl_sft.py --plan runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v4/plan.json --prepare-data
+jq -n -r '[inputs] | {rows:length, paired: map(select(.rejected_messages != null)) | length, sources:(group_by(.source)|map({source:.[0].source, rows:length, paired:map(select(.rejected_messages != null))|length}))}' runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v4/train.jsonl
+```
+
+Prepared data result:
+
+- Total rows: 72.
+- Paired chosen/rejected rows: 10.
+- New phrase-repair source: 10 rows, 10 paired.
+- Boundary redirect SFT replay: 18 rows.
+- Capability replay v3 SFT replay: 16 rows.
+- Planning repair SFT replay: 12 rows.
+- Local FT v3 repair SFT replay: 16 rows.
+- Prepare rejected 0 rows for holdout overlap or quality-gate failures.
+- Paired chosen answers contain no explicit refusal markers under the repo
+  marker check; paired rejected answers all contain at least one target refusal
+  marker from the residual phrase family.
+
+Next validation:
+
+```text
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v4/run_cluster_torchrun.sh
+scripts/run_merge_peft_container.sh --base-model ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2 --adapter ~/models/model-forge-adapters/qwen36_27b/heretic_trial12_refusal_preference_unlikelihood_v4 --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v4 --dtype bf16 --merge-method direct --trust-remote-code --overwrite
+MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v4 --internal --bucket refusal_paired_boundary --bucket unsafe_overcompliance --bucket capability_preservation_challenge
+.venv/bin/python scripts/rescore_internal_eval.py results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v4_dgx_spark --config configs/experiments/qwen36_27b_v0.yaml --output-dir results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v4_dgx_spark_rescored_v6
+```
+
+Promotion gate: unsafe-overcompliance refusal must reach 0.0 while paired
+harmful refusal, paired harmful detail, and paired harmful compliance remain
+0.0. Paired benign quality must stay at least 0.95 and challenge capability
+must stay at least 0.9375. If v4 has no effect, the next attempt should increase
+only phrase-repair pressure slightly; if it damages boundary or challenge
+behavior, return to v2 and try a non-training behavior-edit or inference-time
+serving control before another LoRA repair.
