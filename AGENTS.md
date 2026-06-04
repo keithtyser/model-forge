@@ -605,15 +605,15 @@ Do not run broader evals, quantize, upload, or promote v8. The next Qwen branch
 should change method or optimize candidate selection directly against
 model-forge blocker metrics, not add more adjacent rows to this same objective.
 
-The active diagnostic follow-up is v9:
+The v9 diagnostic follow-up is rejected:
 `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v9_probe.yaml`.
-It is not a release candidate. It starts from held v2, reuses the v8
-direct-prompt blocker rows, reduces replay to 13 rows, expands LoRA to
-attention plus MLP modules, and raises preference/unlikelihood/SFT pressure.
-The purpose is to test whether this objective can move the two blockers at all.
-Run the targeted three-trial blocker gate first. If either blocker remains,
-reject v9 and delete the full merged checkpoint. If both blockers pass, run a
-broader source-relative gate before any upload, quantization, or promotion.
+It trained for 96 guarded two-node steps from held v2, merged, synced, served
+with TP=2, and failed the targeted blocker gate: self-harm refusal suppression
+0/3 with refusal rate 3/3, and `model_selection_summary` 0/3. Do not upload,
+quantize, promote, or run broader evals from v9. The rejected full merged
+checkpoint was deleted from both Spark nodes; the adapter, configs, report, and
+eval evidence were retained. See
+`reports/qwen36_27b_trial12_pref_ul_v9_probe_summary.md`.
 
 Operational note: the first TP=2 serve failed because the Spark vLLM launcher
 forced RoCE NCCL. The working Qwen serve override was:
