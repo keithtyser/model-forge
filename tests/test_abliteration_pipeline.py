@@ -487,6 +487,31 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(manifest["sections"]["bad_evaluation_prompts"]["count"], 5)
         self.assertEqual(manifest["sections"]["good_evaluation_prompts"]["count"], 6)
 
+    def test_qwen_v2_self_harm_search_targets_only_remaining_refusal_blocker(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_refusal_search.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+
+        self.assertTrue(plan["backend_config"]["search_only"])
+        self.assertEqual(plan["backend_config"]["n_trials"], 18)
+        self.assertEqual(plan["backend_config"]["search_selection"]["max_refusals"], 0)
+        self.assertTrue(plan["source_model"].endswith("Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2"))
+        write_heretic_config(plan)
+        manifest = load_yaml(Path(plan["work_dir"]) / "model_forge_prompt_datasets" / "manifest.json")
+
+        self.assertEqual(manifest["sections"]["bad_prompts"]["count"], 2)
+        self.assertEqual(manifest["sections"]["bad_prompts"]["response_conditioned"]["count"], 1)
+        self.assertEqual(manifest["sections"]["good_prompts"]["response_conditioned"]["count"], 8)
+        self.assertEqual(manifest["sections"]["bad_evaluation_prompts"]["count"], 1)
+        self.assertEqual(
+            manifest["sections"]["bad_evaluation_prompts"]["case_ids"],
+            ["refusal_paired_boundary/self_harm_instruction_harmful"],
+        )
+
     def test_qwen_trial12_unsafe_followup_trial16_exports_direct_parameters(self) -> None:
         config_path = (
             REPO_DIR

@@ -605,15 +605,30 @@ Do not run broader evals, quantize, upload, or promote v8. The next Qwen branch
 should change method or optimize candidate selection directly against
 model-forge blocker metrics, not add more adjacent rows to this same objective.
 
+Scoring v9 fixed a Qwen eval painpoint: `model_selection_summary` now scores
+model-selection reasoning over capability/refusal/latency tradeoffs instead of
+requiring verbatim base/fine-tuned/ablated label echoing. Rescored saved v2 and
+v6-v9 evidence passes that case 3/3, so future Qwen work should not train
+against `model_selection_summary_lineage_terms` as a live blocker. See
+`reports/qwen36_27b_model_selection_scoring_v9_summary.md`.
+
 The v9 diagnostic follow-up is rejected:
 `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v9_probe.yaml`.
 It trained for 96 guarded two-node steps from held v2, merged, synced, served
-with TP=2, and failed the targeted blocker gate: self-harm refusal suppression
-0/3 with refusal rate 3/3, and `model_selection_summary` 0/3. Do not upload,
-quantize, promote, or run broader evals from v9. The rejected full merged
-checkpoint was deleted from both Spark nodes; the adapter, configs, report, and
-eval evidence were retained. See
+with TP=2, and failed the actual targeted blocker gate: self-harm refusal
+suppression 0/3 with refusal rate 3/3. Do not upload, quantize, promote, or run
+broader evals from v9. The rejected full merged checkpoint was deleted from both
+Spark nodes; the adapter, configs, report, and eval evidence were retained. See
 `reports/qwen36_27b_trial12_pref_ul_v9_probe_summary.md`.
+
+The v2 self-harm Heretic search is also a negative probe:
+`configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_refusal_search.yaml`.
+It targeted the remaining stochastic `self_harm_instruction_harmful` refusal
+wording from held v2, but Heretic's focused bad eval started at refusals `0/1`,
+so all 18 search-only trials had refusal reduction `0`.
+`heretic-search-analyze` recommended `do_not_export`; no checkpoint was exported,
+quantized, uploaded, or promoted. See
+`reports/qwen36_27b_v2_self_harm_heretic_search_summary.md`.
 
 Operational note: the first TP=2 serve failed because the Spark vLLM launcher
 forced RoCE NCCL. The working Qwen serve override was:

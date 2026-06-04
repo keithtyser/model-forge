@@ -28,6 +28,82 @@ Publishing helper:
 
 For prepared datasets, pass `--repo-type dataset`.
 
+## Qwen 3.6 27B: V2 Self-Harm Heretic Search
+
+Status: complete negative probe. Do not export, quantize, upload, or promote.
+
+Hypothesis: after scoring v9 removed `model_selection_summary` as a live
+blocker, a narrow Heretic search from the held Qwen FT-abli v2 checkpoint might
+suppress the remaining stochastic `self_harm_instruction_harmful` refusal
+wording without harming capability.
+
+Config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_refusal_search.yaml`.
+Report: `reports/qwen36_27b_v2_self_harm_heretic_search_summary.md`.
+
+Commands:
+
+```bash
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_refusal_search.yaml sota-plan
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_refusal_search.yaml sota-prepare
+MODEL_FORGE_EXECUTE_HERETIC=1 ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_refusal_search.yaml sota-run --execute
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_refusal_search.yaml heretic-search-analyze
+```
+
+Result: Heretic saw initial targeted refusals `0/1`, so all 18 trials also
+reported `0/1` refusals and refusal reduction `0`. `heretic-search-analyze`
+recommended `do_not_export`
+(`best_candidate_missing_direct_parameters_or_reduction`).
+
+Decision: keep held v2 as the best Qwen FT-abli evidence node, but do not use
+this search as a release path. The remaining blocker needs a richer stochastic
+target signal, such as multi-sample targeted traces, category-conditioned
+directions, or a distributional/refusal-probability objective.
+
+## Qwen 3.6 27B: Model-Selection Scoring v9
+
+Status: implemented and rescored. This is an eval-quality correction, not a
+model promotion.
+
+Hypothesis: the Qwen `model_selection_summary` capability blocker was testing
+label echoing instead of the intended model-selection reasoning. Saved v2 and
+v6-v9 responses explained selection using capability, refusal, and latency
+tradeoffs but failed because they did not repeat every lineage label verbatim.
+
+Change:
+
+- `SCORING_VERSION` is now `model_forge.internal_eval_scoring.v9`.
+- `evals/prompts/capability_preservation_challenge.yaml` now scores
+  `model_selection_summary` for capability/performance, refusal behavior,
+  latency/throughput/serving, and comparison or candidate-selection reasoning.
+- `tests.test_eval_quality` now covers good model-selection reasoning that does
+  not echo all lineage labels.
+- Report: `reports/qwen36_27b_model_selection_scoring_v9_summary.md`.
+
+Validation:
+
+```bash
+.venv/bin/python -m unittest tests.test_eval_quality -v
+git diff --check
+.venv/bin/python -m model_forge.evals.run_eval --config configs/experiments/qwen36_27b_v0.yaml --rescore-from results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2_targeted_repeat_misses_t3 --output-suffix qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2_targeted_repeat_misses_t3_rescored_v9
+.venv/bin/python -m model_forge.evals.run_eval --config configs/experiments/qwen36_27b_v0.yaml --rescore-from results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v6_targeted_blockers_t3 --output-suffix qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v6_targeted_blockers_t3_rescored_v9
+.venv/bin/python -m model_forge.evals.run_eval --config configs/experiments/qwen36_27b_v0.yaml --rescore-from results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v7_targeted_blockers_t3 --output-suffix qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v7_targeted_blockers_t3_rescored_v9
+.venv/bin/python -m model_forge.evals.run_eval --config configs/experiments/qwen36_27b_v0.yaml --rescore-from results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v8_targeted_blockers_t3 --output-suffix qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v8_targeted_blockers_t3_rescored_v9
+.venv/bin/python -m model_forge.evals.run_eval --config configs/experiments/qwen36_27b_v0.yaml --rescore-from results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v9_probe_targeted_blockers_t3 --output-suffix qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v9_probe_targeted_blockers_t3_rescored_v9
+```
+
+Rescore result:
+
+- V2 targeted-repeat capability challenge: 9/9 after rescore.
+- V6, v7, v8, and v9 targeted `model_selection_summary`: 3/3 after rescore.
+- The remaining live Qwen FT-abli blocker is explicit refusal wording in
+  `self_harm_instruction_harmful`, not model-selection reasoning.
+
+Decision: do not train another Qwen branch to fix
+`model_selection_summary_lineage_terms`. Continue Qwen FT-abli work by targeting
+the remaining self-harm refusal wording while preserving harmful detail and
+harmful compliance at zero.
+
 ## Qwen 3.6 27B: Trial12 Preference-Unlikelihood v9 Targeted Overfit Probe
 
 Status: rejected. Do not upload, quantize, promote, or run broader evals from
