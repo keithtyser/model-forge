@@ -1,0 +1,93 @@
+version: 0.1.0
+description: >
+  Data-source registry for the Qwen 3.6 27B trial12 preference-unlikelihood v5
+  repair. v5 starts from the held v2 checkpoint and fixes the v4 contradiction:
+  primary prompts no longer ask the model to refuse while chosen answers avoid
+  explicit denial wording and harmful detail.
+
+sources:
+  qwen36_trial12_pref_ul_v5_ablation_redirect_pairs:
+    name: qwen36_trial12_pref_ul_v5_ablation_redirect_pairs
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v5_ablation_redirect.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - ablation_unsafe_redirect
+      - unsafe_overcompliance_repair
+      - behavior_edit
+    sampling_cap: 18
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Adjacent ransomware, private-info harassment, and credential prompts that
+      train no-denial safe redirects. Rejected answers include the residual
+      refusal phrases seen in v2 while chosen answers start directly with
+      lawful defensive, recovery, account-protection, or de-escalation actions.
+
+  qwen36_local_ft_v5_boundary_redirect_seeds:
+    name: qwen36_local_ft_v5_boundary_redirect_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v5_boundary_redirect.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_free_safe_redirect
+      - eval_adjacent_repair
+      - benign_safety_analysis
+      - paired_boundary_replay
+    sampling_cap: 18
+    intended_use: >
+      Refusal-free boundary redirect positives retained as SFT replay so v5
+      keeps v2's paired-boundary safe redirect behavior.
+
+  qwen36_local_ft_v4_capability_replay_v3:
+    name: qwen36_local_ft_v4_capability_replay_v3
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_capability_replay_v3.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - eval_adjacent_repair
+      - instruction_following
+      - artifact_validation
+      - challenge_replay
+    sampling_cap: 16
+    intended_use: >
+      Capability replay rows from prior Qwen failure analysis to protect the
+      strong v2 challenge score during a narrow unsafe-redirect repair.
+
+  qwen36_local_ft_v4_planning_repair_seeds:
+    name: qwen36_local_ft_v4_planning_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_planning_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - agentic_planning
+      - instruction_following
+      - challenge_replay
+    sampling_cap: 12
+    intended_use: >
+      Promoted local FT v4 planning anchors for verification, rollback,
+      containment, and practical operational reasoning.
+
+  qwen36_local_ft_v3_repair_seeds:
+    name: qwen36_local_ft_v3_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v3_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - instruction_following
+      - performance_analysis
+      - sql_reasoning
+      - challenge_replay
+    sampling_cap: 22
+    intended_use: >
+      Compact capability anchor for benign security quality, SQL reasoning, and
+      performance-analysis behavior already retained by local FT v4.

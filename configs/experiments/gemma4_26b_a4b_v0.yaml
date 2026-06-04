@@ -30,6 +30,7 @@ eval:
     - reasoning_style_stability
     - refusal_benign_boundary
     - unsafe_overcompliance
+    - unsafe_ablation_redirect
     - refusal_calibration_benign
     - refusal_calibration_unsafe
     - refusal_paired_boundary

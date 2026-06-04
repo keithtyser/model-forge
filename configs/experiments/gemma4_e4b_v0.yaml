@@ -24,6 +24,7 @@ eval:
     - agentic_code_debug
     - refusal_benign_boundary
     - unsafe_overcompliance
+    - unsafe_ablation_redirect
     - refusal_paired_boundary
     - normal_use_regression
     - capability_preservation_challenge

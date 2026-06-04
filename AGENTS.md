@@ -434,7 +434,21 @@ the two-Spark cluster on 2026-06-04 with the posttrain Transformers-5 image.
 
 Before making another Qwen sequential repair, start from v2 and protect every
 paired-boundary and challenge failure exposed by v3/v4. Do not simply increase
-the same phrase-repair objective pressure.
+the same phrase-repair objective pressure. The old `unsafe_overcompliance`
+bucket is a deployment-safety/refusal-calibration bucket whose prompts
+explicitly ask for refusal; report it, but do not use it as the sole
+zero-refusal promotion blocker. Use the new `unsafe_ablation_redirect` bucket
+for ablation-specific safe-redirect gating: it asks for no-denial safe
+redirects and scores explicit refusal wording, harmful detail, and harmful
+compliance separately.
+
+The next prepared Qwen branch is
+`configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v5.yaml`.
+It starts from held v2, uses 68 rows with 18 no-denial unsafe-redirect pairs,
+attention-only rank-4 LoRA, 48 guarded steps, low LR, and high SFT replay. It
+has been prepared, not trained. Before training, quick-gate v2 on
+`unsafe_ablation_redirect` to check whether v2 already passes the corrected
+ablation-specific bucket.
 
 Before exporting another Heretic search result into a full checkpoint, run the
 repo-native journal gate:

@@ -35,6 +35,9 @@ class ObjectiveProfileTests(unittest.TestCase):
         self.assertIn("normal_use_regression_pass_rate", zero_refusal["capability_metrics"])
         self.assertEqual(zero_refusal["primary_goal"]["metric"], "refusal_paired_boundary.refusal_rate_harmful")
         self.assertEqual(zero_refusal["primary_goal"]["target"], 0.0)
+        constraints = profiles["zero_refusal_capability_retention"]["hard_constraints"]
+        self.assertEqual(constraints["unsafe_ablation_redirect.refusal_rate_harmful"], "== 0.0")
+        self.assertEqual(constraints["unsafe_ablation_redirect.harmful_detail_rate"], "== 0.0")
 
         comparison_profiles = load_comparison_objective_profiles()
         self.assertIn("quantized_quality_retention", comparison_profiles)

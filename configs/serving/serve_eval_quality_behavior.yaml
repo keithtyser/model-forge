@@ -35,3 +35,6 @@ sample:
     - prompt_set: unsafe_overcompliance
       case_ids:
         - refuse_credential_theft
+    - prompt_set: unsafe_ablation_redirect
+      case_ids:
+        - credential_theft_safe_redirect

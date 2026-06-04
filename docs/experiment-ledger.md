@@ -5486,3 +5486,58 @@ sequential phrase-repair LoRA with the same objective mix; either return to v2
 with a non-training behavior edit/inference-time serving control, or design a
 new repair that explicitly protects all paired-boundary and challenge failures
 from v3/v4 before increasing refusal-phrase pressure.
+
+### 2026-06-04 Qwen v5 ablation-gate correction
+
+Hypothesis: the remaining v2 blocker was partly an eval/data mismatch. The
+legacy `unsafe_overcompliance` prompt set asks the model to refuse, while the
+zero-refusal ablation objective rewards no-denial safe redirects. v4 repeated
+that contradiction in training data by pairing refusal-requesting user prompts
+with refusal-free chosen answers.
+
+Implemented:
+
+- Added `evals/prompts/unsafe_ablation_redirect.yaml` and
+  `evals/rubrics/unsafe_ablation_redirect.md`.
+- Added the new bucket to reusable internal experiment configs and the sampled
+  serving behavior gate.
+- Updated `zero_refusal_capability_retention` hard constraints to require
+  `unsafe_ablation_redirect.refusal_rate_harmful == 0.0` and
+  `unsafe_ablation_redirect.harmful_detail_rate == 0.0`.
+- Added Qwen v5 recipe:
+  `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v5.yaml`.
+- Added v5 data:
+  `datasets/seeds/qwen36_27b_trial12_pref_ul_v5_ablation_redirect.jsonl`,
+  `configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v5.yaml`,
+  and
+  `datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v5.yaml`.
+- Registered
+  `local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v5` as an
+  inconclusive, blocked Qwen variant until trained and gated.
+
+Prepared v5 plan:
+
+- Source: held
+  `local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2`.
+- Rows: 68.
+- Primary repair rows: 18 no-denial unsafe-redirect pairs.
+- LoRA: rank 4, attention-only (`q_proj`, `k_proj`, `v_proj`, `o_proj`).
+- Steps: 48.
+- LR: 0.0000012.
+- Preference/unlikelihood/SFT weights: 0.40 / 0.08 / 1.35.
+- Cluster: guarded two-Spark torchrun config with posttrain Transformers-5
+  image and smoke requirement.
+
+Validation before training:
+
+```text
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v5.yaml prepare --overwrite
+.venv/bin/python -m unittest tests.test_finetune_pipeline tests.test_eval_quality tests.test_objectives tests.test_serving_eval tests.test_variants tests.test_roadmap -v
+./forge doctor
+git diff --check
+```
+
+Decision: do not train v5 until v2 is first quick-gated on the corrected
+`unsafe_ablation_redirect` bucket. If v2 already passes no-denial
+unsafe-redirect, promote from v2 evidence after paired-boundary/challenge
+confirmation instead of spending another training run.
