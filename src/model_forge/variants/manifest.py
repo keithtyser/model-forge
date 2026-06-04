@@ -141,7 +141,7 @@ def default_variant_node(
     *,
     implementation_status: str = "scaffolded",
     validation_state: str = "planned",
-    promotion_decision: str = "inconclusive",
+    promotion_decision: str | None = None,
     command: str | None = None,
     spark_evidence_path: str | None = None,
     node_count: int | None = None,
@@ -159,11 +159,13 @@ def default_variant_node(
         raise ValueError(f"unsupported implementation_status {implementation_status!r}")
     if validation_state not in VALIDATION_STATES:
         raise ValueError(f"unsupported validation_state {validation_state!r}")
-    if promotion_decision not in PROMOTION_DECISIONS:
-        raise ValueError(f"unsupported promotion_decision {promotion_decision!r}")
 
     family_config = load_family(family)
     variant = variant_config(family_config, variant_name)
+    promotion = variant.get("promotion") if isinstance(variant.get("promotion"), Mapping) else {}
+    effective_promotion_decision = promotion_decision or str(promotion.get("decision") or "inconclusive")
+    if effective_promotion_decision not in PROMOTION_DECISIONS:
+        raise ValueError(f"unsupported promotion_decision {effective_promotion_decision!r}")
     source_variant = variant.get("base_variant")
     transform = transform_from_variant(variant_name, variant)
     local_path = configured_local_path(family_config, variant)
@@ -190,9 +192,9 @@ def default_variant_node(
         "metrics": dict(metrics or {}),
         "logs": dict(logs or {}),
         "known_failure_modes": [],
-        "promotion_decision": promotion_decision,
+        "promotion_decision": effective_promotion_decision,
     }
-    return {
+    node = {
         "schema_version": SCHEMA_VERSION,
         "created_at": utc_now().isoformat(),
         "variant_id": sanitize_run_id(f"{family}_{variant_name}"),
@@ -221,6 +223,14 @@ def default_variant_node(
         "publication_class": variant.get("publication_class") or "research_report_only",
         "git": git_metadata(),
     }
+    if promotion:
+        node["promotion"] = {
+            "decision": effective_promotion_decision,
+            "blocked_actions": list(promotion.get("blocked_actions") or []),
+            "reason": promotion.get("reason"),
+            "evidence": list(promotion.get("evidence") or []),
+        }
+    return node
 
 
 def validate_variant_node(node: Mapping[str, Any]) -> list[str]:

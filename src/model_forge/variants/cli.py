@@ -171,7 +171,7 @@ def main() -> None:
     node_parser.add_argument("variant")
     node_parser.add_argument("--implementation-status", default="scaffolded", choices=sorted(IMPLEMENTATION_STATUSES))
     node_parser.add_argument("--validation-state", default="planned", choices=sorted(VALIDATION_STATES))
-    node_parser.add_argument("--promotion-decision", default="inconclusive", choices=sorted(PROMOTION_DECISIONS))
+    node_parser.add_argument("--promotion-decision", default=None, choices=sorted(PROMOTION_DECISIONS))
     node_parser.add_argument("--command", dest="run_command")
     node_parser.add_argument("--spark-evidence-path")
     node_parser.add_argument("--node-count", type=int)

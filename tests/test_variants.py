@@ -112,7 +112,7 @@ class VariantGraphTests(unittest.TestCase):
         self.assertEqual(targets["local_ft"]["transform"]["type"], "fine_tune")
 
         qwen36 = variant_graph("qwen36_27b")
-        self.assertEqual(qwen36["node_count"], 29)
+        self.assertEqual(qwen36["node_count"], 30)
         self.assertEqual(ancestry(qwen36, "local_abli"), ["base", "local_abli"])
         self.assertEqual(ancestry(qwen36, "local_ft_v5"), ["base", "local_ft_v5"])
         self.assertEqual(
@@ -160,6 +160,16 @@ class VariantGraphTests(unittest.TestCase):
                 "local_ft_abli_heretic_residual_trial12",
                 "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2",
                 "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v6",
+            ],
+        )
+        self.assertEqual(
+            ancestry(qwen36, "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v7"),
+            [
+                "base",
+                "local_ft_v4",
+                "local_ft_abli_heretic_residual_trial12",
+                "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2",
+                "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v7",
             ],
         )
         self.assertEqual(
@@ -308,6 +318,14 @@ class VariantGraphTests(unittest.TestCase):
         self.assertEqual(node["validation"]["metrics"]["primary_metric"], "challenge_capability")
         self.assertEqual(node["retention"]["publish_or_delete_decision"], "keep_private")
         self.assertTrue(any(entry.get("sha256", "").startswith("sha256:") for entry in node["checkpoint"]["artifacts"]))
+
+    def test_variant_node_inherits_family_promotion_metadata(self) -> None:
+        node = default_variant_node("qwen36_27b", "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v6")
+
+        self.assertEqual(node["validation"]["promotion_decision"], "rejected")
+        self.assertEqual(node["promotion"]["decision"], "rejected")
+        self.assertIn("quantization_export", node["promotion"]["blocked_actions"])
+        self.assertIn("reports/qwen36_27b_trial12_pref_ul_v6_summary.md", node["promotion"]["evidence"])
 
     def test_write_variant_node_round_trips(self) -> None:
         node = default_variant_node("gemma4_26b_a4b", "base")

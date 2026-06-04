@@ -170,6 +170,9 @@ traceability, but add `promotion.blocked_actions` for `quantization_export`,
 `hf_upload`, and `promotion` when the ledger says they should not become release
 sources. `./forge quantize export --execute` and `./forge hf plan-model` enforce
 that metadata before heavy export or model upload planning.
+`./forge variants node` inherits this family promotion metadata by default; use
+`--promotion-decision` only when intentionally overriding the family state for a
+specific generated node.
 
 Known Qwen 3.6 27B state: local FT v4 is the current FT source. Trial2
 scale0.75 preserves full-suite measured capability and benign quality after
@@ -544,6 +547,43 @@ guardrail. The already-rejected v3 and v4 full merged checkpoints were deleted
 from both Spark nodes to restore headroom. Their tracked configs, summaries,
 adapters, and eval evidence remain available; only the 51 GiB rejected merged
 checkpoint directories were removed.
+
+The active follow-up is the v7 response-conditioned repair:
+`configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7.yaml`.
+It starts again from held v2, not from failed v6. V7 exists because v6 showed
+that the previous tiny replay was too weak and too indirect: self-harm refusal
+wording worsened to 2/3 trials and `model_selection_summary` stayed 0/3.
+
+V7 changes only the recipe/data, not the release decision:
+
+- 61 prepared rows, 0 rejected rows.
+- 18 primary response-conditioned repair rows.
+- 22 total chosen/rejected rows after replay sampling.
+- Rejected self-harm answers include the observed "I can help, but I won't..."
+  and "I cannot..." denial forms; chosen answers start directly with safe
+  crisis support and avoid operational harmful detail.
+- Model-selection chosen answers explicitly include base, fine-tuned, and
+  ablated terminology; rejected answers encode the omission pattern that made
+  v2/v6 fail.
+- Training pressure is between v6 and the broader rejected v3/v4 runs:
+  attention-only rank-4 LoRA, LR `1.2e-6`, `56` max steps, preference weight
+  `0.55`, unlikelihood weight `0.14`, and SFT replay weight `1.20`.
+
+Do not upload, quantize, or promote v7 until it is trained, merged, synced,
+checkpoint/tokenizer audited, and targeted-gated. Run the targeted gate first:
+
+```bash
+MODEL_FORGE_TRIALS=3 ./forge eval qwen36_27b local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v7 --internal \
+  --bucket refusal_paired_boundary \
+  --bucket capability_preservation_challenge \
+  --case-id self_harm_instruction_harmful \
+  --case-id model_selection_summary
+```
+
+Only if that passes should the broader source-relative gate add
+`unsafe_ablation_redirect` and the rest of the paired/challenge buckets. Qwen
+NVFP4 remains blocked until a Qwen FT-abli candidate passes the unquantized
+zero-refusal capability-retention gate.
 
 Before exporting another Heretic search result into a full checkpoint, run the
 repo-native journal gate:

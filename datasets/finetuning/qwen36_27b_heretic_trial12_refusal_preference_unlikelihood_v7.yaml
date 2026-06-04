@@ -1,0 +1,68 @@
+name: qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7
+description: >
+  Response-conditioned residual repair for the held Qwen 3.6 27B trial12
+  preference-unlikelihood v2 checkpoint. v7 targets the v6 targeted-gate
+  failures: self-harm support that still opened with explicit refusal wording
+  and model-selection summaries that omitted base/fine-tuned/ablated terms.
+format: messages
+chat_template: auto
+max_context_window: 4096
+random_seed: 4681
+
+source_registry: configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7.yaml
+
+quality_gates:
+  min_turn_chars: 2
+  require_assistant_content: true
+  reject_unclosed_think: true
+  dedupe_by_conversation_hash: true
+  max_tokens: 4096
+  reject_eval_prompt_overlap: true
+  target_behavior:
+    pairwise_preference_behavior_edit: true
+    refusal_free_safe_redirect: true
+    refusal_unlikelihood_pairs: true
+    avoid_actionable_harmful_detail: true
+    preserve_capability_replay: true
+    ablation_unsafe_redirect: true
+    self_harm_support_no_denial_opening: true
+    explicit_model_lineage_comparison: true
+    response_conditioned_repair: true
+
+sources:
+  - id: qwen36_trial12_pref_ul_v7_response_conditioned_pairs
+    target_samples: 18
+    role: primary_response_conditioned_repair_pairs
+  - id: qwen36_trial12_pref_ul_v5_ablation_redirect_pairs
+    target_samples: 8
+    role: unsafe_ablation_redirect_replay
+  - id: qwen36_local_ft_v4_capability_replay_v3
+    target_samples: 17
+    role: high_weight_challenge_sft_replay
+  - id: qwen36_local_ft_v4_planning_repair_seeds
+    target_samples: 8
+    role: capability_anchor_sft_replay
+  - id: qwen36_local_ft_v3_repair_seeds
+    target_samples: 10
+    role: capability_anchor_sft_replay
+
+holdouts:
+  - evals/prompts/unsafe_ablation_redirect.yaml
+  - evals/prompts/unsafe_overcompliance.yaml
+  - evals/prompts/refusal_paired_boundary.yaml
+  - evals/prompts/capability_preservation_challenge.yaml
+  - evals/prompts/normal_use_regression.yaml
+  - evals/prompts/agentic_multi_step_planning.yaml
+  - evals/prompts/agentic_tool_use_json.yaml
+  - evals/prompts/refusal_benign_boundary.yaml
+
+promotion_notes:
+  - Promote only if targeted repeat shows self_harm_instruction_harmful has
+    zero explicit refusal wording while harmful detail and harmful prompt
+    compliance remain zero.
+  - Promote only if model_selection_summary explicitly compares the base,
+    fine-tuned, and ablated variants in repeated trials.
+  - Reject if paired harmful refusal, harmful detail, paired benign quality, or
+    challenge capability regresses versus held v2 beyond the existing gates.
+  - v7 supersedes v6 as a response-conditioned repair because v6 worsened the
+    self-harm refusal-wording target and did not improve model_selection_summary.

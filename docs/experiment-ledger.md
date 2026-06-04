@@ -28,6 +28,87 @@ Publishing helper:
 
 For prepared datasets, pass `--repo-type dataset`.
 
+## Qwen 3.6 27B: Trial12 Preference-Unlikelihood v7 Response-Conditioned Repair
+
+Status: prepared and ready for guarded two-Spark execution. No v7 training job,
+merge, model server, quantization export, or upload has been started.
+
+Hypothesis: held v2 remains the best Qwen FT-abli evidence node, but v6 proved
+the prior tiny repair was too weak and too indirect. V7 starts again from held
+v2 and uses response-conditioned adjacent pairs for the exact observed failure
+forms: self-harm outputs that say "I can help, but I won't..." / "I cannot..."
+before safe support, and model-selection outputs that omit base, fine-tuned,
+and ablated comparison terms. Moderate preference/unlikelihood pressure should
+move those local wording behaviors without repeating the broad v3/v4
+capability regressions.
+
+Recipe and data:
+
+- config:
+  `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7.yaml`
+- dataset manifest:
+  `datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7.yaml`
+- data-source registry:
+  `configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7.yaml`
+- primary seed:
+  `datasets/seeds/qwen36_27b_trial12_pref_ul_v7_response_conditioned_repair.jsonl`
+- generated run dir:
+  `runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7`
+
+Prepared data-pack evidence:
+
+```bash
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7.yaml prepare --overwrite
+.venv/bin/python runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7/train_trl_sft.py \
+  --plan runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7/plan.json \
+  --prepare-data
+```
+
+Result:
+
+- 61 rows accepted, 0 rejected by quality or holdout-overlap gates.
+- 18 primary v7 response-conditioned repair rows.
+- 8 v5 unsafe_ablation_redirect replay rows.
+- 17 capability replay v3 rows.
+- 8 planning replay rows.
+- 10 local FT v3 repair replay rows.
+- 22 rows preserved chosen/rejected pairs after replay sampling.
+- LoRA: attention-only rank 4.
+- Trainer: `qlora_pairwise_preference_unlikelihood`.
+- LR `1.2e-6`, max steps `56`, preference weight `0.55`, unlikelihood weight
+  `0.14`, SFT replay weight `1.20`.
+
+Painpoint fixed during prep: the initial v7 manifest requested 18
+`qwen36_local_ft_v4_capability_replay_v3` rows, but that source only has 17.
+The first data materialization correctly produced 61 rows while the plan still
+declared 62. The manifest, data-source cap, and tests now declare 61 so the
+plan and realized data pack match.
+
+Second painpoint fixed during prep: `./forge variants node` previously reported
+family-blocked variants as `promotion_decision: inconclusive` unless the caller
+passed an explicit CLI override. Generated variant nodes now inherit
+`promotion.decision`, `blocked_actions`, reason, and evidence from
+`configs/model_families/` by default, so agents do not accidentally treat
+rejected or blocked checkpoints as release candidates.
+
+Validation:
+
+```text
+jq empty datasets/seeds/qwen36_27b_trial12_pref_ul_v7_response_conditioned_repair.jsonl
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7.yaml plan
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7.yaml prepare --overwrite
+.venv/bin/python runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7/train_trl_sft.py --plan runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7/plan.json --prepare-data
+.venv/bin/python -m unittest tests.test_variants tests.test_finetune_pipeline -v
+git diff --check
+```
+
+Next action: train v7 through
+`runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7/run_cluster_torchrun.sh`
+with `MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1`, then merge, audit, sync, serve, and
+run the targeted three-trial blocker gate before any broader eval or NVFP4
+work. Keep v7 blocked for promotion, quantization, and upload until it clears
+the targeted gate and then the source-relative gates.
+
 ## Qwen 3.6 27B: Trial12 Preference-Unlikelihood v6 Tiny Residual Repair
 
 Status: trained, merged, synced, TP=2 targeted-gated, rescored with scoring v8,
