@@ -238,7 +238,14 @@ This is the short handoff state for humans and agents. Use
   guarded container. Trial index 18 is the best candidate by focused refusal
   count and KL (0 refusals, KL 0.001819), but the Abliterix JSONL did not
   persist baseline refusals, so the reduction gate must be proven by a
-  source-vs-target model-forge targeted eval after guarded export. See
+  source-vs-target model-forge targeted eval. Trial18 has now been exported to
+  `~/models/Qwen3.6-27B-local-ft-v4-abliterated-method-shift-self-harm-selected`,
+  registered as `local_ft_abli_method_shift_self_harm_selected`, locally
+  checkpoint/tokenizer-audited, and copied to the worker Spark. The reviewed
+  export saved successfully but the old runner did not exit cleanly after save;
+  commit `2d8486f` fixes future generated runners. Next: sync the new variant
+  registration to the worker, run strict worker audits, then serve/eval the
+  exported checkpoint on the targeted source-vs-target gate. See
   `reports/qwen36_27b_v2_abliterix_sra_search_summary.md`.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until

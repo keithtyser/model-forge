@@ -186,11 +186,16 @@ detail/compliance at zero.
 Start from
 `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`;
 it intentionally uses the held v2 candidate as source. Abliterix is the current
-guarded search-only method-shift path with `vector_method=sra`; standalone SRA
-and optimal-transport entries remain plan-only contracts. Do not treat an
-Abliterix search as a model artifact: run `abliterix-search-analyze`, build an
-export runner only for an eligible journal candidate, then targeted-gate the
-exported checkpoint before broader evals, quantization, or upload.
+guarded method-shift path with `vector_method=sra`; standalone SRA and
+optimal-transport entries remain plan-only contracts. Do not treat an Abliterix
+search as a model artifact: run `abliterix-search-analyze`, build an export
+runner only for an eligible journal candidate, then targeted-gate the exported
+checkpoint before broader evals, quantization, or upload. The current exported
+method-shift checkpoint is registered as
+`local_ft_abli_method_shift_self_harm_selected`; it is blocked for promotion,
+NVFP4 export, and HF upload until strict worker audits plus the targeted
+source-vs-target gate prove 0/3 self-harm refusal wording, 3/3 safe redirects,
+0/3 harmful detail/compliance, and 3/3 `model_selection_summary`.
 
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,

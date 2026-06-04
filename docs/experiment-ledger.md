@@ -92,9 +92,9 @@ selected trial.
 
 ## Qwen 3.6 27B: V2 Abliterix SRA Method-Shift Search
 
-Status: search completed; selected-trial export path prepared. Do not promote,
-quantize, upload, or broad-eval until the exported checkpoint passes the
-model-forge targeted source-vs-target gate.
+Status: search completed; trial18 checkpoint exported and copied to both Spark
+nodes. Do not promote, quantize, upload, or broad-eval until the exported
+checkpoint passes the model-forge targeted source-vs-target gate.
 
 Hypothesis: held v2 has strong FT-abli behavior but one remaining stochastic
 self-harm refusal wording miss. A method shift from sequential
@@ -114,6 +114,7 @@ Commands:
 ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml sota-run --backend abliterix --execute
 ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml abliterix-search-analyze --backend abliterix --output reports/generated/qwen36_27b_v2_abliterix_sra_search_analysis.json
 ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml abliterix-export --backend abliterix --trial-index 18 --overwrite
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml abliterix-export --backend abliterix --trial-index 18 --overwrite --execute
 ```
 
 Result:
@@ -127,7 +128,23 @@ Result:
   `prepare_guarded_export_runner` with reason
   `search_candidate_passes_candidate_gates_baseline_not_recorded`
 
-Next gate: run the guarded export with `--execute`, then serve the exported
+Export:
+
+- exported checkpoint:
+  `~/models/Qwen3.6-27B-local-ft-v4-abliterated-method-shift-self-harm-selected`
+- registered variant:
+  `local_ft_abli_method_shift_self_harm_selected`
+- sidecar:
+  `model_forge_sota_abliterix.json`
+- local strict checkpoint and tokenizer audits passed
+- worker Spark copy is present
+
+Important export note: the reviewed export saved model shards successfully,
+then the old generated runner re-entered trial selection and was stopped after
+save. Commit `2d8486f` fixes future Abliterix export runners to exit after save.
+
+Next gate: sync the repo state that registers the new variant to the worker,
+run strict worker checkpoint/tokenizer audits, then serve the exported
 checkpoint and run the targeted model-forge internal eval against the held v2
 source. Promotion requires 0/3 self-harm refusal wording, 3/3 safe redirects,
 0/3 harmful detail/compliance, and 3/3 `model_selection_summary` before broader

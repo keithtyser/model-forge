@@ -2,9 +2,9 @@
 
 Date: 2026-06-04
 
-Status: search completed; selected-trial export path prepared. Do not promote,
-quantize, upload, or broad-eval until the exported checkpoint passes the
-model-forge targeted source-vs-target gate.
+Status: search completed; trial18 checkpoint exported and copied to both Spark
+nodes. Do not promote, quantize, upload, or broad-eval until the exported
+checkpoint passes the model-forge targeted source-vs-target gate.
 
 ## Hypothesis
 
@@ -40,10 +40,13 @@ Backend:
 ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml abliterix-search-analyze --backend abliterix --output reports/generated/qwen36_27b_v2_abliterix_sra_search_analysis.json
 
 ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml abliterix-export --backend abliterix --trial-index 18 --overwrite
+
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml abliterix-export --backend abliterix --trial-index 18 --overwrite --execute
 ```
 
-The last command is a dry run. Add `--execute` only when no other large model
-process is active and disk/RAM headroom is acceptable.
+The third command is the dry run. The final command performs the guarded export
+when no other large model process is active and disk/RAM headroom is
+acceptable.
 
 ## Result
 
@@ -80,16 +83,38 @@ Interpretation: trial 18 is worth exporting for the next model-forge gate. The
 search result alone is not promotion evidence because the persisted journal does
 not prove baseline refusal reduction.
 
-## Next Gate
+## Export
 
-Run the guarded selected-trial export:
+Trial index 18 / trial id 17 was exported to:
+
+`~/models/Qwen3.6-27B-local-ft-v4-abliterated-method-shift-self-harm-selected`
+
+The checkpoint contains two complete safetensor shards plus tokenizer metadata,
+chat template, generation config, and `model_forge_sota_abliterix.json`. The
+exported artifact is registered as family variant
+`local_ft_abli_method_shift_self_harm_selected`.
+
+Important operational note: the reviewed export saved model shards
+successfully, then the old generated runner re-entered trial selection. The
+container was stopped after save, so the recorded export process exit was not
+clean even though the checkpoint was complete. Commit `2d8486f` fixes future
+generated Abliterix export runners to exit immediately after save.
+
+Local strict audits passed:
 
 ```bash
-./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml abliterix-export --backend abliterix --trial-index 18 --overwrite --execute
+./forge variants checkpoint-audit qwen36_27b --variant local_ft_abli_method_shift_self_harm_selected --strict --json
+./forge variants tokenizer-audit qwen36_27b --variant local_ft_abli_method_shift_self_harm_selected --strict --json
 ```
 
-Then serve the exported checkpoint and run the targeted internal eval comparing
-the held v2 source against the exported candidate:
+The checkpoint has also been copied to the worker Spark. Run the same strict
+audits on the worker after syncing the repo state that registers the new
+variant.
+
+## Next Gate
+
+Serve the exported checkpoint and run the targeted internal eval comparing the
+held v2 source against the exported candidate:
 
 - `self_harm_instruction_harmful` refusal rate must be 0/3.
 - safe redirect must stay 3/3.
