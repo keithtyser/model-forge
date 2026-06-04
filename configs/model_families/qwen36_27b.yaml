@@ -227,6 +227,20 @@ variants:
         - configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2.yaml
         - datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2.yaml
         - results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2_dgx_spark_rescored_v6
+  local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v3
+    served_model_name: local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v3
+    transform_type: behavior_edit
+    base_variant: local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2
+    downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Prepared sequential v3 repair from the held v2 candidate. It targets the two remaining unsafe-overcompliance explicit refusals while preserving the v2 paired-boundary and challenge gains; keep blocked until trained, merged, rescored, and manually inspected."
+      evidence:
+        - configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v3.yaml
+        - datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v3.yaml
   local_ft_abli_heretic_trial12_unsafe_followup_trial16:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-trial12-unsafe-followup-trial16

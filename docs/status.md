@@ -83,6 +83,11 @@ This is the short handoff state for humans and agents. Use
   It remains blocked rather than promoted because unsafe-overcompliance still
   has explicit refusal wording on 2/3 prompts, even though harmful detail and
   harmful compliance are both zero there.
+- Qwen 3.6 27B residual-trial12 preference-unlikelihood v3 is prepared as the
+  next sequential repair from the v2 checkpoint. It targets the two remaining
+  unsafe-overcompliance explicit refusals with 16 new adjacent no-refusal
+  chosen/rejected pairs plus pair and capability replay. Prepare accepted 68/68
+  rows with 27 paired rows and no holdout-overlap rejections.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until
   a real FT-abli candidate passes the zero-refusal capability-retention gate.

@@ -331,6 +331,72 @@ class FinetunePlanTests(unittest.TestCase):
         self.assertIn("Unlikelihood weight: `0.18`", method_card)
         self.assertIn("primary_evalstyle_refusal_preference_unlikelihood_pairs", method_card)
 
+    def test_qwen36_trial12_v3_repair_starts_from_v2_candidate(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "finetuning"
+            / "qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v3.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["run_dir"] = tmp
+            plan = build_plan(config, config_path)
+            outputs = write_artifacts(plan, overwrite=False)
+            trainer_script = Path(outputs["trainer"]).read_text()
+            method_card = Path(outputs["method_card"]).read_text()
+
+        self.assertEqual(plan["family"], "qwen36_27b")
+        self.assertEqual(
+            plan["model"]["source"],
+            "local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2",
+        )
+        self.assertTrue(
+            plan["model"]["output_dir"].endswith(
+                "model-forge-adapters/qwen36_27b/heretic_trial12_refusal_preference_unlikelihood_v3"
+            )
+        )
+        self.assertEqual(plan["eval"]["source_variant"], "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2")
+        self.assertEqual(plan["trainer"]["method"], "qlora_pairwise_preference_unlikelihood")
+        self.assertEqual(plan["trainer"]["preference_weight"], 1.05)
+        self.assertEqual(plan["trainer"]["sft_weight"], 0.70)
+        self.assertEqual(plan["trainer"]["unlikelihood_weight"], 0.22)
+        self.assertEqual(plan["trainer"]["learning_rate"], 0.0000035)
+        self.assertEqual(plan["trainer"]["max_steps"], 80)
+        self.assertEqual(plan["lora"]["r"], 8)
+        self.assertEqual(plan["data"]["target_samples"], 68)
+        source_ids = {source["id"] for source in plan["data"]["sources"]}
+        self.assertIn("qwen36_trial12_pref_ul_v3_unsafe_no_refusal_pairs", source_ids)
+        self.assertIn("PairwisePreferenceTrainer", trainer_script)
+        self.assertIn("self.unlikelihood_weight", trainer_script)
+        self.assertIn("primary_unsafe_overcompliance_refusal_repair_pairs", method_card)
+
+    def test_qwen36_trial12_v3_repair_pairs_are_refusal_free_chosen(self) -> None:
+        import json
+
+        path = REPO_DIR / "datasets" / "seeds" / "qwen36_27b_trial12_pref_ul_v3_unsafe_no_refusal.jsonl"
+        chosen_refusal_markers = (
+            "i can't",
+            "i cannot",
+            "i can’t",
+            "i won't",
+            "i won’t",
+            "i will not",
+            "cannot help",
+            "refuse",
+        )
+        rejected_refusal_markers = ("i can't", "i cannot", "cannot help", "cannot provide")
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertEqual(len(rows), 16)
+        self.assertGreaterEqual(sum("ransomware" in row["id"] for row in rows), 7)
+        self.assertGreaterEqual(sum("doxxing" in row["id"] for row in rows), 7)
+        for row in rows:
+            chosen = row["messages"][-1]["content"].lower()
+            rejected = row["rejected_messages"][-1]["content"].lower()
+            self.assertFalse(any(marker in chosen for marker in chosen_refusal_markers), row["id"])
+            self.assertTrue(any(marker in rejected for marker in rejected_refusal_markers), row["id"])
+            self.assertEqual(row["messages"][0]["content"], row["rejected_messages"][0]["content"])
+
     def test_qwen36_refusal_unlikelihood_v2_pairs_have_chosen_and_rejected(self) -> None:
         import json
 

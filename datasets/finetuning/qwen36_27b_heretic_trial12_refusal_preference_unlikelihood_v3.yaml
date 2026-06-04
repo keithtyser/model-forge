@@ -1,0 +1,69 @@
+name: qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v3
+description: >
+  Sequential repair pack for the Qwen 3.6 27B trial12 preference-unlikelihood
+  v2 checkpoint. v3 targets the remaining unsafe-overcompliance refusal wording
+  with adjacent no-refusal chosen/rejected pairs while retaining capability and
+  benign-boundary replay.
+format: messages
+chat_template: auto
+max_context_window: 4096
+random_seed: 4639
+
+source_registry: configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v3.yaml
+
+quality_gates:
+  min_turn_chars: 2
+  require_assistant_content: true
+  reject_unclosed_think: true
+  dedupe_by_conversation_hash: true
+  max_tokens: 4096
+  reject_eval_prompt_overlap: true
+  target_behavior:
+    pairwise_preference_behavior_edit: true
+    refusal_free_safe_redirect: true
+    refusal_unlikelihood_pairs: true
+    avoid_actionable_harmful_detail: true
+    preserve_capability_replay: true
+
+sources:
+  - id: qwen36_trial12_pref_ul_v3_unsafe_no_refusal_pairs
+    target_samples: 16
+    role: primary_unsafe_overcompliance_refusal_repair_pairs
+  - id: qwen36_local_ft_v4_refusal_unlikelihood_v3_evalstyle_pairs
+    target_samples: 6
+    role: low_weight_evalstyle_refusal_pair_replay
+  - id: qwen36_heretic_trial12_refusal_unlikelihood_v1
+    target_samples: 6
+    role: low_weight_residual_refusal_pair_replay
+  - id: qwen36_local_ft_v5_boundary_redirect_seeds
+    target_samples: 8
+    role: sft_refusal_free_boundary_redirect_replay
+  - id: qwen36_local_ft_v4_capability_replay_v3
+    target_samples: 16
+    role: sft_capability_replay_from_v2_failure_analysis
+  - id: qwen36_local_ft_v4_planning_repair_seeds
+    target_samples: 8
+    role: sft_capability_anchor
+  - id: qwen36_local_ft_v3_repair_seeds
+    target_samples: 8
+    role: sft_capability_anchor
+
+holdouts:
+  - evals/prompts/unsafe_overcompliance.yaml
+  - evals/prompts/refusal_paired_boundary.yaml
+  - evals/prompts/capability_preservation_challenge.yaml
+  - evals/prompts/normal_use_regression.yaml
+  - evals/prompts/agentic_multi_step_planning.yaml
+  - evals/prompts/agentic_tool_use_json.yaml
+  - evals/prompts/refusal_benign_boundary.yaml
+
+promotion_notes:
+  - Start from v2, not residual trial12, because v2 already clears paired
+    refusal, benign quality, harmful-detail, and challenge gates after scoring
+    v6 rescore.
+  - Promote only if unsafe-overcompliance refusal reaches zero while paired
+    harmful refusal, paired harmful detail, and paired harmful compliance remain
+    zero.
+  - Promote only if paired benign quality remains at 1.00 or within one miss
+    of v2 and challenge capability remains at least 0.9375.
+  - Reject if harmful_detail_rate rises above zero after manual review.

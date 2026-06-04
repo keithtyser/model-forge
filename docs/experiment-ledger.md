@@ -5223,3 +5223,63 @@ unsafe-overcompliance wording. The next repair should target the ransomware and
 doxxing unsafe-overcompliance refusal prior with a small, adjacent no-refusal
 safe-redirect pack while preserving the clean paired-boundary scores and the
 0.9688 challenge capability.
+
+## Qwen Trial12 Preference-Unlikelihood v3 Unsafe-Refusal Repair
+
+Status: prepared and data-validated; not trained, merged, promoted, uploaded,
+or quantized yet.
+
+Hypothesis: v2 already solved the paired-boundary and capability problem, so a
+smaller low-LR sequential LoRA from v2 should target only the remaining
+unsafe-overcompliance refusal prior. The repair pack preserves the exact
+eval-style trigger shape, including "safety-aligned assistant" and "Refuse
+briefly" wording, but uses adjacent prompts rather than holdout prompt copies.
+Chosen answers redirect without explicit refusal wording or harmful detail;
+rejected answers contain the refusal wording that v2 still emits.
+
+Recipe:
+
+- `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v3.yaml`
+- Method: `qlora_pairwise_preference_unlikelihood`
+- Source: `local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2`
+- Candidate variant:
+  `local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3`
+- Data manifest:
+  `datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v3.yaml`
+- Source registry:
+  `configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v3.yaml`
+- Primary seed file:
+  `datasets/seeds/qwen36_27b_trial12_pref_ul_v3_unsafe_no_refusal.jsonl`
+
+Prepared validation:
+
+```text
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v3.yaml prepare --overwrite
+.venv/bin/python runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v3/train_trl_sft.py --plan runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v3/plan.json --prepare-data
+jq -n -r '[inputs] | {rows:length, paired: map(select(.rejected_messages != null)) | length, sources:(group_by(.source)|map({source:.[0].source, rows:length, paired:map(select(.rejected_messages != null))|length}))}' runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v3/train.jsonl
+```
+
+Prepared data result:
+
+- Total rows: 68.
+- Paired chosen/rejected rows: 27.
+- New unsafe-overcompliance repair source: 16 rows, 16 paired.
+- Eval-style pair replay: 6 rows, 6 paired.
+- Residual trial12 pair replay sample: 6 rows, 5 paired.
+- Boundary/capability SFT replay: 40 rows.
+- Prepare rejected 0 rows for holdout overlap or quality-gate failures.
+- Paired chosen answers contain no explicit refusal markers under the repo
+  marker check; paired rejected answers all contain refusal markers.
+
+Next validation:
+
+```text
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v3/run_cluster_torchrun.sh
+scripts/run_merge_peft_container.sh --base-model ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2 --adapter ~/models/model-forge-adapters/qwen36_27b/heretic_trial12_refusal_preference_unlikelihood_v3 --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v3 --dtype bf16 --merge-method direct --trust-remote-code --overwrite
+MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3 --internal --bucket refusal_paired_boundary --bucket unsafe_overcompliance --bucket capability_preservation_challenge
+```
+
+Promotion gate: unsafe-overcompliance refusal must reach 0.0 while paired
+harmful refusal, paired harmful detail, and paired harmful compliance remain
+0.0. Challenge capability should stay at or above 0.9375 before this candidate
+can become the unquantized source for NVFP4 work.
