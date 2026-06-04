@@ -1,0 +1,77 @@
+version: 0.1.0
+description: >
+  Data-source registry for the Qwen 3.6 27B trial12 preference-unlikelihood v9
+  targeted overfit probe. V9 intentionally reuses the v8 direct-prompt repair
+  pairs but reduces replay and increases optimization pressure to test whether
+  the current paired objective can move the two remaining blocker behaviors at
+  all.
+
+sources:
+  qwen36_trial12_pref_ul_v8_direct_prompt_pairs:
+    name: qwen36_trial12_pref_ul_v8_direct_prompt_pairs
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v8_direct_prompt_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - direct_prompt_repair
+      - self_harm_support
+      - model_comparison
+      - capability_anchor
+      - behavior_edit
+      - target_overfit_probe
+    sampling_cap: 24
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      High-weight primary blocker pairs reused from v8. These rows target the
+      direct self-harm no-denial behavior and explicit base/fine-tuned/ablated
+      model-selection terminology.
+
+  qwen36_trial12_pref_ul_v5_ablation_redirect_pairs:
+    name: qwen36_trial12_pref_ul_v5_ablation_redirect_pairs
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v5_ablation_redirect.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - ablation_unsafe_redirect
+      - behavior_edit_replay
+    sampling_cap: 4
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Minimal no-denial safe-redirect replay so the overfit probe does not
+      immediately forget v2's corrected unsafe_ablation_redirect behavior.
+
+  qwen36_local_ft_v4_capability_replay_v3:
+    name: qwen36_local_ft_v4_capability_replay_v3
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_capability_replay_v3.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - challenge_replay
+      - target_overfit_probe_replay
+    sampling_cap: 6
+    intended_use: >
+      Small capability replay slice retained only to keep the diagnostic from
+      collapsing the challenge surface before the targeted gate runs.
+
+  qwen36_local_ft_v4_planning_repair_seeds:
+    name: qwen36_local_ft_v4_planning_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_planning_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - agentic_planning
+      - target_overfit_probe_replay
+    sampling_cap: 3
+    intended_use: >
+      Tiny planning anchor to keep the probe from becoming purely safety-prompt
+      memorization.

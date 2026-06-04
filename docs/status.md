@@ -156,6 +156,13 @@ This is the short handoff state for humans and agents. Use
   run broader evals from v8. The rejected v8 full checkpoint was deleted from
   both Spark nodes; the adapter, configs, report, and eval evidence were
   retained.
+- Qwen 3.6 27B residual-trial12 preference-unlikelihood v9 probe is prepared
+  as a diagnostic, not a release candidate. It starts from held v2, reuses the
+  v8 direct-prompt blocker pairs, reduces replay to 13 rows, expands LoRA to
+  attention plus MLP modules, and raises preference/unlikelihood/SFT pressure
+  to test whether the current paired objective can move the two blockers at
+  all. Run the targeted three-trial blocker gate first; if either blocker
+  remains, reject v9 and delete the full merged checkpoint.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until
   a real FT-abli candidate passes the zero-refusal capability-retention gate.
@@ -527,7 +534,11 @@ length filtering:
    `reports/qwen36_27b_trial12_pref_ul_v8_summary.md`. The next branch should
    change method or optimize candidate selection directly against the
    model-forge blocker metrics instead of adding more rows to the same
-   adjacent-pair objective.
+   adjacent-pair objective. The prepared diagnostic v9 probe is:
+   `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v9_probe.yaml`.
+   It is intentionally high-pressure and blocked for upload, quantization, and
+   promotion unless it first passes targeted gating and then a broader
+   source-relative gate.
    The pairwise preference method shift at
    `configs/finetuning/qwen36_27b_local_ft_v4_pairwise_preference_v1.yaml`
    trained 100/100 guarded two-Spark steps, merged, and quick-gated. It is

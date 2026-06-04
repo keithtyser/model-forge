@@ -321,6 +321,20 @@ variants:
         - datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8.yaml
         - reports/qwen36_27b_trial12_pref_ul_v8_summary.md
         - results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v8_targeted_blockers_t3
+  local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v9_probe:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v9-probe
+    served_model_name: local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v9-probe
+    transform_type: behavior_edit
+    base_variant: local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2
+    downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Prepared diagnostic overfit probe from held v2 after v6/v7/v8 failed the same targeted blockers. It intentionally reduces replay and increases full attention+MLP LoRA pressure to test whether the current paired objective can move the blocker metrics. It is not a release candidate unless it first passes targeted gating and then a broader source-relative gate."
+      evidence:
+        - configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v9_probe.yaml
+        - datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v9_probe.yaml
   local_ft_abli_heretic_trial12_unsafe_followup_trial16:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-trial12-unsafe-followup-trial16

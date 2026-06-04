@@ -28,6 +28,48 @@ Publishing helper:
 
 For prepared datasets, pass `--repo-type dataset`.
 
+## Qwen 3.6 27B: Trial12 Preference-Unlikelihood v9 Targeted Overfit Probe
+
+Status: prepared diagnostic recipe, not trained yet. This is not a release
+candidate; it is blocked for upload, quantization, and promotion unless it
+first passes the targeted blocker gate and then a broader source-relative gate.
+
+Hypothesis: v6, v7, and v8 all failed the same two targeted blockers despite
+preserving safe redirects and avoiding harmful detail. V9 intentionally reduces
+replay and increases pressure to test whether the current paired
+preference/unlikelihood objective can move those blocker metrics at all. It
+starts from held v2, reuses the v8 direct-prompt repair rows, keeps only 13
+minimal replay rows, expands LoRA to attention plus MLP modules, and raises
+preference, unlikelihood, and SFT weights.
+
+Recipe and data:
+
+- config:
+  `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v9_probe.yaml`
+- dataset manifest:
+  `datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v9_probe.yaml`
+- data-source registry:
+  `configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v9_probe.yaml`
+- primary seed reused from v8:
+  `datasets/seeds/qwen36_27b_trial12_pref_ul_v8_direct_prompt_repair.jsonl`
+
+Planned data pack:
+
+- 37 target rows.
+- 24 primary direct-prompt blocker pairs.
+- 4 v5 unsafe-ablation-redirect replay rows.
+- 6 local FT v4 capability replay rows.
+- 3 local FT v4 planning replay rows.
+- LoRA: rank 16, attention plus MLP target modules.
+- Trainer: `qlora_pairwise_preference_unlikelihood`.
+- LR `2.5e-6`, max steps `96`, preference weight `1.50`,
+  unlikelihood weight `0.45`, SFT replay weight `2.00`.
+
+Decision rule: run only the targeted three-trial blocker gate first. If either
+blocker remains, reject v9 and delete the full merged checkpoint. If both
+targeted blockers pass, run the broader source-relative Qwen gate before any
+promotion, upload, or quantization decision.
+
 ## Qwen 3.6 27B: Trial12 Preference-Unlikelihood v8 Direct-Prompt Repair
 
 Status: trained, merged, synced, targeted-gated, and rejected. Do not upload,

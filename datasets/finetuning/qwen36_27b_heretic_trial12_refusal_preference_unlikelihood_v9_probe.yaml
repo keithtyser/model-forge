@@ -1,0 +1,63 @@
+name: qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v9_probe
+description: >
+  Targeted overfit probe for the held Qwen 3.6 27B trial12
+  preference-unlikelihood v2 checkpoint. V9 intentionally reduces replay and
+  increases LoRA capacity to test whether the paired preference/unlikelihood
+  objective can move the exact v8/v7 blocker behaviors.
+format: messages
+chat_template: auto
+max_context_window: 4096
+random_seed: 4709
+
+source_registry: configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v9_probe.yaml
+
+quality_gates:
+  min_turn_chars: 2
+  require_assistant_content: true
+  reject_unclosed_think: true
+  dedupe_by_conversation_hash: true
+  max_tokens: 4096
+  reject_eval_prompt_overlap: true
+  target_behavior:
+    pairwise_preference_behavior_edit: true
+    refusal_free_safe_redirect: true
+    refusal_unlikelihood_pairs: true
+    avoid_actionable_harmful_detail: true
+    ablation_unsafe_redirect: true
+    self_harm_support_no_denial_opening: true
+    explicit_model_lineage_comparison: true
+    direct_prompt_repair: true
+    target_overfit_probe: true
+
+sources:
+  - id: qwen36_trial12_pref_ul_v8_direct_prompt_pairs
+    target_samples: 24
+    role: high_weight_primary_blocker_pairs
+  - id: qwen36_trial12_pref_ul_v5_ablation_redirect_pairs
+    target_samples: 4
+    role: minimal_unsafe_ablation_redirect_replay
+  - id: qwen36_local_ft_v4_capability_replay_v3
+    target_samples: 6
+    role: minimal_challenge_sft_replay
+  - id: qwen36_local_ft_v4_planning_repair_seeds
+    target_samples: 3
+    role: minimal_planning_sft_replay
+
+holdouts:
+  - evals/prompts/unsafe_ablation_redirect.yaml
+  - evals/prompts/unsafe_overcompliance.yaml
+  - evals/prompts/refusal_paired_boundary.yaml
+  - evals/prompts/capability_preservation_challenge.yaml
+  - evals/prompts/normal_use_regression.yaml
+  - evals/prompts/agentic_multi_step_planning.yaml
+  - evals/prompts/agentic_tool_use_json.yaml
+  - evals/prompts/refusal_benign_boundary.yaml
+
+promotion_notes:
+  - This is a diagnostic probe, not a release candidate. It should run the
+    targeted blocker gate first and should be rejected immediately if either
+    blocker remains.
+  - If the targeted gate passes, run a broader source-relative gate before
+    considering whether the method deserves a less overfit follow-up recipe.
+  - Do not upload, quantize, or promote v9 directly without a full source-
+    relative internal comparison.

@@ -803,6 +803,55 @@ class FinetunePlanTests(unittest.TestCase):
                 self.assertIn("fine-tuned", chosen)
                 self.assertIn("ablated", chosen)
 
+    def test_qwen36_trial12_v9_probe_is_high_pressure_diagnostic_from_v2(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "finetuning"
+            / "qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v9_probe.yaml"
+        )
+        config = load_yaml(config_path)
+        self.assertIn(
+            "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v8",
+            config["eval"]["rejected_prior_variants"],
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            config["run_dir"] = tmp
+            plan = build_plan(config, config_path)
+            outputs = write_artifacts(plan, overwrite=False)
+            method_card = Path(outputs["method_card"]).read_text()
+
+        self.assertEqual(
+            plan["model"]["source"],
+            "local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2",
+        )
+        self.assertTrue(
+            plan["model"]["output_dir"].endswith(
+                "model-forge-adapters/qwen36_27b/heretic_trial12_refusal_preference_unlikelihood_v9_probe"
+            )
+        )
+        self.assertEqual(plan["eval"]["source_variant"], "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2")
+        self.assertEqual(plan["trainer"]["method"], "qlora_pairwise_preference_unlikelihood")
+        self.assertEqual(plan["trainer"]["preference_weight"], 1.50)
+        self.assertEqual(plan["trainer"]["preference_beta"], 0.45)
+        self.assertEqual(plan["trainer"]["preference_margin"], 0.05)
+        self.assertEqual(plan["trainer"]["sft_weight"], 2.00)
+        self.assertEqual(plan["trainer"]["unlikelihood_weight"], 0.45)
+        self.assertEqual(plan["trainer"]["learning_rate"], 0.0000025)
+        self.assertEqual(plan["trainer"]["max_steps"], 96)
+        self.assertEqual(plan["lora"]["r"], 16)
+        self.assertEqual(
+            plan["lora"]["target_modules"],
+            ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+        )
+        self.assertEqual(plan["data"]["target_samples"], 37)
+        source_targets = {source["id"]: source["target_samples"] for source in plan["data"]["sources"]}
+        self.assertEqual(source_targets["qwen36_trial12_pref_ul_v8_direct_prompt_pairs"], 24)
+        replay_rows = sum(value for key, value in source_targets.items() if key != "qwen36_trial12_pref_ul_v8_direct_prompt_pairs")
+        self.assertEqual(replay_rows, 13)
+        self.assertIn("target_overfit_probe", plan["data"]["quality_gates"]["target_behavior"])
+        self.assertIn("high_weight_primary_blocker_pairs", method_card)
+
     def test_qwen36_refusal_unlikelihood_v2_pairs_have_chosen_and_rejected(self) -> None:
         import json
 
