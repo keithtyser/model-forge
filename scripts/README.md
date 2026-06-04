@@ -20,8 +20,9 @@ wrappers, operational helpers, or hardware-specific launchers.
   sota-run --execute` uses it automatically when the recipe sets a Heretic
   `container_image`.
 - `run_abliterix_search_container.sh`: guarded CUDA container launcher for
-  generated Abliterix non-interactive search-only runners. It does not export a
-  checkpoint; analyze the journal before building an export path.
+  generated Abliterix non-interactive search runners and reviewed selected-trial
+  export runners. Search runs do not export a checkpoint; analyze the journal
+  before running `abliterix-export --execute`.
 - `quantization/gemma4_moe_nvfp4.py`: lower-level ModelOpt helper used by
   `./forge quantize export` for Gemma4 full-MoE NVFP4 checkpoint creation.
 - `merge_peft_adapter.py`: PEFT adapter merge helper when live LoRA serving is

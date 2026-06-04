@@ -169,12 +169,12 @@ method-shift backends:
 - `optimal_transport`: distributional activation transport candidate
 
 Standalone `apostate`, `sra`, and `optimal_transport` remain plan-only until a
-guarded model-forge runner exists. Abliterix is executable only in
-non-interactive search-only mode; it writes an Optuna journal and exits without
-exporting a checkpoint. Use `abliterix-search-analyze` before implementing an
-export runner for a selected trial. The contract is the same for every backend:
-one large model job at a time, source checkpoint audit, CPU/RAM/disk caps,
-targeted internal eval before broader eval, and source-relative promotion gates.
+guarded model-forge runner exists. Abliterix first runs in non-interactive
+search-only mode; it writes an Optuna journal and exits without exporting a
+checkpoint. Use `abliterix-search-analyze` before `abliterix-export` for a
+selected trial. The contract is the same for every backend: one large model job
+at a time, source checkpoint audit, CPU/RAM/disk caps, targeted internal eval
+before broader eval, and source-relative promotion gates.
 
 Prepare backend-specific files:
 
@@ -206,6 +206,21 @@ After it finishes, run:
 Only build/export a selected trial after the journal gate recommends
 `prepare_guarded_export_runner`, then run the model-forge targeted internal eval
 before broader evals, quantization, or upload.
+
+```bash
+./forge ablate --config <config.yaml> abliterix-export \
+  --backend abliterix \
+  --trial-index <selected-index> \
+  --overwrite
+```
+
+The default export command is a dry run and only writes the guarded export
+runner. Add `--execute` after checking disk/RAM headroom and confirming no other
+large model process is active. Some Abliterix journals record candidate
+refusals and KL but not the baseline refusal count; in that case
+`abliterix-search-analyze` can still recommend preparing an export runner, but
+the required next gate must compare the source checkpoint against the exported
+checkpoint with model-forge targeted internal evals.
 
 Recipes can also condition Heretic prompt sections on prior eval traces by
 setting keys such as `bad_train_response_source`,

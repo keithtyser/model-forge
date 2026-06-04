@@ -1041,7 +1041,174 @@ def main() -> None:
         "checkpoint_dir": str(checkpoint_dir),
         "journals": [str(path) for path in checkpoint_files],
         "exported_checkpoint": False,
-        "next_step": "Run `./forge ablate --config <config> abliterix-search-analyze` and only implement/export a selected trial after model-forge targeted gates pass.",
+        "next_step": "Run `./forge ablate --config <config> abliterix-search-analyze`; if it recommends `prepare_guarded_export_runner`, dry-run `abliterix-export`, then execute export and run the model-forge targeted gate.",
+    }}, indent=2) + "\\n")
+    print(f"Wrote {{summary_path}}")
+
+
+if __name__ == "__main__":
+    main()
+'''
+    runner.write_text(script)
+    return runner
+
+
+def write_abliterix_export_runner(plan: dict[str, Any], trial_index: int, overwrite: bool = False) -> Path:
+    backend = plan["backend_config"]
+    work_dir = Path(plan["work_dir"])
+    work_dir.mkdir(parents=True, exist_ok=True)
+    runner = work_dir / f"run_abliterix_export_trial{trial_index}.py"
+    config_path = work_dir / "abliterix.toml"
+    checkpoint_dir = resolve_repo_path(backend.get("checkpoint_dir", "abliterix_checkpoints"), work_dir)
+    script = f'''from __future__ import annotations
+
+import json
+import os
+import re
+import shutil
+import sys
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
+
+import questionary
+
+work_dir = Path({str(work_dir)!r})
+config_path = Path({str(config_path)!r})
+checkpoint_dir = Path({str(checkpoint_dir)!r})
+source_model = Path({plan["source_model"]!r})
+output_dir = Path({plan["output_dir"]!r})
+trial_index = {int(trial_index)!r}
+overwrite = {bool(overwrite)!r}
+state = {{"selected_trial": None, "save_requested": False, "saved": False}}
+
+
+def _choice_title(choice):
+    return choice.title if hasattr(choice, "title") else str(choice)
+
+
+def _choice_value(choice):
+    return choice.value if hasattr(choice, "value") else choice
+
+
+def _directory_size(path: Path) -> int:
+    if not path.exists():
+        return 0
+    total = 0
+    for item in path.rglob("*"):
+        if item.is_file():
+            total += item.stat().st_size
+    return total
+
+
+def _preflight_output_dir() -> None:
+    if output_dir.exists():
+        if not overwrite:
+            raise SystemExit(f"output already exists: {{output_dir}}; pass --overwrite to replace it")
+        shutil.rmtree(output_dir)
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    total, used, free = shutil.disk_usage(output_dir.parent)
+    source_size = _directory_size(source_model)
+    floor = float(os.environ.get("MODEL_FORGE_MIN_FREE_DISK_FRACTION", "0.15"))
+    if total and (free - source_size) / total < floor:
+        raise SystemExit(
+            "disk preflight would breach free-space floor after export: "
+            f"{{(free - source_size) / total:.3f}} < {{floor:.3f}}"
+        )
+
+
+def prompt_choice(message, choices, *args, **kwargs):
+    if message == "How would you like to proceed?":
+        return "continue"
+    if message == "Which trial do you want to use?":
+        fallback = None
+        for choice in choices:
+            value = _choice_value(choice)
+            if value in {{"continue", ""}}:
+                continue
+            if fallback is None:
+                fallback = choice
+            if getattr(value, "user_attrs", {{}}).get("index") == trial_index:
+                state["selected_trial"] = _choice_title(choice)
+                return value
+            match = re.search(r"Trial\\s+(\\d+)", _choice_title(choice))
+            if match and int(match.group(1)) == trial_index:
+                state["selected_trial"] = _choice_title(choice)
+                return value
+        raise SystemExit(f"selected Abliterix trial {{trial_index}} was not available")
+    if message == "What do you want to do with the decensored model?":
+        if not state["save_requested"]:
+            state["save_requested"] = True
+            return "Save the model to a local folder"
+        state["saved"] = True
+        return "Return to the trial selection menu"
+    if message == "How do you want to proceed?":
+        return "merge"
+    return _choice_value(choices[0]) if choices else None
+
+
+def prompt_path(message, *args, **kwargs):
+    _preflight_output_dir()
+    return str(output_dir)
+
+
+def prompt_text(message, default="", qmark="?", unsafe=False, *args, **kwargs):
+    return default
+
+
+def prompt_secret(message, *args, **kwargs):
+    return ""
+
+
+def main() -> None:
+    os.chdir(work_dir)
+    try:
+        backend_version = version("abliterix")
+    except PackageNotFoundError as exc:
+        raise SystemExit("Abliterix is not installed. Build/use the configured container or run `pip install abliterix`.") from exc
+
+    import abliterix.cli as ax_cli
+    import abliterix.interactive as ax_interactive
+
+    original_checkpoint_handler = ax_cli._handle_existing_checkpoint
+
+    def checkpoint_handler(config, existing_study, checkpoint_file, lock_obj, storage):
+        result = original_checkpoint_handler(config, existing_study, checkpoint_file, lock_obj, storage)
+        if result is None:
+            return None
+        restored, restored_storage = result
+        restored.non_interactive = False
+        restored.overwrite_checkpoint = False
+        return restored, restored_storage
+
+    ax_cli._handle_existing_checkpoint = checkpoint_handler
+    ax_cli.ask_choice = prompt_choice
+    ax_interactive.ask_choice = prompt_choice
+    ax_interactive.ask_path = prompt_path
+    ax_interactive.ask_text = prompt_text
+    ax_interactive.ask_secret = prompt_secret
+    questionary.select = lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("unexpected interactive prompt"))
+
+    os.environ["AX_CONFIG"] = str(config_path)
+    sys.argv = ["abliterix", "--no-non-interactive"]
+    ax_cli.main()
+    if not state["saved"]:
+        raise SystemExit("Abliterix exited before a model was saved")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = output_dir / "model_forge_sota_abliterix.json"
+    summary_path.write_text(json.dumps({{
+        "backend": "abliterix",
+        "backend_version": backend_version,
+        "mode": "selected_trial_export",
+        "source_model": str(source_model),
+        "output_dir": str(output_dir),
+        "work_dir": str(work_dir),
+        "config": str(config_path),
+        "checkpoint_dir": str(checkpoint_dir),
+        "selected_trial_index": trial_index,
+        "selected_trial": state["selected_trial"],
+        "exported_checkpoint": True,
+        "required_next_gate": "Run model-forge targeted internal eval before broader eval, NVFP4 quantization, or upload.",
     }}, indent=2) + "\\n")
     print(f"Wrote {{summary_path}}")
 
@@ -2015,6 +2182,22 @@ def default_abliterix_journal_path(plan: dict[str, Any]) -> Path:
     return journals[0]
 
 
+def abliterix_manifest_bad_eval_count(plan: dict[str, Any]) -> int | None:
+    manifest_path = Path(plan["work_dir"]) / "model_forge_prompt_datasets" / "manifest.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    count = (
+        manifest.get("sections", {})
+        .get("bad_evaluation_prompts", {})
+        .get("count")
+    )
+    return _as_int(count)
+
+
 def analyze_heretic_search_journal(
     plan: dict[str, Any],
     journal_path: Path,
@@ -2205,26 +2388,36 @@ def analyze_abliterix_search_journal(
         (trial["base_refusals"] for trial in complete_trials if trial["base_refusals"] is not None),
         default=None,
     )
+    baseline_recorded = base_refusals is not None
+    manifest_bad_eval_count = abliterix_manifest_bad_eval_count(plan)
     enriched = []
     for trial in complete_trials:
         refusal_reduction = None if base_refusals is None else int(base_refusals) - int(trial["refusals"])
-        n_bad = trial["n_bad_prompts"]
+        n_bad = trial["n_bad_prompts"] if trial["n_bad_prompts"] is not None else manifest_bad_eval_count
         refusal_rate = None if not n_bad else int(trial["refusals"]) / int(n_bad)
-        eligible = (
+        candidate_passes = (
             float(trial["kl_divergence"]) <= effective_max_kl
             and int(trial["refusals"]) <= effective_max_refusals
-            and (base_refusals is None or int(base_refusals) >= effective_min_base_refusals)
-            and (refusal_reduction is None or refusal_reduction >= effective_min_reduction)
         )
+        baseline_gate_passes = (
+            baseline_recorded
+            and int(base_refusals) >= effective_min_base_refusals
+            and refusal_reduction is not None
+            and refusal_reduction >= effective_min_reduction
+        )
+        eligible = candidate_passes and baseline_gate_passes
         enriched.append({
             "trial_id": trial["trial_id"],
             "trial_index": trial["index"],
             "refusals": trial["refusals"],
             "base_refusals": trial["base_refusals"],
             "n_bad_prompts": n_bad,
+            "n_bad_prompts_source": "journal" if trial["n_bad_prompts"] is not None else "manifest",
             "refusal_rate": refusal_rate,
             "refusal_reduction": refusal_reduction,
             "kl_divergence": trial["kl_divergence"],
+            "candidate_passes": candidate_passes,
+            "baseline_recorded": baseline_recorded,
             "eligible": eligible,
             "parameters": trial.get("parameters"),
         })
@@ -2234,6 +2427,7 @@ def analyze_abliterix_search_journal(
         int(trial["trial_index"] if trial["trial_index"] is not None else trial["trial_id"] or 10**9),
     ))
     eligible_trials = [trial for trial in enriched if trial["eligible"]]
+    candidate_trials = [trial for trial in enriched if trial["candidate_passes"]]
     best = enriched[0]
     if base_refusals is not None and int(base_refusals) < effective_min_base_refusals:
         recommendation = {
@@ -2254,6 +2448,22 @@ def analyze_abliterix_search_journal(
             "refusals": selected["refusals"],
             "kl_divergence": selected["kl_divergence"],
             "required_next_gate": "export selected trial, then run model-forge targeted internal eval before broader eval or upload",
+        }
+    elif not baseline_recorded and candidate_trials:
+        selected = candidate_trials[0]
+        recommendation = {
+            "action": "prepare_guarded_export_runner",
+            "reason": "search_candidate_passes_candidate_gates_baseline_not_recorded",
+            "selected_trial_id": selected["trial_id"],
+            "selected_trial_index": selected["trial_index"],
+            "refusals": selected["refusals"],
+            "kl_divergence": selected["kl_divergence"],
+            "base_refusals": None,
+            "baseline_recorded": False,
+            "required_next_gate": (
+                "export selected trial, then run source-vs-target model-forge targeted internal eval; "
+                "Abliterix JSONL did not persist baseline refusals"
+            ),
         }
     elif int(best["refusals"]) > effective_max_refusals:
         recommendation = {
@@ -2288,6 +2498,8 @@ def analyze_abliterix_search_journal(
         "trial_count": len(parsed["trials"]),
         "complete_trial_count": len(complete_trials),
         "base_refusals": base_refusals,
+        "baseline_recorded": baseline_recorded,
+        "manifest_bad_evaluation_prompt_count": manifest_bad_eval_count,
         "best_trial": best,
         "recommendation": recommendation,
         "frontier": enriched[: max(1, top_k)],
@@ -2330,10 +2542,16 @@ def print_heretic_search_analysis(summary: dict[str, Any]) -> None:
 def print_abliterix_search_analysis(summary: dict[str, Any]) -> None:
     gates = summary["gates"]
     recommendation = summary["recommendation"]
+    baseline_status = (
+        str(summary.get("base_refusals"))
+        if summary.get("baseline_recorded")
+        else "not recorded in Abliterix journal"
+    )
     console.print(Panel.fit(
         "\n".join([
             f"[bold]Journal[/bold]: {summary['journal']}",
             f"[bold]Complete trials[/bold]: {summary['complete_trial_count']}/{summary['trial_count']}",
+            f"[bold]Baseline refusals[/bold]: {baseline_status}",
             f"[bold]Gates[/bold]: refusals <= {gates['max_refusals']}, KL <= {gates['max_kl']}, "
             f"reduction >= {gates['min_refusal_reduction']}, baseline refusals >= {gates.get('min_base_refusals', 0)}",
             f"[bold]Recommendation[/bold]: {recommendation['action']} ({recommendation['reason']})",
@@ -2400,6 +2618,34 @@ def command_abliterix_search_analyze(args: argparse.Namespace) -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(summary, indent=2) + "\n")
     print_abliterix_search_analysis(summary)
+
+
+def command_abliterix_export(args: argparse.Namespace) -> None:
+    config_path = resolve_repo_path(args.config)
+    config = load_yaml(config_path)
+    if args.execute:
+        guard_source_checkpoint(build_plan(config, config_path))
+    plan = build_sota_plan(config, config_path, args.backend)
+    if plan["backend"] != "abliterix":
+        raise SystemExit("abliterix-export requires the Abliterix backend")
+    if plan["backend_config"].get("execution") not in {"search_only", "guarded_search"}:
+        raise SystemExit("abliterix-export requires an Abliterix search-only/guarded-search backend")
+    write_abliterix_config(plan)
+    runner = write_abliterix_export_runner(plan, args.trial_index, overwrite=args.overwrite)
+    console.print(f"[bold green]Wrote Abliterix export runner[/bold green]: {runner}")
+    console.print(f"[bold]Selected trial index[/bold]: {args.trial_index}")
+    console.print(f"[bold]Output dir[/bold]: {plan['output_dir']}")
+    if not args.execute:
+        console.print("[yellow]Dry run only; pass --execute to export the selected checkpoint.[/yellow]")
+        return
+    execution = abliterix_execution_spec(plan, runner)
+    console.print(f"[bold]Abliterix export execution mode[/bold]: {execution['mode']}")
+    subprocess.run(
+        execution["command"],
+        cwd=execution["cwd"],
+        env=execution["env"],
+        check=True,
+    )
 
 
 def command_sota_plan(args: argparse.Namespace) -> None:
@@ -2955,6 +3201,16 @@ def build_parser() -> argparse.ArgumentParser:
     abliterix_search.add_argument("--top-k", type=int, default=8, help="Number of frontier rows to print")
     abliterix_search.add_argument("--output", default=None, help="Optional JSON report path")
     abliterix_search.set_defaults(func=command_abliterix_search_analyze)
+
+    abliterix_export = sub.add_parser(
+        "abliterix-export",
+        help="Export a selected Abliterix search trial through the guarded runner",
+    )
+    abliterix_export.add_argument("--backend", choices=["abliterix"], default="abliterix")
+    abliterix_export.add_argument("--trial-index", type=int, required=True, help="Abliterix trial index to export")
+    abliterix_export.add_argument("--execute", action="store_true", help="Actually export the selected checkpoint")
+    abliterix_export.add_argument("--overwrite", action="store_true", help="Replace an existing output directory")
+    abliterix_export.set_defaults(func=command_abliterix_export)
     return parser
 
 

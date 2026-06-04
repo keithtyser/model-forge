@@ -234,10 +234,12 @@ This is the short handoff state for humans and agents. Use
   harmful detail/compliance at zero.
 - `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`
   is the tracked next-method plan. It starts from the held v2 candidate, not the
-  rejected v11-v13 chain. Abliterix is now wired as guarded non-interactive
-  search-only with `vector_method=sra`; standalone SRA and optimal-transport
-  remain plan-only contracts. Run `abliterix-search-analyze` on the resulting
-  journal before building any export runner.
+  rejected v11-v13 chain. Abliterix SRA search completed 24/24 trials under the
+  guarded container. Trial index 18 is the best candidate by focused refusal
+  count and KL (0 refusals, KL 0.001819), but the Abliterix JSONL did not
+  persist baseline refusals, so the reduction gate must be proven by a
+  source-vs-target model-forge targeted eval after guarded export. See
+  `reports/qwen36_27b_v2_abliterix_sra_search_summary.md`.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until
   a real FT-abli candidate passes the zero-refusal capability-retention gate.

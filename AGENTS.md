@@ -931,8 +931,22 @@ create or promote a checkpoint. Follow with:
 ./forge ablate --config <config.yaml> abliterix-search-analyze --backend abliterix
 ```
 
-Only after `prepare_guarded_export_runner` should an agent implement/export a
-selected trial, and that exported checkpoint still must pass the targeted
+Only after `prepare_guarded_export_runner` should an agent export a selected
+trial:
+
+```bash
+./forge ablate --config <config.yaml> abliterix-export \
+  --backend abliterix \
+  --trial-index <selected-index> \
+  --overwrite
+```
+
+The command is dry-run by default and writes the guarded export runner. Add
+`--execute` only after checking disk/RAM headroom and confirming no other large
+model process is active. If `abliterix-search-analyze` says the candidate gates
+passed but baseline refusals were not recorded in the journal, treat export as
+permission to run the source-vs-target model-forge targeted eval, not as proof
+of refusal reduction. The exported checkpoint still must pass the targeted
 internal eval gate before broad evals, NVFP4 quantization, or Hugging Face
 upload.
 

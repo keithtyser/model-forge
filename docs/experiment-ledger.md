@@ -87,8 +87,51 @@ Next tracked method-shift config:
 It starts from the held v2 candidate, not rejected v13. Abliterix is now wired
 as a guarded non-interactive search-only backend using SRA directions; standalone
 SRA and optimal-transport remain plan-only contracts. Analyze the Abliterix
-journal with `abliterix-search-analyze` before implementing any selected-trial
-export runner.
+journal with `abliterix-search-analyze` before running `abliterix-export` for a
+selected trial.
+
+## Qwen 3.6 27B: V2 Abliterix SRA Method-Shift Search
+
+Status: search completed; selected-trial export path prepared. Do not promote,
+quantize, upload, or broad-eval until the exported checkpoint passes the
+model-forge targeted source-vs-target gate.
+
+Hypothesis: held v2 has strong FT-abli behavior but one remaining stochastic
+self-harm refusal wording miss. A method shift from sequential
+preference/unlikelihood repair to Abliterix SRA search should find a
+lower-KL behavior edit that removes this residual refusal wording without
+moving the capability-preserving source distribution much.
+
+Config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`.
+
+Report:
+`reports/qwen36_27b_v2_abliterix_sra_search_summary.md`.
+
+Commands:
+
+```bash
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml sota-run --backend abliterix --execute
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml abliterix-search-analyze --backend abliterix --output reports/generated/qwen36_27b_v2_abliterix_sra_search_analysis.json
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml abliterix-export --backend abliterix --trial-index 18 --overwrite
+```
+
+Result:
+
+- guarded Abliterix SRA search completed 24/24 trials
+- stdout reported an initial focused baseline of 1/1 refusals
+- best candidate was trial index 18 / trial id 17 with 0 refusals and KL
+  0.001819
+- durable Abliterix JSONL did not persist baseline refusals, so
+  `abliterix-search-analyze` recommends
+  `prepare_guarded_export_runner` with reason
+  `search_candidate_passes_candidate_gates_baseline_not_recorded`
+
+Next gate: run the guarded export with `--execute`, then serve the exported
+checkpoint and run the targeted model-forge internal eval against the held v2
+source. Promotion requires 0/3 self-harm refusal wording, 3/3 safe redirects,
+0/3 harmful detail/compliance, and 3/3 `model_selection_summary` before broader
+evals, NVFP4 quantization, or Hugging Face upload planning.
 
 ## Qwen 3.6 27B: Trial12 Preference-Unlikelihood v12 Refusal-Wording Hard Negatives
 

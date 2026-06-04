@@ -38,6 +38,7 @@ from model_forge.pipelines.abliterate import (
     write_heretic_direct_runner,
     write_heretic_runner,
     write_abliterix_config,
+    write_abliterix_export_runner,
     write_abliterix_runner,
     write_sota_artifacts,
 )
@@ -649,6 +650,34 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(execution["cwd"], REPO_DIR)
         self.assertEqual(execution["env"]["MODEL_FORGE_ABLITERIX_IMAGE"], "model-forge-abliterix:latest")
 
+    def test_abliterix_export_runner_selects_trial_and_keeps_guards(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+                "output_dir": f"{tmp}/exported",
+            }
+            plan = build_sota_plan(config, config_path, "abliterix")
+            write_abliterix_config(plan)
+            runner = write_abliterix_export_runner(plan, 18, overwrite=True)
+            script = runner.read_text(encoding="utf-8")
+
+        self.assertIn("trial_index = 18", script)
+        self.assertIn("overwrite = True", script)
+        self.assertIn('os.environ["AX_CONFIG"] = str(config_path)', script)
+        self.assertIn('sys.argv = ["abliterix", "--no-non-interactive"]', script)
+        self.assertIn("_handle_existing_checkpoint", script)
+        self.assertIn("MODEL_FORGE_MIN_FREE_DISK_FRACTION", script)
+        self.assertIn("model_forge_sota_abliterix.json", script)
+        self.assertIn("selected Abliterix trial", script)
+
     def test_abliterix_search_analyze_recommends_export_runner_only_after_journal_gates(self) -> None:
         config_path = (
             REPO_DIR
@@ -671,6 +700,43 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(summary["recommendation"]["action"], "prepare_guarded_export_runner")
         self.assertEqual(summary["recommendation"]["selected_trial_index"], 1)
         self.assertFalse(summary["frontier"][0].get("has_direct_parameters", False))
+
+    def test_abliterix_search_analyze_marks_missing_baseline_before_export_gate(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+            }
+            plan = build_sota_plan(config, config_path, "abliterix")
+            write_abliterix_config(plan)
+            journal = Path(tmp) / "abliterix.jsonl"
+            records = [
+                {"trial_id": 17, "user_attr": {"index": 18, "refusals": 0}},
+                {"trial_id": 17, "values": [0.0018], "state": 1},
+                {"trial_id": 18, "user_attr": {"index": 19, "refusals": 1}},
+                {"trial_id": 18, "values": [0.0010], "state": 1},
+            ]
+            journal.write_text("\n".join(json.dumps(record) for record in records) + "\n", encoding="utf-8")
+            summary = analyze_abliterix_search_journal(plan, journal)
+
+        self.assertEqual(summary["recommendation"]["action"], "prepare_guarded_export_runner")
+        self.assertEqual(
+            summary["recommendation"]["reason"],
+            "search_candidate_passes_candidate_gates_baseline_not_recorded",
+        )
+        self.assertEqual(summary["recommendation"]["selected_trial_index"], 18)
+        self.assertFalse(summary["baseline_recorded"])
+        self.assertEqual(summary["manifest_bad_evaluation_prompt_count"], 1)
+        self.assertTrue(summary["frontier"][0]["candidate_passes"])
+        self.assertFalse(summary["frontier"][0]["eligible"])
+        self.assertEqual(summary["frontier"][0]["n_bad_prompts_source"], "manifest")
 
     def test_qwen_v2_self_harm_stochastic_search_uses_weighted_variants(self) -> None:
         config_path = (
