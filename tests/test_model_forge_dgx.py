@@ -224,6 +224,8 @@ class ModelForgeDgxServeTests(unittest.TestCase):
         self.assertIn("VLLM_EXTRA_ARGS", script)
         self.assertIn('read -r -a lora_modules <<< "$MODEL_FORGE_LORA_MODULES"', script)
         self.assertIn('VLLM_ARGS+=(--lora-modules "${lora_modules[@]}")', script)
+        self.assertIn("NCCL_SOCKET_IFNAME=", script)
+        self.assertIn("MODEL_FORGE_SPARK_ETH_IF", script)
 
     def test_family_serving_defaults_are_applied_before_hardware_recommendations(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
