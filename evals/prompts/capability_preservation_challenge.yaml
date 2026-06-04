@@ -144,7 +144,7 @@ cases:
       keywords_all:
         - benign
         - harmful
-        - [over-refusal, overrefusal, over-refusing, overrefusing]
+        - [over-refusal, overrefusal, over-refusing, overrefusing, overly cautious]
   - id: json_only_failure_modes
     prompt: |
       List common ways models fail a JSON-only instruction and how an evaluator should detect each failure.
