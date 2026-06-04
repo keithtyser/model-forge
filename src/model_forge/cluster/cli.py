@@ -625,6 +625,10 @@ if not ok:
 """
 
 
+def torchrun_smoke_container_name(node_rank: int) -> str:
+    return f"model_forge_torchrun_smoke_rank{node_rank}"
+
+
 def docker_torchrun_smoke_command(
     image: str,
     *,
@@ -633,10 +637,13 @@ def docker_torchrun_smoke_command(
     nproc_per_node: int,
     rdzv_endpoint: str,
     nccl_socket_ifname: str | None = None,
+    timeout_seconds: int | None = None,
+    container_name: str | None = None,
 ) -> str:
     master_addr, _, master_port = rdzv_endpoint.rpartition(":")
     if not master_addr or not master_port:
         raise ValueError(f"rdzv_endpoint must be host:port, got {rdzv_endpoint!r}")
+    container_name = container_name or torchrun_smoke_container_name(node_rank)
     bash = "\n".join(
         [
             "set -euo pipefail",
@@ -661,6 +668,8 @@ def docker_torchrun_smoke_command(
         "docker",
         "run",
         "--rm",
+        "--name",
+        container_name,
         "--gpus",
         "all",
         "--network",
@@ -679,7 +688,13 @@ def docker_torchrun_smoke_command(
     if nccl_socket_ifname:
         command.extend(["-e", f"NCCL_SOCKET_IFNAME={nccl_socket_ifname}"])
     command.extend(["--entrypoint", "bash", image, "-lc", bash])
+    if timeout_seconds and timeout_seconds > 0:
+        command = ["timeout", "--kill-after=15s", f"{int(timeout_seconds)}s", *command]
     return shell_join(command)
+
+
+def docker_rm_command(container_name: str) -> str:
+    return shell_join(["docker", "rm", "-f", container_name]) + " >/dev/null 2>&1 || true"
 
 
 def collect_cluster_runtime(
@@ -783,6 +798,7 @@ def collect_torchrun_smoke(
         node_rank, node = index_and_node
         work_dir = str(node.get("work_dir") or ".")
         lock_path = job_lock if Path(job_lock).is_absolute() else str(Path(work_dir) / job_lock)
+        container_name = torchrun_smoke_container_name(node_rank)
         docker_command = docker_torchrun_smoke_command(
             image,
             node_rank=node_rank,
@@ -790,23 +806,54 @@ def collect_torchrun_smoke(
             nproc_per_node=nproc_per_node,
             rdzv_endpoint=rdzv_endpoint,
             nccl_socket_ifname=nccl_socket_ifname,
+            timeout_seconds=max(1, timeout - 15),
+            container_name=container_name,
         )
         command = shell_join(["mkdir", "-p", str(Path(lock_path).parent)])
         command += " && "
+        command += docker_rm_command(container_name)
+        command += " && "
         command += guarded_command(docker_command, resource_policy, lock_path)
-        result = run_node_shell(node, command, timeout=timeout)
+        timed_out = False
+        cleanup: dict[str, Any] | None = None
+        try:
+            result = run_node_shell(node, command, timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            timed_out = True
+            cleanup_result = run_node_shell(node, docker_rm_command(container_name), timeout=30)
+            cleanup = {
+                "returncode": cleanup_result.returncode,
+                "stdout": cleanup_result.stdout.strip(),
+                "stderr": cleanup_result.stderr.strip(),
+            }
+            result = subprocess.CompletedProcess(
+                args=exc.cmd,
+                returncode=124,
+                stdout=(exc.stdout or "") if isinstance(exc.stdout, str) else "",
+                stderr=(exc.stderr or "") if isinstance(exc.stderr, str) else f"timed out after {timeout}s",
+            )
         records = json_lines(result.stdout)
         ok = result.returncode == 0 and len(records) == nproc_per_node and all(bool(record.get("ok")) for record in records)
+        if not ok and not timed_out:
+            cleanup_result = run_node_shell(node, docker_rm_command(container_name), timeout=30)
+            cleanup = {
+                "returncode": cleanup_result.returncode,
+                "stdout": cleanup_result.stdout.strip(),
+                "stderr": cleanup_result.stderr.strip(),
+            }
         return {
             "name": node.get("name"),
             "role": node.get("role"),
             "host": node.get("host"),
             "node_rank": node_rank,
+            "container_name": container_name,
+            "timed_out": timed_out,
             "returncode": result.returncode,
             "ok": ok,
             "records": records,
             "stdout": result.stdout.strip(),
             "stderr": result.stderr.strip(),
+            "cleanup": cleanup,
         }
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(nodes))) as executor:

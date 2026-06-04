@@ -364,6 +364,11 @@ nice -n 10 .venv/bin/python scripts/merge_peft_adapter.py \
   --output-dir ~/models/gemma-4-26B-A4B-it-local-ft-v0-merged
 ```
 
+The merge helper preserves tokenizer/chat-template metadata from the source
+checkpoint by default. Use `--tokenizer-source adapter` only when the adapter
+intentionally changes tokenizer metadata, then run strict tokenizer audit before
+serving, quantization, upload, or promotion.
+
 For non-MoE or LoRA-compatible backends, adapter variants can use live vLLM LoRA
 serving via `--enable-lora --lora-modules`. Evals always use the adapter
 variant's `served_model_name`.

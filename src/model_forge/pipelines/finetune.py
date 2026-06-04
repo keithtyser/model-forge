@@ -1177,6 +1177,12 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
             "dataset_rows": len(dataset),
             "global_step": getattr(train_output, "global_step", None),
             "metrics": dict(getattr(train_output, "metrics", {}) or {}),
+            "lora": {
+                "rank": int(plan["lora"]["r"]),
+                "alpha": int(plan["lora"]["alpha"]),
+                "dropout": float(plan["lora"].get("dropout", 0.0) or 0.0),
+                "target_modules": list(plan["lora"].get("target_modules", [])),
+            },
             "trainer": {
                 "backend": backend,
                 "method": plan["trainer"].get("method"),

@@ -107,6 +107,64 @@ class MergePeftAdapterTests(unittest.TestCase):
         self.assertFalse(restored)
         self.assertEqual(config, plain_config)
 
+    def test_resolve_tokenizer_source_preserves_base_by_default(self) -> None:
+        module = load_merge_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = root / "base"
+            adapter = root / "adapter"
+            base.mkdir()
+            adapter.mkdir()
+            (base / "tokenizer_config.json").write_text(json.dumps({"source": "base"}), encoding="utf-8")
+            (adapter / "tokenizer_config.json").write_text(json.dumps({"source": "adapter"}), encoding="utf-8")
+
+            resolved = module.resolve_tokenizer_source_dir(base, adapter, "base")
+
+        self.assertEqual(resolved, base)
+
+    def test_resolve_tokenizer_source_auto_uses_adapter_when_present(self) -> None:
+        module = load_merge_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = root / "base"
+            adapter = root / "adapter"
+            base.mkdir()
+            adapter.mkdir()
+            (adapter / "tokenizer_config.json").write_text(json.dumps({"source": "adapter"}), encoding="utf-8")
+
+            resolved = module.resolve_tokenizer_source_dir(base, adapter, "auto")
+
+        self.assertEqual(resolved, adapter)
+
+    def test_resolve_tokenizer_source_adapter_requires_metadata(self) -> None:
+        module = load_merge_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = root / "base"
+            adapter = root / "adapter"
+            base.mkdir()
+            adapter.mkdir()
+
+            with self.assertRaises(FileNotFoundError):
+                module.resolve_tokenizer_source_dir(base, adapter, "adapter")
+
+    def test_copy_tokenizer_files_uses_selected_source_only(self) -> None:
+        module = load_merge_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = root / "base"
+            adapter = root / "adapter"
+            output = root / "output"
+            base.mkdir()
+            adapter.mkdir()
+            output.mkdir()
+            (base / "chat_template.jinja").write_text("base-template", encoding="utf-8")
+            (adapter / "chat_template.jinja").write_text("adapter-template", encoding="utf-8")
+
+            module.copy_tokenizer_files(base, output)
+
+            self.assertEqual((output / "chat_template.jinja").read_text(encoding="utf-8"), "base-template")
+
     def test_resolves_wrapper_parameter_prefixes(self) -> None:
         module = load_merge_module()
         parameters = {

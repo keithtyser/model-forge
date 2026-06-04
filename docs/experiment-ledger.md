@@ -5448,8 +5448,11 @@ Operational notes:
   behavior-only fallback at 8k context with `--safetensors-load-strategy
   prefetch --enforce-eager`. Treat the latency/tok/s from this fallback as not
   throughput-comparable to earlier TP=2 runs.
-- `cluster torchrun-smoke` can deadlock by starting a worker-side smoke
-  container that waits for a master that never starts.
+- The v4 follow-up also exposed a `cluster torchrun-smoke` failure mode where a
+  worker-side smoke container could wait for a master that never starts. The
+  repo now rank-names smoke containers, adds an inner Docker timeout, and
+  cleans up on timeout/failure. The hardened smoke passed on the two-Spark
+  cluster with the posttrain Transformers-5 image.
 
 Scoring v6 quick-gate result:
 

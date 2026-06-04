@@ -102,9 +102,11 @@ configured node and performs a CUDA/NCCL all-reduce. It uses static
 `--master-addr`/`--master-port` launch arguments derived from
 `MODEL_FORGE_RDZV_ENDPOINT`, host networking, `--gpus all`, a 2 CPU cap, a
 16 GB memory cap, and the same systemd resource policy used by other guarded
-cluster probes. Treat this as the preflight gate before distributed fine-tuning,
-distributed quantization, or any benchmark claim that says a workload used both
-Spark nodes.
+cluster probes. Smoke containers are rank-named, wrapped in an inner timeout,
+and cleaned up if rendezvous fails, so a failed worker/master join should not
+leave random Docker containers running. Treat this as the preflight gate before
+distributed fine-tuning, distributed quantization, or any benchmark claim that
+says a workload used both Spark nodes.
 
 ## Serving On Spark
 

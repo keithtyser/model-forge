@@ -581,6 +581,8 @@ class FinetunePlanTests(unittest.TestCase):
             self.assertIn("dataloader_num_workers", trainer_script)
             self.assertIn("training_result.json", trainer_script)
             self.assertIn("benchmark_only", trainer_script)
+            self.assertIn('"lora": {', trainer_script)
+            self.assertIn('"target_modules": list(plan["lora"].get("target_modules", []))', trainer_script)
             method_card = Path(outputs["method_card"]).read_text()
             self.assertIn("# Training Method Card: gemma4_26b_a4b_local_ft_v0", method_card)
             self.assertIn("Distributed Correctness And Resource Guardrails", method_card)

@@ -30,6 +30,14 @@ from model_forge.data.factory import (
 from model_forge.data.sources import load_source_registry, resolve_sources
 
 
+def relax_generation_resource_limits(config: dict) -> dict:
+    generation = config.setdefault("generation", {})
+    limits = generation.setdefault("resource_limits", {})
+    limits["min_free_memory_ratio"] = 0.0
+    limits["min_free_disk_ratio"] = 0.0
+    return config
+
+
 class DatasetFactoryTests(unittest.TestCase):
     def test_local_ft_v1_plan_targets_observed_gaps(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
@@ -113,7 +121,7 @@ class DatasetFactoryTests(unittest.TestCase):
 
     def test_pack_writes_dataset_card_and_rejection_report(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
-        config = load_yaml(config_path)
+        config = relax_generation_resource_limits(load_yaml(config_path))
         with tempfile.TemporaryDirectory() as tmp:
             config["output_dir"] = tmp
             outputs = command_pack(config, config_path, overwrite=True)
@@ -140,7 +148,7 @@ class DatasetFactoryTests(unittest.TestCase):
 
     def test_generate_expands_seeds_with_template_provider(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
-        config = load_yaml(config_path)
+        config = relax_generation_resource_limits(load_yaml(config_path))
         with tempfile.TemporaryDirectory() as tmp:
             config["output_dir"] = tmp
             path = command_generate(config, overwrite=True, smoke=True)
@@ -158,7 +166,7 @@ class DatasetFactoryTests(unittest.TestCase):
 
     def test_downstream_overwrite_does_not_regenerate_candidates(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
-        config = load_yaml(config_path)
+        config = relax_generation_resource_limits(load_yaml(config_path))
         with tempfile.TemporaryDirectory() as tmp:
             config["output_dir"] = tmp
             candidate_path = command_generate(config, overwrite=True, smoke=True)
@@ -196,7 +204,7 @@ class DatasetFactoryTests(unittest.TestCase):
 
     def test_review_command_writes_review_gate_artifacts(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
-        config = load_yaml(config_path)
+        config = relax_generation_resource_limits(load_yaml(config_path))
         with tempfile.TemporaryDirectory() as tmp:
             config["output_dir"] = tmp
             outputs = command_review(config, overwrite=True, smoke=True, sample_size=12)
@@ -209,7 +217,7 @@ class DatasetFactoryTests(unittest.TestCase):
 
     def test_verify_command_writes_static_skill_checks(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
-        config = load_yaml(config_path)
+        config = relax_generation_resource_limits(load_yaml(config_path))
         with tempfile.TemporaryDirectory() as tmp:
             config["output_dir"] = tmp
             path = command_verify(config, overwrite=True)
@@ -270,7 +278,7 @@ class DatasetFactoryTests(unittest.TestCase):
 
     def test_publish_writes_dry_run_plan_only(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
-        config = load_yaml(config_path)
+        config = relax_generation_resource_limits(load_yaml(config_path))
         with tempfile.TemporaryDirectory() as tmp:
             config["output_dir"] = tmp
             publish_plan = command_publish(
@@ -309,7 +317,7 @@ class DatasetFactoryTests(unittest.TestCase):
 
     def test_publish_execute_refuses_smoke_dataset(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
-        config = load_yaml(config_path)
+        config = relax_generation_resource_limits(load_yaml(config_path))
         with tempfile.TemporaryDirectory() as tmp:
             config["output_dir"] = tmp
             command_publish(config, config_path, overwrite=True)
@@ -355,7 +363,7 @@ class DatasetFactoryTests(unittest.TestCase):
 
     def test_training_gate_requires_bounded_spark_finetune_evidence(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
-        config = load_yaml(config_path)
+        config = relax_generation_resource_limits(load_yaml(config_path))
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             config["output_dir"] = str(tmp_path / "dataset")
@@ -393,7 +401,7 @@ class DatasetFactoryTests(unittest.TestCase):
 
     def test_training_gate_fails_unbounded_finetune_plan(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
-        config = load_yaml(config_path)
+        config = relax_generation_resource_limits(load_yaml(config_path))
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             config["output_dir"] = str(tmp_path / "dataset")
@@ -430,7 +438,7 @@ class DatasetFactoryTests(unittest.TestCase):
 
     def test_training_gate_command_writes_artifacts(self) -> None:
         config_path = REPO_DIR / "configs" / "datasets" / "gemma4_26b_a4b_local_ft_v1.yaml"
-        config = load_yaml(config_path)
+        config = relax_generation_resource_limits(load_yaml(config_path))
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             config["output_dir"] = str(tmp_path / "dataset")

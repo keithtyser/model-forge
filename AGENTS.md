@@ -427,8 +427,10 @@ after training and had to be replaced from the coordinator copy; PEFT merge
 caused tokenizer metadata drift that strict tokenizer audit caught; cluster
 TP=2 vLLM serving failed twice during NCCL communicator initialization, so the
 behavior gate used a solo TP=1 8k-context fallback that is not
-throughput-comparable; `cluster torchrun-smoke` can deadlock if the worker
-container starts and waits for a master that never starts.
+throughput-comparable. The `cluster torchrun-smoke` deadlock risk exposed by
+this run has been hardened: smoke containers are now rank-named, bounded by an
+inner timeout, and cleaned up on failure/timeout. The hardened smoke passed on
+the two-Spark cluster on 2026-06-04 with the posttrain Transformers-5 image.
 
 Before making another Qwen sequential repair, start from v2 and protect every
 paired-boundary and challenge failure exposed by v3/v4. Do not simply increase
@@ -614,6 +616,11 @@ lowering that guard. The behavior-v1 merge used a documented one-off
 `--min-free-disk-fraction 0.10` because projected absolute free space was still
 over 500 GiB and no artifact deletion decision had been reviewed; do not repeat
 that casually.
+PEFT merge now preserves tokenizer metadata from the source/base checkpoint by
+default. Use `--tokenizer-source adapter` only when the adapter intentionally
+changes tokenizer or chat-template metadata, and run
+`./forge variants tokenizer-audit <family> --variant <candidate> --load-tokenizer --strict`
+before any promotion, quantization, or upload gate.
 
 The trial16 export required worker cleanup. The rejected Qwen checkpoints
 `Qwen3.6-27B-local-ft-v4-abliterated-v1`,

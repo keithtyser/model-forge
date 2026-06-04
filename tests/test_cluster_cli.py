@@ -13,6 +13,7 @@ from model_forge.cluster.cli import (
     build_launcher_plan,
     docker_gpu_runtime_command,
     docker_torchrun_smoke_command,
+    torchrun_smoke_container_name,
     guarded_command,
     json_lines,
     load_cluster_config,
@@ -157,6 +158,22 @@ class ClusterCliTests(unittest.TestCase):
         self.assertIn("--master-addr=spark-a", command)
         self.assertIn("--master-port=29500", command)
         self.assertIn("NCCL_SOCKET_IFNAME=eth0", command)
+
+    def test_torchrun_smoke_command_has_timeout_and_named_container(self) -> None:
+        command = docker_torchrun_smoke_command(
+            "nemotron-runner:latest",
+            node_rank=0,
+            nnodes=2,
+            nproc_per_node=1,
+            rdzv_endpoint="spark-a:29500",
+            timeout_seconds=45,
+            container_name="model_forge_torchrun_smoke_rank0",
+        )
+        self.assertIn("timeout --kill-after=15s 45s docker run", command)
+        self.assertIn("--name model_forge_torchrun_smoke_rank0", command)
+
+    def test_torchrun_smoke_container_name_is_rank_stable(self) -> None:
+        self.assertEqual(torchrun_smoke_container_name(1), "model_forge_torchrun_smoke_rank1")
 
     def test_json_lines_extracts_smoke_records(self) -> None:
         records = json_lines('warning\n{"ok": true, "rank": 0}\nnot-json\n{"ok": true, "rank": 1}\n')

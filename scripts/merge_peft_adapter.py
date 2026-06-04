@@ -31,6 +31,15 @@ DTYPES = {
     "fp16": torch.float16,
     "fp32": torch.float32,
 }
+TOKENIZER_FILE_NAMES = (
+    "chat_template.jinja",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "special_tokens_map.json",
+    "generation_config.json",
+    "processor_config.json",
+)
+TOKENIZER_SOURCE_CHOICES = {"base", "adapter", "auto"}
 
 
 def available_fraction() -> float:
@@ -126,18 +135,23 @@ def configure_cpu_threads() -> int:
     return usable_cores
 
 
-def copy_tokenizer_files(adapter_dir: Path, output_dir: Path) -> None:
-    for name in (
-        "chat_template.jinja",
-        "tokenizer.json",
-        "tokenizer_config.json",
-        "special_tokens_map.json",
-        "generation_config.json",
-        "processor_config.json",
-    ):
-        source = adapter_dir / name
+def copy_tokenizer_files(source_dir: Path, output_dir: Path) -> None:
+    for name in TOKENIZER_FILE_NAMES:
+        source = source_dir / name
         if source.exists():
             shutil.copy2(source, output_dir / name)
+
+
+def resolve_tokenizer_source_dir(base_model: Path, adapter_dir: Path, tokenizer_source: str) -> Path:
+    if tokenizer_source not in TOKENIZER_SOURCE_CHOICES:
+        raise ValueError(f"unsupported tokenizer source: {tokenizer_source!r}")
+    if tokenizer_source == "base":
+        return base_model
+    if tokenizer_source == "adapter":
+        if not (adapter_dir / "tokenizer_config.json").exists():
+            raise FileNotFoundError(f"adapter tokenizer_config.json is missing: {adapter_dir}")
+        return adapter_dir
+    return adapter_dir if (adapter_dir / "tokenizer_config.json").exists() else base_model
 
 
 def restore_base_wrapper_config_if_needed(base_model: Path, output_dir: Path) -> bool:
@@ -176,6 +190,7 @@ def write_merge_manifest(args: argparse.Namespace, output_dir: Path, started_at:
         "max_shard_size": args.max_shard_size,
         "merge_method": args.merge_method,
         "lora_scale": args.lora_scale,
+        "tokenizer_source": args.tokenizer_source,
         "min_available_ram_fraction": args.min_available_ram_fraction,
         "started_unix": started_at,
         "finished_unix": finished_at,
@@ -279,6 +294,12 @@ def main() -> None:
     parser.add_argument("--min-available-ram-fraction", type=float, default=float(os.getenv("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", "0.05")))
     parser.add_argument("--min-free-disk-fraction", type=float, default=float(os.getenv("MODEL_FORGE_MIN_FREE_DISK_FRACTION", "0.15")))
     parser.add_argument("--monitor-interval-seconds", type=float, default=15.0)
+    parser.add_argument(
+        "--tokenizer-source",
+        choices=sorted(TOKENIZER_SOURCE_CHOICES),
+        default=os.getenv("MODEL_FORGE_MERGE_TOKENIZER_SOURCE", "base"),
+        help="Tokenizer metadata source for merged checkpoint. Default preserves the base/source checkpoint tokenizer.",
+    )
     parser.add_argument("--trust-remote-code", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
@@ -296,6 +317,11 @@ def main() -> None:
         raise SystemExit("--lora-scale must be greater than zero")
     if args.merge_method == "peft" and args.lora_scale != 1.0:
         raise SystemExit("--lora-scale requires --merge-method direct or auto")
+    if args.tokenizer_source not in TOKENIZER_SOURCE_CHOICES:
+        raise SystemExit(
+            "--tokenizer-source must be one of "
+            f"{', '.join(sorted(TOKENIZER_SOURCE_CHOICES))}; got {args.tokenizer_source!r}"
+        )
     output_dir.mkdir(parents=True, exist_ok=True)
 
     usable_cores = configure_cpu_threads()
@@ -306,6 +332,8 @@ def main() -> None:
     print(f"[model-forge] output: {output_dir}", flush=True)
     print(f"[model-forge] dtype: {args.dtype}", flush=True)
     print(f"[model-forge] LoRA scale: {args.lora_scale:g}", flush=True)
+    tokenizer_source_dir = resolve_tokenizer_source_dir(base_model, adapter, args.tokenizer_source)
+    print(f"[model-forge] tokenizer source: {tokenizer_source_dir}", flush=True)
     print(f"[model-forge] usable CPU threads: {usable_cores}", flush=True)
     print(f"[model-forge] RAM floor: {args.min_available_ram_fraction:.3f}", flush=True)
     if UNSLOTH_IMPORT_ERROR:
@@ -355,14 +383,14 @@ def main() -> None:
             print("[model-forge] restored base wrapper config for language-model-only checkpoint", flush=True)
         guard.check("after model save")
 
-        tokenizer = AutoTokenizer.from_pretrained(adapter if (adapter / "tokenizer_config.json").exists() else base_model)
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_source_dir)
         tokenizer.save_pretrained(output_dir)
         try:
-            processor = AutoProcessor.from_pretrained(base_model)
+            processor = AutoProcessor.from_pretrained(tokenizer_source_dir)
             processor.save_pretrained(output_dir)
         except Exception as exc:
             print(f"[model-forge] processor save skipped: {exc}", flush=True)
-        copy_tokenizer_files(adapter, output_dir)
+        copy_tokenizer_files(tokenizer_source_dir, output_dir)
         finished_at = time.time()
         write_merge_manifest(args, output_dir, started_at, finished_at)
         print(f"[model-forge] merge complete in {finished_at - started_at:.1f}s", flush=True)

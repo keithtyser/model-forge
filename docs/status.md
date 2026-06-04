@@ -123,6 +123,13 @@ This is the short handoff state for humans and agents. Use
   painpoints found during worker execution: optional Unsloth import failures in
   CPU/container merge contexts, and root-owned model outputs from ad hoc Docker
   runs.
+- `scripts/merge_peft_adapter.py` now preserves tokenizer metadata from the
+  source/base checkpoint by default and exposes `--tokenizer-source
+  adapter|auto` only for intentional tokenizer changes. This prevents PEFT merge
+  tokenizer drift from silently reaching a release candidate.
+- Generated fine-tune `training_result.json` files now include LoRA rank, alpha,
+  dropout, and target modules so run postmortems can verify which modules were
+  actually trained.
 - The local FT v1 dataset factory MVP is implemented with planning, gap
   extraction, feedback proposals, seed rows, generation adapters, verification,
   filtering, review, packing, dry-run publish planning, non-cascading overwrite
@@ -161,6 +168,11 @@ This is the short handoff state for humans and agents. Use
   `nemotron-runner:latest` GPU container probe with CUDA Torch visible. The
   two-node torchrun smoke then joined both GB10s into one `world_size=2`
   CUDA/NCCL all-reduce job through the guarded container launcher.
+- On 2026-06-04, `cluster torchrun-smoke` was hardened after the v4 follow-up
+  exposed a worker-waiting-for-master failure mode. The smoke now uses
+  deterministic rank-named containers, an inner Docker timeout, and cleanup on
+  timeout/failure. The hardened smoke passed on the two-Spark cluster with the
+  posttrain Transformers-5 image and left no running containers.
 - Serving workload definitions are now present under
   `configs/serving/workloads/`, with smoke and core benchmark configs loading
   reusable workload files instead of hard-coding all requests inline.
