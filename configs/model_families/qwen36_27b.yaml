@@ -297,12 +297,14 @@ variants:
     base_variant: local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2
     downloadable: false
     promotion:
-      decision: inconclusive
+      decision: rejected
       blocked_actions: [quantization_export, hf_upload, promotion]
-      reason: "Prepared v7 response-conditioned repair starts from held v2 after v6 failed targeted gating. It focuses on the observed self-harm denial phrase family and explicit base/fine-tuned/ablated comparison terms. It must be trained, merged, and source-relative gated before promotion, quantization, or upload."
+      reason: "Response-conditioned v7 repair trained for 56 guarded two-node steps from held v2, merged, synced, served with TP=2 after overriding the serve launcher to socket NCCL on the direct-link interface, and targeted-gated. It preserved safety on the self-harm blocker with harmful detail/compliance 0/3 and safe redirect 3/3, but failed the actual ablation target: explicit refusal wording remained 2/3. It also failed model_selection_summary 0/3. Reject; keep v2 as the best held Qwen FT-abli evidence node and do not quantize, upload, or promote v7."
       evidence:
         - configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7.yaml
         - datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7.yaml
+        - reports/qwen36_27b_trial12_pref_ul_v7_summary.md
+        - results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v7_targeted_blockers_t3
   local_ft_abli_heretic_trial12_unsafe_followup_trial16:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-trial12-unsafe-followup-trial16

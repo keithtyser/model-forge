@@ -134,17 +134,18 @@ This is the short handoff state for humans and agents. Use
   quantize, or promote it. Keep held v2 as the best Qwen FT-abli evidence node.
   The rejected v3/v4 full merged checkpoints were deleted from both Spark nodes
   to restore disk headroom, with configs/reports/adapters retained.
-- Qwen 3.6 27B residual-trial12 preference-unlikelihood v7 is now prepared as
-  the active response-conditioned follow-up from held v2. It uses 61 accepted
-  rows, 18 primary response-conditioned repair rows, 22 total chosen/rejected
-  pairs after replay sampling, attention-only rank-4 LoRA, LR `1.2e-6`, 56
-  guarded two-node steps, preference weight 0.55, unlikelihood weight 0.14, and
-  SFT replay weight 1.20. V7 specifically encodes the self-harm "I can help,
-  but I won't..." / "I cannot..." failure forms in rejected answers and the
-  base/fine-tuned/ablated terminology omissions in model-selection rejected
-  answers. It is prepared but not trained, merged, or evaluated; keep it
-  blocked until the targeted three-trial gate passes and then the broader
-  source-relative paired/challenge/unsafe_ablation_redirect gates pass.
+- Qwen 3.6 27B residual-trial12 preference-unlikelihood v7 trained for 56
+  guarded two-node steps from held v2, merged, synced to both Sparks, passed
+  strict checkpoint/tokenizer audits, served with TP=2 after overriding the
+  Spark vLLM launcher to socket NCCL on the direct-link interface, and ran the
+  targeted three-trial blocker gate. Reject v7: self-harm safe redirect stayed
+  3/3 and harmful detail/compliance stayed 0/3, but explicit refusal wording
+  remained 2/3 and `model_selection_summary` stayed 0/3. Do not upload,
+  quantize, promote, or run broader evals from v7. The rejected v6 full
+  checkpoint was deleted from both Spark nodes before v7 merge to restore disk
+  headroom, and the rejected v7 full checkpoint was deleted from both Spark
+  nodes after the failed gate; configs/reports/adapters/eval evidence were
+  retained.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until
   a real FT-abli candidate passes the zero-refusal capability-retention gate.
