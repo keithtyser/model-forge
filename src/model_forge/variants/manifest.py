@@ -14,6 +14,7 @@ from model_forge.runs.manifest import REPO_DIR, display_path, git_metadata, reda
 
 SCHEMA_VERSION = "model_forge.variant_node.v1"
 PROMOTION_DECISIONS = {"promoted", "rejected", "inconclusive", "research_report_only"}
+PROMOTION_BLOCKED_ACTIONS = {"all", "hf_upload", "promotion", "publishing", "quantization_export"}
 DEFAULT_OUTPUT_ROOT = REPO_DIR / "reports" / "generated" / "variants"
 
 
@@ -305,6 +306,27 @@ def validate_family_config(config: Mapping[str, Any], *, path: str | None = None
                 errors.append(f"{prefix}variants.{variant_name}.base_variant is required for derived variants")
         if raw_variant.get("adapter") and not base_variant:
             errors.append(f"{prefix}variants.{variant_name}.base_variant is required for adapter variants")
+        promotion = raw_variant.get("promotion")
+        if promotion is not None:
+            if not isinstance(promotion, Mapping):
+                errors.append(f"{prefix}variants.{variant_name}.promotion must be a mapping")
+            else:
+                decision = promotion.get("decision")
+                if decision is not None and str(decision) not in PROMOTION_DECISIONS:
+                    errors.append(
+                        f"{prefix}variants.{variant_name}.promotion.decision must be one of: {', '.join(sorted(PROMOTION_DECISIONS))}"
+                    )
+                blocked_actions = promotion.get("blocked_actions") or []
+                if not isinstance(blocked_actions, list):
+                    errors.append(f"{prefix}variants.{variant_name}.promotion.blocked_actions must be a list")
+                else:
+                    unknown_actions = sorted({str(item) for item in blocked_actions} - PROMOTION_BLOCKED_ACTIONS)
+                    if unknown_actions:
+                        errors.append(
+                            f"{prefix}variants.{variant_name}.promotion.blocked_actions contains unsupported actions: {', '.join(unknown_actions)}"
+                        )
+                if promotion.get("blocked_actions") and not promotion.get("reason"):
+                    errors.append(f"{prefix}variants.{variant_name}.promotion.reason is required when blocked_actions are set")
     serve = config.get("serve") or {}
     if not isinstance(serve, Mapping):
         errors.append(f"{prefix}serve must be a mapping")

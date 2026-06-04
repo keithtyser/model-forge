@@ -74,6 +74,11 @@ This is the short handoff state for humans and agents. Use
   preserves or improves measured capability versus base and FT, but still
   refuses 75% of paired harmful prompts, so it is a hold, not the final
   zero-refusal FT-abli target.
+- The generic Qwen 3.6 27B `local_ft_abli` slot and
+  `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until
+  a real FT-abli candidate passes the zero-refusal capability-retention gate.
+  This prevents the Qwen NVFP4 recipe from exporting a placeholder or held
+  ablation candidate before the unquantized source is promoted.
 - Live LoRA follow-up adapters were materialized for low-disk ablation gating,
   but the equivalence control failed for this Qwen Heretic adapter. A live
   scale0.75 adapter refused 95% of paired harmful prompts, while the already

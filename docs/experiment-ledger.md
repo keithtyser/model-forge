@@ -4942,3 +4942,36 @@ Validation:
 Result: tests passed, doctor passed, quantization exited with the expected
 blocked-variant preflight error before launching a container, and the HF plan
 was blocked by `variant_promotion_not_blocked`.
+
+## Qwen Generic FT-Abli Slot Block
+
+Status: implemented.
+
+Issue found during the full Qwen workflow audit: `local_ft_v4` is a valid FT
+source, but no Qwen FT-abli variant has reached the final gate of zero harmful
+refusals with retained FT quality. Despite that, the Qwen NVFP4 config defaults
+to `source_variant: local_ft_abli`. That made the generic placeholder/held
+FT-abli slot look quantizable.
+
+Change:
+
+- `configs/model_families/qwen36_27b.yaml` now marks `local_ft_abli` as
+  `promotion.decision: inconclusive` with `quantization_export`, `hf_upload`,
+  and `promotion` blocked.
+- `local_ft_abli_nvfp4_modelopt` is blocked for upload/promotion until the
+  unquantized FT-abli source is promoted and quantized with behavior and
+  throughput evidence.
+- `validate_family_config` now validates promotion metadata decisions, blocked
+  actions, and required reasons so future model families get the same guardrail.
+
+Validation:
+
+```text
+./forge quantize plan --config configs/quantization/qwen36_27b_nvfp4_modelopt.yaml qwen36_27b local_ft_abli --run-id qwen_generic_ft_abli_block_probe --json
+./forge quantize export qwen36_27b local_ft_abli --config configs/quantization/qwen36_27b_nvfp4_modelopt.yaml --run-id qwen_generic_ft_abli_block_probe --write-plan --execute
+.venv/bin/python -m unittest tests.test_quantization_cli tests.test_variants -v
+```
+
+Result: the plan surfaces the `local_ft_abli` promotion block, export exits with
+the expected preflight error before launching Docker, focused tests passed, and
+`./forge doctor` passed.

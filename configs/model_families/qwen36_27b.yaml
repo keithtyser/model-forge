@@ -100,6 +100,14 @@ variants:
     served_model_name: local/qwen36-27b-local-ft-v4-abliterated-v1
     base_variant: local_ft_v4
     downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Generic Qwen FT-abli slot is not a promoted final candidate yet; current Qwen ablation work has not reached zero-refusal capability-retention gates."
+      evidence:
+        - AGENTS.md
+        - docs/status.md
+        - docs/experiment-ledger.md
   local_ft_abli_gemma_t34_scale1p5:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-gemma-t34-scale1p5
@@ -275,6 +283,13 @@ variants:
     base_variant: local_ft_abli
     quantization: nvfp4
     downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [hf_upload, promotion]
+      reason: "Qwen NVFP4 target is blocked until the unquantized FT-abli source is promoted and then quantized with behavior and throughput evidence."
+      evidence:
+        - configs/quantization/qwen36_27b_nvfp4_modelopt.yaml
+        - docs/quantization.md
 
 serve:
   script: scripts/dgx_spark_serve_qwen.sh

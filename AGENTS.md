@@ -180,6 +180,12 @@ prompts, only reached 90% paired benign quality, and scored 84.38% on the
 challenge bucket. Trial0 direction50 was also fully merged on the worker Spark;
 it refused 85% of paired harmful prompts, refused all unsafe-overcompliance
 prompts, and dropped challenge capability to 75%.
+The generic Qwen `local_ft_abli` slot and its `local_ft_abli_nvfp4_modelopt`
+child are intentionally blocked until a candidate reaches zero harmful refusals
+while retaining local FT v4 quality. Do not run Qwen NVFP4 export from
+`local_ft_abli` just because `configs/quantization/qwen36_27b_nvfp4_modelopt.yaml`
+has that default source; promote a passing FT-abli variant first, then update
+the quantization source.
 
 The longer-response Heretic search
 `configs/abliteration/qwen36_27b_ft_local_abli_heretic_long_search.yaml`

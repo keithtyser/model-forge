@@ -185,6 +185,22 @@ class VariantGraphTests(unittest.TestCase):
         errors = validate_family_config(broken)
         self.assertTrue(any("local_abli.base_variant is required" in error for error in errors))
 
+    def test_family_config_validation_checks_promotion_metadata(self) -> None:
+        family = load_family("qwen35_9b")
+        broken = dict(family)
+        broken["variants"] = dict(family["variants"])
+        broken["variants"]["local_ft_abli"] = dict(broken["variants"]["local_ft_abli"])
+        broken["variants"]["local_ft_abli"]["promotion"] = {
+            "decision": "maybe",
+            "blocked_actions": ["ship_it"],
+        }
+
+        errors = validate_family_config(broken)
+
+        self.assertTrue(any("promotion.decision" in error for error in errors))
+        self.assertTrue(any("blocked_actions contains unsupported actions" in error for error in errors))
+        self.assertTrue(any("promotion.reason is required" in error for error in errors))
+
     def test_family_config_validation_requires_architecture_metadata(self) -> None:
         family = load_family("qwen35_9b")
         broken = dict(family)
