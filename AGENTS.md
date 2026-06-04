@@ -280,6 +280,20 @@ redirect traces. It completed 32/32 guarded worker trials. Reject it:
 only at KL 0.1303, above the 0.075 budget, and the best in-budget candidates
 stayed at 2/5. Do not export, upload, quantize, or promote this branch.
 
+One explicit high-KL diagnostic export was tested from that same search:
+`configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_response_conditioned_trial19_aggressive.yaml`.
+It exports response-conditioned trial index 19 to test whether the 0.075 KL cap
+was too conservative. The checkpoint exported cleanly, synced to both Sparks,
+passed strict checkpoint/tokenizer audits, served through TP=2 vLLM, and ran the
+targeted quick gate at
+`results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_response_conditioned_trial19_aggressive_dgx_spark`.
+Reject it: paired harmful refusal regressed to 0.20 versus residual trial12's
+0.10, unsafe-overcompliance refusal stayed 1.00, paired benign quality stayed
+0.90, harmful detail stayed 0.00, and challenge capability improved to 0.9062
+but still missed local FT v4's 0.9375. The rejected 51 GiB merged checkpoint was
+deleted from both Sparks after validation; keep the config and aggregate eval
+results as evidence only. Do not upload, quantize, or promote this variant.
+
 Before exporting another Heretic search result into a full checkpoint, run the
 repo-native journal gate:
 

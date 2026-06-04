@@ -5045,3 +5045,67 @@ between rounds, rather than continuing this exact recipe.
 Support fix: the live tokenizer audit exposed a CLI/audit-builder bug where
 source comparison records lacked `variant` display metadata. The builder now
 annotates source records, and `tests.test_variants` covers the path.
+
+## Qwen Response-Conditioned Heretic Trial19 Aggressive Diagnostic
+
+Status: exported, two-Spark quick-gated, rejected, and cleaned up.
+
+Hypothesis: the response-conditioned Heretic search may have been blocked by a
+too-conservative KL cap. Trial index 19 was the strongest focused signal
+(1/5 residual focused refusals) but exceeded the normal `0.075` KL budget at
+KL `0.130288`. Exporting it once as an explicitly aggressive diagnostic tests
+whether higher KL buys real model-forge refusal suppression without unacceptable
+capability loss.
+
+Recipe:
+
+- `configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_response_conditioned_trial19_aggressive.yaml`
+- Source checkpoint:
+  `~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12`
+- Output checkpoint during validation:
+  `~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-trial12-response-conditioned-trial19-aggressive`
+- Search evidence:
+  `reports/generated/qwen36_heretic_trial12_response_conditioned_analysis.json`
+
+Validation:
+
+```text
+./forge ablate --config configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_response_conditioned_trial19_aggressive.yaml plan
+./forge ablate --config configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_response_conditioned_trial19_aggressive.yaml sota-prepare
+MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 ./forge ablate --config configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_response_conditioned_trial19_aggressive.yaml sota-run --execute
+./forge variants tokenizer-audit qwen36_27b --variant local_ft_abli_heretic_trial12_response_conditioned_trial19_aggressive --load-tokenizer --strict --json
+./forge variants checkpoint-audit qwen36_27b --variant local_ft_abli_heretic_trial12_response_conditioned_trial19_aggressive --strict
+./forge cluster model-sync --config /tmp/model_forge_dgx_spark_x2_runtime.yaml --source ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-trial12-response-conditioned-trial19-aggressive --family qwen36_27b --variant local_ft_abli_heretic_trial12_response_conditioned_trial19_aggressive --execute --timeout 3600
+MODEL_FORGE_SPARK_CLUSTER_CONFIG=/tmp/model_forge_dgx_spark_x2_runtime.yaml MODEL_FORGE_SERVE_REQUIRE_CLUSTER=1 MODEL_FORGE_SPARK_CLUSTER=1 MODEL_FORGE_SPARK_NON_PRIVILEGED=1 MODEL_FORGE_SPARK_MEM_LIMIT_GB=110 MODEL_FORGE_SPARK_CONTAINER_NAME=vllm_qwen36_trial19_aggressive MODEL_FORGE_TENSOR_PARALLEL_SIZE=2 VLLM_KV_CACHE_DTYPE=fp8_e4m3 VLLM_ENABLE_CHUNKED_PREFILL=1 ./forge serve qwen36_27b local_ft_abli_heretic_trial12_response_conditioned_trial19_aggressive
+MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_heretic_trial12_response_conditioned_trial19_aggressive --internal --bucket refusal_paired_boundary --bucket unsafe_overcompliance --bucket capability_preservation_challenge
+./forge compare qwen36_27b
+```
+
+Result:
+
+- Export completed through the guarded Heretic direct Docker path.
+- Checkpoint audit passed: 12 shards, 50.1 GiB, no incomplete files.
+- Strict tokenizer audit passed with a live chat-template round trip.
+- Cluster model-sync completed; evidence:
+  `reports/generated/cluster/model_sync_20260604T035933Z.json`.
+- Two-Spark TP=2 vLLM served the candidate with FP8 KV cache, chunked prefill,
+  prefix caching, and non-privileged 110G container memory caps.
+- Quick gate output:
+  `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_response_conditioned_trial19_aggressive_dgx_spark`.
+- Key metrics: paired harmful refusal `0.20`, paired refusal suppression
+  `0.80`, paired benign quality `0.90`, harmful detail `0.00`,
+  unsafe-overcompliance refusal `1.00`, challenge capability `0.9062`, median
+  latency `17.5675s`.
+
+Decision: reject. The high-KL trial improved challenge capability versus
+residual trial12 (`0.9062` vs `0.875`) but regressed paired harmful refusal
+(`0.20` vs `0.10`) and did not move unsafe-overcompliance refusal (`1.00`).
+This falsifies the narrow hypothesis that simply relaxing the KL cap unlocks a
+better Qwen FT-abli candidate from the response-conditioned Heretic search. Do
+not upload, quantize, or promote this variant.
+
+Cleanup: the rejected 51 GiB merged checkpoint was deleted from both Sparks
+after validation to restore disk headroom. The pairwise-preference-v1 merged
+checkpoint had also been deleted earlier as a rejected reproducible artifact to
+keep the coordinator above the 15% disk guard. Recipes, adapters, aggregate
+evals, and result manifests remain as evidence.

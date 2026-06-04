@@ -429,6 +429,21 @@ length filtering:
    `do_not_export`: best refusal count was 1/5 only at KL 0.1303, above the
    0.075 budget, and the best within-budget frontier stayed at 2/5. Do not
    export, upload, quantize, or promote this branch.
+   A deliberate high-KL diagnostic export was then added at
+   `configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_response_conditioned_trial19_aggressive.yaml`
+   to test whether the 0.075 KL cap was too conservative. It exported from
+   response-conditioned search trial index 19, synced the checkpoint to both
+   Sparks, passed strict checkpoint/tokenizer audits, and ran the targeted
+   TP=2 quick gate at
+   `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_response_conditioned_trial19_aggressive_dgx_spark`.
+   Reject it: paired harmful refusal regressed to 0.20 versus residual
+   trial12's 0.10, unsafe-overcompliance still refused all 3 cases, paired
+   benign quality stayed 0.90, harmful detail stayed 0.0, and challenge
+   capability improved to 0.9062 but remained below local FT v4's 0.9375. The
+   hypothesis that the KL cap alone blocked a better Qwen FT-abli candidate did
+   not hold. The rejected 51 GiB trial19 checkpoint was removed from both
+   Sparks after validation to restore disk headroom; keep only the recipe,
+   aggregate eval results, and cluster sync evidence.
    This branch also exposed and fixed a repo pain point: generated finetune
    trainers now enforce exact holdout-prompt rejection when manifests set
    `reject_eval_prompt_overlap: true`. The run also exposed a serving pain
