@@ -1120,6 +1120,8 @@ def prompt_choice(message, choices, *args, **kwargs):
     if message == "How would you like to proceed?":
         return "continue"
     if message == "Which trial do you want to use?":
+        if state["saved"]:
+            return ""
         fallback = None
         for choice in choices:
             value = _choice_value(choice)

@@ -673,6 +673,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("overwrite = True", script)
         self.assertIn('os.environ["AX_CONFIG"] = str(config_path)', script)
         self.assertIn('sys.argv = ["abliterix", "--no-non-interactive"]', script)
+        self.assertIn('if state["saved"]:', script)
         self.assertIn('if isinstance(value, str) and value in {"continue", ""}:', script)
         self.assertIn("_handle_existing_checkpoint", script)
         self.assertIn("MODEL_FORGE_MIN_FREE_DISK_FRACTION", script)
