@@ -5109,3 +5109,66 @@ after validation to restore disk headroom. The pairwise-preference-v1 merged
 checkpoint had also been deleted earlier as a rejected reproducible artifact to
 keep the coordinator above the 15% disk guard. Recipes, adapters, aggregate
 evals, and result manifests remain as evidence.
+
+## Qwen Residual Trial12 Combined Preference + Unlikelihood Candidate
+
+Status: prepared and data-validated; not trained, merged, promoted, uploaded, or
+quantized yet.
+
+Hypothesis: residual Heretic trial12 is still the best Qwen FT-abli source, but
+preference-only was too weak and unlikelihood-only failed to reduce the
+unsafe-overcompliance refusal prior. A combined objective should apply
+sequence-level pressure toward chosen no-refusal safe redirects and token-level
+pressure away from explicit refusal completions while SFT replay preserves the
+local FT v4 capability surface.
+
+Recipe:
+
+- `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2.yaml`
+- Method: `qlora_pairwise_preference_unlikelihood`
+- Source: `local_ft_abli_heretic_residual_trial12`
+- Candidate variant:
+  `local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2`
+- Data manifest:
+  `datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2.yaml`
+- Source registry:
+  `configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2.yaml`
+
+Prepared validation:
+
+```text
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2.yaml prepare --overwrite
+.venv/bin/python runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2/train_trl_sft.py --plan runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2/plan.json --prepare-data
+jq -n -r '[inputs] | {rows:length, paired: map(select(.rejected_messages != null)) | length, sources:(group_by(.source)|map({source:.[0].source, rows:length, paired:map(select(.rejected_messages != null))|length}))}' runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2/train.jsonl
+```
+
+Prepared data result:
+
+- Total rows: 93.
+- Paired chosen/rejected rows: 39.
+- Residual trial12 source rows: 23 rows, 15 paired.
+- Eval-style adjacent pairs: 12 rows, 12 paired.
+- Broader adjacent refusal pairs: 12 rows, 12 paired.
+- Capability and no-refusal redirect replay: 46 SFT rows.
+- Paired chosen answers contain no explicit refusal markers under the repo
+  marker check.
+
+Implementation note: this branch exposed a generic finetune data-builder bug.
+When a source mixed SFT-only rows and pair rows, `Dataset.from_list` could drop
+the optional `rejected_messages` field if the first shuffled row lacked that
+field. The builder now sets `rejected_messages` and `rejected_text` to `None` on
+all rows in any source that has at least one paired row, preserving the full
+pair set.
+
+Next validation:
+
+```text
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2/run_cluster_torchrun.sh
+scripts/run_merge_peft_container.sh --base-model ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12 --adapter ~/models/model-forge-adapters/qwen36_27b/heretic_trial12_refusal_preference_unlikelihood_v2 --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2 --dtype bf16 --merge-method direct --trust-remote-code --overwrite
+MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2 --internal --bucket refusal_paired_boundary --bucket unsafe_overcompliance --bucket capability_preservation_challenge
+```
+
+Promotion requirements remain unchanged: zero or near-zero paired harmful
+refusal, unsafe-overcompliance refusal below residual trial12, harmful detail at
+zero after manual review, paired benign quality at least 0.90 and preferably
+0.95, and challenge capability at least residual trial12.

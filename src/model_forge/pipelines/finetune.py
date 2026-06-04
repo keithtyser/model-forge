@@ -685,6 +685,10 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
                     row["rejected_text"] = rejected_text
                 rows.append(row)
             if rows:
+                if any("rejected_messages" in row for row in rows):
+                    for row in rows:
+                        row.setdefault("rejected_messages", None)
+                        row.setdefault("rejected_text", None)
                 chunks.append(Dataset.from_list(rows))
             source_stats.append({"name": name, "sampled": target, "accepted": len(rows), "rejected": rejected})
             print(f"[model-forge] prepared source {name}: accepted={len(rows)} rejected={rejected}", flush=True)
@@ -759,7 +763,7 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
     method = str(plan["trainer"].get("method", "")).lower()
     use_pairwise_preference = any(marker in method for marker in ("pairwise_preference", "preference_dpo", "preference", "simpo"))
     unlikelihood_weight = float(plan["trainer"].get("unlikelihood_weight", 0.0) or 0.0)
-    use_unlikelihood = (unlikelihood_weight > 0 or "unlikelihood" in method) and not use_pairwise_preference
+    use_unlikelihood = unlikelihood_weight > 0 or "unlikelihood" in method
     assistant_only_loss = bool(plan["trainer"].get("assistant_only_loss", False)) or use_unlikelihood or use_pairwise_preference
 
     def assistant_prefix_text(messages: list[dict[str, str]]) -> str:
@@ -1059,6 +1063,7 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
             preference_margin: float,
             sft_weight: float,
             length_normalize: bool,
+            unlikelihood_weight: float,
             **kwargs,
         ) -> None:
             super().__init__(*args, **kwargs)
@@ -1067,6 +1072,7 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
             self.preference_margin = float(preference_margin)
             self.sft_weight = float(sft_weight)
             self.length_normalize = bool(length_normalize)
+            self.unlikelihood_weight = float(unlikelihood_weight)
 
         def _sequence_logps(self, logits, labels):
             token_logits = logits[:, :-1, :].float()
@@ -1094,15 +1100,27 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
             chosen_logps, chosen_counts = self._sequence_logps(outputs.logits, chosen_labels)
             rejected_logps, rejected_counts = self._sequence_logps(rejected_outputs.logits, rejected_labels)
             valid_pairs = chosen_counts.gt(0) & rejected_counts.gt(0)
+            used_rejected_loss = False
             if bool(valid_pairs.any()) and self.preference_weight > 0:
                 preference_logits = self.preference_beta * (
                     chosen_logps[valid_pairs] - rejected_logps[valid_pairs] - self.preference_margin
                 )
                 preference_loss = -F.logsigmoid(preference_logits).mean()
                 loss = loss + (self.preference_weight * preference_loss)
-            else:
+                used_rejected_loss = True
+            if bool((rejected_labels != -100).any()) and self.unlikelihood_weight > 0:
+                logits = rejected_outputs.logits[:, :-1, :].float()
+                labels = rejected_labels[:, 1:]
+                mask = labels.ne(-100)
+                safe_labels = labels.masked_fill(~mask, 0)
+                token_probs = torch.softmax(logits, dim=-1).gather(-1, safe_labels.unsqueeze(-1)).squeeze(-1)
+                unlikelihood = -torch.log(torch.clamp(1.0 - token_probs, min=1e-6))
+                unlikelihood_loss = unlikelihood.masked_select(mask).mean()
+                loss = loss + (self.unlikelihood_weight * unlikelihood_loss)
+                used_rejected_loss = True
+            if not used_rejected_loss:
                 # Keep DDP ranks in the same forward/backward structure even
-                # when only some ranks receive paired preference rows.
+                # when only some ranks receive paired preference/unlikelihood rows.
                 loss = loss + (rejected_outputs.logits.sum() * 0.0)
             return (loss, outputs) if return_outputs else loss
 
@@ -1142,6 +1160,7 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
             preference_margin=float(plan["trainer"].get("preference_margin", 0.0) or 0.0),
             sft_weight=float(plan["trainer"].get("sft_weight", 1.0) if plan["trainer"].get("sft_weight") is not None else 1.0),
             length_normalize=bool(plan["trainer"].get("preference_length_normalize", True)),
+            unlikelihood_weight=unlikelihood_weight,
         )
     elif use_unlikelihood:
         trainer = trainer_cls(**trainer_kwargs, unlikelihood_weight=unlikelihood_weight)
@@ -1163,6 +1182,7 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
                 "method": plan["trainer"].get("method"),
                 "assistant_only_loss": assistant_only_loss,
                 "unlikelihood_weight": unlikelihood_weight,
+                "refusal_unlikelihood": use_unlikelihood,
                 "pairwise_preference": use_pairwise_preference,
                 "preference_weight": float(plan["trainer"].get("preference_weight", 0.0) or 0.0),
                 "preference_beta": float(plan["trainer"].get("preference_beta", 0.1) or 0.1),

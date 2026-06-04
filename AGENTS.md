@@ -294,6 +294,31 @@ but still missed local FT v4's 0.9375. The rejected 51 GiB merged checkpoint was
 deleted from both Sparks after validation; keep the config and aggregate eval
 results as evidence only. Do not upload, quantize, or promote this variant.
 
+The next prepared Qwen FT-abli candidate is a sequential combined
+preference-plus-unlikelihood LoRA from residual trial12:
+
+```bash
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2.yaml prepare --overwrite
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2/run_cluster_torchrun.sh
+scripts/run_merge_peft_container.sh \
+  --base-model ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12 \
+  --adapter ~/models/model-forge-adapters/qwen36_27b/heretic_trial12_refusal_preference_unlikelihood_v2 \
+  --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2 \
+  --dtype bf16 --merge-method direct --trust-remote-code --overwrite
+MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2 --internal \
+  --bucket refusal_paired_boundary --bucket unsafe_overcompliance --bucket capability_preservation_challenge
+```
+
+This is not promoted. It is blocked in
+`configs/model_families/qwen36_27b.yaml` until trained, merged, and gated. The
+prepared data pack has 93 rows and 39 chosen/rejected pairs: 15 residual
+trial12 pairs, 12 eval-style "Refuse briefly" adjacent pairs, 12 broader
+adjacent pairs, plus capability and no-refusal redirect SFT replay. A repo
+bugfix now preserves optional `rejected_messages` columns for mixed SFT/pair
+sources before `Dataset.from_list`; without that fix, a shuffled source whose
+first row lacked a rejected pair could silently drop all rejected pairs from
+that source.
+
 Before exporting another Heretic search result into a full checkpoint, run the
 repo-native journal gate:
 

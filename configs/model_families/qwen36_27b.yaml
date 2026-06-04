@@ -212,6 +212,20 @@ variants:
       evidence:
         - AGENTS.md
         - docs/status.md
+  local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2
+    served_model_name: local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2
+    transform_type: behavior_edit
+    base_variant: local_ft_abli_heretic_residual_trial12
+    downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Prepared combined preference-plus-unlikelihood candidate; keep blocked until the merged checkpoint passes paired refusal, unsafe-overcompliance, benign quality, challenge, and harmful-detail gates."
+      evidence:
+        - configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2.yaml
+        - datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2.yaml
   local_ft_abli_heretic_trial12_unsafe_followup_trial16:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-trial12-unsafe-followup-trial16

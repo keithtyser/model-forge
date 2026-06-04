@@ -282,6 +282,55 @@ class FinetunePlanTests(unittest.TestCase):
         self.assertIn("Preference weight/beta/margin: `1.0` / `0.25` / `0.0`", method_card)
         self.assertIn("SFT replay weight: `0.6`", method_card)
 
+    def test_qwen36_trial12_combined_preference_unlikelihood_plan_uses_both_losses(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "finetuning"
+            / "qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["run_dir"] = tmp
+            plan = build_plan(config, config_path)
+            outputs = write_artifacts(plan, overwrite=False)
+            trainer_script = Path(outputs["trainer"]).read_text()
+            method_card = Path(outputs["method_card"]).read_text()
+
+        self.assertEqual(plan["family"], "qwen36_27b")
+        self.assertEqual(
+            plan["model"]["source"],
+            "local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12",
+        )
+        self.assertTrue(
+            plan["model"]["output_dir"].endswith(
+                "model-forge-adapters/qwen36_27b/heretic_trial12_refusal_preference_unlikelihood_v2"
+            )
+        )
+        self.assertEqual(plan["trainer"]["method"], "qlora_pairwise_preference_unlikelihood")
+        self.assertTrue(plan["trainer"]["assistant_only_loss"])
+        self.assertEqual(plan["trainer"]["preference_weight"], 1.15)
+        self.assertEqual(plan["trainer"]["preference_beta"], 0.35)
+        self.assertEqual(plan["trainer"]["preference_margin"], 0.02)
+        self.assertEqual(plan["trainer"]["sft_weight"], 0.55)
+        self.assertEqual(plan["trainer"]["unlikelihood_weight"], 0.18)
+        self.assertEqual(plan["trainer"]["learning_rate"], 0.000005)
+        self.assertEqual(plan["trainer"]["max_steps"], 120)
+        self.assertEqual(plan["data"]["target_samples"], 93)
+        source_ids = {source["id"] for source in plan["data"]["sources"]}
+        self.assertIn("qwen36_heretic_trial12_refusal_unlikelihood_v1", source_ids)
+        self.assertIn("qwen36_local_ft_v4_refusal_unlikelihood_v3_evalstyle_pairs", source_ids)
+        self.assertIn("PairwisePreferenceTrainer", trainer_script)
+        self.assertIn("preference_loss", trainer_script)
+        self.assertIn("self.unlikelihood_weight", trainer_script)
+        self.assertIn("unlikelihood_loss", trainer_script)
+        self.assertIn("used_rejected_loss", trainer_script)
+        self.assertIn('row.setdefault("rejected_messages", None)', trainer_script)
+        self.assertIn('"refusal_unlikelihood": use_unlikelihood', trainer_script)
+        self.assertIn("Preference weight/beta/margin: `1.15` / `0.35` / `0.02`", method_card)
+        self.assertIn("Unlikelihood weight: `0.18`", method_card)
+        self.assertIn("primary_evalstyle_refusal_preference_unlikelihood_pairs", method_card)
+
     def test_qwen36_refusal_unlikelihood_v2_pairs_have_chosen_and_rejected(self) -> None:
         import json
 

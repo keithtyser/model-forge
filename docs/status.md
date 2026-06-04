@@ -444,6 +444,19 @@ length filtering:
    not hold. The rejected 51 GiB trial19 checkpoint was removed from both
    Sparks after validation to restore disk headroom; keep only the recipe,
    aggregate eval results, and cluster sync evidence.
+   The next prepared method shift is
+   `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2.yaml`.
+   It starts from residual Heretic trial12 and combines length-normalized
+   chosen-vs-rejected preference loss with token-level refusal unlikelihood on
+   rejected completions. The prepared data pack has 93 rows and 39 paired
+   chosen/rejected rows, including all 15 residual-trial12 pairs plus 24
+   adjacent eval-style/broader refusal pairs, with capability and no-refusal
+   redirect SFT replay. The variant
+   `local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2` is blocked
+   for quantization, upload, and promotion until it is trained, merged, and
+   quick-gated. This work also fixed the finetune data builder so mixed SFT/pair
+   sources preserve optional `rejected_messages` fields before
+   `Dataset.from_list`.
    This branch also exposed and fixed a repo pain point: generated finetune
    trainers now enforce exact holdout-prompt rejection when manifests set
    `reject_eval_prompt_overlap: true`. The run also exposed a serving pain
