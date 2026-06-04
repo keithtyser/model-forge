@@ -19,10 +19,10 @@ refusal wording with much lower KL than the prior Heretic near-miss branches.
 `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`
 
 Source checkpoint:
-`/home/ktyser/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2`
+`~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2`
 
 Planned output checkpoint:
-`/home/ktyser/models/Qwen3.6-27B-local-ft-v4-abliterated-method-shift-self-harm-selected`
+`~/models/Qwen3.6-27B-local-ft-v4-abliterated-method-shift-self-harm-selected`
 
 Backend:
 

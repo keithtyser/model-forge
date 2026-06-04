@@ -1123,7 +1123,7 @@ def prompt_choice(message, choices, *args, **kwargs):
         fallback = None
         for choice in choices:
             value = _choice_value(choice)
-            if value in {{"continue", ""}}:
+            if isinstance(value, str) and value in {{"continue", ""}}:
                 continue
             if fallback is None:
                 fallback = choice
