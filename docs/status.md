@@ -92,15 +92,15 @@ This is the short handoff state for humans and agents. Use
   harmful detail/compliance regressed to 0.10, paired benign quality fell to
   0.90, and challenge capability fell to 0.8125. Keep v2 as the best held
   Qwen FT-abli evidence node and do not upload, quantize, or promote v3.
-- Qwen 3.6 27B residual-trial12 preference-unlikelihood v4 is prepared and
-  data-validated as the next lower-impact repair from v2, not v3. It uses
-  attention-only rank-4 LoRA, LR 1e-6, 36 max steps, lower
-  preference/unlikelihood pressure, and a high replay ratio. Prepare accepted
-  72/72 rows with 10 paired phrase-repair rows and 62 SFT replay rows; chosen
-  paired answers contain no explicit refusal markers and rejected paired
-  answers target the observed "I can't help", "I cannot", and "do not provide"
-  residual phrase family. It remains blocked until trained, merged,
-  quick-gated, rescored, and manually inspected.
+- Qwen 3.6 27B residual-trial12 preference-unlikelihood v4 trained for 36
+  guarded two-node steps from the held v2 checkpoint, merged, synced back,
+  checkpoint/tokenizer-audited, and quick-gated with a solo TP=1 behavior-only
+  fallback after cluster TP=2 vLLM serving failed twice during NCCL
+  communicator initialization. Rescoring v6 confirmed it is rejected:
+  unsafe-overcompliance refusal stayed at 0.6667, paired harmful refusal
+  regressed to 0.10, paired harmful detail/compliance regressed to 0.05, and
+  challenge capability fell to 0.8438. Keep v2 as the best held Qwen FT-abli
+  evidence node and do not upload, quantize, or promote v4.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until
   a real FT-abli candidate passes the zero-refusal capability-retention gate.

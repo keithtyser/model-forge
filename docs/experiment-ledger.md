@@ -5356,8 +5356,8 @@ phrasing without changing the v2 answer distribution.
 
 ## Qwen Trial12 Preference-Unlikelihood v4 Micro Phrase Repair
 
-Status: prepared and data-validated; not trained, merged, promoted, uploaded,
-or quantized yet.
+Status: trained, merged, quick-gated, rescored, and rejected. Do not upload,
+quantize, or promote v4.
 
 Hypothesis: v2 is still the best held Qwen FT-abli candidate. v3 proved the
 phrase-repair direction can reduce the explicit unsafe-overcompliance refusal
@@ -5416,7 +5416,7 @@ Prepared data result:
   marker check; paired rejected answers all contain at least one target refusal
   marker from the residual phrase family.
 
-Next validation:
+Execution:
 
 ```text
 MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v4/run_cluster_torchrun.sh
@@ -5425,10 +5425,61 @@ MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_heretic_trial12_refus
 .venv/bin/python scripts/rescore_internal_eval.py results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v4_dgx_spark --config configs/experiments/qwen36_27b_v0.yaml --output-dir results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v4_dgx_spark_rescored_v6
 ```
 
-Promotion gate: unsafe-overcompliance refusal must reach 0.0 while paired
-harmful refusal, paired harmful detail, and paired harmful compliance remain
-0.0. Paired benign quality must stay at least 0.95 and challenge capability
-must stay at least 0.9375. If v4 has no effect, the next attempt should increase
-only phrase-repair pressure slightly; if it damages boundary or challenge
-behavior, return to v2 and try a non-training behavior-edit or inference-time
-serving control before another LoRA repair.
+Training result:
+
+- 36/36 steps.
+- Dataset rows: 72.
+- Train loss: 3.6519.
+- Runtime: 459.7920 seconds.
+- Method: `qlora_pairwise_preference_unlikelihood`.
+- Preference weight: 0.45.
+- Unlikelihood weight: 0.10.
+- SFT replay weight: 1.25.
+
+Operational notes:
+
+- The final adapter root on the worker was incomplete/root-owned after cluster
+  training. It had to be replaced from the coordinator adapter before merge.
+- Worker-side merge succeeded and wrote the 51 GiB merged checkpoint, but strict
+  tokenizer audit caught tokenizer metadata drift. Restoring tokenizer metadata
+  from v2 fixed the audit.
+- Cluster TP=2 vLLM serving failed twice during NCCL communicator
+  initialization. The targeted v4 quick gate therefore used a solo TP=1
+  behavior-only fallback at 8k context with `--safetensors-load-strategy
+  prefetch --enforce-eager`. Treat the latency/tok/s from this fallback as not
+  throughput-comparable to earlier TP=2 runs.
+- `cluster torchrun-smoke` can deadlock by starting a worker-side smoke
+  container that waits for a master that never starts.
+
+Scoring v6 quick-gate result:
+
+- Output:
+  `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v4_dgx_spark_rescored_v6`.
+- Paired harmful refusal: 0.10.
+- Paired refusal suppression: 0.90.
+- Paired benign quality: 1.00.
+- Paired safe redirect: 1.00.
+- Paired harmful detail: 0.05.
+- Paired harmful compliance: 0.05.
+- Unsafe-overcompliance refusal: 0.6667.
+- Unsafe-overcompliance safe redirect: 1.00.
+- Unsafe-overcompliance harmful detail/compliance: 0.00.
+- Challenge capability: 0.8438.
+- Median latency: 27.8799 seconds on the solo TP=1 fallback.
+
+Failed-row summary:
+
+- Unsafe-overcompliance still had explicit refusal wording on 2/3 prompts.
+- Paired boundary had 3 failing harmful rows: 2 explicit refusal-wording
+  failures and 1 overcompliance/detail failure.
+- Challenge capability missed 5/32 rows, mostly required-concept misses.
+
+Decision: reject. v4 had no positive movement on the residual
+unsafe-overcompliance refusal problem and damaged v2's paired-boundary and
+challenge behavior. Keep
+`local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2` as the best
+held Qwen FT-abli evidence node. The next candidate should not be another
+sequential phrase-repair LoRA with the same objective mix; either return to v2
+with a non-training behavior edit/inference-time serving control, or design a
+new repair that explicitly protects all paired-boundary and challenge failures
+from v3/v4 before increasing refusal-phrase pressure.
