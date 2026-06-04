@@ -75,6 +75,9 @@ Every model plan records `release_gates` in `hub_publish.json`. Common gates:
 - raw unsafe outputs are excluded from public plans
 - planned upload files do not contain secret-like tokens or private absolute
   paths
+- model-artifact uploads are blocked when the family variant records
+  `promotion.decision: rejected` or includes `hf_upload` in
+  `promotion.blocked_actions`
 - public full-checkpoint releases are blocked unless the release class allows
   them and validation is at least `spark_single_node_validated`
 

@@ -124,11 +124,31 @@ def resolve_variant(family: str, variant: str, env: Mapping[str, str] | None = N
         "adapter": bool(raw.get("adapter", False)),
         "quantization": raw.get("quantization"),
         "downloadable": raw.get("downloadable", True),
+        "promotion": dict(raw.get("promotion") or {}),
         "local_path": local_path,
         "adapter_path": adapter_path,
         "merged_path": merged_path,
         "raw": raw,
     }
+
+
+def promotion_blocks_release(variant_info: Mapping[str, Any], release_class: Mapping[str, Any]) -> tuple[bool, str]:
+    publishes_artifact = bool(release_class.get("publish_weights", False)) or bool(release_class.get("publish_adapter", False))
+    if not publishes_artifact:
+        return False, "report-only release does not publish model artifacts"
+    promotion = variant_info.get("promotion") or {}
+    if not isinstance(promotion, Mapping):
+        return False, "no promotion metadata"
+    decision = str(promotion.get("decision") or "").strip().lower()
+    blocked_actions = {str(item).strip().lower() for item in promotion.get("blocked_actions") or []}
+    blocked = decision == "rejected" or "hf_upload" in blocked_actions or "publishing" in blocked_actions or "all" in blocked_actions
+    if not blocked:
+        return False, "variant is not blocked by promotion metadata"
+    reason = str(promotion.get("reason") or f"promotion decision is {decision or 'blocked'}")
+    evidence = promotion.get("evidence")
+    if isinstance(evidence, list) and evidence:
+        reason = f"{reason}; evidence={', '.join(str(item) for item in evidence[:3])}"
+    return True, reason
 
 
 def load_hub_config(path: Path = DEFAULT_HUB_CONFIG) -> dict[str, Any]:
@@ -476,6 +496,15 @@ def build_release_gates(
                 "; ".join(findings[:5]) or "no secret-like literals or private absolute paths found",
             )
         )
+
+    promotion_blocked, promotion_message = promotion_blocks_release(variant_info, release_class)
+    gates.append(
+        gate_status(
+            "variant_promotion_not_blocked",
+            not promotion_blocked,
+            promotion_message,
+        )
+    )
 
     public_checkpoint = (
         release_class.get("hf_visibility") == "public"

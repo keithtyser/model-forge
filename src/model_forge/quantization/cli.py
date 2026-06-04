@@ -69,6 +69,7 @@ class QuantizationSource:
     model_id: str
     served_model_name: str
     local_path: Path | None = None
+    promotion: dict[str, Any] | None = None
 
 
 def utc_now() -> datetime:
@@ -149,6 +150,7 @@ def resolve_family_variant(family: str, variant: str, env: Mapping[str, str]) ->
         model_id=model_id,
         served_model_name=served_model_name,
         local_path=local_path,
+        promotion=dict(raw_variant.get("promotion") or {}),
     )
 
 
@@ -167,7 +169,28 @@ def resolve_source(config: QuantizationConfig, family: str | None, variant: str 
         model_id=model_id,
         served_model_name=str(config.runtime.get("served_model_name") or model_id),
         local_path=Path(str(config.runtime["local_path"])).expanduser() if config.runtime.get("local_path") else None,
+        promotion={},
     )
+
+
+def promotion_blocks_action(promotion: Mapping[str, Any] | None, action: str) -> tuple[bool, str]:
+    if not promotion:
+        return False, ""
+    decision = str(promotion.get("decision") or "").strip().lower()
+    blocked_actions = {str(item).strip().lower() for item in promotion.get("blocked_actions") or []}
+    blocked = decision == "rejected" or action in blocked_actions or "all" in blocked_actions
+    if not blocked:
+        return False, ""
+    reason = str(promotion.get("reason") or f"promotion decision is {decision or 'blocked'}")
+    evidence = promotion.get("evidence")
+    evidence_note = ""
+    if isinstance(evidence, list) and evidence:
+        evidence_note = f"; evidence={', '.join(str(item) for item in evidence[:3])}"
+    return True, f"{reason}{evidence_note}"
+
+
+def source_promotion(source: QuantizationSource) -> dict[str, Any]:
+    return dict(source.promotion or {})
 
 
 def comma_list(raw: str | None) -> list[str]:
@@ -465,6 +488,7 @@ def build_modelopt_export_command(
             "model_id": source.model_id,
             "local_path": display_path(source.local_path) if source.local_path else None,
             "container_path": container_source,
+            "promotion": source_promotion(source),
         },
         "target": {
             "variant": target_variant_label(config, source),
@@ -633,6 +657,7 @@ def build_gguf_export_command(
             "variant": source.variant,
             "model_id": source.model_id,
             "local_path": display_path(source.local_path) if source.local_path else None,
+            "promotion": source_promotion(source),
         },
         "target": {
             "variant": target_variant_label(config, source),
@@ -748,6 +773,7 @@ def build_calibration_manifest(
                 "model_id": source.model_id,
                 "local_path": display_path(source.local_path) if source.local_path else None,
                 "local_path_exists": source.local_path.exists() if source.local_path else None,
+                "promotion": source_promotion(source),
             },
             "target": {
                 "variant": target_variant_label(config, source),
@@ -819,6 +845,12 @@ def write_calibration_manifest_outputs(manifest: Mapping[str, Any]) -> Path:
 
 def guard_export(export_plan: Mapping[str, Any]) -> None:
     source = export_plan.get("source") or {}
+    blocked, reason = promotion_blocks_action(source.get("promotion"), "quantization_export")
+    if blocked:
+        source_label = "/".join(str(item) for item in (source.get("family"), source.get("variant")) if item)
+        raise RuntimeError(
+            f"source variant {source_label or source.get('model_id') or '<unknown>'} is blocked by variant promotion metadata: {reason}"
+        )
     source_family = str(source.get("family") or "")
     source_variant = str(source.get("variant") or "")
     if source_family and source_variant:
@@ -1060,6 +1092,7 @@ def build_plan(
             "served_model_name": source.served_model_name,
             "local_path": display_path(source.local_path) if source.local_path else None,
             "local_path_exists": source.local_path.exists() if source.local_path else None,
+            "promotion": source_promotion(source),
         },
         "target": {
             "variant": target_variant_label(config, source),

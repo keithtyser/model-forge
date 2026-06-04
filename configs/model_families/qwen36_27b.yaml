@@ -81,6 +81,13 @@ variants:
     base_variant: base
     lora_rank: 32
     downloadable: false
+    promotion:
+      decision: rejected
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Qwen FT v5 underperformed local FT v4 on refusal and capability gates; keep local FT v4 as source."
+      evidence:
+        - AGENTS.md
+        - docs/status.md
   local_abli:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-abliterated-v0
@@ -99,42 +106,90 @@ variants:
     served_model_name: local/qwen36-27b-local-ft-v4-abliterated-gemma-t34-scale1p5
     base_variant: local_ft_v4
     downloadable: false
+    promotion:
+      decision: rejected
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Gemma t34 transfer scaling was an exploratory Qwen ablation and was superseded by stronger Heretic candidates."
+      evidence:
+        - docs/experiment-ledger.md
   local_ft_abli_trial2_scale0p75:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-trial2-scale0p75
     served_model_name: local/qwen36-27b-local-ft-v4-abliterated-trial2-scale0p75
     base_variant: local_ft_v4
     downloadable: false
+    promotion:
+      decision: rejected
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Trial2 scale0.75 retained capability but left too many paired harmful refusals for the zero-refusal objective."
+      evidence:
+        - AGENTS.md
+        - docs/status.md
   local_ft_abli_trial2_scale1p0:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-trial2-scale1p0
     served_model_name: local/qwen36-27b-local-ft-v4-abliterated-trial2-scale1p0
     base_variant: local_ft_v4
     downloadable: false
+    promotion:
+      decision: rejected
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Trial2 scale1.0 still refused most paired harmful prompts and regressed benign/challenge quality."
+      evidence:
+        - AGENTS.md
+        - docs/experiment-ledger.md
   local_ft_abli_trial0_direction50:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-trial0-direction50
     served_model_name: local/qwen36-27b-local-ft-v4-abliterated-trial0-direction50
     base_variant: local_ft_v4
     downloadable: false
+    promotion:
+      decision: rejected
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Trial0 direction50 had poor refusal suppression and challenge capability after merged-checkpoint eval."
+      evidence:
+        - AGENTS.md
+        - docs/experiment-ledger.md
   local_ft_abli_heretic_long_trial2:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-long-trial2
     served_model_name: local/qwen36-27b-local-ft-v4-abliterated-heretic-long-trial2
     base_variant: local_ft_v4
     downloadable: false
+    promotion:
+      decision: rejected
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Long-response Heretic trial2 reduced refusals but regressed paired benign quality and challenge capability."
+      evidence:
+        - AGENTS.md
+        - docs/experiment-ledger.md
   local_ft_abli_heretic_refusal_suffix_trial17_scale1p5:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-refusal-suffix-trial17-scale1p5
     served_model_name: local/qwen36-27b-local-ft-v4-abliterated-heretic-refusal-suffix-trial17-scale1p5
     base_variant: local_ft_v4
     downloadable: false
+    promotion:
+      decision: rejected
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Refusal-suffix trial17 scale1.5 failed paired harmful and unsafe-overcompliance refusal gates."
+      evidence:
+        - AGENTS.md
+        - docs/experiment-ledger.md
   local_ft_abli_heretic_residual_trial12:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12
     served_model_name: local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12
     base_variant: local_ft_v4
     downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Strongest Qwen FT-abli candidate so far, but not a final source because unsafe-overcompliance, benign quality, and challenge gates remain below target."
+      evidence:
+        - AGENTS.md
+        - docs/status.md
   local_ft_abli_heretic_trial12_refusal_unlikelihood_v1:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-ul-v1
@@ -142,12 +197,26 @@ variants:
     transform_type: behavior_edit
     base_variant: local_ft_abli_heretic_residual_trial12
     downloadable: false
+    promotion:
+      decision: rejected
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Trial12 refusal-unlikelihood v1 did not improve refusal suppression and regressed challenge capability."
+      evidence:
+        - AGENTS.md
+        - docs/status.md
   local_ft_abli_heretic_trial12_unsafe_followup_trial16:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-trial12-unsafe-followup-trial16
     served_model_name: local/qwen36-27b-local-ft-v4-abliterated-heretic-trial12-unsafe-followup-trial16
     base_variant: local_ft_abli_heretic_residual_trial12
     downloadable: false
+    promotion:
+      decision: rejected
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Unsafe-followup trial16 worsened paired harmful refusal, benign quality, and harmful detail."
+      evidence:
+        - AGENTS.md
+        - docs/status.md
   local_ft_abli_trial2_lora_scale0p85:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: model-forge-adapters/qwen36_27b/local_ft_abli_trial2_lora_scale0p85
@@ -164,6 +233,13 @@ variants:
     transform_type: behavior_edit
     base_variant: local_ft_v4
     downloadable: false
+    promotion:
+      decision: rejected
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Behavior v1 did not improve paired harmful refusal and regressed benign and challenge quality."
+      evidence:
+        - AGENTS.md
+        - docs/status.md
   local_ft_abli_refusal_unlikelihood_v2:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-refusal-unlikelihood-v2
@@ -171,6 +247,13 @@ variants:
     transform_type: behavior_edit
     base_variant: local_ft_v4
     downloadable: false
+    promotion:
+      decision: rejected
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Refusal-unlikelihood v2 improved paired harmful refusal but regressed challenge, benign quality, and harmful-detail gates."
+      evidence:
+        - AGENTS.md
+        - docs/status.md
   local_ft_abli_refusal_unlikelihood_v3:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-refusal-unlikelihood-v3
@@ -178,6 +261,13 @@ variants:
     transform_type: behavior_edit
     base_variant: local_ft_v4
     downloadable: false
+    promotion:
+      decision: rejected
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Refusal-unlikelihood v3 restored benign quality but removed too little refusal behavior and regressed challenge capability."
+      evidence:
+        - AGENTS.md
+        - docs/status.md
   local_ft_abli_nvfp4_modelopt:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: model-forge-quantized/qwen36_27b/local_ft_abli_nvfp4_modelopt

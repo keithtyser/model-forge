@@ -516,6 +516,44 @@ class QuantizationCliTests(unittest.TestCase):
         self.assertIsNone(export["calibration"]["recipe"])
         self.assertIn("quantization_export.lock", export["resource_policy"]["lock_path"])
 
+    def test_quantization_export_blocks_rejected_source_variant(self) -> None:
+        config = load_quantization_config(Path("configs/quantization/qwen36_27b_nvfp4_modelopt.yaml"))
+        source = resolve_source(
+            config,
+            "qwen36_27b",
+            "local_ft_abli_refusal_unlikelihood_v2",
+            {"MODEL_FORGE_MODELS_DIR": "/models-host"},
+        )
+        self.assertEqual(source.promotion["decision"], "rejected")
+        with tempfile.TemporaryDirectory() as tmp:
+            export = build_modelopt_export_command(
+                config,
+                source,
+                output_dir=Path(tmp) / "quantized",
+                run_id="unit_blocked_rejected_qwen_variant",
+                env={"MODEL_FORGE_MODELS_DIR": "/models-host", "HF_HOME": "/hf-cache"},
+            )
+
+        self.assertEqual(export["source"]["promotion"]["decision"], "rejected")
+        with self.assertRaisesRegex(RuntimeError, "blocked by variant promotion metadata"):
+            guard_export(export)
+
+    def test_quantization_plan_surfaces_inconclusive_source_blockers(self) -> None:
+        config = load_quantization_config(Path("configs/quantization/qwen36_27b_nvfp4_modelopt.yaml"))
+        plan = build_plan(
+            config,
+            config_path=Path("configs/quantization/qwen36_27b_nvfp4_modelopt.yaml"),
+            family="qwen36_27b",
+            variant="local_ft_abli_heretic_residual_trial12",
+            output_dir=None,
+            run_id="unit_qwen_inconclusive_plan",
+            env={"MODEL_FORGE_MODELS_DIR": "/models-host"},
+        )
+
+        promotion = plan["source"]["promotion"]
+        self.assertEqual(promotion["decision"], "inconclusive")
+        self.assertIn("quantization_export", promotion["blocked_actions"])
+
     def test_generic_fp8_w8a8_modelopt_pipeline_templates_target_variant(self) -> None:
         config_path = Path("configs/quantization/fp8_w8a8_modelopt.yaml")
         config = load_quantization_config(config_path)

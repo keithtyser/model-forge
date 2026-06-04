@@ -4910,3 +4910,35 @@ the prior sequential follow-up, but still did not produce an exportable
 zero-refusal candidate. The best in-budget candidates reduce the focused
 refusals from 3/5 to 2/5 only, which is not worth a full 51 GiB checkpoint
 export. Do not upload, quantize, or promote this branch.
+
+## Qwen Rejected-Candidate Promotion Blocks
+
+Status: implemented as repo guardrail metadata.
+
+Change: Qwen 3.6 27B variants that the ledger already rejects or holds now
+carry `promotion.blocked_actions` in `configs/model_families/qwen36_27b.yaml`.
+The blocked actions are `quantization_export`, `hf_upload`, and `promotion`.
+This keeps the variants in the graph for reproducibility while preventing later
+agents from accidentally treating stale checkpoints as release or NVFP4 sources.
+
+Enforcement:
+
+- `./forge quantize export --execute` fails preflight before Docker/systemd when
+  the source variant is blocked.
+- `./forge hf plan-model` adds a failed `variant_promotion_not_blocked` gate for
+  model-artifact uploads of blocked variants.
+- Report-only HF plans remain allowed, because rejected candidates can still be
+  published as evidence without uploading model artifacts.
+
+Validation:
+
+```text
+.venv/bin/python -m unittest tests.test_abliteration_pipeline tests.test_model_forge_dgx tests.test_eval_quality tests.test_quantization_cli tests.test_hub_cli tests.test_variants -v
+./forge doctor
+./forge quantize export qwen36_27b local_ft_abli_refusal_unlikelihood_v2 --config configs/quantization/qwen36_27b_nvfp4_modelopt.yaml --run-id qwen_blocked_export_probe --write-plan --execute
+./forge hf plan-model qwen36_27b local_ft_abli_refusal_unlikelihood_v2 --release-class private_research_model --artifact-path /tmp/model_forge_fake_model --validation-state spark_cluster_validated --source-license-checked --eval-results /tmp/eval.json --promotion-report /tmp/promotion.json --risk-report /tmp/risk.json --behavior-edited --output-dir /tmp/model_forge_hf_block_probe --run-id block_probe --json
+```
+
+Result: tests passed, doctor passed, quantization exited with the expected
+blocked-variant preflight error before launching a container, and the HF plan
+was blocked by `variant_promotion_not_blocked`.

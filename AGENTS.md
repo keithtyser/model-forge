@@ -165,6 +165,12 @@ uploaded as the release target. After changing scoring or prompt checks, rescore
 the source baseline, FT source, and candidate together before trusting a
 comparison report.
 
+Rejected or held variants should stay in `configs/model_families/` for
+traceability, but add `promotion.blocked_actions` for `quantization_export`,
+`hf_upload`, and `promotion` when the ledger says they should not become release
+sources. `./forge quantize export --execute` and `./forge hf plan-model` enforce
+that metadata before heavy export or model upload planning.
+
 Known Qwen 3.6 27B state: local FT v4 is the current FT source. Trial2
 scale0.75 preserves full-suite measured capability and benign quality after
 scorer/rubric v4, but it still refuses 75% of paired harmful prompts, so it is

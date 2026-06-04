@@ -164,8 +164,10 @@ The export runner now has hard host guardrails:
 Do not bypass this runner with an ad hoc `docker run` for large checkpoints.
 If the guard trips, treat it as a failed run to diagnose before retrying.
 For configured family variants, `./forge quantize export ... --execute` also
-runs the strict source checkpoint audit before ModelOpt starts. Missing merged
-adapters, incomplete HF downloads, and partial behavior-edited checkpoints must
+runs the strict source checkpoint audit before ModelOpt starts. It also blocks
+sources whose family config records `promotion.decision: rejected` or includes
+`quantization_export` in `promotion.blocked_actions`. Missing merged adapters,
+incomplete HF downloads, rejected behavior edits, and partial checkpoints must
 fail before a heavy export starts.
 
 ## Evidence Contract

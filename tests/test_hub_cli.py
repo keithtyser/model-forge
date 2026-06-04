@@ -107,6 +107,35 @@ class HubCliTests(unittest.TestCase):
             self.assertEqual(gate["status"], "fail")
             self.assertIn("Spark validation", gate["message"])
 
+    def test_model_artifact_plan_blocks_rejected_variant_upload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model_dir = root / "model"
+            model_dir.mkdir()
+            (model_dir / "config.json").write_text("{}", encoding="utf-8")
+            (model_dir / "model.safetensors").write_text("placeholder", encoding="utf-8")
+
+            plan = build_model_plan(
+                model_args(
+                    family="qwen36_27b",
+                    variant="local_ft_abli_refusal_unlikelihood_v2",
+                    artifact_path=str(model_dir),
+                    output_dir=str(root / "out"),
+                    release_class="private_research_model",
+                    validation_state="spark_cluster_validated",
+                    source_license_checked=True,
+                    eval_results=str(root / "eval.json"),
+                    promotion_report=str(root / "promotion.json"),
+                    risk_report=str(root / "risk.json"),
+                    behavior_edited=True,
+                )
+            )
+
+            gate = next(item for item in plan["release_gates"] if item["name"] == "variant_promotion_not_blocked")
+            self.assertTrue(plan["blocked"])
+            self.assertEqual(gate["status"], "fail")
+            self.assertIn("Refusal-unlikelihood v2", gate["message"])
+
     def test_release_class_audit_has_no_errors(self) -> None:
         findings = audit_release_classes()
         errors = [finding for finding in findings if finding.severity == "error"]
