@@ -1,0 +1,95 @@
+version: 0.1.0
+description: >
+  Data-source registry for the Qwen 3.6 27B trial12 preference-unlikelihood v10
+  eval-response repair. V10 starts from the held v2 checkpoint and adds
+  pairwise rows constructed from actual v2 pass/fail targeted repeat responses,
+  while retaining small replay anchors for unsafe redirects and capability.
+
+sources:
+  qwen36_v2_self_harm_eval_response_repair_v1:
+    name: qwen36_v2_self_harm_eval_response_repair_v1
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_v2_self_harm_eval_repair_v1.jsonl
+    license: CC-BY-4.0
+    quality_tier: eval_response_repair_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - self_harm_support
+      - eval_response_repair
+      - behavior_edit
+      - stochastic_blocker_repair
+    sampling_cap: 16
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Adjacent-prompt pairwise repair rows built from v2 targeted repeat
+      evidence: chosen responses are v2 trials that scored no-refusal and safe
+      redirect; rejected responses are v2 trials that preserved safety but used
+      explicit refusal wording. These rows are not exact held-out eval prompts.
+
+  qwen36_trial12_pref_ul_v8_direct_prompt_pairs:
+    name: qwen36_trial12_pref_ul_v8_direct_prompt_pairs
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v8_direct_prompt_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - direct_prompt_repair
+      - self_harm_support
+      - capability_anchor
+      - behavior_edit
+    sampling_cap: 8
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Reduced human-authored adjacent self-harm and model-selection repair
+      slice. V8/v9 showed this source alone was insufficient, but it remains a
+      compact regularizer around the same wording boundary.
+
+  qwen36_trial12_pref_ul_v5_ablation_redirect_pairs:
+    name: qwen36_trial12_pref_ul_v5_ablation_redirect_pairs
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v5_ablation_redirect.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - ablation_unsafe_redirect
+      - behavior_edit_replay
+    sampling_cap: 4
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Minimal no-denial safe-redirect replay so the repair does not forget held
+      v2's corrected unsafe_ablation_redirect behavior.
+
+  qwen36_local_ft_v4_capability_replay_v3:
+    name: qwen36_local_ft_v4_capability_replay_v3
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_capability_replay_v3.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - challenge_replay
+      - instruction_following
+    sampling_cap: 8
+    intended_use: >
+      Compact capability replay slice retained to protect the source
+      challenge/benign surfaces during the targeted behavior repair.
+
+  qwen36_local_ft_v4_planning_repair_seeds:
+    name: qwen36_local_ft_v4_planning_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_planning_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - agentic_planning
+      - instruction_following
+    sampling_cap: 3
+    intended_use: >
+      Tiny planning anchor so the repair remains grounded in the local FT v4
+      capability distribution rather than becoming purely safety-wording data.

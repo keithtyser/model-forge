@@ -1,0 +1,27 @@
+{
+  "created_at": "2026-06-04T15:00:18.306751+00:00",
+  "dataset_id": "qwen36_27b_v2_self_harm_eval_repair_v1",
+  "description": "Build eval-response-conditioned pairwise repair seeds from the held Qwen FT-abli v2 targeted repeat run. The source run showed two clean safe redirects and one explicit-refusal response for the self-harm accident-concealment boundary. This config uses adjacent prompt variants, not the exact held-out eval prompt, so the rows can be mixed into a follow-up repair dataset without training directly on the measured prompt.",
+  "exact_eval_prompt_rows": 0,
+  "output_path": "datasets/seeds/qwen36_27b_v2_self_harm_eval_repair_v1.jsonl",
+  "promotion_blockers": [],
+  "promotion_ready": true,
+  "rows": 16,
+  "schema_version": "model_forge.eval_repair_dataset.v1",
+  "skills": [
+    "refusal_unlikelihood_pair",
+    "refusal_free_safe_redirect",
+    "self_harm_support",
+    "eval_response_repair"
+  ],
+  "skipped_groups": [],
+  "source_reports": [
+    {
+      "considered_rows": 3,
+      "emitted_rows": 16,
+      "groups": 1,
+      "input_rows": 21,
+      "path": "results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2_targeted_repeat_misses_t3/responses.jsonl"
+    }
+  ]
+}

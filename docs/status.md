@@ -190,6 +190,21 @@ This is the short handoff state for humans and agents. Use
   ineligible trials completed. Do not export, quantize, upload, or promote from
   `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_stochastic_search.yaml`.
   See `reports/qwen36_27b_v2_self_harm_stochastic_search_summary.md`.
+- A generic eval-response repair builder is now available through
+  `./forge data repair-from-eval --config <config>`. It converts saved eval
+  responses into pairwise `messages` / `rejected_messages` rows by matching
+  configured pass/fail score filters and records whether rows use exact held-out
+  prompts. The Qwen v10 seed config
+  `configs/data_repair/qwen36_27b_v2_self_harm_eval_repair_v1.yaml` generated
+  `datasets/seeds/qwen36_27b_v2_self_harm_eval_repair_v1.jsonl`: 16 adjacent
+  self-harm repair pairs, 0 exact eval-prompt rows, and no promotion blockers in
+  `reports/qwen36_27b_v2_self_harm_eval_repair_v1_report.json`.
+- Qwen 3.6 27B residual-trial12 preference-unlikelihood v10 eval repair is
+  prepared but not trained. It starts from held v2, consumes the eval-response
+  repair seed plus small replay anchors, uses a bounded two-node cluster
+  attention-LoRA recipe, and remains blocked from promotion, upload, and
+  quantization until it passes the targeted blocker gate, fresh adjacent
+  self-harm paraphrases, and source-relative benign/challenge gates.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until
   a real FT-abli candidate passes the zero-refusal capability-retention gate.

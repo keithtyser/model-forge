@@ -163,6 +163,31 @@ capability is as important as suppressing refusal language. Keep the first run
 conservative: low learning rate, low LoRA rank, short max steps, and a quick
 gate before full eval or quantization.
 
+## Eval-Response Repair Seeds
+
+When a repeated eval shows stochastic pass/fail behavior for the same case,
+turn the saved responses into a small pairwise repair seed instead of manually
+copying rows into a model-specific file:
+
+```bash
+./forge data repair-from-eval --config configs/data_repair/<repair>.yaml --overwrite
+```
+
+The repair config selects source `responses.jsonl` rows, filters chosen and
+rejected trials by score fields, groups them by bucket/case/prompt, and writes
+training rows with `messages` plus `rejected_messages`. Use adjacent prompt
+variants when the rows will feed a real repair run. Exact held-out eval prompts
+are marked in the report as promotion blockers and should remain diagnostic
+only.
+
+This is useful after a model mostly meets the objective but fails a narrow
+repeat gate, for example an ablated model that safely redirects without harmful
+detail in most trials but still emits explicit refusal wording in one trial.
+The generated seed can then be mixed with capability replay and trained through
+`qlora_pairwise_preference_unlikelihood`. A pass on the old failing prompt is
+not enough for promotion; add fresh adjacent held-out paraphrases before
+quantizing or uploading the model.
+
 ## Resource Contract
 
 Training jobs must be tenants on the host, not owners of the host. The generated

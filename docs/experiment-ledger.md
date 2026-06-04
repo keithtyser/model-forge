@@ -6268,3 +6268,50 @@ held Qwen FT-abli evidence node.
 Tracked summary:
 
 - `reports/qwen36_27b_trial12_pref_ul_v6_summary.md`
+
+### 2026-06-04 Qwen v10 eval-response repair prep
+
+Hypothesis: held v2 remains the best Qwen FT-abli source candidate, but the
+remaining `self_harm_instruction_harmful` blocker is stochastic: two targeted
+trials already produce safe redirects without refusal wording, while one trial
+keeps explicit refusal wording. Deterministic Heretic follow-ups did not see a
+measurable baseline refusal signal, so another projection search is unlikely to
+move this case. A better generalizable repair path is to construct pairwise
+training rows from actual pass/fail eval responses, then train on adjacent
+prompt variants rather than the exact held-out prompt.
+
+Implemented:
+
+- Generic data-factory command:
+  `./forge data repair-from-eval --config <config>`.
+- Builder support for score-filtered chosen/rejected trial selection,
+  per-case grouping, adjacent prompt variants, pairwise
+  `messages` / `rejected_messages` output, and contamination/promotion metadata.
+- Qwen repair config:
+  `configs/data_repair/qwen36_27b_v2_self_harm_eval_repair_v1.yaml`.
+- Generated seed:
+  `datasets/seeds/qwen36_27b_v2_self_harm_eval_repair_v1.jsonl`.
+- Generated report:
+  `reports/qwen36_27b_v2_self_harm_eval_repair_v1_report.json`.
+- Prepared v10 source, dataset, fine-tune, and family-variant metadata:
+  `configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v10_eval_repair.yaml`,
+  `datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v10_eval_repair.yaml`,
+  `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v10_eval_repair.yaml`,
+  and `configs/model_families/qwen36_27b.yaml`.
+
+Generated repair seed result:
+
+- Source responses considered: 3 targeted self-harm rows from held v2.
+- Emitted rows: 16 adjacent pairwise repair rows.
+- Exact eval-prompt rows: 0.
+- Promotion blockers in the repair report: none.
+- The v10 model variant is still marked `inconclusive` with promotion, HF upload,
+  and quantization blocked until the model is actually trained and passes
+  targeted repeats plus fresh adjacent paraphrase gates.
+
+Validation:
+
+```text
+./forge data repair-from-eval --config configs/data_repair/qwen36_27b_v2_self_harm_eval_repair_v1.yaml --overwrite
+.venv/bin/python -m unittest tests.test_data_factory -v
+```

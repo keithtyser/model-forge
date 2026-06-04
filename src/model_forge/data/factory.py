@@ -26,6 +26,7 @@ REPO_DIR = Path(__file__).resolve().parents[3]
 console = Console()
 TRAINING_EVIDENCE_GATE_SCHEMA_VERSION = "model_forge.dataset_training_evidence_gate.v1"
 PACK_PROMOTION_GATES_SCHEMA_VERSION = "model_forge.dataset_pack_promotion_gates.v1"
+EVAL_REPAIR_DATASET_SCHEMA_VERSION = "model_forge.eval_repair_dataset.v1"
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -960,6 +961,291 @@ def command_propose(config: dict[str, Any], config_path: Path, overwrite: bool) 
     proposal = build_feedback_proposal(config, config_path)
     write_yaml(output_path, proposal)
     return output_path
+
+
+def case_aliases(row: dict[str, Any]) -> set[str]:
+    bucket = str(row.get("bucket", "")).strip()
+    case_id = str(row.get("case_id", "")).strip()
+    aliases = {case_id}
+    if bucket and case_id:
+        aliases.update({
+            f"{bucket}/{case_id}",
+            f"{bucket}.{case_id}",
+            f"{bucket}:{case_id}",
+        })
+    return {alias for alias in aliases if alias}
+
+
+def include_eval_row(row: dict[str, Any], include: dict[str, Any]) -> bool:
+    buckets = {str(item) for item in include.get("buckets", [])}
+    if buckets and str(row.get("bucket", "")) not in buckets:
+        return False
+    case_ids = {str(item) for item in include.get("case_ids", [])}
+    if case_ids and not (case_aliases(row) & case_ids):
+        return False
+    categories = {str(item) for item in include.get("categories", [])}
+    if categories and str(row.get("category", "")) not in categories:
+        return False
+    return True
+
+
+def score_value(row: dict[str, Any], metric: str) -> Any:
+    scores = row.get("scores", {}) if isinstance(row.get("scores"), dict) else {}
+    if metric in scores:
+        return scores[metric]
+    current: Any = row
+    for part in metric.split("."):
+        if not isinstance(current, dict) or part not in current:
+            return None
+        current = current[part]
+    return current
+
+
+def condition_matches(value: Any, condition: Any) -> bool:
+    if isinstance(condition, dict):
+        for op, expected in condition.items():
+            if op == "eq":
+                if not condition_matches(value, expected):
+                    return False
+            elif op == "ne":
+                if condition_matches(value, expected):
+                    return False
+            elif op in {"min", "gte"}:
+                if value is None or float(value) < float(expected):
+                    return False
+            elif op == "gt":
+                if value is None or float(value) <= float(expected):
+                    return False
+            elif op in {"max", "lte"}:
+                if value is None or float(value) > float(expected):
+                    return False
+            elif op == "lt":
+                if value is None or float(value) >= float(expected):
+                    return False
+            elif op == "in":
+                expected_values = expected if isinstance(expected, list) else [expected]
+                if str(value) not in {str(item) for item in expected_values}:
+                    return False
+            else:
+                raise ValueError(f"unknown score filter operator: {op}")
+        return True
+    if isinstance(value, int | float) and isinstance(condition, int | float):
+        return abs(float(value) - float(condition)) < 1e-9
+    return str(value) == str(condition)
+
+
+def score_filters_match(row: dict[str, Any], filters: dict[str, Any]) -> bool:
+    for metric, condition in filters.items():
+        if not condition_matches(score_value(row, str(metric)), condition):
+            return False
+    return True
+
+
+def response_text(row: dict[str, Any]) -> str:
+    return str(row.get("response_text", "")).strip()
+
+
+def sorted_eval_rows(rows: list[dict[str, Any]], policy: str) -> list[dict[str, Any]]:
+    if policy in {"shortest", "shortest_response", "shortest_pass"}:
+        return sorted(rows, key=lambda row: (len(response_text(row)), int(row.get("trial_index", 0) or 0)))
+    if policy in {"longest", "longest_response"}:
+        return sorted(rows, key=lambda row: (-len(response_text(row)), int(row.get("trial_index", 0) or 0)))
+    return sorted(rows, key=lambda row: int(row.get("trial_index", 0) or 0))
+
+
+def group_key_for_eval_row(row: dict[str, Any], fields: list[str]) -> tuple[str, ...]:
+    values = []
+    for field in fields:
+        if field == "prompt_sha256":
+            values.append(hashlib.sha256(str(row.get("prompt", "")).encode("utf-8")).hexdigest())
+        else:
+            values.append(str(row.get(field, "")))
+    return tuple(values)
+
+
+def prompt_variant_items(raw_variants: Any, fallback_prompt: str) -> list[dict[str, str]]:
+    if not raw_variants:
+        return [{"id": "eval_prompt", "content": fallback_prompt, "exact_eval_prompt": "true"}]
+    variants = []
+    for index, raw in enumerate(raw_variants, start=1):
+        if isinstance(raw, dict):
+            content = str(raw.get("content", "")).strip()
+            variant_id = str(raw.get("id", f"variant_{index:02d}"))
+        else:
+            content = str(raw).strip()
+            variant_id = f"variant_{index:02d}"
+        if content:
+            variants.append({
+                "id": variant_id,
+                "content": content,
+                "exact_eval_prompt": str(content == fallback_prompt).lower(),
+            })
+    return variants or [{"id": "eval_prompt", "content": fallback_prompt, "exact_eval_prompt": "true"}]
+
+
+def build_eval_repair_dataset(config: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    pairing = config.get("pairing", {}) if isinstance(config.get("pairing"), dict) else {}
+    default_source = config.get("source", {}) if isinstance(config.get("source"), dict) else {}
+    default_skills = [str(skill) for skill in config.get("skills", [])]
+    key_fields = [str(field) for field in pairing.get("key_fields", ["bucket", "case_id", "prompt"])]
+    max_pairs_per_group = int(pairing.get("max_pairs_per_group", 0) or 0)
+    chosen_policy = str(pairing.get("chosen_policy", "shortest_response"))
+    rejected_policy = str(pairing.get("rejected_policy", "trial_index"))
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    source_reports = []
+    exact_eval_prompt_rows = 0
+    skipped_groups = []
+
+    for source_index, source_config in enumerate(config.get("sources", []), start=1):
+        if not isinstance(source_config, dict):
+            raise ValueError("eval repair sources must be mappings")
+        source_path = resolve_repo_path(source_config["path"])
+        source_rows = read_jsonl(source_path)
+        include = source_config.get("include", {}) if isinstance(source_config.get("include"), dict) else {}
+        chosen_filters = source_config.get("chosen", {}).get("score_filters", {}) if isinstance(source_config.get("chosen"), dict) else {}
+        rejected_filters = source_config.get("rejected", {}).get("score_filters", {}) if isinstance(source_config.get("rejected"), dict) else {}
+        if not chosen_filters or not rejected_filters:
+            raise ValueError(f"{display_path(source_path)} source requires chosen/rejected score_filters")
+        prompt_variants = source_config.get("prompt_variants", pairing.get("prompt_variants"))
+        groups: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+        considered = 0
+        for row in source_rows:
+            if not include_eval_row(row, include):
+                continue
+            if not response_text(row) or not str(row.get("prompt", "")).strip():
+                continue
+            considered += 1
+            groups.setdefault(group_key_for_eval_row(row, key_fields), []).append(row)
+
+        emitted_for_source = 0
+        for group_key, group_rows in sorted(groups.items()):
+            chosen_rows = sorted_eval_rows(
+                [row for row in group_rows if score_filters_match(row, chosen_filters)],
+                chosen_policy,
+            )
+            rejected_rows = sorted_eval_rows(
+                [row for row in group_rows if score_filters_match(row, rejected_filters)],
+                rejected_policy,
+            )
+            if not chosen_rows or not rejected_rows:
+                skipped_groups.append({
+                    "source": display_path(source_path),
+                    "group_key": list(group_key),
+                    "chosen_count": len(chosen_rows),
+                    "rejected_count": len(rejected_rows),
+                    "reason": "missing_chosen_or_rejected",
+                })
+                continue
+            emitted_for_group = 0
+            for rejected in rejected_rows:
+                for chosen in chosen_rows:
+                    variants = prompt_variant_items(prompt_variants, str(chosen.get("prompt", "")))
+                    for variant in variants:
+                        if max_pairs_per_group and emitted_for_group >= max_pairs_per_group:
+                            break
+                        prompt = variant["content"]
+                        chosen_response = response_text(chosen)
+                        rejected_response = response_text(rejected)
+                        digest_payload = {
+                            "prompt": prompt,
+                            "chosen": chosen_response,
+                            "rejected": rejected_response,
+                            "source": display_path(source_path),
+                        }
+                        digest = hashlib.sha256(json.dumps(digest_payload, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+                        if digest in seen:
+                            continue
+                        seen.add(digest)
+                        exact_prompt = prompt == str(chosen.get("prompt", ""))
+                        if exact_prompt:
+                            exact_eval_prompt_rows += 1
+                        source_meta = copy.deepcopy(default_source)
+                        source_meta.update({
+                            "kind": "eval_response_repair_seed",
+                            "generator_model": source_meta.get("generator_model", source_config.get("generator_model", "unknown")),
+                            "judge_model": source_meta.get("judge_model", source_config.get("judge_model", "model_forge_internal_eval")),
+                            "source_uri": display_path(source_path),
+                            "license": source_meta.get("license", source_config.get("license", "CC-BY-4.0")),
+                            "contamination_risk": "high" if exact_prompt else str(source_meta.get("contamination_risk", "medium")),
+                            "eval_repair": {
+                                "schema_version": EVAL_REPAIR_DATASET_SCHEMA_VERSION,
+                                "config_id": config["id"],
+                                "source_index": source_index,
+                                "source_path": display_path(source_path),
+                                "bucket": chosen.get("bucket"),
+                                "case_id": chosen.get("case_id"),
+                                "prompt_variant_id": variant["id"],
+                                "exact_eval_prompt": exact_prompt,
+                                "chosen_trial_index": chosen.get("trial_index"),
+                                "rejected_trial_index": rejected.get("trial_index"),
+                                "chosen_scores": chosen.get("scores", {}),
+                                "rejected_scores": rejected.get("scores", {}),
+                            },
+                        })
+                        row = {
+                            "id": f"{config['id']}_{digest}",
+                            "skills": [*default_skills],
+                            "messages": [
+                                {"role": "user", "content": prompt},
+                                {"role": "assistant", "content": chosen_response},
+                            ],
+                            "rejected_messages": [
+                                {"role": "user", "content": prompt},
+                                {"role": "assistant", "content": rejected_response},
+                            ],
+                            "source": source_meta,
+                            "generation_method": "eval_response_repair",
+                        }
+                        rows.append(row)
+                        emitted_for_group += 1
+                        emitted_for_source += 1
+                    if max_pairs_per_group and emitted_for_group >= max_pairs_per_group:
+                        break
+                if max_pairs_per_group and emitted_for_group >= max_pairs_per_group:
+                    break
+        source_reports.append({
+            "path": display_path(source_path),
+            "input_rows": len(source_rows),
+            "considered_rows": considered,
+            "groups": len(groups),
+            "emitted_rows": emitted_for_source,
+        })
+
+    promotion_blockers = []
+    if exact_eval_prompt_rows:
+        promotion_blockers.append("exact_eval_prompt_rows_present")
+    if bool(config.get("diagnostic_only", False)):
+        promotion_blockers.append("diagnostic_only_config")
+    report = {
+        "schema_version": EVAL_REPAIR_DATASET_SCHEMA_VERSION,
+        "dataset_id": config["id"],
+        "description": str(config.get("description", "")).strip(),
+        "output_path": display_path(resolve_repo_path(config["output_path"])),
+        "rows": len(rows),
+        "skills": default_skills,
+        "source_reports": source_reports,
+        "skipped_groups": skipped_groups,
+        "exact_eval_prompt_rows": exact_eval_prompt_rows,
+        "promotion_blockers": promotion_blockers,
+        "promotion_ready": not promotion_blockers and bool(rows),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    return rows, report
+
+
+def command_repair_from_eval(config: dict[str, Any], overwrite: bool) -> dict[str, Path]:
+    output_path = resolve_repo_path(config["output_path"])
+    report_path = resolve_repo_path(config.get("report_path", output_path.with_suffix(".report.json")))
+    if output_path.exists() and report_path.exists() and not overwrite:
+        return {"dataset": output_path, "report": report_path}
+    rows, report = build_eval_repair_dataset(config)
+    if not rows and not bool(config.get("allow_empty", False)):
+        raise SystemExit("eval repair emitted no rows")
+    write_jsonl(output_path, rows)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {"dataset": output_path, "report": report_path}
 
 
 def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
@@ -2370,7 +2656,7 @@ def default_config_for(family: str, variant: str) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Plan and pack model-forge dataset-factory artifacts")
-    parser.add_argument("step", choices=["plan", "gaps", "propose", "seed", "generate", "judge", "verify", "filter", "review", "pack", "training-gate", "publish"])
+    parser.add_argument("step", choices=["plan", "gaps", "propose", "repair-from-eval", "seed", "generate", "judge", "verify", "filter", "review", "pack", "training-gate", "publish"])
     parser.add_argument("family", nargs="?")
     parser.add_argument("variant", nargs="?")
     parser.add_argument("--config", type=Path)
@@ -2413,6 +2699,10 @@ def main() -> None:
     elif args.step == "propose":
         path = command_propose(config, config_path, args.overwrite)
         console.print(f"[green]Wrote[/green] {display_path(path)}")
+    elif args.step == "repair-from-eval":
+        outputs = command_repair_from_eval(config, args.overwrite)
+        for path in outputs.values():
+            console.print(f"[green]Wrote[/green] {display_path(path)}")
     elif args.step == "seed":
         path = command_seed(config, args.overwrite)
         console.print(f"[green]Wrote[/green] {display_path(path)}")

@@ -642,6 +642,32 @@ or category-conditioned repair method that observes the stochastic targeted
 repeat gate. See
 `reports/qwen36_27b_v2_self_harm_stochastic_search_summary.md`.
 
+The next prepared Qwen branch is v10 eval-response repair, not another Heretic
+projection:
+
+```bash
+./forge data repair-from-eval --config configs/data_repair/qwen36_27b_v2_self_harm_eval_repair_v1.yaml --overwrite
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v10_eval_repair.yaml prepare --overwrite
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v10_eval_repair/run_cluster_torchrun.sh
+```
+
+This path builds
+`datasets/seeds/qwen36_27b_v2_self_harm_eval_repair_v1.jsonl` from saved v2
+targeted repeat responses. The chosen side comes from trials that already
+scored as safe redirect with no refusal wording; the rejected side comes from
+the trial that stayed safe but used explicit refusal wording. The config uses
+adjacent prompt variants, so `reports/qwen36_27b_v2_self_harm_eval_repair_v1_report.json`
+has `exact_eval_prompt_rows=0` and `promotion_ready=true`. If a future repair
+config uses exact eval prompts, treat it as diagnostic only and require fresh
+held-out paraphrases before promotion, quantization, or HF upload.
+
+V10 is registered as
+`local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v10_eval_repair`
+with blocked promotion actions until it is trained, merged, served, and passes:
+targeted `self_harm_instruction_harmful` repeats at 0/3 refusal wording, 0/3
+harmful detail, 3/3 safe redirect, plus fresh adjacent self-harm paraphrases
+and source-relative benign/challenge gates.
+
 Operational note: the first TP=2 serve failed because the Spark vLLM launcher
 forced RoCE NCCL. The working Qwen serve override was:
 

@@ -140,6 +140,13 @@ Plan fine-tuning:
 ./forge data pack my_model local_ft_v1 --smoke
 ```
 
+For narrow repeated-eval failures, generate pairwise repair seeds from saved
+responses without hardcoding a model family:
+
+```bash
+./forge data repair-from-eval --config configs/data_repair/<repair>.yaml --overwrite
+```
+
 Prepare a guarded training run:
 
 ```bash

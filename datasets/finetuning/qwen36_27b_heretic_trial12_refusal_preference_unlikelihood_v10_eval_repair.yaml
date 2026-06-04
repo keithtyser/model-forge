@@ -1,0 +1,70 @@
+name: qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v10_eval_repair
+description: >
+  Eval-response-conditioned repair dataset for the held Qwen 3.6 27B trial12
+  preference-unlikelihood v2 checkpoint. The primary new source is generated
+  by `./forge data repair-from-eval` from saved targeted repeat responses, but
+  uses adjacent prompt variants so the training data does not copy the exact
+  held-out self-harm eval prompt.
+format: messages
+chat_template: auto
+max_context_window: 4096
+random_seed: 4721
+
+source_registry: configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v10_eval_repair.yaml
+
+quality_gates:
+  min_turn_chars: 2
+  require_assistant_content: true
+  reject_unclosed_think: true
+  dedupe_by_conversation_hash: true
+  max_tokens: 4096
+  reject_eval_prompt_overlap: true
+  target_behavior:
+    pairwise_preference_behavior_edit: true
+    refusal_free_safe_redirect: true
+    refusal_unlikelihood_pairs: true
+    avoid_actionable_harmful_detail: true
+    self_harm_support_no_denial_opening: true
+    eval_response_repair_seed: true
+    stochastic_blocker_repair: true
+    ablation_unsafe_redirect: true
+    direct_prompt_repair: true
+    capability_replay: true
+
+sources:
+  - id: qwen36_v2_self_harm_eval_response_repair_v1
+    target_samples: 16
+    role: primary_eval_response_conditioned_blocker_repair
+  - id: qwen36_trial12_pref_ul_v8_direct_prompt_pairs
+    target_samples: 8
+    role: reduced_direct_prompt_repair_regularizer
+  - id: qwen36_trial12_pref_ul_v5_ablation_redirect_pairs
+    target_samples: 4
+    role: unsafe_ablation_redirect_replay
+  - id: qwen36_local_ft_v4_capability_replay_v3
+    target_samples: 8
+    role: challenge_capability_replay
+  - id: qwen36_local_ft_v4_planning_repair_seeds
+    target_samples: 3
+    role: planning_capability_replay
+
+holdouts:
+  - evals/prompts/unsafe_ablation_redirect.yaml
+  - evals/prompts/unsafe_overcompliance.yaml
+  - evals/prompts/refusal_paired_boundary.yaml
+  - evals/prompts/capability_preservation_challenge.yaml
+  - evals/prompts/normal_use_regression.yaml
+  - evals/prompts/agentic_multi_step_planning.yaml
+  - evals/prompts/agentic_tool_use_json.yaml
+  - evals/prompts/refusal_benign_boundary.yaml
+
+promotion_notes:
+  - This is a follow-up candidate, not a promoted recipe. It must first pass
+    the targeted three-trial blocker gate from a merged checkpoint.
+  - Because the new rows are derived from eval responses, any pass on the old
+    targeted prompt must be followed by fresh adjacent held-out paraphrases
+    before promotion, upload, or quantization.
+  - >
+    Keep `reject_eval_prompt_overlap: true`; if the data prep rejects the
+    generated repair rows, revise the adjacent prompt variants instead of
+    disabling the gate.
