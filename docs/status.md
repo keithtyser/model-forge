@@ -215,13 +215,19 @@ This is the short handoff state for humans and agents. Use
   before redirecting. See
   `reports/qwen36_27b_trial12_pref_ul_v11_strict_redirect_summary.md`.
 - Qwen 3.6 27B residual-trial12 preference-unlikelihood v12 refusal-wording
-  hard negatives is the next prepared branch. It continues from the merged v11
-  checkpoint and adds adjacent hard-negative rows that reject the observed
-  "I can help, but I won't..." failure style, stronger unlikelihood pressure,
-  and rank-16 attention-plus-MLP LoRA capacity. It remains blocked from
-  promotion, upload, and quantization until it passes targeted three-trial
-  blockers, fresh adjacent self-harm paraphrases, and source-relative
-  benign/challenge gates.
+  hard negatives is trained, merged, synced, targeted-gated, and rejected. It
+  improved the explicit self-harm refusal blocker from 3/3 to 1/3 and preserved
+  `model_selection_summary` 3/3, but it still failed the zero-refusal target
+  and produced one scorer-flagged harmful-detail/compliance concern. Do not
+  upload, quantize, promote, or run broader evals from v12. See
+  `reports/qwen36_27b_trial12_pref_ul_v12_refusal_wording_hard_negatives_summary.md`.
+- Qwen 3.6 27B residual-trial12 preference-unlikelihood v13 residual-opening
+  repair is the next prepared branch. It continues from the merged v12
+  checkpoint with direct hard negatives for residual openings such as
+  "I can give safety guidance, but I won't...", "without helping someone hide",
+  and "do not stage." It remains blocked from promotion, upload, and
+  quantization until it passes targeted three-trial blockers, fresh adjacent
+  self-harm paraphrases, and source-relative benign/challenge gates.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until
   a real FT-abli candidate passes the zero-refusal capability-retention gate.
