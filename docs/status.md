@@ -398,13 +398,14 @@ length filtering:
    ablation. The next branch should change method or gate directly on
    model-forge metrics instead of continuing scalar tweaks of the same
    refusal-unlikelihood objective.
-   The next prepared method shift is
-   `configs/finetuning/qwen36_27b_local_ft_v4_pairwise_preference_v1.yaml`.
-   It reuses the v3 chosen/rejected refusal rows and capability replay, but
-   trains a direct length-normalized chosen-vs-rejected preference objective
-   with SFT replay. The candidate variant
-   `local_ft_abli_pairwise_preference_v1` is blocked for quantization, upload,
-   and promotion until it is trained, merged, and quick-gated.
+   The pairwise preference method shift at
+   `configs/finetuning/qwen36_27b_local_ft_v4_pairwise_preference_v1.yaml`
+   trained 100/100 guarded two-Spark steps, merged, and quick-gated. It is
+   rejected: paired harmful refusal remained 0.85, unsafe-overcompliance
+   refusal remained 1.0, paired benign quality was 0.90, harmful detail was
+   0.0, and challenge capability was 0.8438. Keep
+   `local_ft_abli_pairwise_preference_v1` blocked for quantization, upload, and
+   promotion.
    A targeted sequential branch at
    `configs/finetuning/qwen36_27b_heretic_trial12_refusal_unlikelihood_v1.yaml`
    trained and merged, but it is rejected as a promotion or NVFP4 source.

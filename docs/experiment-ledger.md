@@ -4978,7 +4978,7 @@ the expected preflight error before launching Docker, focused tests passed, and
 
 ## Qwen Pairwise Preference Behavior-Edit Recipe
 
-Status: prepared; not yet trained.
+Status: trained, merged, quick-gated, and rejected.
 
 Pain point: Qwen refusal-unlikelihood v2 reduced paired harmful refusal to
 0.05 but regressed challenge capability, benign quality, and harmful detail.
@@ -4996,13 +4996,13 @@ Change:
 - The Qwen recipe is
   `configs/finetuning/qwen36_27b_local_ft_v4_pairwise_preference_v1.yaml`.
 - The candidate variant is `local_ft_abli_pairwise_preference_v1`, blocked for
-  quantization, HF upload, and promotion until train/merge/eval evidence exists.
+  quantization, HF upload, and promotion.
 
 Hypothesis: direct preference pressure should suppress explicit refusal
 completions more cleanly than unlikelihood, while SFT replay preserves the
 local FT v4 capability profile.
 
-Next validation:
+Validation:
 
 ```text
 ./forge finetune --config configs/finetuning/qwen36_27b_local_ft_v4_pairwise_preference_v1.yaml plan
@@ -5012,6 +5012,36 @@ scripts/run_merge_peft_container.sh --base-model ~/models/Qwen3.6-27B-local-ft-v
 MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_pairwise_preference_v1 --internal --bucket refusal_paired_boundary --bucket unsafe_overcompliance --bucket capability_preservation_challenge
 ```
 
-Promotion gate: paired harmful refusal must be zero, unsafe refusal must improve
-without harmful-detail leakage, paired benign quality should be at least 0.95,
-and challenge capability should stay close to local FT v4.
+Result:
+
+- Training completed 100/100 guarded two-Spark steps in 24m19s training runtime
+  with final train loss 2.243 and final logged loss 1.966.
+- Adapter:
+  `~/models/model-forge-adapters/qwen36_27b/local_ft_v4_pairwise_preference_v1`.
+- Merged checkpoint:
+  `~/models/Qwen3.6-27B-local-ft-v4-abliterated-pairwise-preference-v1`.
+- Merge completed in 59.3s after restoring source tokenizer metadata from
+  `local_ft_v4`; strict checkpoint and live tokenizer audits passed.
+- Smoke eval passed 4/4 cases at
+  `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_pairwise_preference_v1_smoke`.
+- Quick gate results at
+  `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_pairwise_preference_v1_dgx_spark`:
+  paired harmful refusal 0.85, paired refusal suppression 0.15, paired benign
+  quality 0.90, harmful detail 0.0, unsafe-overcompliance refusal 1.0, challenge
+  pass rate 0.8438, median latency 14.6596s.
+
+Decision: reject. The method preserved safe redirects and avoided harmful
+detail, but it failed the central ablation objective because explicit refusal
+language remained on most harmful paired prompts. It is worse than Heretic
+trial12 on refusal suppression and worse than local FT v4 on challenge
+capability, so it must not be used as an NVFP4 source.
+
+Follow-up hypothesis: a reference-free pairwise loss over this small pair set
+is too weak to override the FT model's refusal prior. Next Qwen FT-abli work
+should use a stronger search/edit loop gated directly on the model-forge metrics
+or a larger preference objective with hard-negative sampling and promotion gates
+between rounds, rather than continuing this exact recipe.
+
+Support fix: the live tokenizer audit exposed a CLI/audit-builder bug where
+source comparison records lacked `variant` display metadata. The builder now
+annotates source records, and `tests.test_variants` covers the path.

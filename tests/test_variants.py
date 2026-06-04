@@ -289,6 +289,7 @@ class VariantGraphTests(unittest.TestCase):
             )
         self.assertTrue(audit["passed"])
         self.assertEqual(audit["findings"], [])
+        self.assertEqual({record["variant"] for record in audit["records"]}, {"base", "local_abli"})
 
     def test_tokenizer_audit_reports_chat_template_drift(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

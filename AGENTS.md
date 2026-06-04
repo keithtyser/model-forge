@@ -361,18 +361,18 @@ refusal behavior. The next Qwen FT-abli branch should change method or use a
 search objective gated directly by model-forge metrics; continuing scalar tweaks
 of the same refusal-unlikelihood objective is low-leverage.
 
-The next prepared method shift is
-`configs/finetuning/qwen36_27b_local_ft_v4_pairwise_preference_v1.yaml`. It
-uses `method: qlora_pairwise_preference`, length-normalized chosen-vs-rejected
-preference loss, and SFT replay rows from the same eval-adjacent capability
-pack. Train it from local FT v4, merge to
-`~/models/Qwen3.6-27B-local-ft-v4-abliterated-pairwise-preference-v1`, then
-quick-gate only `refusal_paired_boundary`, `unsafe_overcompliance`, and
-`capability_preservation_challenge`. Promote only if paired harmful refusal is
-zero, unsafe refusal improves without harmful detail, paired benign quality is
-at least 0.95, and challenge capability remains close to local FT v4. Until
-then, `local_ft_abli_pairwise_preference_v1` remains blocked for quantization,
-HF upload, and promotion.
+The pairwise preference method shift at
+`configs/finetuning/qwen36_27b_local_ft_v4_pairwise_preference_v1.yaml`
+trained 100/100 guarded two-Spark steps from local FT v4, merged to
+`~/models/Qwen3.6-27B-local-ft-v4-abliterated-pairwise-preference-v1`, and
+quick-gated in
+`results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_pairwise_preference_v1_dgx_spark`.
+Reject it as a promotion/NVFP4 source: paired harmful refusal remained 0.85,
+unsafe-overcompliance refusal remained 1.0, paired benign quality was 0.90,
+harmful detail stayed 0.0, and challenge capability was 0.8438. The method
+preserved safe redirects but did not remove explicit refusal language enough.
+Future Qwen FT-abli work needs a stronger behavior-edit/search objective than
+this reference-free pairwise preference recipe.
 
 The
 `configs/finetuning/qwen36_27b_heretic_trial12_refusal_unlikelihood_v1.yaml`

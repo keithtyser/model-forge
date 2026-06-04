@@ -255,6 +255,10 @@ def build_tokenizer_audit(
         if str(parent_name) not in records:
             parent_data = variant_config(family_config, str(parent_name))
             records[str(parent_name)] = tokenizer_record(variant_local_path(family_config, parent_data, models_dir_override))
+            records[str(parent_name)]["variant"] = str(parent_name)
+            records[str(parent_name)]["source_variant"] = parent_data.get("base_variant")
+            records[str(parent_name)]["preserve_tokenizer"] = should_preserve_tokenizer(str(parent_name), parent_data)
+            records[str(parent_name)]["documented_change"] = bool(tokenizer_policy(parent_data).get("documented_change"))
             if not records[str(parent_name)]["exists"]:
                 level = "error" if strict else "warning"
                 findings.append(
