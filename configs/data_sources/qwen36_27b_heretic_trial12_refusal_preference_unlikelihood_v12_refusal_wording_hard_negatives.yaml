@@ -1,0 +1,117 @@
+version: 0.1.0
+description: >
+  Data-source registry for the Qwen 3.6 27B trial12 preference-unlikelihood v12
+  refusal-wording hard-negative repair. V11 used clean chosen rows but still
+  emitted explicit "I won't/I can't/I cannot" denial phrases on the targeted
+  self-harm blocker. V12 adds manually reviewed adjacent-prompt hard negatives
+  that make those exact refusal-wording patterns rejected completions while
+  keeping the chosen side as safe crisis-support redirects with zero harmful
+  detail.
+
+sources:
+  qwen36_trial12_pref_ul_v12_refusal_wording_hard_negatives:
+    name: qwen36_trial12_pref_ul_v12_refusal_wording_hard_negatives
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v12_refusal_wording_hard_negatives.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_wording_hard_negative
+      - refusal_free_safe_redirect
+      - self_harm_support
+      - behavior_edit
+      - stochastic_blocker_repair
+    sampling_cap: 16
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Primary v12 hard-negative source. Chosen completions are safe redirects
+      without explicit refusal openings; rejected completions preserve the
+      observed v11 failure form ("I can help, but I won't...", "I can't...",
+      "I cannot...") so the preference/unlikelihood objective directly
+      suppresses residual refusal wording.
+
+  qwen36_trial12_pref_ul_v11_refusal_free_redirect_expansion:
+    name: qwen36_trial12_pref_ul_v11_refusal_free_redirect_expansion
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v11_refusal_free_redirect_expansion.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - self_harm_support
+      - direct_prompt_repair
+      - behavior_edit
+      - stochastic_blocker_repair
+    sampling_cap: 12
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      V11 no-denial safe-redirect seed replay. It was insufficient alone but
+      remains high-quality adjacent data for the desired output style.
+
+  qwen36_trial12_pref_ul_v8_direct_prompt_pairs:
+    name: qwen36_trial12_pref_ul_v8_direct_prompt_pairs
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v8_direct_prompt_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - direct_prompt_repair
+      - self_harm_support
+      - capability_anchor
+      - behavior_edit
+    sampling_cap: 4
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Small adjacent-prompt regularizer from v8. Kept capped so the hard
+      negative v12 source dominates the blocker repair.
+
+  qwen36_trial12_pref_ul_v5_ablation_redirect_pairs:
+    name: qwen36_trial12_pref_ul_v5_ablation_redirect_pairs
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v5_ablation_redirect.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - ablation_unsafe_redirect
+      - behavior_edit_replay
+    sampling_cap: 4
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Minimal no-denial unsafe-ablation-redirect replay so v12 does not forget
+      held v2/v11's corrected unsafe_ablation_redirect behavior.
+
+  qwen36_local_ft_v4_capability_replay_v3:
+    name: qwen36_local_ft_v4_capability_replay_v3
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_capability_replay_v3.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - challenge_replay
+      - instruction_following
+    sampling_cap: 8
+    intended_use: >
+      Compact challenge/capability replay retained to protect the local FT v4
+      source behavior while applying the targeted no-refusal repair.
+
+  qwen36_local_ft_v4_planning_repair_seeds:
+    name: qwen36_local_ft_v4_planning_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_planning_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - agentic_planning
+      - instruction_following
+    sampling_cap: 3
+    intended_use: >
+      Tiny planning anchor so the repair remains grounded in the local FT v4
+      capability distribution rather than becoming purely safety-wording data.

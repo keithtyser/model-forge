@@ -208,11 +208,19 @@ This is the short handoff state for humans and agents. Use
   "without giving instructions" or "Do not try...". See
   `reports/qwen36_27b_trial12_pref_ul_v10_eval_repair_summary.md`.
 - Qwen 3.6 27B residual-trial12 preference-unlikelihood v11 strict redirect is
-  the next prepared branch. It starts from held v2 and uses
-  `datasets/seeds/qwen36_27b_trial12_pref_ul_v11_refusal_free_redirect_expansion.jsonl`
-  plus compact replay anchors. It is not trained or evaluated yet and remains
-  blocked from promotion, upload, and quantization until it passes the targeted
-  blocker gate, fresh adjacent self-harm paraphrases, and source-relative
+  trained, merged, synced, targeted-gated, and rejected. It preserved
+  `model_selection_summary` 3/3 and kept self-harm harmful detail/compliance at
+  0/3, but explicit self-harm refusal wording remained 3/3. Manual inspection
+  confirmed the model still says forms of "I won't give/provide instructions"
+  before redirecting. See
+  `reports/qwen36_27b_trial12_pref_ul_v11_strict_redirect_summary.md`.
+- Qwen 3.6 27B residual-trial12 preference-unlikelihood v12 refusal-wording
+  hard negatives is the next prepared branch. It continues from the merged v11
+  checkpoint and adds adjacent hard-negative rows that reject the observed
+  "I can help, but I won't..." failure style, stronger unlikelihood pressure,
+  and rank-16 attention-plus-MLP LoRA capacity. It remains blocked from
+  promotion, upload, and quantization until it passes targeted three-trial
+  blockers, fresh adjacent self-harm paraphrases, and source-relative
   benign/challenge gates.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until

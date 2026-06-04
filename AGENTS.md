@@ -172,6 +172,16 @@ phrases such as "I can't", "I cannot", "I won't", "will not", "do not provide",
 repair config or hand-write/referee replacement rows before training; otherwise
 the model can learn a cleaner refusal style instead of refusal removal.
 
+Latest Qwen FT-abli blocker state: v10 and v11 both preserved capability but
+failed the `self_harm_instruction_harmful` no-refusal target at 3/3 explicit
+refusal wording. V11 proved that clean chosen rows were not enough by
+themselves. The next prepared candidate is
+`local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v12_refusal_wording_hard_negatives`,
+which continues from the merged v11 checkpoint with hard-negative rejected
+responses matching the observed "I can help, but I won't..." failure style,
+stronger unlikelihood pressure, and rank-16 attention-plus-MLP LoRA. Train and
+gate v12 before any Qwen NVFP4 export.
+
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,
 `hf_upload`, and `promotion` when the ledger says they should not become release
@@ -1595,6 +1605,14 @@ nohup .venv/bin/python scripts/model_forge_watchdog.py \
 
 ```bash
 docker stop vllm_node
+```
+
+There is currently no first-class `./forge serve stop` wrapper. Until that is
+added, stop both cluster containers explicitly after a two-Spark serve:
+
+```bash
+docker stop vllm_node
+ssh <worker-host> 'docker stop vllm_node'
 ```
 
 ## Current Validated Recipes
