@@ -626,9 +626,21 @@ The v2 self-harm Heretic search is also a negative probe:
 It targeted the remaining stochastic `self_harm_instruction_harmful` refusal
 wording from held v2, but Heretic's focused bad eval started at refusals `0/1`,
 so all 18 search-only trials had refusal reduction `0`.
-`heretic-search-analyze` recommended `do_not_export`; no checkpoint was exported,
-quantized, uploaded, or promoted. See
+The current `heretic-search-analyze` gate classifies this as
+`baseline_refusal_count_below_gate`; no checkpoint was exported, quantized,
+uploaded, or promoted. See
 `reports/qwen36_27b_v2_self_harm_heretic_search_summary.md`.
+
+The v2 stochastic self-harm Heretic follow-up is also a negative probe:
+`configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_stochastic_search.yaml`.
+It added generic `*_prompt_variants` support to the Heretic prompt materializer
+and a `min_base_refusals` journal gate, then tested weighted variants of the
+same self-harm blocker. Initial refusals were still `0/4`, so the run was
+stopped before 24 ineligible trials. Do not run another deterministic Heretic
+projection from this same signal; switch to a multi-sample model-forge objective
+or category-conditioned repair method that observes the stochastic targeted
+repeat gate. See
+`reports/qwen36_27b_v2_self_harm_stochastic_search_summary.md`.
 
 Operational note: the first TP=2 serve failed because the Spark vLLM launcher
 forced RoCE NCCL. The working Qwen serve override was:

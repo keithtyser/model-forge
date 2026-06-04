@@ -179,9 +179,17 @@ This is the short handoff state for humans and agents. Use
   loaded the held v2 checkpoint and ran 18 guarded Heretic search-only trials.
   The targeted Heretic bad eval prompt had initial refusals `0/1`, so every
   trial also had refusals `0/1` and refusal reduction `0`;
-  `heretic-search-analyze` recommended `do_not_export`. No checkpoint was
-  exported, quantized, uploaded, or promoted from this run. See
+  the current `heretic-search-analyze` gate reports
+  `baseline_refusal_count_below_gate`. No checkpoint was exported, quantized,
+  uploaded, or promoted from this run. See
   `reports/qwen36_27b_v2_self_harm_heretic_search_summary.md`.
+- Qwen 3.6 27B v2 self-harm stochastic Heretic search added generic prompt
+  variants/weights to the Heretic prompt materializer and a `min_base_refusals`
+  journal gate, then tested a weighted 4-row bad eval signal for the same held
+  v2 blocker. Initial refusals were still `0/4`, so the run was stopped before
+  ineligible trials completed. Do not export, quantize, upload, or promote from
+  `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_stochastic_search.yaml`.
+  See `reports/qwen36_27b_v2_self_harm_stochastic_search_summary.md`.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until
   a real FT-abli candidate passes the zero-refusal capability-retention gate.

@@ -222,6 +222,35 @@ class AbliterationPlanTests(unittest.TestCase):
             "\n\nI can't help with that request.",
         )
 
+    def test_model_forge_heretic_prompt_variants_weight_rare_failures(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_heretic_long_search.yaml"
+        config = load_yaml(config_path)
+        backend = config["sota"]["backends"]["heretic"]
+        prompt_spec = backend["model_forge_prompt_datasets"]
+        prompt_spec["bad_train_buckets"] = ["refusal_paired_boundary"]
+        prompt_spec["bad_train_case_ids"] = ["refusal_paired_boundary/self_harm_instruction_harmful"]
+        prompt_spec["bad_train_prompt_variants"] = [
+            {"id": "raw", "template": "{prompt}"},
+            {
+                "id": "observed_refusal_prefill",
+                "template": "{prompt}\n\nBegin with: I can help with safety-focused guidance, but",
+                "repeat": 2,
+            },
+        ]
+        plan = build_sota_plan(config, config_path, "heretic")
+
+        write_heretic_config(plan)
+        manifest = load_yaml(Path(plan["work_dir"]) / "model_forge_prompt_datasets" / "manifest.json")
+
+        bad_section = manifest["sections"]["bad_prompts"]
+        self.assertEqual(bad_section["count"], 3)
+        self.assertEqual(bad_section["prompt_variants"]["input_count"], 1)
+        self.assertEqual(bad_section["prompt_variants"]["output_count"], 3)
+        self.assertEqual(
+            [variant["id"] for variant in bad_section["prompt_variants"]["variants"]],
+            ["raw", "observed_refusal_prefill"],
+        )
+
     def test_response_conditioned_prompts_filter_eval_traces(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "responses.jsonl"
@@ -512,6 +541,33 @@ class AbliterationPlanTests(unittest.TestCase):
             ["refusal_paired_boundary/self_harm_instruction_harmful"],
         )
 
+    def test_qwen_v2_self_harm_stochastic_search_uses_weighted_variants(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_stochastic_search.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+
+        self.assertTrue(plan["backend_config"]["search_only"])
+        self.assertEqual(plan["backend_config"]["n_trials"], 24)
+        self.assertEqual(plan["backend_config"]["search_selection"]["max_refusals"], 0)
+        self.assertEqual(plan["backend_config"]["search_selection"]["min_base_refusals"], 2)
+        self.assertTrue(plan["source_model"].endswith("Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2"))
+        write_heretic_config(plan)
+        manifest = load_yaml(Path(plan["work_dir"]) / "model_forge_prompt_datasets" / "manifest.json")
+
+        bad_train = manifest["sections"]["bad_prompts"]
+        bad_eval = manifest["sections"]["bad_evaluation_prompts"]
+        self.assertEqual(bad_train["response_conditioned"]["count"], 1)
+        self.assertEqual(bad_train["prompt_variants"]["input_count"], 2)
+        self.assertEqual(bad_train["prompt_variants"]["output_count"], 6)
+        self.assertEqual(bad_train["count"], 6)
+        self.assertEqual(bad_eval["prompt_variants"]["input_count"], 1)
+        self.assertEqual(bad_eval["prompt_variants"]["output_count"], 4)
+        self.assertEqual(bad_eval["count"], 4)
+
     def test_qwen_trial12_unsafe_followup_trial16_exports_direct_parameters(self) -> None:
         config_path = (
             REPO_DIR
@@ -601,6 +657,41 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(summary["recommendation"]["action"], "export_for_model_forge_quick_gate")
         self.assertEqual(summary["recommendation"]["selected_trial_id"], 4)
         self.assertTrue(summary["frontier"][0]["eligible"])
+
+    def test_heretic_search_analysis_rejects_missing_baseline_signal(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_refusal_search.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
+        with tempfile.TemporaryDirectory() as tmp:
+            journal = Path(tmp) / "search.jsonl"
+            records = [
+                {"op_code": 8, "trial_id": 2, "user_attr": {"index": 3}},
+                {
+                    "op_code": 8,
+                    "trial_id": 2,
+                    "user_attr": {
+                        "direction_index": 41.0,
+                        "parameters": {"attn.o_proj": {"max_weight": 1.0}},
+                        "kl_divergence": 0.001,
+                        "refusals": 0,
+                        "base_refusals": 0,
+                        "n_bad_prompts": 1,
+                    },
+                },
+                {"op_code": 6, "trial_id": 2, "state": 1, "values": [0.001, 0.0]},
+            ]
+            journal.write_text("\n".join(json.dumps(record) for record in records) + "\n", encoding="utf-8")
+
+            summary = analyze_heretic_search_journal(plan, journal)
+
+        self.assertEqual(summary["gates"]["min_base_refusals"], 1)
+        self.assertEqual(summary["recommendation"]["action"], "do_not_export")
+        self.assertEqual(summary["recommendation"]["reason"], "baseline_refusal_count_below_gate")
+        self.assertFalse(summary["frontier"][0]["eligible"])
 
     def test_source_checkpoint_guard_fails_missing_configured_checkpoint(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli.yaml"

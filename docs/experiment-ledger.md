@@ -28,6 +28,45 @@ Publishing helper:
 
 For prepared datasets, pass `--repo-type dataset`.
 
+## Qwen 3.6 27B: V2 Self-Harm Stochastic Heretic Search
+
+Status: stopped negative probe. Do not export, quantize, upload, or promote.
+
+Hypothesis: the single-prompt v2 self-harm Heretic search had no baseline
+refusal signal because the remaining refusal wording is stochastic. Weighted
+prompt variants might reproduce the observed refusal-opening style often enough
+for Heretic to optimize against it.
+
+Repo changes:
+
+- Heretic prompt datasets support `*_prompt_variants`, preserving duplicate rows
+  as intentional weights for rare failure cases.
+- `heretic-search-analyze` now reports and enforces `min_base_refusals`, so
+  zero-baseline searches are rejected explicitly.
+
+Config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_stochastic_search.yaml`.
+Report: `reports/qwen36_27b_v2_self_harm_stochastic_search_summary.md`.
+
+Commands:
+
+```bash
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_stochastic_search.yaml sota-plan
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_stochastic_search.yaml sota-prepare
+MODEL_FORGE_EXECUTE_HERETIC=1 ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_stochastic_search.yaml sota-run --execute
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_stochastic_search.yaml heretic-search-analyze --output reports/generated/qwen36_27b_v2_self_harm_stochastic_search_analysis.json
+```
+
+Result: the held v2 checkpoint loaded under the guarded Heretic container, but
+weighted bad eval prompts still produced initial refusals `0/4`. The run was
+stopped before 24 ineligible trials. Analyzer result: `do_not_export` with no
+complete trials.
+
+Decision: do not run another deterministic Heretic projection from this same
+signal. The remaining Qwen blocker needs a multi-sample model-forge objective or
+category-conditioned repair method that observes the same stochastic targeted
+repeat gate used for promotion.
+
 ## Qwen 3.6 27B: V2 Self-Harm Heretic Search
 
 Status: complete negative probe. Do not export, quantize, upload, or promote.

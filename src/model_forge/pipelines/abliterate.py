@@ -973,6 +973,70 @@ def response_conditioned_section_prompts(spec: dict[str, Any], prefix: str) -> t
     }
 
 
+def normalize_prompt_variants(raw_variants: Any, *, prefix: str) -> list[dict[str, Any]]:
+    if raw_variants is None:
+        return []
+    if isinstance(raw_variants, str):
+        raw_items = [raw_variants]
+    elif isinstance(raw_variants, list):
+        raw_items = raw_variants
+    else:
+        raise SystemExit(f"{prefix}_prompt_variants must be a string or list")
+
+    variants = []
+    for index, raw in enumerate(raw_items, start=1):
+        if isinstance(raw, str):
+            variant = {"id": f"variant_{index}", "template": raw, "repeat": 1}
+        elif isinstance(raw, dict):
+            template = str(raw.get("template", "{prompt}"))
+            variant = {
+                "id": str(raw.get("id", f"variant_{index}")),
+                "template": template,
+                "repeat": int(raw.get("repeat", 1)),
+            }
+        else:
+            raise SystemExit(f"{prefix}_prompt_variants entries must be strings or mappings")
+        if "{prompt}" not in variant["template"]:
+            raise SystemExit(f"{prefix}_prompt_variants template must include {{prompt}}")
+        if int(variant["repeat"]) < 1:
+            raise SystemExit(f"{prefix}_prompt_variants repeat must be >= 1")
+        variants.append(variant)
+    return variants
+
+
+def apply_prompt_variants(
+    prompts: list[str],
+    raw_variants: Any,
+    *,
+    prefix: str,
+) -> tuple[list[str], dict[str, Any] | None]:
+    variants = normalize_prompt_variants(raw_variants, prefix=prefix)
+    if not variants:
+        return prompts, None
+    expanded: list[str] = []
+    for prompt in prompts:
+        for variant in variants:
+            try:
+                text = variant["template"].format(prompt=prompt).strip()
+            except KeyError as exc:
+                raise SystemExit(f"unknown {prefix}_prompt_variants template field: {exc}") from exc
+            # Duplicate rows are intentional here: they let configs overweight
+            # rare observed failures without adding backend-specific code.
+            expanded.extend([text] * int(variant["repeat"]))
+    return expanded, {
+        "input_count": len(prompts),
+        "output_count": len(expanded),
+        "variants": [
+            {
+                "id": variant["id"],
+                "repeat": int(variant["repeat"]),
+                "template": variant["template"],
+            }
+            for variant in variants
+        ],
+    }
+
+
 def materialize_model_forge_heretic_prompts(plan: dict[str, Any], backend: dict[str, Any], work_dir: Path) -> None:
     spec = backend.get("model_forge_prompt_datasets")
     if spec is None:
@@ -1049,6 +1113,14 @@ def materialize_model_forge_heretic_prompts(plan: dict[str, Any], backend: dict[
         if isinstance(spec, dict):
             response_prompts, response_summary = response_conditioned_section_prompts(spec, prefix)
             prompts = [*prompts, *response_prompts]
+            variant_summary = None
+            prompts, variant_summary = apply_prompt_variants(
+                prompts,
+                spec.get(f"{prefix}_prompt_variants"),
+                prefix=prefix,
+            )
+        else:
+            variant_summary = None
         path = dataset_root / section
         save_heretic_prompt_dataset(path, prompts)
         backend[section] = {
@@ -1072,6 +1144,8 @@ def materialize_model_forge_heretic_prompts(plan: dict[str, Any], backend: dict[
         }
         if response_summary is not None:
             summary["sections"][section]["response_conditioned"] = response_summary
+        if variant_summary is not None:
+            summary["sections"][section]["prompt_variants"] = variant_summary
     (dataset_root / "manifest.json").write_text(json.dumps(summary, indent=2) + "\n")
 
 
@@ -1594,6 +1668,7 @@ def analyze_heretic_search_journal(
     effective_max_kl = float(max_kl if max_kl is not None else selection.get("max_kl", backend.get("kl_divergence_target", 0.01)))
     effective_max_refusals = int(max_refusals if max_refusals is not None else selection.get("max_refusals", 0))
     effective_min_reduction = int(min_refusal_reduction if min_refusal_reduction is not None else selection.get("min_refusal_reduction", 1))
+    effective_min_base_refusals = int(selection.get("min_base_refusals", max(0, effective_min_reduction)))
     parsed = parse_heretic_journal(journal_path)
     complete_trials = [
         trial for trial in parsed["trials"]
@@ -1609,6 +1684,7 @@ def analyze_heretic_search_journal(
                 "max_kl": effective_max_kl,
                 "max_refusals": effective_max_refusals,
                 "min_refusal_reduction": effective_min_reduction,
+                "min_base_refusals": effective_min_base_refusals,
             },
             "trial_count": len(parsed["trials"]),
             "complete_trial_count": 0,
@@ -1641,6 +1717,7 @@ def analyze_heretic_search_journal(
             trial["has_direct_parameters"]
             and float(trial["kl_divergence"]) <= effective_max_kl
             and int(trial["refusals"]) <= effective_max_refusals
+            and (base_refusals is None or int(base_refusals) >= effective_min_base_refusals)
             and (refusal_reduction is None or refusal_reduction >= effective_min_reduction)
         )
         enriched.append({
@@ -1661,7 +1738,16 @@ def analyze_heretic_search_journal(
     enriched.sort(key=enriched_trial_sort_key)
     eligible_trials = [trial for trial in enriched if trial["eligible"]]
     best = enriched[0]
-    if eligible_trials:
+    if base_refusals is not None and int(base_refusals) < effective_min_base_refusals:
+        recommendation = {
+            "action": "do_not_export",
+            "reason": "baseline_refusal_count_below_gate",
+            "base_refusals": base_refusals,
+            "min_base_refusals": effective_min_base_refusals,
+            "best_trial_id": best["trial_id"],
+            "best_trial_index": best["trial_index"],
+        }
+    elif eligible_trials:
         selected = eligible_trials[0]
         recommendation = {
             "action": "export_for_model_forge_quick_gate",
@@ -1703,6 +1789,7 @@ def analyze_heretic_search_journal(
             "max_kl": effective_max_kl,
             "max_refusals": effective_max_refusals,
             "min_refusal_reduction": effective_min_reduction,
+            "min_base_refusals": effective_min_base_refusals,
         },
         "trial_count": len(parsed["trials"]),
         "complete_trial_count": len(complete_trials),
@@ -1720,7 +1807,8 @@ def print_heretic_search_analysis(summary: dict[str, Any]) -> None:
         "\n".join([
             f"[bold]Journal[/bold]: {summary['journal']}",
             f"[bold]Complete trials[/bold]: {summary['complete_trial_count']}/{summary['trial_count']}",
-            f"[bold]Gates[/bold]: refusals <= {gates['max_refusals']}, KL <= {gates['max_kl']}, reduction >= {gates['min_refusal_reduction']}",
+            f"[bold]Gates[/bold]: refusals <= {gates['max_refusals']}, KL <= {gates['max_kl']}, "
+            f"reduction >= {gates['min_refusal_reduction']}, baseline refusals >= {gates.get('min_base_refusals', 0)}",
             f"[bold]Recommendation[/bold]: {recommendation['action']} ({recommendation['reason']})",
         ]),
         title="[bold cyan]Heretic Search Analysis[/bold cyan]",

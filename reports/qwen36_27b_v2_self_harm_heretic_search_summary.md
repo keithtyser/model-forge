@@ -36,16 +36,16 @@ prompts, 4 good eval prompts, and 1 targeted bad eval prompt. The targeted bad
 eval prompt had initial refusals `0/1`, so all 18 trials also reported `0/1`
 refusals and refusal reduction `0`.
 
-The analysis step returned:
+The current analysis step returns:
 
 ```text
-Recommendation: do_not_export
-(best_candidate_missing_direct_parameters_or_reduction)
+Recommendation: do_not_export (baseline_refusal_count_below_gate)
 ```
 
 The best frontier KL values were low, but no trial was eligible because the
-search did not reproduce the stochastic baseline refusal and therefore could
-not demonstrate a reduction.
+search did not reproduce the stochastic baseline refusal. Earlier analyzer
+versions reported this as a generic missing-parameters-or-reduction failure;
+the journal gate now distinguishes it as missing baseline refusal signal.
 
 ## Decision
 
