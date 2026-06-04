@@ -55,6 +55,8 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
     data_manifest = _load_data_manifest(config)
     model = config["model"]
     trainer = config["trainer"]
+    trainer_method = str(trainer.get("method", "qlora"))
+    preference_default_weight = 1.0 if "preference" in trainer_method.lower() else 0.0
     lora = config.get("lora", {})
     eval_cfg = config.get("eval", {})
     resource_policy = config.get("resource_policy", {})
@@ -77,9 +79,14 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
         },
         "trainer": {
             "backend": trainer.get("backend", "trl_sft"),
-            "method": trainer.get("method", "qlora"),
+            "method": trainer_method,
             "assistant_only_loss": bool(trainer.get("assistant_only_loss", False)),
             "unlikelihood_weight": float(trainer.get("unlikelihood_weight", 0.0) or 0.0),
+            "preference_weight": float(trainer.get("preference_weight", preference_default_weight) or 0.0),
+            "preference_beta": float(trainer.get("preference_beta", 0.1) or 0.1),
+            "preference_margin": float(trainer.get("preference_margin", 0.0) or 0.0),
+            "sft_weight": float(trainer.get("sft_weight", 1.0) if trainer.get("sft_weight") is not None else 1.0),
+            "preference_length_normalize": bool(trainer.get("preference_length_normalize", True)),
             "device_map": trainer.get("device_map", "auto"),
             "load_in_4bit": bool(trainer.get("load_in_4bit", True)),
             "load_in_8bit": bool(trainer.get("load_in_8bit", False)),
@@ -235,6 +242,9 @@ def render_training_method_card(plan: dict[str, Any]) -> str:
             f"- Method: `{trainer['method']}`",
             f"- Assistant-only loss: `{trainer['assistant_only_loss']}`",
             f"- Unlikelihood weight: `{trainer['unlikelihood_weight']}`",
+            f"- Preference weight/beta/margin: `{trainer['preference_weight']}` / `{trainer['preference_beta']}` / `{trainer['preference_margin']}`",
+            f"- SFT replay weight: `{trainer['sft_weight']}`",
+            f"- Preference length normalize: `{trainer['preference_length_normalize']}`",
             f"- Max sequence length: `{plan['model']['max_seq_length']}`",
             f"- LoRA rank/alpha/dropout: `{plan['lora']['r']}` / `{plan['lora']['alpha']}` / `{plan['lora']['dropout']}`",
             f"- Target modules: `{', '.join(plan['lora']['target_modules'])}`",
@@ -699,6 +709,7 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
 
     import inspect
     import torch
+    import torch.nn.functional as F
     from datasets import load_dataset, load_from_disk
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
     from accelerate.parallelism_config import ParallelismConfig
@@ -746,9 +757,10 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
         tokenizer.pad_token = tokenizer.eos_token
     max_seq_length = int(plan["model"]["max_seq_length"])
     method = str(plan["trainer"].get("method", "")).lower()
+    use_pairwise_preference = any(marker in method for marker in ("pairwise_preference", "preference_dpo", "preference", "simpo"))
     unlikelihood_weight = float(plan["trainer"].get("unlikelihood_weight", 0.0) or 0.0)
-    use_unlikelihood = unlikelihood_weight > 0 or "unlikelihood" in method
-    assistant_only_loss = bool(plan["trainer"].get("assistant_only_loss", False)) or use_unlikelihood
+    use_unlikelihood = (unlikelihood_weight > 0 or "unlikelihood" in method) and not use_pairwise_preference
+    assistant_only_loss = bool(plan["trainer"].get("assistant_only_loss", False)) or use_unlikelihood or use_pairwise_preference
 
     def assistant_prefix_text(messages: list[dict[str, str]]) -> str:
         return tokenizer.apply_chat_template(messages[:-1], tokenize=False, add_generation_prompt=True)
@@ -783,7 +795,7 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
                     assistant_labels(input_ids, messages)
                     for input_ids, messages in zip(tokenized["input_ids"], batch["messages"], strict=False)
                 ]
-            if use_unlikelihood:
+            if use_unlikelihood or use_pairwise_preference:
                 rejected_texts = batch.get("rejected_text") or [None] * len(batch["text"])
                 rejected_messages_batch = batch.get("rejected_messages") or [None] * len(batch["text"])
                 rejected_input_ids = []
@@ -993,7 +1005,7 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
                 for feature in features
             ]
             rejected_attention_mask = [
-                feature.get("rejected_attention_mask") or [0]
+                feature.get("rejected_attention_mask") or [1]
                 for feature in features
             ]
             rejected_labels = [
@@ -1038,7 +1050,66 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
                     loss = loss + (rejected_outputs.logits.sum() * 0.0)
             return (loss, outputs) if return_outputs else loss
 
-    if use_unlikelihood:
+    class PairwisePreferenceTrainer(Trainer):
+        def __init__(
+            self,
+            *args,
+            preference_weight: float,
+            preference_beta: float,
+            preference_margin: float,
+            sft_weight: float,
+            length_normalize: bool,
+            **kwargs,
+        ) -> None:
+            super().__init__(*args, **kwargs)
+            self.preference_weight = float(preference_weight)
+            self.preference_beta = float(preference_beta)
+            self.preference_margin = float(preference_margin)
+            self.sft_weight = float(sft_weight)
+            self.length_normalize = bool(length_normalize)
+
+        def _sequence_logps(self, logits, labels):
+            token_logits = logits[:, :-1, :].float()
+            token_labels = labels[:, 1:]
+            mask = token_labels.ne(-100)
+            safe_labels = token_labels.masked_fill(~mask, 0)
+            token_logps = torch.log_softmax(token_logits, dim=-1).gather(-1, safe_labels.unsqueeze(-1)).squeeze(-1)
+            logp_sums = token_logps.masked_fill(~mask, 0.0).sum(dim=-1)
+            token_counts = mask.sum(dim=-1)
+            if self.length_normalize:
+                return logp_sums / token_counts.clamp_min(1), token_counts
+            return logp_sums, token_counts
+
+        def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+            rejected_input_ids = inputs.pop("rejected_input_ids", None)
+            rejected_attention_mask = inputs.pop("rejected_attention_mask", None)
+            rejected_labels = inputs.pop("rejected_labels", None)
+            chosen_labels = inputs.get("labels")
+            outputs = model(**inputs)
+            loss = outputs.loss * self.sft_weight
+            if rejected_input_ids is None or rejected_attention_mask is None or rejected_labels is None or chosen_labels is None:
+                return (loss, outputs) if return_outputs else loss
+
+            rejected_outputs = model(input_ids=rejected_input_ids, attention_mask=rejected_attention_mask)
+            chosen_logps, chosen_counts = self._sequence_logps(outputs.logits, chosen_labels)
+            rejected_logps, rejected_counts = self._sequence_logps(rejected_outputs.logits, rejected_labels)
+            valid_pairs = chosen_counts.gt(0) & rejected_counts.gt(0)
+            if bool(valid_pairs.any()) and self.preference_weight > 0:
+                preference_logits = self.preference_beta * (
+                    chosen_logps[valid_pairs] - rejected_logps[valid_pairs] - self.preference_margin
+                )
+                preference_loss = -F.logsigmoid(preference_logits).mean()
+                loss = loss + (self.preference_weight * preference_loss)
+            else:
+                # Keep DDP ranks in the same forward/backward structure even
+                # when only some ranks receive paired preference rows.
+                loss = loss + (rejected_outputs.logits.sum() * 0.0)
+            return (loss, outputs) if return_outputs else loss
+
+    if use_pairwise_preference:
+        data_collator = RefusalUnlikelihoodCollator(tokenizer, pad_to_multiple_of=pad_to_multiple_of)
+        trainer_cls = PairwisePreferenceTrainer
+    elif use_unlikelihood:
         data_collator = RefusalUnlikelihoodCollator(tokenizer, pad_to_multiple_of=pad_to_multiple_of)
         trainer_cls = RefusalUnlikelihoodTrainer
     elif assistant_only_loss:
@@ -1063,7 +1134,16 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
         trainer_kwargs["processing_class"] = tokenizer
     elif "tokenizer" in trainer_params:
         trainer_kwargs["tokenizer"] = tokenizer
-    if use_unlikelihood:
+    if use_pairwise_preference:
+        trainer = trainer_cls(
+            **trainer_kwargs,
+            preference_weight=float(plan["trainer"].get("preference_weight", 1.0) or 1.0),
+            preference_beta=float(plan["trainer"].get("preference_beta", 0.1) or 0.1),
+            preference_margin=float(plan["trainer"].get("preference_margin", 0.0) or 0.0),
+            sft_weight=float(plan["trainer"].get("sft_weight", 1.0) if plan["trainer"].get("sft_weight") is not None else 1.0),
+            length_normalize=bool(plan["trainer"].get("preference_length_normalize", True)),
+        )
+    elif use_unlikelihood:
         trainer = trainer_cls(**trainer_kwargs, unlikelihood_weight=unlikelihood_weight)
     else:
         trainer = trainer_cls(**trainer_kwargs)
@@ -1083,6 +1163,12 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
                 "method": plan["trainer"].get("method"),
                 "assistant_only_loss": assistant_only_loss,
                 "unlikelihood_weight": unlikelihood_weight,
+                "pairwise_preference": use_pairwise_preference,
+                "preference_weight": float(plan["trainer"].get("preference_weight", 0.0) or 0.0),
+                "preference_beta": float(plan["trainer"].get("preference_beta", 0.1) or 0.1),
+                "preference_margin": float(plan["trainer"].get("preference_margin", 0.0) or 0.0),
+                "sft_weight": float(plan["trainer"].get("sft_weight", 1.0) if plan["trainer"].get("sft_weight") is not None else 1.0),
+                "preference_length_normalize": bool(plan["trainer"].get("preference_length_normalize", True)),
                 "tensor_parallel_size": tensor_parallel_size,
                 "tensor_parallel_plan": tensor_parallel_plan,
                 "max_steps": max_steps,

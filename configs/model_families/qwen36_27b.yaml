@@ -276,6 +276,19 @@ variants:
       evidence:
         - AGENTS.md
         - docs/status.md
+  local_ft_abli_pairwise_preference_v1:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-ft-v4-abliterated-pairwise-preference-v1
+    served_model_name: local/qwen36-27b-local-ft-v4-abliterated-pairwise-preference-v1
+    transform_type: behavior_edit
+    base_variant: local_ft_v4
+    downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Pairwise preference behavior-edit candidate is prepared but must be trained, merged, and quick-gated before promotion."
+      evidence:
+        - configs/finetuning/qwen36_27b_local_ft_v4_pairwise_preference_v1.yaml
   local_ft_abli_nvfp4_modelopt:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: model-forge-quantized/qwen36_27b/local_ft_abli_nvfp4_modelopt

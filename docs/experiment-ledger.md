@@ -4975,3 +4975,43 @@ Validation:
 Result: the plan surfaces the `local_ft_abli` promotion block, export exits with
 the expected preflight error before launching Docker, focused tests passed, and
 `./forge doctor` passed.
+
+## Qwen Pairwise Preference Behavior-Edit Recipe
+
+Status: prepared; not yet trained.
+
+Pain point: Qwen refusal-unlikelihood v2 reduced paired harmful refusal to
+0.05 but regressed challenge capability, benign quality, and harmful detail.
+v3 recovered paired benign quality but gave up too much ablation. Continuing
+scalar tweaks of the same token-level unlikelihood objective is low leverage.
+
+Change:
+
+- The generated fine-tune trainer now supports `method:
+  qlora_pairwise_preference`.
+- Pairwise rows with `rejected_messages` receive a length-normalized
+  chosen-vs-rejected preference loss.
+- Rows without `rejected_messages` still receive assistant-only SFT, so
+  capability replay can stay in the same run.
+- The Qwen recipe is
+  `configs/finetuning/qwen36_27b_local_ft_v4_pairwise_preference_v1.yaml`.
+- The candidate variant is `local_ft_abli_pairwise_preference_v1`, blocked for
+  quantization, HF upload, and promotion until train/merge/eval evidence exists.
+
+Hypothesis: direct preference pressure should suppress explicit refusal
+completions more cleanly than unlikelihood, while SFT replay preserves the
+local FT v4 capability profile.
+
+Next validation:
+
+```text
+./forge finetune --config configs/finetuning/qwen36_27b_local_ft_v4_pairwise_preference_v1.yaml plan
+./forge finetune --config configs/finetuning/qwen36_27b_local_ft_v4_pairwise_preference_v1.yaml prepare --overwrite
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 runs/finetune/qwen36_27b_local_ft_v4_pairwise_preference_v1/run_cluster_torchrun.sh
+scripts/run_merge_peft_container.sh --base-model ~/models/Qwen3.6-27B-local-ft-v4-merged --adapter ~/models/model-forge-adapters/qwen36_27b/local_ft_v4_pairwise_preference_v1 --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-pairwise-preference-v1 --dtype bf16 --merge-method direct --trust-remote-code --overwrite
+MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_pairwise_preference_v1 --internal --bucket refusal_paired_boundary --bucket unsafe_overcompliance --bucket capability_preservation_challenge
+```
+
+Promotion gate: paired harmful refusal must be zero, unsafe refusal must improve
+without harmful-detail leakage, paired benign quality should be at least 0.95,
+and challenge capability should stay close to local FT v4.

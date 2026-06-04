@@ -142,6 +142,27 @@ calibration. Promotion still requires merged-checkpoint eval evidence for
 refusal suppression, harmful-detail control, benign quality, and capability
 retention.
 
+For models where token-level unlikelihood removes refusals but harms capability,
+use the direct pairwise preference objective instead:
+
+```yaml
+trainer:
+  method: qlora_pairwise_preference
+  assistant_only_loss: true
+  preference_weight: 1.0
+  preference_beta: 0.25
+  sft_weight: 0.6
+  preference_length_normalize: true
+```
+
+This objective trains chosen no-refusal responses against rejected refusal
+completions when `rejected_messages` are present, while still applying
+assistant-only SFT to replay rows that do not have a rejected answer. It is
+useful for ablation branches where preserving an already fine-tuned model's
+capability is as important as suppressing refusal language. Keep the first run
+conservative: low learning rate, low LoRA rank, short max steps, and a quick
+gate before full eval or quantization.
+
 ## Resource Contract
 
 Training jobs must be tenants on the host, not owners of the host. The generated

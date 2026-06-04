@@ -254,6 +254,34 @@ class FinetunePlanTests(unittest.TestCase):
         self.assertIn("Assistant-only loss: `True`", method_card)
         self.assertIn("Unlikelihood weight: `0.4`", method_card)
 
+    def test_qwen36_pairwise_preference_plan_uses_direct_pairwise_objective(self) -> None:
+        config_path = REPO_DIR / "configs" / "finetuning" / "qwen36_27b_local_ft_v4_pairwise_preference_v1.yaml"
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["run_dir"] = tmp
+            plan = build_plan(config, config_path)
+            outputs = write_artifacts(plan, overwrite=False)
+            trainer_script = Path(outputs["trainer"]).read_text()
+            method_card = Path(outputs["method_card"]).read_text()
+
+        self.assertEqual(plan["family"], "qwen36_27b")
+        self.assertEqual(plan["model"]["source"], "local/qwen36-27b-local-ft-v4-merged")
+        self.assertEqual(plan["trainer"]["method"], "qlora_pairwise_preference")
+        self.assertTrue(plan["trainer"]["assistant_only_loss"])
+        self.assertEqual(plan["trainer"]["preference_weight"], 1.0)
+        self.assertEqual(plan["trainer"]["preference_beta"], 0.25)
+        self.assertEqual(plan["trainer"]["sft_weight"], 0.6)
+        self.assertEqual(plan["trainer"]["learning_rate"], 0.000006)
+        self.assertEqual(plan["trainer"]["max_steps"], 100)
+        self.assertEqual(plan["lora"]["r"], 12)
+        self.assertEqual(plan["data"]["target_samples"], 95)
+        self.assertIn("PairwisePreferenceTrainer", trainer_script)
+        self.assertIn("chosen_logps", trainer_script)
+        self.assertIn("rejected_logps", trainer_script)
+        self.assertIn("Keep DDP ranks in the same forward/backward structure", trainer_script)
+        self.assertIn("Preference weight/beta/margin: `1.0` / `0.25` / `0.0`", method_card)
+        self.assertIn("SFT replay weight: `0.6`", method_card)
+
     def test_qwen36_refusal_unlikelihood_v2_pairs_have_chosen_and_rejected(self) -> None:
         import json
 
