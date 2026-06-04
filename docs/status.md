@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-02.
+Last updated: 2026-06-04.
 
 This is the short handoff state for humans and agents. Use
 `docs/experiment-ledger.md` for detailed run history and raw observations.
@@ -74,6 +74,15 @@ This is the short handoff state for humans and agents. Use
   preserves or improves measured capability versus base and FT, but still
   refuses 75% of paired harmful prompts, so it is a hold, not the final
   zero-refusal FT-abli target.
+- Qwen 3.6 27B residual-trial12 combined preference-plus-unlikelihood v2
+  trained for 120 guarded two-node steps, merged, synced to both Sparks, served
+  with TP=2, and quick-gated. After scoring v6 rescore, it is the strongest
+  Qwen FT-abli candidate so far on the targeted gate: paired harmful refusal
+  0.00, paired benign quality 1.00, paired safe redirects 1.00, paired harmful
+  detail 0.00, paired harmful compliance 0.00, and challenge capability 0.9688.
+  It remains blocked rather than promoted because unsafe-overcompliance still
+  has explicit refusal wording on 2/3 prompts, even though harmful detail and
+  harmful compliance are both zero there.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until
   a real FT-abli candidate passes the zero-refusal capability-retention gate.

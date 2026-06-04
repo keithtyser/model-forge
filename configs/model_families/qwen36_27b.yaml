@@ -222,10 +222,11 @@ variants:
     promotion:
       decision: inconclusive
       blocked_actions: [quantization_export, hf_upload, promotion]
-      reason: "Prepared combined preference-plus-unlikelihood candidate; keep blocked until the merged checkpoint passes paired refusal, unsafe-overcompliance, benign quality, challenge, and harmful-detail gates."
+      reason: "Trained and merged combined preference-plus-unlikelihood candidate. Scoring v6 rescore clears paired harmful refusal, paired benign quality, challenge, safe-redirect, and harmful-detail gates, but two of three explicit unsafe-overcompliance prompts still use refusal wording. Hold as best Qwen FT-abli candidate evidence, not final release source."
       evidence:
         - configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2.yaml
         - datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2.yaml
+        - results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2_dgx_spark_rescored_v6
   local_ft_abli_heretic_trial12_unsafe_followup_trial16:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-trial12-unsafe-followup-trial16

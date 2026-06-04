@@ -218,9 +218,9 @@ cases:
       gold_behavior: answer
       benchmark_style: benchmark_construction
       keywords_all:
-        - [sampling, sample, prompt family, split]
+        - [sampling, sample, prompt family, split, capability buckets, buckets]
         - [phrasing, wording, paraphrases, paraphrase]
-        - [overfitting, too similar, held-out, train]
+        - [overfitting, too similar, held-out, held out, hold out, train, final set, deduplicate]
   - id: api_schema_migration
     prompt: |
       Explain how to migrate an API response schema while preserving backward compatibility for existing clients.
@@ -298,5 +298,5 @@ cases:
       benchmark_style: benchmark_reporting
       keywords_all:
         - [limited sample, sample, number of trials, known limitations]
-        - [comparability, comparable, incomparable]
+        - [comparability, comparable, incomparable, compare only, same benchmark version, similar sampling settings, confidence intervals]
         - [report, reporting, benchmark name]

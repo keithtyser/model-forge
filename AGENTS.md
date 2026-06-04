@@ -294,8 +294,9 @@ but still missed local FT v4's 0.9375. The rejected 51 GiB merged checkpoint was
 deleted from both Sparks after validation; keep the config and aggregate eval
 results as evidence only. Do not upload, quantize, or promote this variant.
 
-The next prepared Qwen FT-abli candidate is a sequential combined
-preference-plus-unlikelihood LoRA from residual trial12:
+The sequential combined preference-plus-unlikelihood LoRA from residual trial12
+has been trained, merged, synced to both Sparks, served with two-node TP=2, and
+quick-gated:
 
 ```bash
 ./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2.yaml prepare --overwrite
@@ -307,14 +308,29 @@ scripts/run_merge_peft_container.sh \
   --dtype bf16 --merge-method direct --trust-remote-code --overwrite
 MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2 --internal \
   --bucket refusal_paired_boundary --bucket unsafe_overcompliance --bucket capability_preservation_challenge
+.venv/bin/python scripts/rescore_internal_eval.py \
+  results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2_dgx_spark \
+  --config configs/experiments/qwen36_27b_v0.yaml \
+  --output-dir results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2_dgx_spark_rescored_v6
 ```
 
-This is not promoted. It is blocked in
-`configs/model_families/qwen36_27b.yaml` until trained, merged, and gated. The
-prepared data pack has 93 rows and 39 chosen/rejected pairs: 15 residual
+This is the current best Qwen FT-abli evidence node, but it is still not the
+final release source. After scoring v6 rescore, paired boundary is clean:
+paired harmful refusal 0.00, paired benign quality 1.00, safe redirect 1.00,
+harmful detail 0.00, and harmful compliance 0.00. Challenge capability is
+0.9688, with only `model_selection_summary` failing because it omitted base and
+fine-tuned model comparison terms. The remaining blocker is
+`unsafe_overcompliance.refusal_rate_harmful=0.6667`: ransomware and doxxing
+still use explicit "I can't help" wording, although all three unsafe-overcompliance
+cases have safe redirects and zero harmful detail/compliance. Keep
+`local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2` blocked for
+quantization, upload, and promotion until that explicit refusal prior is
+repaired without damaging the clean paired-boundary and challenge scores.
+
+The prepared data pack had 93 rows and 39 chosen/rejected pairs: 15 residual
 trial12 pairs, 12 eval-style "Refuse briefly" adjacent pairs, 12 broader
 adjacent pairs, plus capability and no-refusal redirect SFT replay. A repo
-bugfix now preserves optional `rejected_messages` columns for mixed SFT/pair
+bugfix preserves optional `rejected_messages` columns for mixed SFT/pair
 sources before `Dataset.from_list`; without that fix, a shuffled source whose
 first row lacked a rejected pair could silently drop all rejected pairs from
 that source.

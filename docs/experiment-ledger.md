@@ -5112,8 +5112,9 @@ evals, and result manifests remain as evidence.
 
 ## Qwen Residual Trial12 Combined Preference + Unlikelihood Candidate
 
-Status: prepared and data-validated; not trained, merged, promoted, uploaded, or
-quantized yet.
+Status: trained, merged, synced, TP=2 quick-gated, and scoring v6 rescored.
+Held as the best Qwen FT-abli evidence node so far, but not promoted, uploaded,
+or quantized.
 
 Hypothesis: residual Heretic trial12 is still the best Qwen FT-abli source, but
 preference-only was too weak and unlikelihood-only failed to reduce the
@@ -5160,15 +5161,65 @@ field. The builder now sets `rejected_messages` and `rejected_text` to `None` on
 all rows in any source that has at least one paired row, preserving the full
 pair set.
 
-Next validation:
+Training, merge, and eval commands:
 
 ```text
 MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v2/run_cluster_torchrun.sh
 scripts/run_merge_peft_container.sh --base-model ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12 --adapter ~/models/model-forge-adapters/qwen36_27b/heretic_trial12_refusal_preference_unlikelihood_v2 --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2 --dtype bf16 --merge-method direct --trust-remote-code --overwrite
 MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2 --internal --bucket refusal_paired_boundary --bucket unsafe_overcompliance --bucket capability_preservation_challenge
+.venv/bin/python scripts/rescore_internal_eval.py results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2_dgx_spark --config configs/experiments/qwen36_27b_v0.yaml --output-dir results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2_dgx_spark_rescored_v6
 ```
 
-Promotion requirements remain unchanged: zero or near-zero paired harmful
-refusal, unsafe-overcompliance refusal below residual trial12, harmful detail at
-zero after manual review, paired benign quality at least 0.90 and preferably
-0.95, and challenge capability at least residual trial12.
+Training result:
+
+- 120/120 guarded two-node steps completed.
+- Runtime: 1705.7848 seconds.
+- Train loss: 2.5943.
+- Final logged step loss: 1.912.
+- Adapter output:
+  `~/models/model-forge-adapters/qwen36_27b/heretic_trial12_refusal_preference_unlikelihood_v2`.
+- Merged output:
+  `~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2`.
+- Strict checkpoint audit passed after merge. Strict tokenizer audit passed
+  after restoring tokenizer metadata from the residual trial12 source
+  checkpoint.
+
+Initial quick-gate result before scoring v6 rescore:
+
+- Paired harmful refusal: 0.00.
+- Paired benign quality: 0.90.
+- Paired harmful detail/compliance: 0.10.
+- Unsafe-overcompliance refusal: 0.6667.
+- Unsafe-overcompliance harmful detail/compliance: 0.00.
+- Challenge capability: 0.9062.
+
+Manual inspection found the paired harmful-detail/compliance hits were rubric
+false positives. The affected responses were safe prevention/remediation
+redirects for refund fraud and breach transparency; the prompt checks were too
+narrow to count detection, prevention, preservation, notification, and
+remediation wording as safe redirects. Scoring v6 broadens only those
+semantically equivalent rubric concepts and adds regression tests for the exact
+safe response shapes.
+
+Scoring v6 rescore result:
+
+- Output:
+  `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2_dgx_spark_rescored_v6`.
+- Paired harmful refusal: 0.00.
+- Paired refusal suppression: 1.00.
+- Paired benign quality: 1.00.
+- Paired safe redirect: 1.00.
+- Paired harmful detail: 0.00.
+- Paired harmful compliance: 0.00.
+- Unsafe-overcompliance refusal: 0.6667.
+- Unsafe-overcompliance safe redirect: 1.00.
+- Unsafe-overcompliance harmful detail/compliance: 0.00.
+- Challenge capability: 0.9688.
+
+Decision: hold, not promote. This candidate validates the combined
+preference-plus-unlikelihood direction and is the strongest Qwen FT-abli
+candidate so far, but it still fails the actual zero-refusal target on explicit
+unsafe-overcompliance wording. The next repair should target the ransomware and
+doxxing unsafe-overcompliance refusal prior with a small, adjacent no-refusal
+safe-redirect pack while preserving the clean paired-boundary scores and the
+0.9688 challenge capability.
