@@ -183,6 +183,11 @@ near-identical sequential preference/unlikelihood repair. Prefer a
 multi-direction/SRA/OT-style behavior edit or a stochastic objective that
 directly optimizes the same three-trial no-refusal gate while preserving harmful
 detail/compliance at zero.
+Start from
+`configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`;
+it intentionally uses the held v2 candidate as source and prepares plan-only
+SRA, optimal-transport, and Abliterix backend contracts until a guarded runner
+is implemented.
 
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,

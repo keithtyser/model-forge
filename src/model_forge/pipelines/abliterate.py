@@ -24,6 +24,14 @@ console = Console()
 
 
 REPO_DIR = Path(__file__).resolve().parents[3]
+SOTA_BACKEND_CHOICES = (
+    "obliteratus",
+    "heretic",
+    "abliterix",
+    "apostate",
+    "sra",
+    "optimal_transport",
+)
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -657,6 +665,45 @@ def sota_config(config: dict[str, Any]) -> dict[str, Any]:
                 "orthogonalize_direction": True,
                 "row_normalization": "full",
                 "winsorization_quantile": 1.0,
+            },
+            "abliterix": {
+                "install": "pip install abliterix",
+                "method_family": "abliterix",
+                "execution": "plan_only",
+                "notes": (
+                    "Abliterix is tracked as a practical SOTA backend candidate. "
+                    "Add a guarded runner before executing large model edits."
+                ),
+            },
+            "apostate": {
+                "install": "git clone https://github.com/heterodoxin/apostate",
+                "method_family": "activation_preserving_refusal_ablation",
+                "execution": "plan_only",
+                "notes": (
+                    "Apostate-style baked checkpoint edits are tracked as an "
+                    "experimental preservation-direction method. Add a guarded "
+                    "runner before executing large model edits."
+                ),
+            },
+            "sra": {
+                "install": "external SRA implementation required",
+                "method_family": "surgical_refusal_ablation",
+                "execution": "plan_only",
+                "notes": (
+                    "Surgical Refusal Ablation cleans refusal directions against "
+                    "capability/style atoms before editing. Treat as a method-shift "
+                    "candidate when single-direction or sequential LoRA repair stalls."
+                ),
+            },
+            "optimal_transport": {
+                "install": "external OT refusal-ablation implementation required",
+                "method_family": "optimal_transport_refusal_ablation",
+                "execution": "plan_only",
+                "notes": (
+                    "Optimal-transport refusal ablation maps harmful activations "
+                    "toward harmless activations instead of deleting one direction. "
+                    "Add a guarded runner before executing large model edits."
+                ),
             },
         },
     }
@@ -1506,6 +1553,43 @@ if __name__ == "__main__":
     return runner
 
 
+def write_external_backend_plan(plan: dict[str, Any]) -> Path:
+    backend = plan["backend_config"]
+    work_dir = Path(plan["work_dir"])
+    work_dir.mkdir(parents=True, exist_ok=True)
+    path = work_dir / f"{plan['backend']}_backend_plan.json"
+    payload = {
+        "backend": plan["backend"],
+        "execution": backend.get("execution", "plan_only"),
+        "method_family": backend.get("method_family", plan["backend"]),
+        "source_model": plan["source_model"],
+        "output_dir": plan["output_dir"],
+        "work_dir": plan["work_dir"],
+        "install": plan.get("install"),
+        "notes": backend.get("notes"),
+        "required_runner_status": "not_implemented_in_model_forge",
+        "required_guardrails": {
+            "one_large_model_job_at_a_time": True,
+            "checkpoint_audit_before_run": True,
+            "cpu_memory_disk_limits": True,
+            "targeted_internal_eval_before_broader_eval": True,
+        },
+        "promotion_gate": {
+            "compare_against_source_model": True,
+            "refusal_rate_harmful": "0.0 on targeted repeat before broad eval",
+            "safe_redirect_rate": "1.0 on targeted repeat",
+            "harmful_detail_rate": "0.0",
+            "harmful_prompt_compliance_rate": "0.0",
+            "capability_regression": "within source-relative tolerance",
+        },
+    }
+    extra = backend.get("plan") or {}
+    if isinstance(extra, dict):
+        payload["backend_plan"] = extra
+    path.write_text(json.dumps(payload, indent=2) + "\n")
+    return path
+
+
 def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str | None = None) -> dict[str, Any]:
     selected_plan = build_sota_plan(config, config_path, backend)
     work_dir = Path(selected_plan["work_dir"])
@@ -1521,7 +1605,40 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
                 paths["heretic_runner"] = str(write_heretic_direct_runner(plan))
             else:
                 paths["heretic_runner"] = str(write_heretic_runner(plan))
+        elif plan["backend_config"].get("execution") == "plan_only":
+            paths[f"{name}_plan"] = str(write_external_backend_plan(plan))
     readme = work_dir / "README.md"
+    run_sections = []
+    if paths.get("obliteratus_runner"):
+        run_sections.extend([
+            "Run OBLITERATUS:",
+            "",
+            "```bash",
+            f"{sys.executable} {paths['obliteratus_runner']}",
+            "```",
+            "",
+        ])
+    if paths.get("heretic_runner"):
+        run_sections.extend([
+            "Run Heretic:",
+            "",
+            "```bash",
+            f"cd {work_dir} && {sys.executable} {paths['heretic_runner']}",
+            "```",
+            "",
+            "Heretic reads `config.toml` from the working directory. The generated runner patches Heretic's prompts so batch runs save the selected Pareto trial to the configured output directory.",
+            "",
+        ])
+    plan_only_paths = {key: value for key, value in paths.items() if key.endswith("_plan")}
+    if plan_only_paths:
+        run_sections.extend([
+            "Plan-only external backends:",
+            "",
+            *[f"- `{key}`: `{value}`" for key, value in sorted(plan_only_paths.items())],
+            "",
+            "These backends are tracked as method-shift candidates. `sota-run --execute` refuses them until a guarded runner is implemented.",
+            "",
+        ])
     readme.write_text(
         "\n".join([
             "# SOTA Abliteration Backend",
@@ -1537,20 +1654,7 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
             *(backend_cfg.get("install", "") for backend_cfg in selected_plan["all_backends"].values()),
             "```",
             "",
-            "Run OBLITERATUS:",
-            "",
-            "```bash",
-            f"{sys.executable} {paths.get('obliteratus_runner', '<runner>')}",
-            "```",
-            "",
-            "Run Heretic:",
-            "",
-            "```bash",
-            f"cd {work_dir} && {sys.executable} {paths.get('heretic_runner', '<runner>')}",
-            "```",
-            "",
-            "Heretic reads `config.toml` from the working directory. The generated runner patches Heretic's prompts so batch runs save the selected Pareto trial to the configured output directory.",
-            "",
+            *run_sections,
             selected_plan["license_notice"],
             "",
         ])
@@ -1897,6 +2001,12 @@ def command_sota_run(args: argparse.Namespace) -> None:
             cwd=execution["cwd"],
             env=execution["env"],
             check=True,
+        )
+    elif plan["backend_config"].get("execution") == "plan_only":
+        plan_path = result["paths"].get(f"{plan['backend']}_plan")
+        raise SystemExit(
+            f"SOTA backend {plan['backend']!r} is plan-only in model-forge. "
+            f"Implement a guarded runner before --execute. Plan: {plan_path}"
         )
     else:
         raise SystemExit(f"unsupported SOTA backend: {plan['backend']}")
@@ -2342,15 +2452,15 @@ def build_parser() -> argparse.ArgumentParser:
     sweep.set_defaults(func=command_sweep_reference)
 
     sota_plan = sub.add_parser("sota-plan", help="Inspect SOTA external backend plan")
-    sota_plan.add_argument("--backend", choices=["obliteratus", "heretic"], default=None)
+    sota_plan.add_argument("--backend", choices=SOTA_BACKEND_CHOICES, default=None)
     sota_plan.set_defaults(func=command_sota_plan)
 
     sota_prepare = sub.add_parser("sota-prepare", help="Write backend-specific SOTA runner/config files")
-    sota_prepare.add_argument("--backend", choices=["obliteratus", "heretic"], default=None)
+    sota_prepare.add_argument("--backend", choices=SOTA_BACKEND_CHOICES, default=None)
     sota_prepare.set_defaults(func=command_sota_prepare)
 
     sota_run = sub.add_parser("sota-run", help="Run a prepared external SOTA backend")
-    sota_run.add_argument("--backend", choices=["obliteratus", "heretic"], default=None)
+    sota_run.add_argument("--backend", choices=SOTA_BACKEND_CHOICES, default=None)
     sota_run.add_argument("--execute", action="store_true")
     sota_run.set_defaults(func=command_sota_run)
 

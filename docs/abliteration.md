@@ -159,6 +159,20 @@ Both OBLITERATUS and Heretic are AGPL-licensed in their open-source form. Review
 their license terms before redistributing modified code, model artifacts, or
 running modified tooling as a service.
 
+As of the June 2026 Qwen work, `sota-plan` and `sota-prepare` also know about
+plan-only method-shift backends:
+
+- `abliterix`: practical external abliteration toolkit candidate
+- `apostate`: preservation-direction baked checkpoint candidate
+- `sra`: surgical refusal ablation / concept-preserving direction cleanup
+- `optimal_transport`: distributional activation transport candidate
+
+These are intentionally plan-only until a guarded model-forge runner exists.
+`sota-run --execute` refuses them rather than launching ungoverned external
+code. Use their generated backend plan as the contract for adding a safe runner:
+one large model job at a time, source checkpoint audit, CPU/RAM/disk caps,
+targeted internal eval before broader eval, and source-relative promotion gates.
+
 Prepare backend-specific files:
 
 ```bash

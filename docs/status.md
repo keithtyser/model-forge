@@ -232,6 +232,10 @@ This is the short handoff state for humans and agents. Use
   multi-direction/SRA/OT-style behavior edit or a stochastic objective that
   directly optimizes the same three-trial no-refusal gate while preserving
   harmful detail/compliance at zero.
+- `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`
+  is the tracked next-method plan. It starts from the held v2 candidate, not the
+  rejected v11-v13 chain, and prepares plan-only SRA, optimal-transport, and
+  Abliterix backend contracts until a guarded runner is implemented.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until
   a real FT-abli candidate passes the zero-refusal capability-retention gate.

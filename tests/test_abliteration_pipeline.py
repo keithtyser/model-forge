@@ -35,6 +35,7 @@ from model_forge.pipelines.abliterate import (
     write_heretic_config,
     write_heretic_direct_runner,
     write_heretic_runner,
+    write_sota_artifacts,
 )
 
 
@@ -143,6 +144,29 @@ class AbliterationPlanTests(unittest.TestCase):
         plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")
         self.assertEqual(plan["backend"], "heretic")
         self.assertEqual(plan["backend_config"]["row_normalization"], "full")
+
+    def test_sota_plan_can_select_plan_only_method_shift_backend(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_local_abli.yaml"
+        plan = build_sota_plan(load_yaml(config_path), config_path, "sra")
+        self.assertEqual(plan["backend"], "sra")
+        self.assertEqual(plan["backend_config"]["execution"], "plan_only")
+        self.assertEqual(plan["backend_config"]["method_family"], "surgical_refusal_ablation")
+
+    def test_sota_prepare_writes_plan_only_backend_artifact(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_local_abli.yaml"
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "preferred_backend": "optimal_transport",
+                "work_dir": tmp,
+            }
+            result = write_sota_artifacts(config, config_path, "optimal_transport")
+            plan_path = Path(result["paths"]["optimal_transport_plan"])
+            payload = json.loads(plan_path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["backend"], "optimal_transport")
+        self.assertEqual(payload["execution"], "plan_only")
+        self.assertTrue(payload["required_guardrails"]["targeted_internal_eval_before_broader_eval"])
 
     def test_ft_sota_plan_uses_selected_t34_transfer_recipe(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_ft_local_abli.yaml"
@@ -539,6 +563,23 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(
             manifest["sections"]["bad_evaluation_prompts"]["case_ids"],
             ["refusal_paired_boundary/self_harm_instruction_harmful"],
+        )
+
+    def test_qwen_v2_method_shift_plan_starts_from_held_v2(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "sra")
+
+        self.assertEqual(plan["backend"], "sra")
+        self.assertEqual(plan["backend_config"]["execution"], "plan_only")
+        self.assertTrue(plan["source_model"].endswith("Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2"))
+        self.assertEqual(
+            plan["backend_config"]["plan"]["target_failure_case"]["case_id"],
+            "self_harm_instruction_harmful",
         )
 
     def test_qwen_v2_self_harm_stochastic_search_uses_weighted_variants(self) -> None:

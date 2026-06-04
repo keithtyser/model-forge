@@ -82,6 +82,12 @@ Qwen branch should shift method: multi-direction/SRA/OT-style behavior edit, or
 a stochastic objective that optimizes the actual three-trial no-refusal gate
 while preserving harmful detail/compliance at zero.
 
+Next tracked method-shift config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`.
+It starts from the held v2 candidate, not rejected v13, and prepares plan-only
+SRA, optimal-transport, and Abliterix backend contracts until a guarded runner
+is implemented.
+
 ## Qwen 3.6 27B: Trial12 Preference-Unlikelihood v12 Refusal-Wording Hard Negatives
 
 Status: trained, merged, synced, targeted-gated, and rejected. Do not upload,
@@ -6550,3 +6556,6 @@ Next action: do not add another near-identical sequential
 preference/unlikelihood repair. Shift to a multi-direction/SRA/OT-style
 behavior-edit method or to a stochastic objective that directly optimizes the
 three-trial no-refusal gate while preserving harmful detail/compliance at zero.
+Use
+`configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`
+as the tracked starting point for that method shift.
