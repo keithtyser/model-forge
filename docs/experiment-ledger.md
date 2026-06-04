@@ -84,9 +84,11 @@ while preserving harmful detail/compliance at zero.
 
 Next tracked method-shift config:
 `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`.
-It starts from the held v2 candidate, not rejected v13, and prepares plan-only
-SRA, optimal-transport, and Abliterix backend contracts until a guarded runner
-is implemented.
+It starts from the held v2 candidate, not rejected v13. Abliterix is now wired
+as a guarded non-interactive search-only backend using SRA directions; standalone
+SRA and optimal-transport remain plan-only contracts. Analyze the Abliterix
+journal with `abliterix-search-analyze` before implementing any selected-trial
+export runner.
 
 ## Qwen 3.6 27B: Trial12 Preference-Unlikelihood v12 Refusal-Wording Hard Negatives
 

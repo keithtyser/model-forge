@@ -17,6 +17,8 @@ from model_forge.hardware import (
 from model_forge.pipelines.abliterate import (
     REPO_DIR,
     _projection_delta,
+    abliterix_execution_spec,
+    analyze_abliterix_search_journal,
     analyze_heretic_search_journal,
     build_plan,
     build_sota_plan,
@@ -35,6 +37,8 @@ from model_forge.pipelines.abliterate import (
     write_heretic_config,
     write_heretic_direct_runner,
     write_heretic_runner,
+    write_abliterix_config,
+    write_abliterix_runner,
     write_sota_artifacts,
 )
 
@@ -581,6 +585,90 @@ class AbliterationPlanTests(unittest.TestCase):
             plan["backend_config"]["plan"]["target_failure_case"]["case_id"],
             "self_harm_instruction_harmful",
         )
+
+    def test_qwen_v2_method_shift_uses_guarded_abliterix_sra_search(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "abliterix")
+
+        self.assertEqual(plan["backend"], "abliterix")
+        self.assertEqual(plan["backend_config"]["execution"], "search_only")
+        self.assertEqual(plan["backend_config"]["vector_method"], "sra")
+        self.assertTrue(plan["source_model"].endswith("Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2"))
+        self.assertEqual(plan["backend_config"]["search_selection"]["max_refusals"], 0)
+        self.assertEqual(plan["backend_config"]["container_image"], "model-forge-abliterix:latest")
+
+    def test_abliterix_prepare_writes_search_only_config_and_runner(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+            }
+            plan = build_sota_plan(config, config_path, "abliterix")
+            config_toml = write_abliterix_config(plan).read_text(encoding="utf-8")
+            runner = write_abliterix_runner(plan).read_text(encoding="utf-8")
+            manifest = load_yaml(Path(tmp) / "model_forge_prompt_datasets" / "manifest.json")
+
+        self.assertIn("non_interactive = true", config_toml)
+        self.assertIn("[model]", config_toml)
+        self.assertIn('vector_method = "sra"', config_toml)
+        self.assertIn("[benign_prompts]", config_toml)
+        self.assertIn("[target_prompts]", config_toml)
+        self.assertIn("model_forge_sota_abliterix_search.json", runner)
+        self.assertIn("Abliterix is not installed", runner)
+        self.assertEqual(manifest["sections"]["bad_prompts"]["count"], 3)
+
+    def test_abliterix_sota_run_uses_guarded_container_when_configured(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "abliterix")
+        runner = Path(plan["work_dir"]) / "run_abliterix_search.py"
+
+        execution = abliterix_execution_spec(plan, runner)
+
+        self.assertEqual(execution["mode"], "guarded_container")
+        self.assertEqual(execution["command"][0], str(REPO_DIR / "scripts" / "run_abliterix_search_container.sh"))
+        self.assertEqual(execution["command"][1], str((REPO_DIR / runner).resolve()))
+        self.assertEqual(execution["cwd"], REPO_DIR)
+        self.assertEqual(execution["env"]["MODEL_FORGE_ABLITERIX_IMAGE"], "model-forge-abliterix:latest")
+
+    def test_abliterix_search_analyze_recommends_export_runner_only_after_journal_gates(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "abliterix")
+        with tempfile.TemporaryDirectory() as tmp:
+            journal = Path(tmp) / "abliterix.jsonl"
+            records = [
+                {"trial_id": 0, "user_attr": {"index": 0, "refusals": 1, "base_refusals": 2, "n_bad_prompts": 2}},
+                {"trial_id": 0, "values": [0.01], "state": 1},
+                {"trial_id": 1, "user_attr": {"index": 1, "refusals": 0, "base_refusals": 2, "n_bad_prompts": 2}},
+                {"trial_id": 1, "values": [0.02], "state": 1},
+            ]
+            journal.write_text("\n".join(json.dumps(record) for record in records) + "\n", encoding="utf-8")
+            summary = analyze_abliterix_search_journal(plan, journal)
+
+        self.assertEqual(summary["recommendation"]["action"], "prepare_guarded_export_runner")
+        self.assertEqual(summary["recommendation"]["selected_trial_index"], 1)
+        self.assertFalse(summary["frontier"][0].get("has_direct_parameters", False))
 
     def test_qwen_v2_self_harm_stochastic_search_uses_weighted_variants(self) -> None:
         config_path = (

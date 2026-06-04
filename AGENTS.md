@@ -185,9 +185,12 @@ directly optimizes the same three-trial no-refusal gate while preserving harmful
 detail/compliance at zero.
 Start from
 `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`;
-it intentionally uses the held v2 candidate as source and prepares plan-only
-SRA, optimal-transport, and Abliterix backend contracts until a guarded runner
-is implemented.
+it intentionally uses the held v2 candidate as source. Abliterix is the current
+guarded search-only method-shift path with `vector_method=sra`; standalone SRA
+and optimal-transport entries remain plan-only contracts. Do not treat an
+Abliterix search as a model artifact: run `abliterix-search-analyze`, build an
+export runner only for an eligible journal candidate, then targeted-gate the
+exported checkpoint before broader evals, quantization, or upload.
 
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,
@@ -917,6 +920,21 @@ ledger explicitly supersedes this.
 automatically when a recipe sets `sota.backends.heretic.container_image`; do not
 run generated Heretic Python directly for large models unless you are debugging a
 small fixture.
+
+`./forge ablate ... sota-run --backend abliterix --execute` uses the guarded
+Abliterix search container when a recipe sets
+`sota.backends.abliterix.container_image`. This is search-only and should write
+an Optuna journal plus `model_forge_sota_abliterix_search.json`; it must not
+create or promote a checkpoint. Follow with:
+
+```bash
+./forge ablate --config <config.yaml> abliterix-search-analyze --backend abliterix
+```
+
+Only after `prepare_guarded_export_runner` should an agent implement/export a
+selected trial, and that exported checkpoint still must pass the targeted
+internal eval gate before broad evals, NVFP4 quantization, or Hugging Face
+upload.
 
 When a host does not have a suitable Python ML environment, use the reusable
 container merge runner:

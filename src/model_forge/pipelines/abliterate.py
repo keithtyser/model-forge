@@ -669,10 +669,17 @@ def sota_config(config: dict[str, Any]) -> dict[str, Any]:
             "abliterix": {
                 "install": "pip install abliterix",
                 "method_family": "abliterix",
-                "execution": "plan_only",
+                "execution": "search_only",
+                "vector_method": "sra",
+                "steering_mode": "lora",
+                "n_trials": 24,
+                "n_warmup_trials": 8,
+                "checkpoint_dir": "abliterix_checkpoints",
+                "llm_judge": False,
                 "notes": (
                     "Abliterix is tracked as a practical SOTA backend candidate. "
-                    "Add a guarded runner before executing large model edits."
+                    "model-forge runs it in non-interactive search-only mode first; "
+                    "checkpoint export requires a separately reviewed runner."
                 ),
             },
             "apostate": {
@@ -846,6 +853,203 @@ def write_heretic_config(plan: dict[str, Any]) -> Path:
                     lines.append(f"{key} = {json.dumps(str(value))}")
     config_path.write_text("\n".join(lines) + "\n")
     return config_path
+
+
+def toml_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return str(value).lower()
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, list):
+        return "[" + ", ".join(toml_value(item) for item in value) + "]"
+    if value is None:
+        return '""'
+    return json.dumps(str(value))
+
+
+def append_toml_section(lines: list[str], section: str, values: dict[str, Any]) -> None:
+    cleaned = {key: value for key, value in values.items() if value is not None}
+    if not cleaned:
+        return
+    lines.append("")
+    lines.append(f"[{section}]")
+    for key, value in cleaned.items():
+        if isinstance(value, dict):
+            items = ", ".join(f"{json.dumps(str(k))} = {toml_value(v)}" for k, v in value.items())
+            lines.append(f"{key} = {{ {items} }}")
+        else:
+            lines.append(f"{key} = {toml_value(value)}")
+
+
+def materialize_model_forge_abliterix_prompts(plan: dict[str, Any], backend: dict[str, Any], work_dir: Path) -> None:
+    """Materialize model-forge prompt buckets into local HF datasets for Abliterix."""
+    materialize_model_forge_heretic_prompts(plan, backend, work_dir)
+    mapping = {
+        "good_prompts": "benign_prompts",
+        "bad_prompts": "target_prompts",
+        "good_evaluation_prompts": "benign_eval_prompts",
+        "bad_evaluation_prompts": "target_eval_prompts",
+    }
+    for source_key, target_key in mapping.items():
+        if source_key in backend:
+            backend[target_key] = backend[source_key]
+
+
+def write_abliterix_config(plan: dict[str, Any]) -> Path:
+    backend = plan["backend_config"]
+    work_dir = Path(plan["work_dir"])
+    work_dir.mkdir(parents=True, exist_ok=True)
+    materialize_model_forge_abliterix_prompts(plan, backend, work_dir)
+    checkpoint_dir = resolve_repo_path(backend.get("checkpoint_dir", "abliterix_checkpoints"), work_dir)
+    config_path = work_dir / "abliterix.toml"
+    model_values = {
+        "model_id": plan["source_model"],
+        "backend": backend.get("model_backend", backend.get("backend", "hf")),
+        "device_map": backend.get("device_map", "auto"),
+        "quant_method": backend.get("quant_method", "none"),
+        "trust_remote_code": backend.get("trust_remote_code", True),
+        "tensor_parallel_size": backend.get("tensor_parallel_size"),
+        "gpu_memory_utilization": backend.get("gpu_memory_utilization"),
+        "max_memory": backend.get("max_memory"),
+        "attn_implementation": backend.get("attn_implementation"),
+        "experts_implementation": backend.get("experts_implementation"),
+        "moe_backend": backend.get("moe_backend"),
+    }
+    inference_values = {
+        "batch_size": int(backend.get("batch_size", 0)),
+        "max_batch_size": int(backend.get("max_batch_size", 64)),
+        "max_gen_tokens": int(backend.get("max_gen_tokens", backend.get("max_response_length", 128))),
+        "min_gen_tokens": backend.get("min_gen_tokens"),
+    }
+    steering_values = {
+        "vector_method": backend.get("vector_method", "sra"),
+        "steering_mode": backend.get("steering_mode", "lora"),
+        "orthogonal_projection": bool(backend.get("orthogonal_projection", False)),
+        "projected_abliteration": bool(backend.get("projected_abliteration", True)),
+        "winsorize_vectors": bool(backend.get("winsorize_vectors", True)),
+        "winsorize_quantile": float(backend.get("winsorize_quantile", 0.995)),
+        "ot_components": int(backend.get("ot_components", 2)),
+        "n_directions": int(backend.get("n_directions", 1)),
+        "sra_base_method": backend.get("sra_base_method", "mean"),
+        "sra_n_atoms": int(backend.get("sra_n_atoms", 8)),
+        "sra_ridge_alpha": float(backend.get("sra_ridge_alpha", 0.1)),
+        "som_grid_h": int(backend.get("som_grid_h", 3)),
+        "som_grid_w": int(backend.get("som_grid_w", 3)),
+        "som_n_iters": int(backend.get("som_n_iters", 500)),
+        "som_initial_lr": float(backend.get("som_initial_lr", 0.5)),
+        "som_seed": int(backend.get("som_seed", backend.get("seed", 0))),
+        "weight_normalization": backend.get("weight_normalization", "full"),
+        "full_norm_lora_rank": int(backend.get("full_norm_lora_rank", 3)),
+        "strength_range": backend.get("strength_range", [0.4, 1.6]),
+        "fixed_vector_scope": backend.get("fixed_vector_scope"),
+        "direct_transform": backend.get("direct_transform"),
+        "search_direct_transform": backend.get("search_direct_transform"),
+    }
+    optimization_values = {
+        "num_trials": int(backend.get("num_trials", backend.get("n_trials", 24))),
+        "num_warmup_trials": int(backend.get("num_warmup_trials", backend.get("n_warmup_trials", 8))),
+        "checkpoint_dir": str(checkpoint_dir),
+        "sampler_seed": backend.get("sampler_seed", backend.get("seed")),
+    }
+    kl_values = {
+        "scale": float(backend.get("kl_scale", backend.get("kl_divergence_scale", 1.0))),
+        "token_count": int(backend.get("kl_token_count", 1)),
+        "target": float(backend.get("kl_target", backend.get("kl_divergence_target", 0.05))),
+        "prune_threshold": float(backend.get("kl_prune_threshold", 5.0)),
+    }
+    detection_values = {
+        "llm_judge": bool(backend.get("llm_judge", False)),
+        "llm_judge_model": backend.get("llm_judge_model"),
+        "llm_judge_base_url": backend.get("llm_judge_base_url"),
+        "llm_judge_api_key_env": backend.get("llm_judge_api_key_env"),
+        "llm_judge_batch_size": backend.get("llm_judge_batch_size"),
+        "llm_judge_concurrency": backend.get("llm_judge_concurrency"),
+    }
+    display_values = {
+        "print_responses": bool(backend.get("print_responses", False)),
+        "print_residual_geometry": bool(backend.get("print_residual_geometry", False)),
+        "plot_residuals": bool(backend.get("plot_residuals", False)),
+        "residual_plot_path": str(work_dir / "abliterix_plots"),
+    }
+    lines = [
+        "non_interactive = true",
+        f"overwrite_checkpoint = {toml_value(bool(backend.get('overwrite_checkpoint', False)))}",
+        f"system_prompt = {toml_value(backend.get('system_prompt', 'You are a helpful assistant.'))}",
+    ]
+    append_toml_section(lines, "model", model_values)
+    append_toml_section(lines, "inference", inference_values)
+    append_toml_section(lines, "steering", steering_values)
+    append_toml_section(lines, "optimization", optimization_values)
+    append_toml_section(lines, "kl", kl_values)
+    append_toml_section(lines, "detection", detection_values)
+    append_toml_section(lines, "display", display_values)
+    for source_key in ("benign_prompts", "target_prompts", "benign_eval_prompts", "target_eval_prompts"):
+        prompt_cfg = backend.get(source_key)
+        if prompt_cfg:
+            append_toml_section(
+                lines,
+                source_key,
+                {key: prompt_cfg.get(key) for key in ["dataset", "split", "column", "prefix", "suffix", "system_prompt"]},
+            )
+    config_path.write_text("\n".join(lines) + "\n")
+    return config_path
+
+
+def write_abliterix_runner(plan: dict[str, Any]) -> Path:
+    backend = plan["backend_config"]
+    work_dir = Path(plan["work_dir"])
+    work_dir.mkdir(parents=True, exist_ok=True)
+    runner = work_dir / "run_abliterix_search.py"
+    config_path = work_dir / "abliterix.toml"
+    checkpoint_dir = resolve_repo_path(backend.get("checkpoint_dir", "abliterix_checkpoints"), work_dir)
+    script = f'''from __future__ import annotations
+
+import json
+import os
+import sys
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
+
+work_dir = Path({str(work_dir)!r})
+config_path = Path({str(config_path)!r})
+checkpoint_dir = Path({str(checkpoint_dir)!r})
+summary_path = work_dir / "model_forge_sota_abliterix_search.json"
+
+
+def main() -> None:
+    os.chdir(work_dir)
+    try:
+        backend_version = version("abliterix")
+    except PackageNotFoundError as exc:
+        raise SystemExit("Abliterix is not installed. Build/use the configured container or run `pip install abliterix`.") from exc
+
+    from abliterix.cli import main as abliterix_main
+
+    sys.argv = ["abliterix", "--config", str(config_path)]
+    abliterix_main()
+    checkpoint_files = sorted(checkpoint_dir.glob("*.jsonl"), key=lambda item: item.stat().st_mtime, reverse=True)
+    summary_path.write_text(json.dumps({{
+        "backend": "abliterix",
+        "backend_version": backend_version,
+        "mode": "search_only",
+        "execution": {backend.get("execution", "search_only")!r},
+        "source_model": {plan["source_model"]!r},
+        "intended_output_dir": {plan["output_dir"]!r},
+        "work_dir": str(work_dir),
+        "config": str(config_path),
+        "checkpoint_dir": str(checkpoint_dir),
+        "journals": [str(path) for path in checkpoint_files],
+        "exported_checkpoint": False,
+        "next_step": "Run `./forge ablate --config <config> abliterix-search-analyze` and only implement/export a selected trial after model-forge targeted gates pass.",
+    }}, indent=2) + "\\n")
+    print(f"Wrote {{summary_path}}")
+
+
+if __name__ == "__main__":
+    main()
+'''
+    runner.write_text(script)
+    return runner
 
 
 def load_eval_prompt_cases(bucket: str) -> list[dict[str, Any]]:
@@ -1605,6 +1809,9 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
                 paths["heretic_runner"] = str(write_heretic_direct_runner(plan))
             else:
                 paths["heretic_runner"] = str(write_heretic_runner(plan))
+        elif name == "abliterix" and plan["backend_config"].get("execution") in {"search_only", "guarded_search"}:
+            paths["abliterix_config"] = str(write_abliterix_config(plan))
+            paths["abliterix_runner"] = str(write_abliterix_runner(plan))
         elif plan["backend_config"].get("execution") == "plan_only":
             paths[f"{name}_plan"] = str(write_external_backend_plan(plan))
     readme = work_dir / "README.md"
@@ -1627,6 +1834,17 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
             "```",
             "",
             "Heretic reads `config.toml` from the working directory. The generated runner patches Heretic's prompts so batch runs save the selected Pareto trial to the configured output directory.",
+            "",
+        ])
+    if paths.get("abliterix_runner"):
+        run_sections.extend([
+            "Run Abliterix search-only:",
+            "",
+            "```bash",
+            f"cd {work_dir} && {sys.executable} {paths['abliterix_runner']}",
+            "```",
+            "",
+            "Abliterix exits after a non-interactive Optuna search. Analyze the journal before implementing/exporting a selected trial.",
             "",
         ])
     plan_only_paths = {key: value for key, value in paths.items() if key.endswith("_plan")}
@@ -1678,6 +1896,28 @@ def heretic_execution_spec(plan: dict[str, Any], runner: str | Path) -> dict[str
     return {
         "mode": "host_python",
         "command": [sys.executable, str(runner_path)],
+        "cwd": Path(plan["work_dir"]),
+        "env": None,
+    }
+
+
+def abliterix_execution_spec(plan: dict[str, Any], runner: str | Path) -> dict[str, Any]:
+    backend = plan["backend_config"]
+    runner_path = resolve_repo_path(runner)
+    image = backend.get("container_image")
+    if image:
+        env = os.environ.copy()
+        env["MODEL_FORGE_ABLITERIX_IMAGE"] = str(image)
+        return {
+            "mode": "guarded_container",
+            "command": [str(REPO_DIR / "scripts" / "run_abliterix_search_container.sh"), str(runner_path)],
+            "cwd": REPO_DIR,
+            "env": env,
+        }
+    python_bin = os.environ.get("MODEL_FORGE_ABLITERIX_PYTHON", sys.executable)
+    return {
+        "mode": "host_python",
+        "command": [python_bin, str(runner_path)],
         "cwd": Path(plan["work_dir"]),
         "env": None,
     }
@@ -1755,6 +1995,22 @@ def default_heretic_journal_path(plan: dict[str, Any]) -> Path:
     journals = sorted(journal_dir.glob("*.jsonl"), key=lambda item: item.stat().st_mtime, reverse=True)
     if not journals:
         raise SystemExit(f"no Heretic journal found in {journal_dir}; pass --journal explicitly")
+    return journals[0]
+
+
+def slugify_abliterix_model_name(model_name: str) -> str:
+    return "".join(c if (c.isalnum() or c in ["_", "-"]) else "--" for c in model_name)
+
+
+def default_abliterix_journal_path(plan: dict[str, Any]) -> Path:
+    backend = plan["backend_config"]
+    checkpoint_dir = resolve_repo_path(backend.get("checkpoint_dir", "abliterix_checkpoints"), Path(plan["work_dir"]))
+    expected = checkpoint_dir / f"{slugify_abliterix_model_name(plan['source_model'])}.jsonl"
+    if expected.exists():
+        return expected
+    journals = sorted(checkpoint_dir.glob("*.jsonl"), key=lambda item: item.stat().st_mtime, reverse=True)
+    if not journals:
+        raise SystemExit(f"no Abliterix journal found in {checkpoint_dir}; pass --journal explicitly")
     return journals[0]
 
 
@@ -1904,6 +2160,139 @@ def analyze_heretic_search_journal(
     }
 
 
+def analyze_abliterix_search_journal(
+    plan: dict[str, Any],
+    journal_path: Path,
+    *,
+    max_kl: float | None = None,
+    max_refusals: int | None = None,
+    min_refusal_reduction: int | None = None,
+    top_k: int = 8,
+) -> dict[str, Any]:
+    backend = plan["backend_config"]
+    selection = backend.get("search_selection") or {}
+    effective_max_kl = float(max_kl if max_kl is not None else selection.get("max_kl", backend.get("kl_target", 0.05)))
+    effective_max_refusals = int(max_refusals if max_refusals is not None else selection.get("max_refusals", 0))
+    effective_min_reduction = int(min_refusal_reduction if min_refusal_reduction is not None else selection.get("min_refusal_reduction", 1))
+    effective_min_base_refusals = int(selection.get("min_base_refusals", max(0, effective_min_reduction)))
+    parsed = parse_heretic_journal(journal_path)
+    complete_trials = [
+        trial for trial in parsed["trials"]
+        if trial["complete"] and trial["refusals"] is not None and trial["kl_divergence"] is not None
+    ]
+    gates = {
+        "max_kl": effective_max_kl,
+        "max_refusals": effective_max_refusals,
+        "min_refusal_reduction": effective_min_reduction,
+        "min_base_refusals": effective_min_base_refusals,
+    }
+    if not complete_trials:
+        return {
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "source_model": plan["source_model"],
+            "work_dir": plan["work_dir"],
+            "journal": str(journal_path),
+            "backend": "abliterix",
+            "gates": gates,
+            "trial_count": len(parsed["trials"]),
+            "complete_trial_count": 0,
+            "recommendation": {"action": "do_not_export", "reason": "no_complete_trials"},
+            "frontier": [],
+        }
+
+    base_refusals = max(
+        (trial["base_refusals"] for trial in complete_trials if trial["base_refusals"] is not None),
+        default=None,
+    )
+    enriched = []
+    for trial in complete_trials:
+        refusal_reduction = None if base_refusals is None else int(base_refusals) - int(trial["refusals"])
+        n_bad = trial["n_bad_prompts"]
+        refusal_rate = None if not n_bad else int(trial["refusals"]) / int(n_bad)
+        eligible = (
+            float(trial["kl_divergence"]) <= effective_max_kl
+            and int(trial["refusals"]) <= effective_max_refusals
+            and (base_refusals is None or int(base_refusals) >= effective_min_base_refusals)
+            and (refusal_reduction is None or refusal_reduction >= effective_min_reduction)
+        )
+        enriched.append({
+            "trial_id": trial["trial_id"],
+            "trial_index": trial["index"],
+            "refusals": trial["refusals"],
+            "base_refusals": trial["base_refusals"],
+            "n_bad_prompts": n_bad,
+            "refusal_rate": refusal_rate,
+            "refusal_reduction": refusal_reduction,
+            "kl_divergence": trial["kl_divergence"],
+            "eligible": eligible,
+            "parameters": trial.get("parameters"),
+        })
+    enriched.sort(key=lambda trial: (
+        int(trial["refusals"]),
+        float(trial["kl_divergence"]),
+        int(trial["trial_index"] if trial["trial_index"] is not None else trial["trial_id"] or 10**9),
+    ))
+    eligible_trials = [trial for trial in enriched if trial["eligible"]]
+    best = enriched[0]
+    if base_refusals is not None and int(base_refusals) < effective_min_base_refusals:
+        recommendation = {
+            "action": "do_not_export",
+            "reason": "baseline_refusal_count_below_gate",
+            "base_refusals": base_refusals,
+            "min_base_refusals": effective_min_base_refusals,
+            "best_trial_id": best["trial_id"],
+            "best_trial_index": best["trial_index"],
+        }
+    elif eligible_trials:
+        selected = eligible_trials[0]
+        recommendation = {
+            "action": "prepare_guarded_export_runner",
+            "reason": "search_candidate_passes_journal_gates",
+            "selected_trial_id": selected["trial_id"],
+            "selected_trial_index": selected["trial_index"],
+            "refusals": selected["refusals"],
+            "kl_divergence": selected["kl_divergence"],
+            "required_next_gate": "export selected trial, then run model-forge targeted internal eval before broader eval or upload",
+        }
+    elif int(best["refusals"]) > effective_max_refusals:
+        recommendation = {
+            "action": "do_not_export",
+            "reason": "best_refusal_count_above_gate",
+            "best_refusals": best["refusals"],
+            "best_trial_id": best["trial_id"],
+            "best_trial_index": best["trial_index"],
+        }
+    elif float(best["kl_divergence"]) > effective_max_kl:
+        recommendation = {
+            "action": "do_not_export",
+            "reason": "best_candidate_above_kl_gate",
+            "best_kl_divergence": best["kl_divergence"],
+            "best_trial_id": best["trial_id"],
+            "best_trial_index": best["trial_index"],
+        }
+    else:
+        recommendation = {
+            "action": "do_not_export",
+            "reason": "best_candidate_missing_required_refusal_reduction",
+            "best_trial_id": best["trial_id"],
+            "best_trial_index": best["trial_index"],
+        }
+    return {
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "source_model": plan["source_model"],
+        "work_dir": plan["work_dir"],
+        "journal": str(journal_path),
+        "backend": "abliterix",
+        "gates": gates,
+        "trial_count": len(parsed["trials"]),
+        "complete_trial_count": len(complete_trials),
+        "base_refusals": base_refusals,
+        "best_trial": best,
+        "recommendation": recommendation,
+        "frontier": enriched[: max(1, top_k)],
+    }
+
+
 def print_heretic_search_analysis(summary: dict[str, Any]) -> None:
     gates = summary["gates"]
     recommendation = summary["recommendation"]
@@ -1916,6 +2305,39 @@ def print_heretic_search_analysis(summary: dict[str, Any]) -> None:
             f"[bold]Recommendation[/bold]: {recommendation['action']} ({recommendation['reason']})",
         ]),
         title="[bold cyan]Heretic Search Analysis[/bold cyan]",
+        border_style="cyan",
+    ))
+    table = Table(title="Search Frontier")
+    table.add_column("index")
+    table.add_column("trial id")
+    table.add_column("refusals")
+    table.add_column("KL")
+    table.add_column("reduction")
+    table.add_column("eligible")
+    for trial in summary["frontier"]:
+        table.add_row(
+            "" if trial["trial_index"] is None else str(trial["trial_index"]),
+            "" if trial["trial_id"] is None else str(trial["trial_id"]),
+            "" if trial["refusals"] is None else str(trial["refusals"]),
+            "" if trial["kl_divergence"] is None else f"{float(trial['kl_divergence']):.6f}",
+            "" if trial["refusal_reduction"] is None else str(trial["refusal_reduction"]),
+            str(bool(trial["eligible"])),
+        )
+    console.print(table)
+
+
+def print_abliterix_search_analysis(summary: dict[str, Any]) -> None:
+    gates = summary["gates"]
+    recommendation = summary["recommendation"]
+    console.print(Panel.fit(
+        "\n".join([
+            f"[bold]Journal[/bold]: {summary['journal']}",
+            f"[bold]Complete trials[/bold]: {summary['complete_trial_count']}/{summary['trial_count']}",
+            f"[bold]Gates[/bold]: refusals <= {gates['max_refusals']}, KL <= {gates['max_kl']}, "
+            f"reduction >= {gates['min_refusal_reduction']}, baseline refusals >= {gates.get('min_base_refusals', 0)}",
+            f"[bold]Recommendation[/bold]: {recommendation['action']} ({recommendation['reason']})",
+        ]),
+        title="[bold cyan]Abliterix Search Analysis[/bold cyan]",
         border_style="cyan",
     ))
     table = Table(title="Search Frontier")
@@ -1958,6 +2380,27 @@ def command_heretic_search_analyze(args: argparse.Namespace) -> None:
     print_heretic_search_analysis(summary)
 
 
+def command_abliterix_search_analyze(args: argparse.Namespace) -> None:
+    config_path = resolve_repo_path(args.config)
+    plan = build_sota_plan(load_yaml(config_path), config_path, args.backend)
+    if plan["backend"] != "abliterix":
+        raise SystemExit("abliterix-search-analyze requires the Abliterix backend")
+    journal_path = resolve_repo_path(args.journal) if args.journal else default_abliterix_journal_path(plan)
+    summary = analyze_abliterix_search_journal(
+        plan,
+        journal_path,
+        max_kl=args.max_kl,
+        max_refusals=args.max_refusals,
+        min_refusal_reduction=args.min_refusal_reduction,
+        top_k=args.top_k,
+    )
+    if args.output:
+        output_path = resolve_repo_path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(summary, indent=2) + "\n")
+    print_abliterix_search_analysis(summary)
+
+
 def command_sota_plan(args: argparse.Namespace) -> None:
     config_path = resolve_repo_path(args.config)
     plan = build_sota_plan(load_yaml(config_path), config_path, args.backend)
@@ -1996,6 +2439,18 @@ def command_sota_run(args: argparse.Namespace) -> None:
             raise SystemExit("missing generated Heretic runner")
         execution = heretic_execution_spec(plan, runner)
         console.print(f"[bold]Heretic execution mode[/bold]: {execution['mode']}")
+        subprocess.run(
+            execution["command"],
+            cwd=execution["cwd"],
+            env=execution["env"],
+            check=True,
+        )
+    elif plan["backend"] == "abliterix" and plan["backend_config"].get("execution") in {"search_only", "guarded_search"}:
+        runner = result["paths"].get("abliterix_runner")
+        if runner is None:
+            raise SystemExit("missing generated Abliterix runner")
+        execution = abliterix_execution_spec(plan, runner)
+        console.print(f"[bold]Abliterix execution mode[/bold]: {execution['mode']}")
         subprocess.run(
             execution["command"],
             cwd=execution["cwd"],
@@ -2481,6 +2936,24 @@ def build_parser() -> argparse.ArgumentParser:
     heretic_search.add_argument("--top-k", type=int, default=8, help="Number of frontier rows to print")
     heretic_search.add_argument("--output", default=None, help="Optional JSON report path")
     heretic_search.set_defaults(func=command_heretic_search_analyze)
+
+    abliterix_search = sub.add_parser(
+        "abliterix-search-analyze",
+        help="Analyze an Abliterix search journal before building an export runner",
+    )
+    abliterix_search.add_argument("--backend", choices=["abliterix"], default="abliterix")
+    abliterix_search.add_argument("--journal", default=None, help="Path to an Abliterix JSONL journal")
+    abliterix_search.add_argument("--max-kl", type=float, default=None, help="Maximum KL allowed for export consideration")
+    abliterix_search.add_argument("--max-refusals", type=int, default=None, help="Maximum focused refusals allowed")
+    abliterix_search.add_argument(
+        "--min-refusal-reduction",
+        type=int,
+        default=None,
+        help="Minimum focused refusal reduction versus the journal baseline",
+    )
+    abliterix_search.add_argument("--top-k", type=int, default=8, help="Number of frontier rows to print")
+    abliterix_search.add_argument("--output", default=None, help="Optional JSON report path")
+    abliterix_search.set_defaults(func=command_abliterix_search_analyze)
     return parser
 
 

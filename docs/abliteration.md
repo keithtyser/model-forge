@@ -155,21 +155,24 @@ SOTA path is:
 5. run internal eval first, then artifact and external evals only if internal
    refusal suppression moves
 
-Both OBLITERATUS and Heretic are AGPL-licensed in their open-source form. Review
-their license terms before redistributing modified code, model artifacts, or
-running modified tooling as a service.
+OBLITERATUS, Heretic, and Abliterix are external open-source backends with their
+own licenses. Review license terms before redistributing modified code, model
+artifacts, or running modified tooling as a service.
 
 As of the June 2026 Qwen work, `sota-plan` and `sota-prepare` also know about
-plan-only method-shift backends:
+method-shift backends:
 
-- `abliterix`: practical external abliteration toolkit candidate
+- `abliterix`: guarded search-only practical toolkit backend with SRA/SOM/OT
+  vector methods
 - `apostate`: preservation-direction baked checkpoint candidate
 - `sra`: surgical refusal ablation / concept-preserving direction cleanup
 - `optimal_transport`: distributional activation transport candidate
 
-These are intentionally plan-only until a guarded model-forge runner exists.
-`sota-run --execute` refuses them rather than launching ungoverned external
-code. Use their generated backend plan as the contract for adding a safe runner:
+Standalone `apostate`, `sra`, and `optimal_transport` remain plan-only until a
+guarded model-forge runner exists. Abliterix is executable only in
+non-interactive search-only mode; it writes an Optuna journal and exits without
+exporting a checkpoint. Use `abliterix-search-analyze` before implementing an
+export runner for a selected trial. The contract is the same for every backend:
 one large model job at a time, source checkpoint audit, CPU/RAM/disk caps,
 targeted internal eval before broader eval, and source-relative promotion gates.
 
@@ -190,6 +193,19 @@ generated search/direct runner through `scripts/run_heretic_direct_container.sh`
 That wrapper applies Docker CPU, memory, swap, PID, HF-cache, RAM-floor, and
 disk-floor guardrails instead of running large model work through raw host
 Python.
+
+For Abliterix recipes with `container_image` set, `sota-run --backend abliterix
+--execute` launches the generated non-interactive search runner through
+`scripts/run_abliterix_search_container.sh`. The runner does not export a model.
+After it finishes, run:
+
+```bash
+./forge ablate --config <config.yaml> abliterix-search-analyze --backend abliterix
+```
+
+Only build/export a selected trial after the journal gate recommends
+`prepare_guarded_export_runner`, then run the model-forge targeted internal eval
+before broader evals, quantization, or upload.
 
 Recipes can also condition Heretic prompt sections on prior eval traces by
 setting keys such as `bad_train_response_source`,
