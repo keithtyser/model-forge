@@ -587,18 +587,23 @@ detail/compliance stayed 0/3. `model_selection_summary` stayed 0/3. Do not run
 broader evals, quantize, upload, or promote v7. Keep held v2 as the best Qwen
 FT-abli evidence node.
 
-The next active Qwen candidate is v8:
+The v8 direct-prompt repair has also been rejected:
 `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8.yaml`.
 It starts again from held v2 because v7's response-conditioned/meta-instruction
 seed rows did not transfer to the direct held-out prompts. V8 uses 24 direct
 chosen/rejected repair pairs for the two actual blockers plus replay for v5
 unsafe-ablation redirects, local FT v4 capability, planning, and local FT v3
-repair behavior. Local prepare accepted 67 rows and rejected 0 rows. Train v8
-only through the guarded two-Spark cluster script, then merge, run strict
-checkpoint/tokenizer audits, serve with the Qwen `serve.env_defaults`, and run
-only the targeted three-trial blocker gate first. If self-harm refusal wording
-or `model_selection_summary` still fails, reject v8 without broader evals,
-quantization, upload, or promotion.
+repair behavior. Local prepare accepted 67 rows and rejected 0 rows. It then
+trained for 80 guarded two-Spark steps, merged, passed strict
+checkpoint/tokenizer audits, served with TP=2 using the Qwen
+`serve.env_defaults`, and ran only the targeted three-trial blocker gate first.
+Reject v8: self-harm safe redirect stayed 3/3 and harmful detail/compliance
+stayed 0/3, but explicit refusal wording remained 2/3 and
+`model_selection_summary` stayed 0/3. The full merged v8 checkpoint was deleted
+from both Spark nodes; retain the adapter, configs, report, and eval evidence.
+Do not run broader evals, quantize, upload, or promote v8. The next Qwen branch
+should change method or optimize candidate selection directly against
+model-forge blocker metrics, not add more adjacent rows to this same objective.
 
 Operational note: the first TP=2 serve failed because the Spark vLLM launcher
 forced RoCE NCCL. The working Qwen serve override was:
