@@ -235,12 +235,14 @@ variants:
     base_variant: local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2
     downloadable: false
     promotion:
-      decision: inconclusive
+      decision: rejected
       blocked_actions: [quantization_export, hf_upload, promotion]
-      reason: "Prepared sequential v3 repair from the held v2 candidate. It targets the two remaining unsafe-overcompliance explicit refusals while preserving the v2 paired-boundary and challenge gains; keep blocked until trained, merged, rescored, and manually inspected."
+      reason: "Sequential v3 repair trained, merged, and quick-gated from the held v2 candidate. It reduced unsafe-overcompliance refusal from 0.6667 to 0.3333 but regressed paired-boundary behavior and challenge capability: paired harmful refusal 0.15, paired benign quality 0.90, paired harmful detail/compliance 0.10, and challenge capability 0.8125. Reject; keep v2 as the best held Qwen FT-abli evidence node."
       evidence:
         - configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v3.yaml
         - datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v3.yaml
+        - results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3_dgx_spark
+        - results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3_dgx_spark_rescored_v6
   local_ft_abli_heretic_trial12_unsafe_followup_trial16:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-trial12-unsafe-followup-trial16

@@ -1,0 +1,203 @@
+{
+  "experiment_name": "qwen36_27b_v0_base_eval",
+  "family": "qwen36_27b",
+  "model_id": "Qwen/Qwen3.6-27B",
+  "variant": "base",
+  "backend": {
+    "engine": "local-openai-compatible",
+    "base_url": "http://127.0.0.1:8000/v1",
+    "model_alias": "local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v3",
+    "api_key_env": "OPENAI_API_KEY",
+    "temperature": 0.2,
+    "max_tokens": 1200,
+    "timeout_seconds": 180
+  },
+  "prompt_counts": {
+    "unsafe_overcompliance": 3,
+    "refusal_paired_boundary": 40,
+    "capability_preservation_challenge": 32
+  },
+  "total_prompts": 75,
+  "trials": 1,
+  "total_cases": 75,
+  "metrics": [
+    "workflow_success",
+    "schema_adherence",
+    "benign_refusal_rate",
+    "benign_answer_quality_rate",
+    "unsafe_overcompliance_rate",
+    "refusal_rate_harmful",
+    "harmful_prompt_compliance_rate",
+    "harmful_detail_rate",
+    "ablation_refusal_suppression_rate",
+    "safe_redirect_rate",
+    "normal_use_regression_pass_rate",
+    "latency",
+    "tokens_per_second"
+  ],
+  "scoring_version": "model_forge.internal_eval_scoring.v6",
+  "dry_run": false,
+  "created_at": "2026-06-04T06:52:27.712823+00:00",
+  "runtime": {
+    "hostname": "spark-b64d",
+    "platform": "Linux-6.11.0-1014-nvidia-aarch64-with-glibc2.39",
+    "python_version": "3.12.3",
+    "variant": "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3",
+    "hardware_label": "DGX Spark",
+    "quantization": "bf16",
+    "context_length": "32768",
+    "dry_run": false,
+    "gpu": {
+      "available": true,
+      "gpus": [
+        {
+          "name": "NVIDIA GB10",
+          "memory_total": "[N/A]",
+          "driver_version": "580.82.09"
+        }
+      ]
+    },
+    "backend_base_url": "http://127.0.0.1:8000/v1",
+    "backend_model_alias": "local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v3"
+  },
+  "canonical": {
+    "schema_version": "model_forge.run_manifest.v1",
+    "run_id": "qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3_eval_20260604t065227z",
+    "run_type": "eval",
+    "status": "completed",
+    "created_at": "2026-06-04T06:52:27.663313+00:00",
+    "updated_at": "2026-06-04T06:52:27.663313+00:00",
+    "identity": {
+      "family": "qwen36_27b",
+      "variant": "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3",
+      "objective_profile": null
+    },
+    "source": {
+      "family_config": "configs/model_families/qwen36_27b.yaml",
+      "family_config_exists": true,
+      "family_name": "qwen36_27b",
+      "variant_config": {
+        "repo_id": "Qwen/Qwen3.6-27B",
+        "local_dir": "Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v3",
+        "served_model_name": "local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v3",
+        "base_variant": "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2"
+      }
+    },
+    "git": {
+      "commit": "74afd36e53b64c297eacd0d627417ed39b73360b",
+      "branch": "main",
+      "dirty": false,
+      "dirty_paths": [],
+      "remote_origin": "git@github.com:keithtyser/model-forge.git"
+    },
+    "command": {
+      "argv": [
+        "/home/ktyser/projects/model-forge/src/model_forge/evals/run_eval.py",
+        "--config",
+        "configs/experiments/qwen36_27b_v0.yaml",
+        "--output-suffix",
+        "qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3_dgx_spark",
+        "--trials",
+        "1",
+        "--bucket",
+        "refusal_paired_boundary",
+        "--bucket",
+        "unsafe_overcompliance",
+        "--bucket",
+        "capability_preservation_challenge"
+      ],
+      "display": "/home/ktyser/projects/model-forge/src/model_forge/evals/run_eval.py --config configs/experiments/qwen36_27b_v0.yaml --output-suffix qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3_dgx_spark --trials 1 --bucket refusal_paired_boundary --bucket unsafe_overcompliance --bucket capability_preservation_challenge",
+      "cwd": "."
+    },
+    "configs": [
+      {
+        "path": "configs/experiments/qwen36_27b_v0.yaml",
+        "exists": true,
+        "sha256": "e8b7eac8205519c5042b98cba4bffb3b0cc7972afc5ab60de0618ac90e266075"
+      }
+    ],
+    "hardware": {
+      "profile": "dgx_spark",
+      "label": "DGX Spark / GB10 unified memory",
+      "gpus": [
+        {
+          "name": "NVIDIA GB10",
+          "memory_total_mb": 0
+        }
+      ],
+      "notes": [
+        "Use a Spark/GB10-native vLLM build; stock wheels are usually not compiled for SM 12.1.",
+        "Conservative DGX Spark cap; raise GPU_MEMORY_UTILIZATION only after smoke serving passes.",
+        "Use FP8 KV cache, chunked prefill, prefix caching, and low max-num-seqs to preserve unified-memory headroom.",
+        "For NVFP4 MoE, keep routers and multimodal projection/vision modules in BF16 unless model-specific evals prove otherwise.",
+        "For CPU/input-pipeline bottlenecks, DGX Spark can benefit from high parallelism such as c=192, but gate it behind an explicit override."
+      ]
+    },
+    "system": {
+      "hostname": "spark-b64d",
+      "platform": "Linux-6.11.0-1014-nvidia-aarch64-with-glibc2.39",
+      "python_version": "3.12.3",
+      "executable": "/home/ktyser/projects/model-forge/.venv/bin/python",
+      "cpu_count": 20,
+      "memory": {
+        "total_bytes": 128501489664,
+        "available_bytes": 15254781952,
+        "available_fraction": 0.1187
+      },
+      "disk": {
+        "path": "results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3_dgx_spark",
+        "total_bytes": 4031871553536,
+        "free_bytes": 658289418240,
+        "free_fraction": 0.1633
+      }
+    },
+    "environment": {
+      "HF_HOME": "/home/ktyser/cache/huggingface",
+      "MODEL_FORGE_BASE_URL": "http://127.0.0.1:8000/v1",
+      "MODEL_FORGE_CONTEXT_LENGTH": "32768",
+      "MODEL_FORGE_FAMILY": "qwen36_27b",
+      "MODEL_FORGE_HARDWARE_LABEL": "DGX Spark",
+      "MODEL_FORGE_MAX_TOKENS": "1200",
+      "MODEL_FORGE_MODEL": "local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v3",
+      "MODEL_FORGE_QUANT": "bf16",
+      "MODEL_FORGE_TIMEOUT_SECONDS": "180",
+      "MODEL_FORGE_TRIALS": "1",
+      "MODEL_FORGE_VARIANT": "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3"
+    },
+    "outputs": {
+      "output_dir": "results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3_dgx_spark",
+      "artifacts": {
+        "manifest_json": "manifest.json",
+        "responses_jsonl": "responses.jsonl",
+        "scores_csv": "scores.csv",
+        "examples_md": "examples.md",
+        "eval_provenance_card_json": "eval_provenance_card.json",
+        "eval_provenance_card_md": "eval_provenance_card.md"
+      },
+      "metrics": {}
+    },
+    "metadata": {
+      "experiment_name": "qwen36_27b_v0_base_eval",
+      "model_id": "Qwen/Qwen3.6-27B",
+      "dry_run": false,
+      "prompt_sets": [
+        "agentic_multi_step_planning",
+        "agentic_tool_use_json",
+        "agentic_self_critique",
+        "agentic_structured_extraction",
+        "agentic_code_debug",
+        "refusal_benign_boundary",
+        "unsafe_overcompliance",
+        "refusal_paired_boundary",
+        "normal_use_regression",
+        "capability_preservation_challenge"
+      ],
+      "trials": 1,
+      "scoring_version": "model_forge.internal_eval_scoring.v6"
+    },
+    "notes": []
+  },
+  "rescored_from": "/home/ktyser/projects/model-forge/results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3_dgx_spark",
+  "rescored_at": "2026-06-04T07:14:09.138843+00:00",
+  "rescore_config": "/home/ktyser/projects/model-forge/configs/experiments/qwen36_27b_v0.yaml"
+}

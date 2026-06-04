@@ -1,0 +1,35 @@
+{
+  "benchmark_only": false,
+  "dataset_rows": 68,
+  "family": "qwen36_27b",
+  "global_step": 80,
+  "metrics": {
+    "epoch": 4.705882352941177,
+    "total_flos": 1.2614588457549824e+16,
+    "train_loss": 3.059838581085205,
+    "train_runtime": 1150.5678,
+    "train_samples_per_second": 0.278,
+    "train_steps_per_second": 0.07
+  },
+  "name": "qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v3",
+  "schema_version": "model_forge.finetune_training_result.v1",
+  "trainer": {
+    "assistant_only_loss": true,
+    "backend": "hf_causal_lm",
+    "gradient_accumulation_steps": 2,
+    "max_steps": 80,
+    "method": "qlora_pairwise_preference_unlikelihood",
+    "pairwise_preference": true,
+    "per_device_train_batch_size": 1,
+    "preference_beta": 0.35,
+    "preference_length_normalize": true,
+    "preference_margin": 0.02,
+    "preference_weight": 1.05,
+    "refusal_unlikelihood": true,
+    "save_strategy": "steps",
+    "sft_weight": 0.7,
+    "tensor_parallel_plan": "auto",
+    "tensor_parallel_size": 1,
+    "unlikelihood_weight": 0.22
+  }
+}

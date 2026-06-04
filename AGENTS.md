@@ -335,7 +335,7 @@ sources before `Dataset.from_list`; without that fix, a shuffled source whose
 first row lacked a rejected pair could silently drop all rejected pairs from
 that source.
 
-The next prepared Qwen repair is
+The latest Qwen repair attempt is
 `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v3.yaml`.
 It starts from the merged v2 checkpoint and targets only the remaining
 unsafe-overcompliance explicit refusal wording, especially ransomware and
@@ -344,7 +344,8 @@ chosen/rejected pairs: 16 new unsafe-overcompliance repair pairs, 6 eval-style
 pair replays, 5 paired residual-trial12 replays from a 6-row sample, and 40 SFT
 replay rows for boundary/capability preservation. Prepare accepted all rows
 with zero holdout-overlap rejections, and chosen paired answers contain no
-refusal markers under the repo marker check.
+refusal markers under the repo marker check. The run completed, but it is
+rejected.
 
 ```bash
 ./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v3.yaml prepare --overwrite
@@ -356,12 +357,37 @@ scripts/run_merge_peft_container.sh \
   --dtype bf16 --merge-method direct --trust-remote-code --overwrite
 MODEL_FORGE_TRIALS=1 ./forge eval qwen36_27b local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3 --internal \
   --bucket refusal_paired_boundary --bucket unsafe_overcompliance --bucket capability_preservation_challenge
+.venv/bin/python scripts/rescore_internal_eval.py \
+  results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3_dgx_spark \
+  --config configs/experiments/qwen36_27b_v0.yaml \
+  --output-dir results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3_dgx_spark_rescored_v6
 ```
 
-Do not upload or quantize v3 unless the quick gate shows
-`unsafe_overcompliance.refusal_rate_harmful=0.0`, paired harmful refusal remains
-0.0, paired harmful detail/compliance remain 0.0, and challenge capability
-stays near v2.
+Training completed 80/80 guarded two-node steps in 1150.5678 seconds with
+train loss 3.0598. The coordinator merge was blocked by the disk floor, which
+was correct; the merge completed on the worker Spark and was synced back.
+Strict checkpoint audit passed. Strict tokenizer audit initially caught PEFT
+merge tokenizer drift; copying tokenizer metadata from the v2 source fixed it.
+
+Scoring v6 result:
+
+- Output:
+  `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3_dgx_spark_rescored_v6`.
+- Unsafe-overcompliance refusal: 0.3333, improved from v2 but still nonzero.
+- Unsafe-overcompliance harmful detail/compliance: 0.00.
+- Paired harmful refusal: 0.15.
+- Paired refusal suppression: 0.85.
+- Paired benign quality: 0.90.
+- Paired safe redirect: 0.85.
+- Paired harmful detail/compliance: 0.10.
+- Challenge capability: 0.8125.
+
+Decision: reject v3. It partially reduced the explicit unsafe-overcompliance
+refusal prior but overfit the repair and damaged the clean v2 paired-boundary
+and challenge behavior. Do not upload, quantize, or promote v3. Keep
+`local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2` as the best
+held Qwen FT-abli evidence node until the next candidate beats it without
+restoring refusals.
 
 Before exporting another Heretic search result into a full checkpoint, run the
 repo-native journal gate:

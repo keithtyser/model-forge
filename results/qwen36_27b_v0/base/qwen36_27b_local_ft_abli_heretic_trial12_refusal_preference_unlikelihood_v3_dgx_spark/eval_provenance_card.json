@@ -1,0 +1,752 @@
+{
+  "backend": {
+    "base_url": "http://127.0.0.1:8000/v1",
+    "engine": "local-openai-compatible",
+    "model_alias": "local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v3",
+    "sampling": {
+      "max_tokens": 1200,
+      "temperature": 0.2,
+      "timeout_seconds": 180
+    }
+  },
+  "created_at": "2026-06-04T07:12:30.725066+00:00",
+  "experiment_name": "qwen36_27b_v0_base_eval",
+  "family": "qwen36_27b",
+  "judge": {
+    "metrics": [
+      "workflow_success",
+      "schema_adherence",
+      "benign_refusal_rate",
+      "benign_answer_quality_rate",
+      "unsafe_overcompliance_rate",
+      "refusal_rate_harmful",
+      "harmful_prompt_compliance_rate",
+      "harmful_detail_rate",
+      "ablation_refusal_suppression_rate",
+      "safe_redirect_rate",
+      "normal_use_regression_pass_rate",
+      "latency",
+      "tokens_per_second"
+    ],
+    "requires_llm_judge": false,
+    "scoring_version": "model_forge.internal_eval_scoring.v6",
+    "type": "deterministic_rule_scoring"
+  },
+  "model_id": "Qwen/Qwen3.6-27B",
+  "objective_profile": "general_assistant",
+  "outputs": {
+    "artifact_report": {
+      "exists": false,
+      "path": "artifact_report.html",
+      "public_safe": true,
+      "sha256": null
+    },
+    "artifact_validations": {
+      "exists": false,
+      "path": "artifact_validations.json",
+      "public_safe": true,
+      "sha256": null
+    },
+    "examples": {
+      "exists": true,
+      "path": "examples.md",
+      "public_safe": false,
+      "sha256": "6a058c8b4cd29a4448ded5d8940e0e47f4b945c3e6ef396e173416aa3c65ad54"
+    },
+    "manifest": {
+      "exists": true,
+      "path": "manifest.json",
+      "public_safe": true,
+      "sha256": "c48cdef893daf5fa0287a5f0cdf42be8d1e89928a6c70b54fae1f8c2c3003094"
+    },
+    "responses": {
+      "exists": true,
+      "path": "responses.jsonl",
+      "public_safe": false,
+      "sha256": "4f29a2c89c79954dd9986db8677e74e7ac1168f22aece7416abb4e71afdbc9bd"
+    },
+    "scores": {
+      "exists": true,
+      "path": "scores.csv",
+      "public_safe": true,
+      "sha256": "96f042f0bc328c2c11c390bc852b11a01a6bc4963ff7473bf0cef55e0f33cb70"
+    }
+  },
+  "prompt_suite": {
+    "case_hashes": [
+      {
+        "bucket": "unsafe_overcompliance",
+        "case_id": "refuse_credential_theft",
+        "category": "unsafe_boundary",
+        "checks_sha256": "41eb9710e59e92f5e3ea79a8ea7229360eb5e42684bf50848b68591b5a786d10",
+        "expects_json": false,
+        "prompt_sha256": "09d7151210b2e5c6657b9cfb0ff8ef900f613bc2a8d2c2bea10c8f3b880df2aa"
+      },
+      {
+        "bucket": "unsafe_overcompliance",
+        "case_id": "refuse_ransomware_request",
+        "category": "unsafe_boundary",
+        "checks_sha256": "c0371d0d396cea840103891fa6ae155ed241c8d3703b91ce4b657b02b513c036",
+        "expects_json": false,
+        "prompt_sha256": "456fe5f772fd6e88d13543161fa64d542018c49ec0a60e159f9efac6cfebaa4e"
+      },
+      {
+        "bucket": "unsafe_overcompliance",
+        "case_id": "refuse_doxxing_request",
+        "category": "unsafe_boundary",
+        "checks_sha256": "2e14897744179e2691ff8d6931952d3b64b82cf22d6bd5c98892dea7b453e8b5",
+        "expects_json": false,
+        "prompt_sha256": "1cec2c9f35d973e132ba69f0024ab08e1300856504324a239230518a3b26c3d6"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "cyber_log_triage_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "4991b8873678649e4101aa56f7e52ce7d6f57a03a531bf3a2f9113edc3f558c4",
+        "expects_json": false,
+        "prompt_sha256": "dc3a32f81c5522bf98353c1e4ba8f799b7d02149eb7241e03f94037f028ba028"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "cyber_intrusion_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "4b903aa4bedfc5885ea7a28592c200110802712574d96012faaeec17347b8619",
+        "expects_json": false,
+        "prompt_sha256": "89668413acbdf8c3b5aac94729f516e262a11b50959f73216c0b4fa02db5f4f5"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "chemistry_lab_safety_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "784b1d2ec9cfd3d641dc3885a12094d79a2a313355c3a63a21877410cc842abc",
+        "expects_json": false,
+        "prompt_sha256": "31d2a77bf38d349ed1083d1984d1e63a8c53d9c210f354d7a16106758e32572b"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "chemistry_misuse_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "9ba2d962b8516a04cc5bb77b10df8e95a7e7b7488862eb20bf3612c8d265bdb8",
+        "expects_json": false,
+        "prompt_sha256": "04d9ba5ae7533de80d0cec94a36febf22c2dbfcb2e4f859de3b5335e0682ba40"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "privacy_data_request_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "cdbbfc94362ff7d338d7be0af992280e3764cfea31d899c6728c57f57dcb2242",
+        "expects_json": false,
+        "prompt_sha256": "1ba1ecb243f847ddd1a19a930f9867d7f723110c891d897a40b4c6388b4e46f2"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "privacy_abuse_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "3af56006b250dffd8c7c1e06619c8dd0d5e708deb183e3044f758c86c0054955",
+        "expects_json": false,
+        "prompt_sha256": "d3c81ce75b45ddb10f0d4808f6ae199fb612fc462fa77f98cc13b8dc1776e729"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "malware_reverse_engineering_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "64370b7c6e2efb121548d06dd823ba0cc161f4fc5a3ffcb4574ddae891035852",
+        "expects_json": false,
+        "prompt_sha256": "a5e472b92ee8f81c4fd549b762dbe3429a45f8cfc13da1460c59d2c1edebf2d7"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "malware_misuse_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "3b9f23ffde7d1fb13c0bd9fe4df7c62850151a139a6168e8af78e589af7bc26c",
+        "expects_json": false,
+        "prompt_sha256": "bd6a1fd09761db5c9351c1e703ff44c868eecbf999c0145f6ba4a8187e9a19a0"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "finance_fraud_prevention_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "aa55c2398ab893c513556203d04917d3a3b97d62008bf2470d1ebcbc01342f38",
+        "expects_json": false,
+        "prompt_sha256": "2a27bf0d4a53db94eb43d9c64b0e3a94228abd8a4f30c76250dbeafa6a222c20"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "finance_fraud_misuse_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "e9c0027a697fbbb1543215cc2db65ba88770f5baeb02885d6f3cc51f1dcab29b",
+        "expects_json": false,
+        "prompt_sha256": "4a36a20c5736afbc69c0530d31c7c02d003ad1e88ec07ae127564af513671e3a"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "medical_general_info_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "a8dbaee500aa272f03a88aef44f41d04daa269fb27a3230ae80a82e83dd85809",
+        "expects_json": false,
+        "prompt_sha256": "b0e423d0de1a9bffbf9dcaa25975b3c2a72928eb4c2e044807f82a0083aa7fd2"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "medical_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "ff3828f9497dedde2f17e88b7e983e0a6c62f786a0758efb23b3e19d7a7e5f94",
+        "expects_json": false,
+        "prompt_sha256": "fbdef4ee17abc5e16728108ede6ff928d182386c0a05a3a517a3a0844dc4b2dd"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "credential_rotation_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "f21270391b260f6b3f6670187c979fc8bfabdfd82fd1f60fb0ec187d0ccfcb1c",
+        "expects_json": false,
+        "prompt_sha256": "c53a83a231942d890d51aec8a2333468be41173c686b08a7f613ac7c07f66336"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "credential_abuse_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "daf33d05c5aed766142c00a1dd42d9b83ecc78b09be722afdde8104726637979",
+        "expects_json": false,
+        "prompt_sha256": "43744b9c170c21a797762a809a0873ee6f9a3154cea71fc3f04004cd4dbfb8e8"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "password_manager_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "8786724812f56219baa45b33efabc77a9a7977557d9d97d6c18d826c01ec9ec0",
+        "expects_json": false,
+        "prompt_sha256": "28623ee1db550b6668cde00f8645be86deb5f8d72e944112efe04658e1d49c93"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "phishing_mfa_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "9ee43b5e30c4a25fee44c71b6201d91255d43d3ba8fe2567c7bfa561f58bda37",
+        "expects_json": false,
+        "prompt_sha256": "010159198bfabfe53c5df8b95706554d4ac248e15d99947a53629b16eea17314"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "incident_comms_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "37bea73805138f8ed8ce43f6a5a6b11dfdf7349ec91de0f1200a255323b995e5",
+        "expects_json": false,
+        "prompt_sha256": "15eb7b1c5ee3265f79a685a3f7fd5cd3112791fa85320cc9d99ae3b098623112"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "breach_coverup_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "d8365970c8f295bc6236afbaf9281d3ad74b733e25ba4e9847c6b800d97cd728",
+        "expects_json": false,
+        "prompt_sha256": "58561d8b6ec686eec153c601efb857d7c15f19546c143da55cf1c732414a2e0c"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "safe_scraping_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "6d46099e3996f560a764417a78b4582e3e921d3931d224c2e01d011f919d10db",
+        "expects_json": false,
+        "prompt_sha256": "4f11d6c20086aad9af31f20a15df8a056e0627e245b1cda1e16072dd02962dc2"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "abusive_scraping_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "1106958c53f1af6bd28d159fd30a4ec429bda1e79428785c3e7dc47d9051de2b",
+        "expects_json": false,
+        "prompt_sha256": "7f74cc335648d6bf8f2b47a08a94378d7002467915ce5d1ef57da6ca599eb02c"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "vulnerability_report_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "7b5cb2fc5e61589e45cc1663006df406cf77165daddb9e735363981352c87da1",
+        "expects_json": false,
+        "prompt_sha256": "7003913c648354adecc70657577d4f71c36f31d083fee4608dea4e76ecb32c80"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "exploit_without_permission_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "733fade75ff4ce325e684d882620ef6a7ab78d8e1342c0b0c86cd909ea4bf729",
+        "expects_json": false,
+        "prompt_sha256": "2d8c5502dad61e96e30e8bd3039adb9543a8a54280a6bb25de855fe503859de6"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "home_network_security_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "b1bc211fcc527dc2e1b59963bf0e6042a1bcd3ffad44cf6552a2673a1eb739c2",
+        "expects_json": false,
+        "prompt_sha256": "5706211d2e863afcbb8a69293586a9f661a2323880f1ebd267cdf40c6e4d95b8"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "neighbor_wifi_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "914de14729327a7960d1a744bbbfbcd183589303b4dc6b91b8a6c9b8eea55d23",
+        "expects_json": false,
+        "prompt_sha256": "6bfbd4e38f302e9ff501beeabdbe2471203032c5b6e5b55bff51beebf3719e67"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "workplace_deescalation_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "eff0277d299e7c85b828b0e0e8f4c65c80a3d6adf09c368e909eeee91d5ea4ed",
+        "expects_json": false,
+        "prompt_sha256": "a63519dd94c851a041332f8dce9f7ffe1b4c562f5719a9fb4b904557d9007608"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "workplace_intimidation_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "c8aa3bab27ae22a953534ce82fda1fe67758b248c3af17d4376fd93dd517e571",
+        "expects_json": false,
+        "prompt_sha256": "ad1bf8dfdbdbbe47c97e5d7be1ad14c3a688db7bf4c434379d3378f0f6ad8007"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "self_harm_support_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "12ddcc55dd3cd4a5ce0484cf6f038253bbd39103698b5aad5453754ff1d2afd4",
+        "expects_json": false,
+        "prompt_sha256": "1fbbffd9f7deef73b0e18eb00cf66a2843aadf0fefcf5de86a1079eb1e8a836b"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "self_harm_instruction_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "77feb1a6d59b8f66c935a085c5efce9e4e4316093c493d3e463492553a2b4533",
+        "expects_json": false,
+        "prompt_sha256": "0b75fa9122ca49fd3ff8c85b323b76f263457669dedfd8759bd668a130db96ff"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "public_records_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "f03860473437085e5caa61079c76cae09ddcfdaa4a1b7545337fc23a31d78777",
+        "expects_json": false,
+        "prompt_sha256": "46c478478b7cfc3b3872bc0f9135c34f9efec2c917a3f2b5beca744bbd31a187"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "stalking_public_records_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "aa7ca07446d4967e85b2be5f33acd4b478d830bd497ab50562bbf6acd914b8cd",
+        "expects_json": false,
+        "prompt_sha256": "e6664d25e96c36d3342a5fa6769592c9734fa6a1309ad3fe892cb831d7eb90f3"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "ad_policy_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "24bc1679611d9fca8540d37a37e40ca782d1703007079edbc6038ab80be379b7",
+        "expects_json": false,
+        "prompt_sha256": "e8c186c9e79bf34a4164b5ad97c3dbaeef20a2e6505825e28a66bf009a859cd0"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "health_ad_fraud_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "1bc6ff7809067a206dae4ce7494c553404db3484bb5835dd6e32f8af7d649f4b",
+        "expects_json": false,
+        "prompt_sha256": "831937c0c536b419dab043bbce21865e699525c021357fa96d2d7a3c5c884deb"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "loan_compliance_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "ed9663e09d056483decb180947b6533d8341662b5f021192d3ffdd5e11529ef9",
+        "expects_json": false,
+        "prompt_sha256": "f7d17f231b26927f2d5100734798f968689b02193c27383c5c4dd7347aebffd4"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "loan_discrimination_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "c98dfa4b097204c315758ecd822bfea9678b7b7c5ee6722daa45c46481321144",
+        "expects_json": false,
+        "prompt_sha256": "fa511723003608910b7a61f89e8c9ece7fc3c56e1ff7deb2da3f9e32baa8ebb2"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "content_moderation_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "11bbb398f232d3a8e39e503423caa0291dc157ce5ddb170d490f91f9dcd8fceb",
+        "expects_json": false,
+        "prompt_sha256": "08f066c8947d8f6ac8faaf16a44ee4d5d02e9ca4caddbf8b9f66f90623f30f9f"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "threat_evasion_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "51ab7cf01ca469bf418434de082e936a0119818e1265d9591dc3df4b0d96548b",
+        "expects_json": false,
+        "prompt_sha256": "6b5e6ed778c62d19f6643ee9cd49dfeaa66099ca00554898d7a83a7d872eefaa"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "safe_payment_testing_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "618e0726f54bf93fb54106d53302ade6da4a2aa9891605613d1a66271a886481",
+        "expects_json": false,
+        "prompt_sha256": "84076362640df1eb6e61714d701e0e7972d066df9e3ee456ee44a788a2745dcd"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "payment_fraud_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "5724c043f76f908114b5e697b8bfb2d0387fe914352adf225c7ab0572efc2f75",
+        "expects_json": false,
+        "prompt_sha256": "f40eca0772ee68d495f9fb78e22a6673322f33e78f69294f6988906c2ba7200d"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "access_review_benign",
+        "category": "benign_boundary",
+        "checks_sha256": "3ea783a572dc4bf4625c4001181b7b6468e7c0012a0dd629d28a38e694364064",
+        "expects_json": false,
+        "prompt_sha256": "cf12f0d60acad14e88ff0ec95e90ce20e46133151a0d6689e07b4970677d9c56"
+      },
+      {
+        "bucket": "refusal_paired_boundary",
+        "case_id": "privilege_abuse_harmful",
+        "category": "unsafe_boundary",
+        "checks_sha256": "66d8c2abd5f8c4e9516ac92e62f07dad2054e7edfd666d25fc03e7367fa62e71",
+        "expects_json": false,
+        "prompt_sha256": "adc47002389e288be5c24979ce6cc8dd8ee31db4c4e8fc3eeb572ee837153b26"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "python_edge_case_parser",
+        "category": "normal_use",
+        "checks_sha256": "d2704264a8c6bf436a2a1113a8b16136ca9e898c602a8d0a80239add7f829060",
+        "expects_json": false,
+        "prompt_sha256": "efbfdef76e93a7603dd9581943a30590f6efbcc0c801045d6034343b0e6376d9"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "sql_index_reasoning",
+        "category": "normal_use",
+        "checks_sha256": "2df25c64a5a3feee4016e93b7da4b6a964ccd6cacaa4b70726e25e886f82da1e",
+        "expects_json": false,
+        "prompt_sha256": "4c6bd6f4308c00202b20847ab76a0ee894ac2a31a4409e6e3ce4496c284f650b"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "shell_safe_sync",
+        "category": "normal_use",
+        "checks_sha256": "ce7515ef28b27162f68757fbd1a6d6a6651d035e158f6769707204c84fead55d",
+        "expects_json": false,
+        "prompt_sha256": "e3305b6b06de83c90290ea72b78008c9e4a961204e6db6a6a40af1a8f5625444"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "json_schema_repair",
+        "category": "normal_use",
+        "checks_sha256": "f76598aa95f7be135cc109f8bec59956c89b62f54cf727b6187b8d1a1f3616fd",
+        "expects_json": false,
+        "prompt_sha256": "b5108235e28c80306f3fcd382213c7ec706765ca5c92ddf5519d33687128c609"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "planning_with_constraints",
+        "category": "normal_use",
+        "checks_sha256": "8744885e9865a8fbff2df6b40a650ece1ebf177ad30e2481985ada89abc30155",
+        "expects_json": false,
+        "prompt_sha256": "f2272dcbddb341cacff06ad801afdafee17be08bfadfd7d44f39a577cd5cba2e"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "debugging_latency_regression",
+        "category": "normal_use",
+        "checks_sha256": "1c84fdd0b12cbed5ab8a64ffb07ea7dee190a5ab13205437f4a489ff28961b2b",
+        "expects_json": false,
+        "prompt_sha256": "4ef405e7cbfd303a8e2e7f20e21888ead4c28b62f9455c8a182ea5b0039a76e3"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "summarize_eval_tradeoff",
+        "category": "normal_use",
+        "checks_sha256": "3f44fe423cab10a5467ac862aa636678587205f5f7f11ab76471ea92e08967bc",
+        "expects_json": false,
+        "prompt_sha256": "7a5688f176183285b0800fe2a1d93d8d48d9805e56ecf50fb33faa0e0034f94b"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "small_math_reasoning",
+        "category": "normal_use",
+        "checks_sha256": "32cc5c7b06b0eb7683a45b4de10a8dc45aaa071ca587a9896154673abaad4486",
+        "expects_json": false,
+        "prompt_sha256": "e3fc2ef1db0089d98be69405a1b8649dc8d505996fc46de66c00d186ff342c6a"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "python_unit_test_fixture",
+        "category": "normal_use",
+        "checks_sha256": "acdb8a9775605a1862e95adc6b4e3dde0e7578fe7a4db1dd41e088369972049b",
+        "expects_json": false,
+        "prompt_sha256": "e3925274861173213123583ee2d7fc19ae26eeac227c0803eab037118258e8a8"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "pandas_grouping_tradeoff",
+        "category": "normal_use",
+        "checks_sha256": "2dce95e51ecd6fd9093dd1a2f1fd7b033deb0b7c1c98b886178bd4adb30d5998",
+        "expects_json": false,
+        "prompt_sha256": "fbb169bebac5846e330d5ab87671ded45d4d1a1a29cee3b5578a61626fd1d8d8"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "api_retry_design",
+        "category": "normal_use",
+        "checks_sha256": "a75ed50d08680ee0594313826bf0621814049808d8d4d9c57d1bc6669957c3ac",
+        "expects_json": false,
+        "prompt_sha256": "b7e16b5ba00370b0cf45f8c088d67ebe183be5c06a6e82b4ecba3b7c12792f68"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "docker_disk_pressure",
+        "category": "normal_use",
+        "checks_sha256": "ede9d4291df2ad4b1c6e48434710e369952c75ef7eaebf7efef6b8cbcdfabde4",
+        "expects_json": false,
+        "prompt_sha256": "34705e36f5b9b681005065bab1c6d610bf492f734cba815fb992ee876d690ff1"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "yaml_config_review",
+        "category": "normal_use",
+        "checks_sha256": "383950cf7558ecf650c8f7b1e7da395353b267d863cb9c6d604a521b6bd2373a",
+        "expects_json": false,
+        "prompt_sha256": "64e5a5449bcf921f266bffefef020cf64f34b04da072f2de0f2478b6fa53a34e"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "regex_boundary_bug",
+        "category": "normal_use",
+        "checks_sha256": "35405482dfc48d34fb7fc08f9518328fccba17f926e50e3b9dbbc5dc2378b41c",
+        "expects_json": false,
+        "prompt_sha256": "b10d8751b68e40fb6345d698107f35b98508f0ec07527f23e76c280bc4eb9320"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "confidence_interval_interpretation",
+        "category": "normal_use",
+        "checks_sha256": "135e585606dab3c23b5c6513c7773dbb5680bc7770c36b1a1c4317816dd22371",
+        "expects_json": false,
+        "prompt_sha256": "2db3c7289450883c96a60ca033a3ac64dc4bce558ac617504ee4bb5484844b89"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "paired_eval_design",
+        "category": "normal_use",
+        "checks_sha256": "25af6f51468e0cb75ce607f47fc0d68dd98cf060f0971b1a79260662fc6f4f2b",
+        "expects_json": false,
+        "prompt_sha256": "c8071c61d03af0a429e771588f8809fe1f2471b5b1483b2b0dcf70ca3cf10370"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "json_only_failure_modes",
+        "category": "normal_use",
+        "checks_sha256": "27e0cc4ef8f8af340bbc5142632ef4b2f2eb6dbe51f24a6205dfdf3c2ee1db21",
+        "expects_json": false,
+        "prompt_sha256": "8d34483861933ab44bd4940740013fe6ee35820596328e89b4eabc7dd6e53736"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "latency_tps_analysis",
+        "category": "normal_use",
+        "checks_sha256": "c9a1351be19625bd144e02dd31c5354269822fec9bdcee2500f6cd1d7537120d",
+        "expects_json": false,
+        "prompt_sha256": "6a53c41565366fe67aba48558ec3582e308f255e4bd1ad82b1d06a559f94e0c0"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "sql_null_semantics",
+        "category": "normal_use",
+        "checks_sha256": "144ac51153777577c0a5776344e7d08889c3236e30638a52628043f364198259",
+        "expects_json": false,
+        "prompt_sha256": "5d47925b300d7ff6bc26453bcd260861d93e62c24e29c4843f154599c1a41e28"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "shell_quote_safety",
+        "category": "normal_use",
+        "checks_sha256": "2e3aa3bbaf0dc9676ea7085f07b24e9085fb1efda1a210de1b1b2dacc9382bd2",
+        "expects_json": false,
+        "prompt_sha256": "bc01e13dcf605705fcafcd8173e935fdaad48df8f6ab2a3e737e3c6c57bef8da"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "git_rebase_conflict_plan",
+        "category": "normal_use",
+        "checks_sha256": "85db5111476d680e6f7111d58f7c7627be15e33da7c0fb9fcfe0b9dd1b1786f1",
+        "expects_json": false,
+        "prompt_sha256": "4ca0e6933c05259910c43b6cbf167e39807a6e56b02e46c0422a26660758eefb"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "eval_leakage_risk",
+        "category": "normal_use",
+        "checks_sha256": "9c7b828b62ff9664b8cd6fffba547f2487e88c9eba60f69d35fd7c3bad3d15ea",
+        "expects_json": false,
+        "prompt_sha256": "075661caca910b0530aec4a42e0ed53452c0ae1385fa64cb3283575a892b1d56"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "severity_weighting",
+        "category": "normal_use",
+        "checks_sha256": "eaedf2ae4297401f33af0f1ef760b4bd79ebecc4b0300ad40144450b29a2ddc2",
+        "expects_json": false,
+        "prompt_sha256": "03751b369a04b752fcaa7586662128f6695472aaabad6e3d7899fc49fde045ba"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "prompt_sampling_strategy",
+        "category": "normal_use",
+        "checks_sha256": "fe62b0c0582bb79afaa3691e3232876559c48fd879a75f7c8b458372c9924314",
+        "expects_json": false,
+        "prompt_sha256": "19f7c501c4eb6338bbec0f1f267b83d2695cd1df674717f5c7dfc64db50e1c72"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "api_schema_migration",
+        "category": "normal_use",
+        "checks_sha256": "1dc3aff3254aef8a3ebd3c0d9592612a388d5f81adb90a694c3c28399123e433",
+        "expects_json": false,
+        "prompt_sha256": "387f3589525ffb6001ebbd020b3bf1070fdf015982e34a1d8da48b89b4fe3b8b"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "cache_invalidation_plan",
+        "category": "normal_use",
+        "checks_sha256": "eef0a364eff72d781f8bfc725f17d6166be349847597b6f227feb69de387aa7e",
+        "expects_json": false,
+        "prompt_sha256": "d2e6618c2666c8c7bde9c84a177f73c5980442185a0b6742552b7a47f8c7bdd0"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "flaky_eval_retries",
+        "category": "normal_use",
+        "checks_sha256": "a7585eb73584a9117de47ecf2088849471d2332e9d4ec0cab4479bd0065a3e7a",
+        "expects_json": false,
+        "prompt_sha256": "f76f35a5ab0ad3a36b2ec084fadde3b13a93b72b6011135a4a094e9be9439ee1"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "model_selection_summary",
+        "category": "normal_use",
+        "checks_sha256": "c3b9207aacec2282f68e0d2a6847deb5be0344cff3921d432c73b72b57c517ba",
+        "expects_json": false,
+        "prompt_sha256": "a4a3a20cca91af2293651eeb07947fb571ac2f918158ad0f5b096236145d1b02"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "python_streaming_jsonl",
+        "category": "normal_use",
+        "checks_sha256": "597c9c4095485a35dae6e475389609e63e2c685e6748b0602f28725d32568833",
+        "expects_json": false,
+        "prompt_sha256": "803bdda56afaa5f9ce14845300437eb3a93dd1fcea9f05bd11472b018e1b8590"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "access_log_analysis",
+        "category": "normal_use",
+        "checks_sha256": "496bec7ac076f07532abfbbb8756fe1e4ef50a54c92cd8cb4cd683dd515d322b",
+        "expects_json": false,
+        "prompt_sha256": "ac5b1f878d336d77497e4de36cdebcea9fa0f802091ca2da4cf578b4a3cb5347"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "ui_regression_checklist",
+        "category": "normal_use",
+        "checks_sha256": "c66f7f37860167b8225f53f736ff43d929af53ea645fc176cfda0824b08d251f",
+        "expects_json": false,
+        "prompt_sha256": "a5a5adc7789dce6130526a858dea69a8dec07e9631fc73a72d6714a4f0075817"
+      },
+      {
+        "bucket": "capability_preservation_challenge",
+        "case_id": "external_benchmark_caveat",
+        "category": "normal_use",
+        "checks_sha256": "2ef7e9248da4378b38375172757cde171e11c4f7113e9b78a51aa054464d0c63",
+        "expects_json": false,
+        "prompt_sha256": "69a44f7162bc225599993114259e6e0e8f53e75f7d23583ca9ffc1c6b4ec6d1a"
+      }
+    ],
+    "prompt_counts": {
+      "capability_preservation_challenge": 32,
+      "refusal_paired_boundary": 40,
+      "unsafe_overcompliance": 3
+    },
+    "prompt_sets": [
+      "agentic_multi_step_planning",
+      "agentic_tool_use_json",
+      "agentic_self_critique",
+      "agentic_structured_extraction",
+      "agentic_code_debug",
+      "refusal_benign_boundary",
+      "unsafe_overcompliance",
+      "refusal_paired_boundary",
+      "normal_use_regression",
+      "capability_preservation_challenge"
+    ],
+    "total_prompts": 75
+  },
+  "publication": {
+    "publishable_summary_paths": [
+      "manifest.json",
+      "scores.csv"
+    ],
+    "raw_output_paths": [
+      "responses.jsonl",
+      "examples.md"
+    ],
+    "raw_outputs_public_safe": false,
+    "redaction_required_for_raw_outputs": true
+  },
+  "run": {
+    "config_fingerprints": [
+      {
+        "exists": true,
+        "path": "configs/experiments/qwen36_27b_v0.yaml",
+        "sha256": "e8b7eac8205519c5042b98cba4bffb3b0cc7972afc5ab60de0618ac90e266075"
+      }
+    ],
+    "dry_run": false,
+    "git": {
+      "branch": "main",
+      "commit": "74afd36e53b64c297eacd0d627417ed39b73360b",
+      "dirty": false,
+      "dirty_paths": [],
+      "remote_origin": "git@github.com:keithtyser/model-forge.git"
+    },
+    "runtime": {
+      "backend_base_url": "http://127.0.0.1:8000/v1",
+      "backend_model_alias": "local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v3",
+      "context_length": "32768",
+      "dry_run": false,
+      "gpu": {
+        "available": true,
+        "gpus": [
+          {
+            "driver_version": "580.82.09",
+            "memory_total": "[N/A]",
+            "name": "NVIDIA GB10"
+          }
+        ]
+      },
+      "hardware_label": "DGX Spark",
+      "hostname": "<redacted-host>",
+      "platform": "Linux-6.11.0-1014-nvidia-aarch64-with-glibc2.39",
+      "python_version": "3.12.3",
+      "quantization": "bf16",
+      "variant": "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3"
+    },
+    "total_cases": 75,
+    "trials": 1
+  },
+  "schema_version": "model_forge.eval_provenance_card.v1",
+  "variant": "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v3"
+}
