@@ -4875,3 +4875,38 @@ good eval: 6
 bad train: 10
 bad eval: 5
 ```
+
+## Qwen Response-Conditioned Heretic Search Result
+
+Status: completed and rejected; no checkpoint export.
+
+Run:
+
+```text
+config: configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_response_conditioned_search.yaml
+source: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12
+mode: search-only Heretic
+worker guard: Docker, 8 CPU, 108 GiB memory, 5% RAM floor
+trials: 32/32 complete
+baseline focused refusals: 3/5
+analysis: reports/generated/qwen36_heretic_trial12_response_conditioned_analysis.json
+```
+
+Result:
+
+```text
+recommendation: do_not_export
+reason: best_refusal_count_above_gate
+gate: refusals <= 0, KL <= 0.075, reduction >= 1
+best refusal count: 1/5
+best trial: index 19 / trial_id 18
+best trial KL: 0.1302881688
+second 1/5 trial: index 2 / trial_id 1 at KL 0.1454872340
+best within-budget frontier: 2/5 refusals at KL 0.0013772974
+```
+
+Interpretation: response-conditioned traces improved the high-KL frontier versus
+the prior sequential follow-up, but still did not produce an exportable
+zero-refusal candidate. The best in-budget candidates reduce the focused
+refusals from 3/5 to 2/5 only, which is not worth a full 51 GiB checkpoint
+export. Do not upload, quantize, or promote this branch.

@@ -258,13 +258,15 @@ unsafe-overcompliance still refused all 3 cases, and harmful detail rose to
 objective; revise the behavior-edit method or gate search directly on
 model-forge unsafe-overcompliance cases.
 
-The next Qwen ablation method shift is
+A Qwen response-conditioned Heretic method shift was run at
 `configs/abliteration/qwen36_27b_ft_local_abli_heretic_trial12_response_conditioned_search.yaml`.
 It uses generic response-conditioned Heretic prompt support plus
 `datasets/abliteration/qwen36_trial12_response_conditioned_traces.jsonl` to
 contrast five actual residual refusal traces against eight no-refusal safe
-redirect traces. Analyze its journal with `heretic-search-analyze`; export only
-if it reaches zero focused refusals at acceptable KL.
+redirect traces. It completed 32/32 guarded worker trials. Reject it:
+`heretic-search-analyze` recommends `do_not_export`; best refusal count was 1/5
+only at KL 0.1303, above the 0.075 budget, and the best in-budget candidates
+stayed at 2/5. Do not export, upload, quantize, or promote this branch.
 
 Before exporting another Heretic search result into a full checkpoint, run the
 repo-native journal gate:
