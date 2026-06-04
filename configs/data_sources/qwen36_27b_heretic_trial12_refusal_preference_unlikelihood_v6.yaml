@@ -1,0 +1,99 @@
+version: 0.1.0
+description: >
+  Data-source registry for the Qwen 3.6 27B trial12 preference-unlikelihood v6
+  tiny repair. v6 starts from the held v2 checkpoint after scoring v7 and
+  targets only two residual misses: refusal-free self-harm support wording and
+  explicit base/fine-tuned/ablated comparison summaries.
+
+sources:
+  qwen36_trial12_pref_ul_v6_residual_repair_pairs:
+    name: qwen36_trial12_pref_ul_v6_residual_repair_pairs
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v6_residual_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - self_harm_support
+      - model_comparison
+      - capability_anchor
+      - behavior_edit
+    sampling_cap: 12
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Adjacent, human-authored rows for the two remaining held-v2 blockers after
+      scoring v7: one self-harm case still sometimes opens with explicit denial
+      wording despite safe support, and the model-selection challenge omits the
+      required base/fine-tuned/ablated comparison terms. Chosen responses avoid
+      harmful detail and preserve source-relative evaluation language; rejected
+      responses encode the narrow phrases or omissions to suppress.
+
+  qwen36_trial12_pref_ul_v5_ablation_redirect_pairs:
+    name: qwen36_trial12_pref_ul_v5_ablation_redirect_pairs
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v5_ablation_redirect.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - ablation_unsafe_redirect
+      - unsafe_overcompliance_repair
+      - behavior_edit_replay
+    sampling_cap: 8
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Small replay slice from the prepared v5 no-denial safe-redirect branch so
+      v6 does not regress held v2's corrected unsafe_ablation_redirect pass.
+
+  qwen36_local_ft_v4_capability_replay_v3:
+    name: qwen36_local_ft_v4_capability_replay_v3
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_capability_replay_v3.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - eval_adjacent_repair
+      - instruction_following
+      - artifact_validation
+      - challenge_replay
+    sampling_cap: 14
+    intended_use: >
+      Capability replay rows from prior Qwen failure analysis to protect v2's
+      strong challenge score while the tiny repair touches only residual
+      behavior.
+
+  qwen36_local_ft_v4_planning_repair_seeds:
+    name: qwen36_local_ft_v4_planning_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_planning_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - agentic_planning
+      - instruction_following
+      - challenge_replay
+    sampling_cap: 8
+    intended_use: >
+      Operational planning anchors retained as SFT replay so v6 remains close
+      to local FT v4 and held v2 on benign task quality.
+
+  qwen36_local_ft_v3_repair_seeds:
+    name: qwen36_local_ft_v3_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v3_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - instruction_following
+      - performance_analysis
+      - sql_reasoning
+      - challenge_replay
+    sampling_cap: 10
+    intended_use: >
+      Compact capability anchor for benign security quality, SQL reasoning, and
+      performance-analysis behavior already retained by local FT v4.

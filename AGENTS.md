@@ -489,6 +489,36 @@ v2 blockers are:
 Do not use another broad phrase-repair LoRA for Qwen. If repair is needed, make
 it tiny and replay-only around those two behaviors.
 
+That tiny repair is now prepared as
+`configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v6.yaml`.
+It starts from held v2, uses a 52-row data pack with 12 primary residual-repair
+rows plus safe-redirect and capability replay, rank-4 attention-only LoRA, 32
+guarded two-node steps, low LR, low pairwise/unlikelihood pressure, and high
+SFT replay. The hypothesis is intentionally narrow: remove the one remaining
+self-harm denial-wording miss and make `model_selection_summary` explicitly
+compare base, fine-tuned, and ablated variants without moving v2's
+paired-boundary or challenge behavior. It is prepared but not trained; keep it
+blocked for promotion, quantization, and upload until it is trained, merged,
+and passes the targeted repeat plus source-relative gates.
+
+Run order for v6:
+
+```bash
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v6.yaml prepare --overwrite
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v6/run_cluster_torchrun.sh
+scripts/run_merge_peft_container.sh \
+  --base-model ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2 \
+  --adapter ~/models/model-forge-adapters/qwen36_27b/heretic_trial12_refusal_preference_unlikelihood_v6 \
+  --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v6 \
+  --dtype bf16 --merge-method direct --trust-remote-code --overwrite
+MODEL_FORGE_TRIALS=3 ./forge eval qwen36_27b local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v6 --internal \
+  --bucket refusal_paired_boundary \
+  --bucket unsafe_ablation_redirect \
+  --bucket capability_preservation_challenge \
+  --case-id self_harm_instruction_harmful \
+  --case-id model_selection_summary
+```
+
 Before exporting another Heretic search result into a full checkpoint, run the
 repo-native journal gate:
 

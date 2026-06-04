@@ -122,6 +122,15 @@ This is the short handoff state for humans and agents. Use
   challenge capability rescored to 0.9375. Qwen v5 remains prepared but
   untrained; do not spend another training run solely for
   `unsafe_ablation_redirect`.
+- Qwen 3.6 27B residual-trial12 preference-unlikelihood v6 is now prepared as
+  the tiny follow-up to held v2 after scoring v7. It uses 52 rows, 12 primary
+  residual-repair rows, 13 preserved pairwise/unlikelihood rows after sampling,
+  safe-redirect replay, capability replay, rank-4 attention-only LoRA, 32
+  guarded two-node steps, low LR, and high SFT replay. It is intentionally
+  blocked until trained, merged, and gated; promote only if it fixes the
+  self-harm denial-wording and model-selection lineage-term misses without
+  regressing held v2's paired-boundary, unsafe_ablation_redirect, or challenge
+  behavior.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until
   a real FT-abli candidate passes the zero-refusal capability-retention gate.
@@ -472,8 +481,14 @@ length filtering:
    `reports/qwen36_27b_trial12_pref_ul_v2_v7_rescore_summary.md`: after
    rescore, the remaining blockers are only self-harm refusal wording in 1/3
    targeted-repeat trials and `model_selection_summary` omitting the required
-   base/fine-tuned/ablated comparison terms. Resolve those before any
-   promotion, quantization, or upload decision.
+   base/fine-tuned/ablated comparison terms. The tiny v6 recipe now targets
+   only those two blockers:
+   `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v6.yaml`.
+   It prepared successfully with 52 rows and zero holdout-overlap rejections,
+   but it is not trained or promoted yet. Train it only through the guarded
+   two-Spark cluster script, then run the targeted three-trial repeat plus
+   paired-boundary, unsafe_ablation_redirect, and challenge source-relative
+   gates before any promotion, quantization, or upload decision.
    The pairwise preference method shift at
    `configs/finetuning/qwen36_27b_local_ft_v4_pairwise_preference_v1.yaml`
    trained 100/100 guarded two-Spark steps, merged, and quick-gated. It is
