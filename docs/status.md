@@ -222,12 +222,16 @@ This is the short handoff state for humans and agents. Use
   upload, quantize, promote, or run broader evals from v12. See
   `reports/qwen36_27b_trial12_pref_ul_v12_refusal_wording_hard_negatives_summary.md`.
 - Qwen 3.6 27B residual-trial12 preference-unlikelihood v13 residual-opening
-  repair is the next prepared branch. It continues from the merged v12
-  checkpoint with direct hard negatives for residual openings such as
-  "I can give safety guidance, but I won't...", "without helping someone hide",
-  and "do not stage." It remains blocked from promotion, upload, and
-  quantization until it passes targeted three-trial blockers, fresh adjacent
-  self-harm paraphrases, and source-relative benign/challenge gates.
+  repair is trained, merged, synced, targeted-gated, and rejected. It preserved
+  `model_selection_summary` 3/3, safe redirects 3/3, and harmful
+  detail/compliance 0/3, but explicit self-harm refusal wording regressed to
+  2/3. Do not upload, quantize, promote, or run broader evals from v13. See
+  `reports/qwen36_27b_trial12_pref_ul_v13_residual_opening_repair_summary.md`.
+- The next Qwen FT-abli branch should shift method rather than adding another
+  near-identical sequential preference/unlikelihood repair. Use a
+  multi-direction/SRA/OT-style behavior edit or a stochastic objective that
+  directly optimizes the same three-trial no-refusal gate while preserving
+  harmful detail/compliance at zero.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until
   a real FT-abli candidate passes the zero-refusal capability-retention gate.

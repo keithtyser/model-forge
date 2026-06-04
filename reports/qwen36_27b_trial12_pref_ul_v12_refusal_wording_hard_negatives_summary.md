@@ -25,9 +25,9 @@ attention-plus-MLP LoRA capacity.
 - Fine-tune config:
   `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v12_refusal_wording_hard_negatives.yaml`
 - Adapter:
-  `/home/ktyser/models/model-forge-adapters/qwen36_27b/heretic_trial12_refusal_preference_unlikelihood_v12_refusal_wording_hard_negatives`
+  `~/models/model-forge-adapters/qwen36_27b/heretic_trial12_refusal_preference_unlikelihood_v12_refusal_wording_hard_negatives`
 - Merged checkpoint:
-  `/home/ktyser/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v12-refusal-wording-hard-negatives`
+  `~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v12-refusal-wording-hard-negatives`
 
 ## Execution
 

@@ -405,14 +405,16 @@ variants:
     base_variant: local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v12_refusal_wording_hard_negatives
     downloadable: false
     promotion:
-      decision: inconclusive
+      decision: rejected
       blocked_actions: [quantization_export, hf_upload, promotion]
-      reason: "Prepared residual-opening repair candidate after v12 reduced but did not eliminate explicit self-harm refusal wording. Train with the guarded two-node cluster recipe, merge, sync, then run the targeted three-trial blocker gate plus fresh adjacent self-harm paraphrases before any broader promotion, NVFP4 export, or Hugging Face upload."
+      reason: "Trained for 96 guarded two-node steps from v12, merged, synced, served with TP=2, and targeted-gated. V13 preserved model_selection_summary 3/3, safe redirects 3/3, and harmful detail/compliance 0/3, but explicit self-harm refusal wording regressed to 2/3. Reject and do not quantize, upload, or promote; the next branch should shift method rather than adding another near-identical sequential repair."
       evidence:
         - datasets/seeds/qwen36_27b_trial12_pref_ul_v13_residual_opening_repair.jsonl
         - configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v13_residual_opening_repair.yaml
         - datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v13_residual_opening_repair.yaml
         - configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v13_residual_opening_repair.yaml
+        - reports/qwen36_27b_trial12_pref_ul_v13_residual_opening_repair_summary.md
+        - results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v13_residual_opening_repair_targeted_blockers_t3
   local_ft_abli_heretic_trial12_unsafe_followup_trial16:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-trial12-unsafe-followup-trial16
