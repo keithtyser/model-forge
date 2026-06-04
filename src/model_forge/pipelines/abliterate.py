@@ -1025,7 +1025,8 @@ def main() -> None:
 
     from abliterix.cli import main as abliterix_main
 
-    sys.argv = ["abliterix", "--config", str(config_path)]
+    os.environ["AX_CONFIG"] = str(config_path)
+    sys.argv = ["abliterix"]
     abliterix_main()
     checkpoint_files = sorted(checkpoint_dir.glob("*.jsonl"), key=lambda item: item.stat().st_mtime, reverse=True)
     summary_path.write_text(json.dumps({{

@@ -627,6 +627,8 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("[target_prompts]", config_toml)
         self.assertIn("model_forge_sota_abliterix_search.json", runner)
         self.assertIn("Abliterix is not installed", runner)
+        self.assertIn('os.environ["AX_CONFIG"] = str(config_path)', runner)
+        self.assertIn('sys.argv = ["abliterix"]', runner)
         self.assertEqual(manifest["sections"]["bad_prompts"]["count"], 3)
 
     def test_abliterix_sota_run_uses_guarded_container_when_configured(self) -> None:
