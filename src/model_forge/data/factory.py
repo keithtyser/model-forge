@@ -1045,6 +1045,52 @@ def response_text(row: dict[str, Any]) -> str:
     return str(row.get("response_text", "")).strip()
 
 
+def normalize_filter_text(text: str, case_sensitive: bool = False) -> str:
+    normalized = (
+        text.replace("\u2019", "'")
+        .replace("\u2018", "'")
+        .replace("\u201c", '"')
+        .replace("\u201d", '"')
+    )
+    return normalized if case_sensitive else normalized.lower()
+
+
+def filter_values(raw: Any) -> list[str]:
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return [str(item) for item in raw if str(item)]
+    return [str(raw)]
+
+
+def text_filter_failures(text: str, filters: dict[str, Any]) -> list[str]:
+    if not filters:
+        return []
+    case_sensitive = bool(filters.get("case_sensitive", False))
+    haystack = normalize_filter_text(text, case_sensitive=case_sensitive)
+    flags = 0 if case_sensitive else re.IGNORECASE
+    failures: list[str] = []
+    for phrase in filter_values(filters.get("must_contain")):
+        needle = normalize_filter_text(phrase, case_sensitive=case_sensitive)
+        if needle not in haystack:
+            failures.append(f"missing:{phrase}")
+    for phrase in filter_values(filters.get("must_not_contain")):
+        needle = normalize_filter_text(phrase, case_sensitive=case_sensitive)
+        if needle in haystack:
+            failures.append(f"forbidden:{phrase}")
+    for pattern in filter_values(filters.get("must_match")):
+        if not re.search(pattern, text, flags=flags):
+            failures.append(f"missing_pattern:{pattern}")
+    for pattern in filter_values(filters.get("must_not_match")):
+        if re.search(pattern, text, flags=flags):
+            failures.append(f"forbidden_pattern:{pattern}")
+    return failures
+
+
+def text_filters_match(text: str, filters: dict[str, Any]) -> bool:
+    return not text_filter_failures(text, filters)
+
+
 def sorted_eval_rows(rows: list[dict[str, Any]], policy: str) -> list[dict[str, Any]]:
     if policy in {"shortest", "shortest_response", "shortest_pass"}:
         return sorted(rows, key=lambda row: (len(response_text(row)), int(row.get("trial_index", 0) or 0)))
@@ -1096,6 +1142,7 @@ def build_eval_repair_dataset(config: dict[str, Any]) -> tuple[list[dict[str, An
     source_reports = []
     exact_eval_prompt_rows = 0
     skipped_groups = []
+    text_filter_skips = []
 
     for source_index, source_config in enumerate(config.get("sources", []), start=1):
         if not isinstance(source_config, dict):
@@ -1105,6 +1152,8 @@ def build_eval_repair_dataset(config: dict[str, Any]) -> tuple[list[dict[str, An
         include = source_config.get("include", {}) if isinstance(source_config.get("include"), dict) else {}
         chosen_filters = source_config.get("chosen", {}).get("score_filters", {}) if isinstance(source_config.get("chosen"), dict) else {}
         rejected_filters = source_config.get("rejected", {}).get("score_filters", {}) if isinstance(source_config.get("rejected"), dict) else {}
+        chosen_text_filters = source_config.get("chosen", {}).get("text_filters", {}) if isinstance(source_config.get("chosen"), dict) else {}
+        rejected_text_filters = source_config.get("rejected", {}).get("text_filters", {}) if isinstance(source_config.get("rejected"), dict) else {}
         if not chosen_filters or not rejected_filters:
             raise ValueError(f"{display_path(source_path)} source requires chosen/rejected score_filters")
         prompt_variants = source_config.get("prompt_variants", pairing.get("prompt_variants"))
@@ -1119,13 +1168,45 @@ def build_eval_repair_dataset(config: dict[str, Any]) -> tuple[list[dict[str, An
             groups.setdefault(group_key_for_eval_row(row, key_fields), []).append(row)
 
         emitted_for_source = 0
+        chosen_text_filter_skip_count = 0
+        rejected_text_filter_skip_count = 0
         for group_key, group_rows in sorted(groups.items()):
+            chosen_score_rows = [row for row in group_rows if score_filters_match(row, chosen_filters)]
+            rejected_score_rows = [row for row in group_rows if score_filters_match(row, rejected_filters)]
+            filtered_chosen_rows = []
+            for row in chosen_score_rows:
+                failures = text_filter_failures(response_text(row), chosen_text_filters)
+                if failures:
+                    chosen_text_filter_skip_count += 1
+                    text_filter_skips.append({
+                        "source": display_path(source_path),
+                        "group_key": list(group_key),
+                        "role": "chosen",
+                        "trial_index": row.get("trial_index"),
+                        "failures": failures[:5],
+                    })
+                    continue
+                filtered_chosen_rows.append(row)
+            filtered_rejected_rows = []
+            for row in rejected_score_rows:
+                failures = text_filter_failures(response_text(row), rejected_text_filters)
+                if failures:
+                    rejected_text_filter_skip_count += 1
+                    text_filter_skips.append({
+                        "source": display_path(source_path),
+                        "group_key": list(group_key),
+                        "role": "rejected",
+                        "trial_index": row.get("trial_index"),
+                        "failures": failures[:5],
+                    })
+                    continue
+                filtered_rejected_rows.append(row)
             chosen_rows = sorted_eval_rows(
-                [row for row in group_rows if score_filters_match(row, chosen_filters)],
+                filtered_chosen_rows,
                 chosen_policy,
             )
             rejected_rows = sorted_eval_rows(
-                [row for row in group_rows if score_filters_match(row, rejected_filters)],
+                filtered_rejected_rows,
                 rejected_policy,
             )
             if not chosen_rows or not rejected_rows:
@@ -1134,6 +1215,8 @@ def build_eval_repair_dataset(config: dict[str, Any]) -> tuple[list[dict[str, An
                     "group_key": list(group_key),
                     "chosen_count": len(chosen_rows),
                     "rejected_count": len(rejected_rows),
+                    "chosen_score_count": len(chosen_score_rows),
+                    "rejected_score_count": len(rejected_score_rows),
                     "reason": "missing_chosen_or_rejected",
                 })
                 continue
@@ -1210,6 +1293,8 @@ def build_eval_repair_dataset(config: dict[str, Any]) -> tuple[list[dict[str, An
             "considered_rows": considered,
             "groups": len(groups),
             "emitted_rows": emitted_for_source,
+            "chosen_text_filter_skips": chosen_text_filter_skip_count,
+            "rejected_text_filter_skips": rejected_text_filter_skip_count,
         })
 
     promotion_blockers = []
@@ -1226,6 +1311,7 @@ def build_eval_repair_dataset(config: dict[str, Any]) -> tuple[list[dict[str, An
         "skills": default_skills,
         "source_reports": source_reports,
         "skipped_groups": skipped_groups,
+        "text_filter_skips": text_filter_skips,
         "exact_eval_prompt_rows": exact_eval_prompt_rows,
         "promotion_blockers": promotion_blockers,
         "promotion_ready": not promotion_blockers and bool(rows),

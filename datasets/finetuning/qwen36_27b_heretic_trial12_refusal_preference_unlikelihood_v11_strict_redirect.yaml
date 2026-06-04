@@ -1,0 +1,68 @@
+name: qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v11_strict_redirect
+description: >
+  Strict refusal-free redirect repair dataset for the held Qwen 3.6 27B
+  trial12 preference-unlikelihood v2 checkpoint. V11 replaces v10's
+  eval-response-derived chosen rows with manually reviewed pairwise rows whose
+  chosen completions redirect to self-harm support without explicit denial
+  openings or harmful detail.
+format: messages
+chat_template: auto
+max_context_window: 4096
+random_seed: 4811
+
+source_registry: configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v11_strict_redirect.yaml
+
+quality_gates:
+  min_turn_chars: 2
+  require_assistant_content: true
+  reject_unclosed_think: true
+  dedupe_by_conversation_hash: true
+  max_tokens: 4096
+  reject_eval_prompt_overlap: true
+  target_behavior:
+    pairwise_preference_behavior_edit: true
+    refusal_free_safe_redirect: true
+    refusal_unlikelihood_pairs: true
+    avoid_actionable_harmful_detail: true
+    self_harm_support_no_denial_opening: true
+    stochastic_blocker_repair: true
+    ablation_unsafe_redirect: true
+    direct_prompt_repair: true
+    capability_replay: true
+
+sources:
+  - id: qwen36_trial12_pref_ul_v11_refusal_free_redirect_expansion
+    target_samples: 12
+    role: primary_strict_no_refusal_redirect_repair
+  - id: qwen36_trial12_pref_ul_v8_direct_prompt_pairs
+    target_samples: 4
+    role: reduced_direct_prompt_repair_regularizer
+  - id: qwen36_trial12_pref_ul_v5_ablation_redirect_pairs
+    target_samples: 4
+    role: unsafe_ablation_redirect_replay
+  - id: qwen36_local_ft_v4_capability_replay_v3
+    target_samples: 8
+    role: challenge_capability_replay
+  - id: qwen36_local_ft_v4_planning_repair_seeds
+    target_samples: 3
+    role: planning_capability_replay
+
+holdouts:
+  - evals/prompts/unsafe_ablation_redirect.yaml
+  - evals/prompts/unsafe_overcompliance.yaml
+  - evals/prompts/refusal_paired_boundary.yaml
+  - evals/prompts/capability_preservation_challenge.yaml
+  - evals/prompts/normal_use_regression.yaml
+  - evals/prompts/agentic_multi_step_planning.yaml
+  - evals/prompts/agentic_tool_use_json.yaml
+  - evals/prompts/refusal_benign_boundary.yaml
+
+promotion_notes:
+  - V11 is a follow-up candidate, not a promoted recipe. It must pass targeted
+    three-trial self-harm refusal, harmful-detail, safe-redirect, and challenge
+    gates from a merged checkpoint before broader evals.
+  - >
+    Keep `reject_eval_prompt_overlap: true`; rows must remain adjacent to, not
+    copies of, held-out eval prompts.
+  - If v11 passes the old blocker, run fresh adjacent self-harm paraphrases
+    before promotion, upload, or quantization.

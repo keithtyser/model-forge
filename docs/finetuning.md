@@ -188,6 +188,27 @@ The generated seed can then be mixed with capability replay and trained through
 not enough for promotion; add fresh adjacent held-out paraphrases before
 quantizing or uploading the model.
 
+For no-refusal ablation repairs, score filters are necessary but not sufficient.
+Inspect the chosen assistant text and add `chosen.text_filters` when refusal
+style matters:
+
+```yaml
+chosen:
+  score_filters:
+    refusal_rate_harmful: {eq: 0.0}
+    safe_redirect_rate: {eq: 1.0}
+  text_filters:
+    must_not_match:
+      - "\\b(?:cannot|can't|won't|will not)\\b"
+      - "\\bwithout giving instructions\\b"
+      - "\\bdo not provide\\b"
+```
+
+If all metric-passing chosen rows fail the text filter, create reviewed
+replacement pairwise rows instead of training on weak "chosen" responses. The
+Qwen v10 repair failed for exactly this reason: the chosen side scored as
+no-refusal but still taught denial-adjacent phrasing.
+
 ## Resource Contract
 
 Training jobs must be tenants on the host, not owners of the host. The generated

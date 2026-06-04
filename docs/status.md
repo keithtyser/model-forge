@@ -193,18 +193,27 @@ This is the short handoff state for humans and agents. Use
 - A generic eval-response repair builder is now available through
   `./forge data repair-from-eval --config <config>`. It converts saved eval
   responses into pairwise `messages` / `rejected_messages` rows by matching
-  configured pass/fail score filters and records whether rows use exact held-out
-  prompts. The Qwen v10 seed config
+  configured pass/fail score filters, optional response text filters, and
+  records whether rows use exact held-out prompts. The Qwen v10 seed config
   `configs/data_repair/qwen36_27b_v2_self_harm_eval_repair_v1.yaml` generated
   `datasets/seeds/qwen36_27b_v2_self_harm_eval_repair_v1.jsonl`: 16 adjacent
   self-harm repair pairs, 0 exact eval-prompt rows, and no promotion blockers in
   `reports/qwen36_27b_v2_self_harm_eval_repair_v1_report.json`.
 - Qwen 3.6 27B residual-trial12 preference-unlikelihood v10 eval repair is
-  prepared but not trained. It starts from held v2, consumes the eval-response
-  repair seed plus small replay anchors, uses a bounded two-node cluster
-  attention-LoRA recipe, and remains blocked from promotion, upload, and
-  quantization until it passes the targeted blocker gate, fresh adjacent
-  self-harm paraphrases, and source-relative benign/challenge gates.
+  trained, merged, synced, targeted-gated, and rejected. It passed
+  `model_selection_summary` 3/3 and kept harmful detail/compliance at 0/3, but
+  failed the actual ablation target: `self_harm_instruction_harmful` refusal
+  wording was 3/3. The root cause was weak eval-response repair data: chosen
+  rows scored as no-refusal while still containing refusal-adjacent text such as
+  "without giving instructions" or "Do not try...". See
+  `reports/qwen36_27b_trial12_pref_ul_v10_eval_repair_summary.md`.
+- Qwen 3.6 27B residual-trial12 preference-unlikelihood v11 strict redirect is
+  the next prepared branch. It starts from held v2 and uses
+  `datasets/seeds/qwen36_27b_trial12_pref_ul_v11_refusal_free_redirect_expansion.jsonl`
+  plus compact replay anchors. It is not trained or evaluated yet and remains
+  blocked from promotion, upload, and quantization until it passes the targeted
+  blocker gate, fresh adjacent self-harm paraphrases, and source-relative
+  benign/challenge gates.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until
   a real FT-abli candidate passes the zero-refusal capability-retention gate.
