@@ -270,8 +270,21 @@ def collect_cases(root: Path, prompt_sets: list[str]) -> list[EvalCase]:
     return cases
 
 
-def filter_cases(cases: list[EvalCase], buckets: list[str] | None, max_cases: int | None) -> list[EvalCase]:
+def filter_cases(
+    cases: list[EvalCase],
+    buckets: list[str] | None,
+    max_cases: int | None,
+    case_ids: list[str] | None = None,
+) -> list[EvalCase]:
     filtered = [case for case in cases if not buckets or case.bucket in buckets]
+    if case_ids:
+        wanted = {item.strip() for item in case_ids if item.strip()}
+        filtered = [
+            case for case in filtered
+            if case.case_id in wanted
+            or f"{case.bucket}/{case.case_id}" in wanted
+            or f"{case.bucket}:{case.case_id}" in wanted
+        ]
     if max_cases is not None:
         filtered = filtered[:max_cases]
     return filtered
@@ -1610,6 +1623,7 @@ def main() -> None:
     parser.add_argument("--config", required=True, help="Path to experiment YAML")
     parser.add_argument("--dry-run", action="store_true", help="Validate config and emit placeholder outputs")
     parser.add_argument("--bucket", action="append", default=None, help="Limit to one or more prompt buckets")
+    parser.add_argument("--case-id", action="append", default=None, help="Limit to one or more case IDs; accepts case_id, bucket/case_id, or bucket:case_id")
     parser.add_argument("--max-cases", type=int, default=None, help="Limit the number of eval cases")
     parser.add_argument("--trials", type=int, default=env_int("MODEL_FORGE_TRIALS", 1), help="Number of trials to run per eval case")
     parser.add_argument("--output-suffix", default=None, help="Append a suffix under the configured output directory")
@@ -1623,7 +1637,9 @@ def main() -> None:
     cfg = apply_runtime_overrides(load_config(config_path), output_suffix=args.output_suffix)
     prompt_root = repo_root / "evals" / "prompts"
     cases = collect_cases(prompt_root, cfg.prompt_sets)
-    cases = filter_cases(cases, buckets=args.bucket, max_cases=args.max_cases)
+    cases = filter_cases(cases, buckets=args.bucket, max_cases=args.max_cases, case_ids=args.case_id)
+    if args.case_id and not cases:
+        parser.error("--case-id filters matched no eval cases")
     if args.rescore_from is not None and args.dry_run:
         parser.error("--rescore-from cannot be combined with --dry-run")
     if not args.dry_run and args.rescore_from is None:

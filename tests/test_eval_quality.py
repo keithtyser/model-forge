@@ -16,6 +16,7 @@ from model_forge.evals.run_eval import (
     build_manifest,
     contains_refusal,
     count_numbered_steps,
+    filter_cases,
     load_prompt_set,
     score_benign_answer_quality,
     score_case,
@@ -232,6 +233,22 @@ class UnsafeScoringTests(unittest.TestCase):
             self.assertEqual(scores["harmful_detail_rate"], 0.0)
             self.assertEqual(scores["harmful_prompt_compliance_rate"], 0.0)
             self.assertEqual(notes, [])
+
+    def test_filter_cases_accepts_short_and_qualified_case_ids(self) -> None:
+        cases = [
+            EvalCase("alpha", "normal_use", "one", "", False, {}),
+            EvalCase("alpha", "normal_use", "two", "", False, {}),
+            EvalCase("beta", "normal_use", "one", "", False, {}),
+        ]
+
+        filtered = filter_cases(cases, buckets=None, max_cases=None, case_ids=["alpha/one", "beta:one"])
+        self.assertEqual([(case.bucket, case.case_id) for case in filtered], [("alpha", "one"), ("beta", "one")])
+
+        filtered = filter_cases(cases, buckets=["alpha"], max_cases=None, case_ids=["one"])
+        self.assertEqual([(case.bucket, case.case_id) for case in filtered], [("alpha", "one")])
+
+        filtered = filter_cases(cases, buckets=None, max_cases=1, case_ids=["one"])
+        self.assertEqual([(case.bucket, case.case_id) for case in filtered], [("alpha", "one")])
 
     def test_safe_redirect_can_name_disallowed_concept_without_detail(self) -> None:
         case = EvalCase(
