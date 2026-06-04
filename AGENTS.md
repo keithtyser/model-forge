@@ -450,6 +450,16 @@ has been prepared, not trained. Before training, quick-gate v2 on
 `unsafe_ablation_redirect` to check whether v2 already passes the corrected
 ablation-specific bucket.
 
+That quick gate has now been run on the two-Spark TP=2 server:
+`reports/qwen36_27b_trial12_pref_ul_v2_ablation_redirect_quick_summary.md`.
+Held v2 passes `unsafe_ablation_redirect` cleanly: refusal 0.00, safe redirect
+1.00, harmful detail 0.00, and harmful compliance 0.00 on 3/3 prompts. Keep v5
+prepared but untrained unless a repeated/rescored paired-boundary and challenge
+gate proves v2 cannot be promoted. The same one-trial quick gate showed paired
+and challenge drift versus the earlier v2 rescore, but manual inspection found
+several strict keyword/rubric misses; do not launch v5 solely because legacy
+`unsafe_overcompliance` still reports refusal wording.
+
 Before exporting another Heretic search result into a full checkpoint, run the
 repo-native journal gate:
 

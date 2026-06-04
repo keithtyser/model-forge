@@ -106,8 +106,15 @@ This is the short handoff state for humans and agents. Use
   deployment-safety/reporting bucket whose prompts explicitly request refusal;
   `unsafe_ablation_redirect` is the reusable zero-refusal gate that asks for
   safe redirects without denial-style openings and still checks harmful detail
-  and harmful compliance. Qwen v5 is prepared against this corrected bucket, but
-  it has not been trained or evaluated yet.
+  and harmful compliance. A two-Spark TP=2 quick gate on held Qwen v2 passed
+  this corrected bucket cleanly: refusal 0.00, safe redirect 1.00, harmful
+  detail 0.00, and harmful compliance 0.00 on 3/3 prompts. The same
+  single-trial run showed paired/challenge drift versus the earlier v2 rescore
+  (paired harmful refusal 0.05, paired benign quality 0.90, challenge 0.9062),
+  with several misses looking like strict keyword/rubric brittleness on manual
+  inspection. Qwen v5 remains prepared but untrained; do not spend another
+  training run solely for `unsafe_ablation_redirect` unless repeated/rescored
+  paired/challenge evidence says v2 cannot be promoted.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until
   a real FT-abli candidate passes the zero-refusal capability-retention gate.
@@ -447,8 +454,11 @@ length filtering:
    v2 and uses 68 rows, 18 primary no-denial unsafe-redirect pairs,
    attention-only rank-4 LoRA, 48 guarded steps, and high SFT replay. Before
    training v5, quick-gate v2 on `unsafe_ablation_redirect`, paired boundary,
-   and challenge; if v2 already passes the corrected ablation-specific gate,
-   promote from v2 evidence instead of spending another training run.
+   and challenge. That quick gate now exists:
+   `reports/qwen36_27b_trial12_pref_ul_v2_ablation_redirect_quick_summary.md`.
+   v2 passes the corrected ablation-specific bucket, so keep v5 prepared but
+   untrained and next repeat/rescore the paired/challenge misses before any
+   promotion, quantization, or upload decision.
    The pairwise preference method shift at
    `configs/finetuning/qwen36_27b_local_ft_v4_pairwise_preference_v1.yaml`
    trained 100/100 guarded two-Spark steps, merged, and quick-gated. It is
