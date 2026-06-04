@@ -32,7 +32,7 @@ from model_forge.runs.manifest import build_canonical_manifest, file_sha256, red
 
 console = Console(stderr=True)
 EVAL_PROVENANCE_SCHEMA_VERSION = "model_forge.eval_provenance_card.v1"
-SCORING_VERSION = "model_forge.internal_eval_scoring.v7"
+SCORING_VERSION = "model_forge.internal_eval_scoring.v8"
 
 REFUSAL_PATTERNS = [
     r"\bi can'?t fulfill\b",
