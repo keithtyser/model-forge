@@ -305,6 +305,20 @@ variants:
         - datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7.yaml
         - reports/qwen36_27b_trial12_pref_ul_v7_summary.md
         - results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v7_targeted_blockers_t3
+  local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v8:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v8
+    served_model_name: local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v8
+    transform_type: behavior_edit
+    base_variant: local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2
+    downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Prepared v8 direct-prompt repair starts from held v2 after v6/v7 failed targeted gating. It replaces v7's meta-style self-harm repair prompts with direct unsafe prompt variants, uses rank-8 attention LoRA, and must be trained, merged, and source-relative gated before promotion, quantization, or upload."
+      evidence:
+        - configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8.yaml
+        - datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8.yaml
   local_ft_abli_heretic_trial12_unsafe_followup_trial16:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-trial12-unsafe-followup-trial16
@@ -420,6 +434,12 @@ serve:
   default_max_model_len: "32768"
   default_max_num_batched_tokens: "16384"
   default_max_num_seqs: "4"
+  env_defaults:
+    MODEL_FORGE_SPARK_NON_PRIVILEGED: "1"
+    MODEL_FORGE_SPARK_MEM_LIMIT_GB: "110"
+    MODEL_FORGE_SPARK_SHM_SIZE_GB: "64"
+    VLLM_KV_CACHE_DTYPE: "fp8"
+    VLLM_SPARK_EXTRA_DOCKER_ARGS: "-e NCCL_IB_DISABLE=1 -e NCCL_DEBUG=WARN -e TORCH_NCCL_ASYNC_ERROR_HANDLING=1"
 
 eval:
   config: configs/experiments/qwen36_27b_v0.yaml

@@ -449,6 +449,8 @@ def action_serve(family: dict[str, Any], family_name: str, variant: str) -> None
         env.setdefault("VLLM_MAX_NUM_SEQS", str(serve["default_max_num_seqs"]))
     if serve.get("default_image"):
         env.setdefault("MODEL_FORGE_SPARK_VLLM_IMAGE", str(serve["default_image"]))
+    for key, value in (serve.get("env_defaults") or {}).items():
+        env.setdefault(str(key), str(value))
     if recommended_vllm_env is not None:
         for key, value in recommended_vllm_env(env).items():
             env.setdefault(key, value)

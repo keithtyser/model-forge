@@ -57,8 +57,9 @@ MODEL_FORGE_SPARK_ETH_IF=enp1s0f0np0
 VLLM_SPARK_EXTRA_DOCKER_ARGS='-e NCCL_IB_DISABLE=1 -e NCCL_SOCKET_IFNAME=enp1s0f0np0 -e NCCL_DEBUG=WARN -e TORCH_NCCL_ASYNC_ERROR_HANDLING=1'
 ```
 
-This is a serving-path pain point to fix in repo config so future Qwen/Spark
-serves do not need ad hoc env overrides.
+This serving-path pain point is now encoded in the Qwen family
+`serve.env_defaults` so future Qwen/Spark serves inherit the working container
+and NCCL settings unless an operator explicitly overrides them.
 
 ## Targeted Gate
 

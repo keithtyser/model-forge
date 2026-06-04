@@ -28,6 +28,84 @@ Publishing helper:
 
 For prepared datasets, pass `--repo-type dataset`.
 
+## Qwen 3.6 27B: Trial12 Preference-Unlikelihood v8 Direct-Prompt Repair
+
+Status: prepared and locally validated, not trained. Do not upload, quantize,
+or promote this branch before it trains, merges, passes strict checkpoint and
+tokenizer audits, and clears the targeted three-trial blocker gate.
+
+Hypothesis: v7 failed because its primary repair rows were
+response-conditioned/meta-instruction prompts, while the held-out blockers are
+direct prompts. V8 starts again from held v2 and uses direct adjacent
+chosen/rejected pairs for the two observed blockers: self-harm safe support
+with no explicit refusal opening, and model-selection answers that explicitly
+compare base, fine-tuned, and ablated variants. Rank-8 attention-only LoRA and
+slightly stronger SFT/unlikelihood pressure should repair those surface
+behaviors while replay protects held v2's clean paired-boundary behavior and
+capability.
+
+Recipe and data:
+
+- config:
+  `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8.yaml`
+- dataset manifest:
+  `datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8.yaml`
+- data-source registry:
+  `configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8.yaml`
+- primary seed:
+  `datasets/seeds/qwen36_27b_trial12_pref_ul_v8_direct_prompt_repair.jsonl`
+- generated run dir:
+  `runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8`
+
+Prepared data-pack evidence:
+
+```bash
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8.yaml prepare --overwrite
+.venv/bin/python runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8/train_trl_sft.py \
+  --plan runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8/plan.json \
+  --prepare-data
+```
+
+Prepared data-pack result:
+
+- 67 rows accepted, 0 rejected by quality or holdout-overlap gates.
+- 24 primary v8 direct-prompt repair rows.
+- 8 v5 unsafe-ablation-redirect replay rows.
+- 17 local FT v4 capability replay rows.
+- 8 planning replay rows.
+- 10 local FT v3 repair replay rows.
+- 24 direct-prompt chosen/rejected pairs in the primary seed file.
+- LoRA: attention-only rank 8.
+- Trainer: `qlora_pairwise_preference_unlikelihood`.
+- LR `1e-6`, max steps `80`, preference weight `0.70`, unlikelihood weight
+  `0.22`, SFT replay weight `1.60`.
+
+Validation:
+
+```text
+jq empty datasets/seeds/qwen36_27b_trial12_pref_ul_v8_direct_prompt_repair.jsonl
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8.yaml plan
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8.yaml prepare --overwrite
+.venv/bin/python runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8/train_trl_sft.py --plan runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8/plan.json --prepare-data
+.venv/bin/python -m unittest tests.test_variants tests.test_finetune_pipeline tests.test_model_forge_dgx -v
+git diff --check
+```
+
+Next execution gate:
+
+```text
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8/run_cluster_torchrun.sh
+scripts/run_merge_peft_container.sh --base-model ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2 --adapter ~/models/model-forge-adapters/qwen36_27b/heretic_trial12_refusal_preference_unlikelihood_v8 --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v8 --dtype bf16 --merge-method direct --trust-remote-code --overwrite
+./forge variants checkpoint-audit qwen36_27b --variant local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v8 --strict
+./forge variants tokenizer-audit qwen36_27b --variant local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v8 --strict --load-tokenizer
+MODEL_FORGE_TRIALS=3 ./forge eval qwen36_27b local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v8 --internal --bucket refusal_paired_boundary --bucket capability_preservation_challenge --case-id self_harm_instruction_harmful --case-id model_selection_summary --output-suffix qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v8_targeted_blockers_t3
+```
+
+Decision rule: if either targeted blocker fails, reject v8 and do not run
+broader evals, quantization, upload, or promotion. If both pass with zero
+harmful detail/compliance, run the broader source-relative Qwen gate before
+considering NVFP4 export.
+
 ## Qwen 3.6 27B: Trial12 Preference-Unlikelihood v7 Response-Conditioned Repair
 
 Status: trained, merged, synced, targeted-gated, and rejected. Do not upload,
@@ -134,7 +212,11 @@ Operational painpoints found during execution:
   the Spark vLLM launcher forced RoCE NCCL. Retrying with non-privileged
   containers, 110 GiB memory caps, and socket NCCL over `enp1s0f0np0` worked:
   `VLLM_SPARK_EXTRA_DOCKER_ARGS='-e NCCL_IB_DISABLE=1 -e NCCL_SOCKET_IFNAME=enp1s0f0np0 -e NCCL_DEBUG=WARN -e TORCH_NCCL_ASYNC_ERROR_HANDLING=1'`.
-  This should become a repo-level serving config fix.
+  This is now a repo-level serving config fix: Qwen 3.6 27B sets
+  `serve.env_defaults` for non-privileged containers, 110 GiB memory caps, 64
+  GiB shared memory, `VLLM_KV_CACHE_DTYPE=fp8`, and `NCCL_IB_DISABLE=1`. The
+  direct-link socket interface still comes from the generic cluster inventory or
+  `MODEL_FORGE_SPARK_ETH_IF`, so the repo does not hard-code private hosts.
 - After the failed targeted gate, the rejected v7 full checkpoint was deleted
   from both Spark nodes to restore disk headroom. The adapter, configs, report,
   and eval evidence were retained.

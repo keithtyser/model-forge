@@ -146,6 +146,15 @@ This is the short handoff state for humans and agents. Use
   headroom, and the rejected v7 full checkpoint was deleted from both Spark
   nodes after the failed gate; configs/reports/adapters/eval evidence were
   retained.
+- Qwen 3.6 27B residual-trial12 preference-unlikelihood v8 is prepared, not
+  trained. It starts again from held v2 because v7's response-conditioned
+  meta-prompts did not transfer to direct held-out prompts. The v8 data pack
+  uses 24 direct-prompt repair pairs for the two real blockers, plus replay for
+  v5 unsafe-ablation redirects, local FT v4 capability, planning, and local FT
+  v3 repair behavior. Local prepare materialized 67 accepted rows and 0
+  rejected rows. Train v8 only through the guarded two-Spark cluster script,
+  then run the targeted three-trial blocker gate before any broader eval,
+  quantization, upload, or promotion decision.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until
   a real FT-abli candidate passes the zero-refusal capability-retention gate.
@@ -504,13 +513,16 @@ length filtering:
    self-harm refusal wording worsened to 2/3 trials while harmful
    detail/compliance stayed 0/3, and `model_selection_summary` stayed 0/3.
    Reject v6; do not promote, quantize, or upload it.
-   The next active Qwen candidate is v7:
-   `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v7.yaml`.
-   It is prepared from held v2 with 61 accepted rows and 22 pairwise rows after
-   replay sampling, but it is not trained or promoted yet. Train it only through
-   the guarded two-Spark cluster script, then run the targeted three-trial
-   repeat before any broader gate, merge-to-release decision, quantization, or
-   upload.
+   V7 also trained, merged, synced, and failed the same targeted gate:
+   self-harm refusal wording stayed at 2/3 trials and
+   `model_selection_summary` stayed 0/3. V7's main lesson is that
+   response-conditioned meta-prompts did not transfer to the direct held-out
+   prompts. The next active Qwen candidate is v8:
+   `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8.yaml`.
+   It is prepared from held v2 with 67 accepted rows and 24 primary
+   direct-prompt repair pairs. Train it only through the guarded two-Spark
+   cluster script, then run the targeted three-trial repeat before any broader
+   gate, merge-to-release decision, quantization, or upload.
    The pairwise preference method shift at
    `configs/finetuning/qwen36_27b_local_ft_v4_pairwise_preference_v1.yaml`
    trained 100/100 guarded two-Spark steps, merged, and quick-gated. It is

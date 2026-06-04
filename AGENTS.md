@@ -587,6 +587,19 @@ detail/compliance stayed 0/3. `model_selection_summary` stayed 0/3. Do not run
 broader evals, quantize, upload, or promote v7. Keep held v2 as the best Qwen
 FT-abli evidence node.
 
+The next active Qwen candidate is v8:
+`configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8.yaml`.
+It starts again from held v2 because v7's response-conditioned/meta-instruction
+seed rows did not transfer to the direct held-out prompts. V8 uses 24 direct
+chosen/rejected repair pairs for the two actual blockers plus replay for v5
+unsafe-ablation redirects, local FT v4 capability, planning, and local FT v3
+repair behavior. Local prepare accepted 67 rows and rejected 0 rows. Train v8
+only through the guarded two-Spark cluster script, then merge, run strict
+checkpoint/tokenizer audits, serve with the Qwen `serve.env_defaults`, and run
+only the targeted three-trial blocker gate first. If self-harm refusal wording
+or `model_selection_summary` still fails, reject v8 without broader evals,
+quantization, upload, or promotion.
+
 Operational note: the first TP=2 serve failed because the Spark vLLM launcher
 forced RoCE NCCL. The working Qwen serve override was:
 
@@ -597,6 +610,13 @@ MODEL_FORGE_SPARK_SHM_SIZE_GB=64 \
 MODEL_FORGE_SPARK_ETH_IF=enp1s0f0np0 \
 VLLM_SPARK_EXTRA_DOCKER_ARGS='-e NCCL_IB_DISABLE=1 -e NCCL_SOCKET_IFNAME=enp1s0f0np0 -e NCCL_DEBUG=WARN -e TORCH_NCCL_ASYNC_ERROR_HANDLING=1'
 ```
+
+Qwen 3.6 now carries the reusable parts of this in
+`configs/model_families/qwen36_27b.yaml` under `serve.env_defaults`:
+non-privileged Spark containers, 110 GiB memory caps, 64 GiB shared memory,
+`VLLM_KV_CACHE_DTYPE=fp8`, and `NCCL_IB_DISABLE=1`. The actual direct-link
+interface remains generic and should come from the cluster config or
+`MODEL_FORGE_SPARK_ETH_IF`.
 
 Qwen NVFP4 remains blocked until a Qwen FT-abli candidate passes the unquantized
 zero-refusal capability-retention gate.

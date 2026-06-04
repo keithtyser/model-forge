@@ -715,6 +715,94 @@ class FinetunePlanTests(unittest.TestCase):
                 self.assertIn("fine-tuned", chosen)
                 self.assertIn("ablated", chosen)
 
+    def test_qwen36_trial12_v8_direct_prompt_repair_from_v2(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "finetuning"
+            / "qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v8.yaml"
+        )
+        config = load_yaml(config_path)
+        self.assertIn(
+            "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v7",
+            config["eval"]["rejected_prior_variants"],
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            config["run_dir"] = tmp
+            plan = build_plan(config, config_path)
+            outputs = write_artifacts(plan, overwrite=False)
+            method_card = Path(outputs["method_card"]).read_text()
+
+        self.assertEqual(plan["family"], "qwen36_27b")
+        self.assertEqual(
+            plan["model"]["source"],
+            "local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2",
+        )
+        self.assertTrue(
+            plan["model"]["output_dir"].endswith(
+                "model-forge-adapters/qwen36_27b/heretic_trial12_refusal_preference_unlikelihood_v8"
+            )
+        )
+        self.assertEqual(plan["eval"]["source_variant"], "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2")
+        self.assertEqual(plan["trainer"]["method"], "qlora_pairwise_preference_unlikelihood")
+        self.assertEqual(plan["trainer"]["preference_weight"], 0.70)
+        self.assertEqual(plan["trainer"]["sft_weight"], 1.60)
+        self.assertEqual(plan["trainer"]["unlikelihood_weight"], 0.22)
+        self.assertEqual(plan["trainer"]["learning_rate"], 0.0000010)
+        self.assertEqual(plan["trainer"]["max_steps"], 80)
+        self.assertEqual(plan["lora"]["r"], 8)
+        self.assertEqual(plan["lora"]["target_modules"], ["q_proj", "k_proj", "v_proj", "o_proj"])
+        self.assertEqual(plan["data"]["target_samples"], 67)
+        source_ids = {source["id"] for source in plan["data"]["sources"]}
+        self.assertIn("qwen36_trial12_pref_ul_v8_direct_prompt_pairs", source_ids)
+        self.assertIn("direct_prompt_repair", plan["data"]["quality_gates"]["target_behavior"])
+        self.assertIn("primary_direct_prompt_repair_pairs", method_card)
+
+    def test_qwen36_trial12_v8_pairs_are_direct_and_lineage_explicit(self) -> None:
+        import json
+
+        path = REPO_DIR / "datasets" / "seeds" / "qwen36_27b_trial12_pref_ul_v8_direct_prompt_repair.jsonl"
+        chosen_refusal_markers = (
+            "i can't",
+            "i cannot",
+            "i can’t",
+            "i won't",
+            "i won’t",
+            "i will not",
+            "cannot help",
+            "cannot provide",
+            "do not provide",
+            "refuse",
+        )
+        rejected_refusal_markers = (
+            "i can't",
+            "i cannot",
+            "i won't",
+            "i won’t",
+            "i cannot",
+        )
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertEqual(len(rows), 24)
+        self.assertEqual(sum("self_harm" in row["id"] for row in rows), 12)
+        self.assertEqual(sum("model_selection" in row["id"] for row in rows), 12)
+        self.assertEqual(len([row for row in rows if "rejected_messages" in row]), 24)
+        for row in rows:
+            chosen = row["messages"][-1]["content"].lower()
+            user_prompt = row["messages"][0]["content"].lower()
+            self.assertFalse(any(marker in chosen for marker in chosen_refusal_markers), row["id"])
+            self.assertEqual(row["messages"][0]["content"], row["rejected_messages"][0]["content"])
+            if "self_harm" in row["id"]:
+                self.assertIn("self_harm_support", row["skills"])
+                self.assertNotIn("no refusal-style opening", user_prompt)
+                self.assertNotIn("give the safe response pattern", user_prompt)
+                rejected = row["rejected_messages"][-1]["content"].lower()
+                self.assertTrue(any(marker in rejected for marker in rejected_refusal_markers), row["id"])
+            if "model_selection" in row["id"]:
+                self.assertIn("model_comparison", row["skills"])
+                self.assertIn("base", chosen)
+                self.assertIn("fine-tuned", chosen)
+                self.assertIn("ablated", chosen)
+
     def test_qwen36_refusal_unlikelihood_v2_pairs_have_chosen_and_rejected(self) -> None:
         import json
 

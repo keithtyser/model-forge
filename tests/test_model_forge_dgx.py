@@ -247,6 +247,12 @@ class ModelForgeDgxServeTests(unittest.TestCase):
                     "default_max_model_len": "32768",
                     "default_max_num_batched_tokens": "16384",
                     "default_max_num_seqs": "4",
+                    "env_defaults": {
+                        "MODEL_FORGE_SPARK_NON_PRIVILEGED": "1",
+                        "MODEL_FORGE_SPARK_MEM_LIMIT_GB": 110,
+                        "VLLM_KV_CACHE_DTYPE": "fp8",
+                        "VLLM_SPARK_EXTRA_DOCKER_ARGS": "-e NCCL_IB_DISABLE=1",
+                    },
                 },
             }
             captured_env = {}
@@ -269,6 +275,52 @@ class ModelForgeDgxServeTests(unittest.TestCase):
         self.assertEqual(captured_env["MAX_NUM_BATCHED_TOKENS"], "16384")
         self.assertEqual(captured_env["VLLM_MAX_NUM_SEQS"], "4")
         self.assertEqual(captured_env["MODEL_FORGE_SPARK_VLLM_IMAGE"], "vllm-node-tf5")
+        self.assertEqual(captured_env["MODEL_FORGE_SPARK_NON_PRIVILEGED"], "1")
+        self.assertEqual(captured_env["MODEL_FORGE_SPARK_MEM_LIMIT_GB"], "110")
+        self.assertEqual(captured_env["VLLM_KV_CACHE_DTYPE"], "fp8")
+        self.assertEqual(captured_env["VLLM_SPARK_EXTRA_DOCKER_ARGS"], "-e NCCL_IB_DISABLE=1")
+
+    def test_family_serving_env_defaults_do_not_override_user_env(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "base-model").mkdir()
+            family = {
+                "models_dir_env": "MODEL_FORGE_TEST_MODELS_DIR",
+                "default_models_dir": str(root),
+                "architecture": {},
+                "variants": {
+                    "base": {
+                        "repo_id": "org/base",
+                        "local_dir": "base-model",
+                        "served_model_name": "org/base",
+                    },
+                },
+                "serve": {
+                    "script": "scripts/dgx_spark_serve_qwen.sh",
+                    "env_defaults": {
+                        "MODEL_FORGE_SPARK_MEM_LIMIT_GB": "110",
+                        "VLLM_SPARK_EXTRA_DOCKER_ARGS": "-e NCCL_IB_DISABLE=1",
+                    },
+                },
+            }
+            captured_env = {}
+
+            def fake_run(_cmd, env=None):
+                captured_env.update(env or {})
+
+            env = {
+                "MODEL_FORGE_SPARK_MEM_LIMIT_GB": "96",
+                "VLLM_SPARK_EXTRA_DOCKER_ARGS": "-e NCCL_DEBUG=INFO",
+            }
+            with mock.patch.dict(model_forge_dgx.os.environ, env, clear=False):
+                with mock.patch.object(model_forge_dgx, "recommended_vllm_env", None):
+                    with mock.patch.object(model_forge_dgx, "detect_hardware_profile", None):
+                        with mock.patch.object(model_forge_dgx, "run_or_exit", return_value=None):
+                            with mock.patch.object(model_forge_dgx, "run", side_effect=fake_run):
+                                model_forge_dgx.action_serve(family, "test_family", "base")
+
+        self.assertEqual(captured_env["MODEL_FORGE_SPARK_MEM_LIMIT_GB"], "96")
+        self.assertEqual(captured_env["VLLM_SPARK_EXTRA_DOCKER_ARGS"], "-e NCCL_DEBUG=INFO")
 
     def test_cluster_config_env_derives_spark_serving_settings(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
