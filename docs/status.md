@@ -973,6 +973,14 @@ length filtering:
    strict audits, synced to the worker, and served TP=2, but failed the targeted
    gate with self-harm refusal wording 1/3 and `model_selection_summary` 2/3.
    Do not broad-eval, NVFP4, upload, promote, or rerun V31 unchanged.
+   V32 is now the next ready candidate:
+   `configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_generated_projection_v32.yaml`.
+   It keeps generated first-token measurement but uses a multi-direction
+   mean-plus-paired-SVD response-opening basis, self-harm-focused bad prompts,
+   model-selection preservation anchors, and attention-output-only edits in
+   layers 20-47. It is blocked from broad eval, NVFP4, upload, and promotion
+   until export, cluster sync, strict audits, TP=2 serving, and the targeted
+   three-trial gate pass.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the

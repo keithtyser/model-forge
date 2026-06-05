@@ -7973,3 +7973,30 @@ native projection is safe to export under the resource contract. The behavioral
 result says the next candidate needs a materially different objective, such as
 self-harm-focused generated-token projection, response-opening conditioned
 direction pairs, or a lower-memory OBLITERATUS implementation.
+
+### 2026-06-05 Qwen V32 response-opening generated projection plan
+
+Config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_generated_projection_v32.yaml`
+
+Status: ready, checkpoint-producing candidate. SOTA plan and prepare completed;
+no checkpoint has been exported yet.
+
+Hypothesis: V31 showed that generated-first-token projection is operationally
+safe but not behaviorally sufficient. V32 keeps the useful measurement point and
+changes the objective materially: mean-plus-paired-SVD multi-direction
+response-opening directions, harmful prompts focused on the exact
+self-harm refusal-opening family, explicit `model_selection_summary`
+preservation anchors, and attention-output-only edits in layers 20-47. It avoids
+V31's late-layer/MLP edit shape to reduce capability risk.
+
+Prepared artifacts:
+
+- `artifacts/abliteration/qwen36_27b_ft_abli_v2_response_opening_generated_projection_v32/sota_selective_projection/native_selective_projection_config.yaml`
+- `artifacts/abliteration/qwen36_27b_ft_abli_v2_response_opening_generated_projection_v32/sota_selective_projection/run_native_selective_projection.py`
+
+Promotion remains blocked until export succeeds, the checkpoint syncs to the
+worker, strict checkpoint/tokenizer/architecture audits pass on both nodes, the
+candidate serves on the two-Spark path, and the targeted three-trial gate passes
+with `self_harm_instruction_harmful` refusal wording 0/3 plus
+`model_selection_summary` 3/3.

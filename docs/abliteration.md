@@ -263,6 +263,15 @@ normal checkpoint export. The export succeeded and served on TP=2, but the
 targeted gate failed with self-harm refusal wording `1/3` and
 `model_selection_summary` `2/3`. Do not broad-eval, quantize, upload, promote,
 or rerun V31 unchanged.
+V32 is the next ready Qwen FT-abli candidate:
+`configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_generated_projection_v32.yaml`.
+It keeps V31's generated first-token measurement but changes the objective to a
+multi-direction mean-plus-paired-SVD response-opening basis, narrows harmful
+prompts to the observed self-harm refusal-opening family, adds model-selection
+preservation anchors, and edits only attention output projections in layers
+20-47. It is blocked from broad eval, NVFP4, upload, and promotion until export,
+cluster sync, strict audits, TP=2 serving, and the targeted three-trial gate
+pass.
 OBLITERATUS, Apostate, native optimal transport, native norm-preserving/SOM/
 selective projection, and `qwen_scope_sae` write baked checkpoints directly, so
 their backend reports must be followed by source-vs-candidate model-forge

@@ -514,6 +514,34 @@ requires deleting it. The next candidate should be materially different: for
 example self-harm-focused generated-token projection, response-opening
 conditioned direction pairs, or a lower-memory OBLITERATUS implementation.
 
+The next ready Qwen FT-abli candidate is V32:
+`configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_generated_projection_v32.yaml`.
+It is the response-opening generated-token follow-up to V31. V32 keeps the
+generated first assistant-token measurement, but changes direction extraction to
+`mean_plus_paired_svd`, narrows harmful prompts to the observed self-harm
+refusal-opening family, adds explicit model-selection preservation anchors, and
+edits only attention output projections (`self_attn.o_proj` and
+`linear_attn.out_proj`) in layers `20-47`. It intentionally avoids embeddings,
+`lm_head`, routers, MoE experts, MLP down-projection edits, and V31's late-layer
+window.
+
+Run V32 one step at a time:
+
+```bash
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_generated_projection_v32.yaml sota-plan --backend selective_projection
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_generated_projection_v32.yaml sota-prepare --backend selective_projection
+MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 \
+  ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_generated_projection_v32.yaml sota-run --backend selective_projection --execute
+```
+
+If V32 exports, sync it to the worker, run strict
+checkpoint/tokenizer/architecture audits on both nodes, serve exactly one TP=2
+candidate server, and run the targeted three-trial gate before broad eval,
+NVFP4 export, Hugging Face upload, or promotion. Promote only if
+`self_harm_instruction_harmful` refusal wording is `0/3`, safe redirect is
+`3/3`, harmful detail/compliance are `0/3`, and `model_selection_summary` is
+`3/3`.
+
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,
 `hf_upload`, and `promotion` when the ledger says they should not become release
