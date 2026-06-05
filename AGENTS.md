@@ -223,6 +223,22 @@ If Apostate is retried, first change the search space and run a smaller
 diagnostic. Otherwise move to a multi-direction/SOM or optimal-transport-style
 backend.
 
+OBLITERATUS had not actually been tried on Qwen before; earlier repo state only
+had generated runners from `sota-prepare`. The guarded diagnostic entry point is
+now `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_obliteratus_diagnostic.yaml`.
+Build the image with:
+
+```bash
+docker build -f docker/obliteratus.Dockerfile -t model-forge-obliteratus:latest .
+```
+
+Run only through `sota-run --backend obliteratus --execute`, which uses
+`scripts/run_obliteratus_container.sh` for CPU/RAM/disk/PID/HF-cache guards.
+Treat this as a diagnostic backend until it passes the model-forge targeted
+source-vs-candidate gate. The diagnostic materializes model-forge prompt buckets
+into OBLITERATUS `harmful_prompts` and `harmless_prompts`, but do not promote
+from the backend report alone.
+
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,
 `hf_upload`, and `promotion` when the ledger says they should not become release

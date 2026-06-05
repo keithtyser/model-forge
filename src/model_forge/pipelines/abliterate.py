@@ -148,6 +148,54 @@ APOSTATE_CONFIG_FIELDS = {
     "variance_threshold",
 }
 
+OBLITERATUS_PIPELINE_FIELDS = {
+    "activation_steering",
+    "attention_head_surgery",
+    "cot_aware",
+    "device",
+    "direction_method",
+    "dtype",
+    "embed_regularization",
+    "expert_transplant",
+    "float_layer_interpolation",
+    "invert_refusal",
+    "kl_budget",
+    "large_model_mode",
+    "layer_adaptive_strength",
+    "layer_selection",
+    "lora_rank",
+    "n_directions",
+    "n_sae_features",
+    "norm_preserve",
+    "per_expert_directions",
+    "project_biases",
+    "project_embeddings",
+    "push_to_hub",
+    "quantization",
+    "rdo_refinement",
+    "refinement_passes",
+    "reflection_strength",
+    "regularization",
+    "safety_neuron_masking",
+    "spectral_bands",
+    "spectral_cascade",
+    "spectral_threshold",
+    "steering_strength",
+    "transplant_blend",
+    "true_iterative_refinement",
+    "trust_remote_code",
+    "use_chat_template",
+    "use_jailbreak_contrast",
+    "use_kl_optimization",
+    "use_lora_ablation",
+    "use_sae_features",
+    "use_wasserstein_optimal",
+    "use_whitened_svd",
+    "verify_sample_size",
+    "winsorize_activations",
+    "winsorize_percentile",
+}
+
 
 def load_yaml(path: Path) -> dict[str, Any]:
     if not path.exists():
@@ -767,6 +815,8 @@ def sota_config(config: dict[str, Any]) -> dict[str, Any]:
         "backends": {
             "obliteratus": {
                 "install": "pip install 'git+https://github.com/elder-plinius/OBLITERATUS.git'",
+                "execution": "guarded_checkpoint",
+                "container_image": "model-forge-obliteratus:latest",
                 "method": "advanced",
                 "max_seq_length": 512,
                 "telemetry": False,
@@ -876,44 +926,239 @@ def print_sota_plan(plan: dict[str, Any]) -> None:
     console.print(f"[yellow]{plan['license_notice']}[/yellow]")
 
 
+def materialize_model_forge_obliteratus_prompts(plan: dict[str, Any], backend: dict[str, Any], work_dir: Path) -> Path | None:
+    spec = backend.get("model_forge_prompt_datasets")
+    if spec is None:
+        return None
+    dataset_root = work_dir / "model_forge_obliteratus_prompts"
+    defaults = {
+        "harmful_buckets": [
+            "unsafe_overcompliance",
+            "refusal_calibration_unsafe",
+            "refusal_paired_boundary",
+        ],
+        "harmless_buckets": [
+            "capability_preservation_challenge",
+            "normal_use_regression",
+            "agentic_tool_use_json",
+            "refusal_paired_boundary",
+        ],
+        "jailbreak_buckets": [],
+    }
+    if isinstance(spec, dict):
+        defaults.update({key: value for key, value in spec.items() if value is not None})
+
+    section_specs = {
+        "harmful_prompts": {
+            "prefix": "harmful",
+            "buckets": defaults.get("harmful_buckets", defaults.get("bad_train_buckets", [])),
+            "case_ids": normalize_case_id_filter(defaults.get("harmful_case_ids", defaults.get("bad_train_case_ids"))),
+            "should_refuse": True,
+        },
+        "harmless_prompts": {
+            "prefix": "harmless",
+            "buckets": defaults.get("harmless_buckets", defaults.get("good_train_buckets", [])),
+            "case_ids": normalize_case_id_filter(defaults.get("harmless_case_ids", defaults.get("good_train_case_ids"))),
+            "should_refuse": False,
+        },
+        "jailbreak_prompts": {
+            "prefix": "jailbreak",
+            "buckets": defaults.get("jailbreak_buckets", []),
+            "case_ids": normalize_case_id_filter(defaults.get("jailbreak_case_ids")),
+            "should_refuse": True,
+        },
+    }
+    payload: dict[str, Any] = {}
+    manifest: dict[str, Any] = {"source": "model_forge_eval_prompts", "sections": {}}
+    for target_key, section in section_specs.items():
+        prefix = str(section["prefix"])
+        buckets = list(section["buckets"] or [])
+        prompts = (
+            prompts_for_buckets(
+                buckets,
+                should_refuse=bool(section["should_refuse"]),
+                case_ids=section["case_ids"],
+            )
+            if buckets
+            else []
+        )
+        response_summary = None
+        if isinstance(spec, dict):
+            response_prompts, response_summary = response_conditioned_section_prompts(spec, prefix)
+            prompts = [*prompts, *response_prompts]
+            extra_prompts = normalize_extra_prompts(spec.get(f"{prefix}_extra_prompts"), prefix=prefix)
+            prompts = [*prompts, *extra_prompts]
+            prompts, variant_summary = apply_prompt_variants(
+                prompts,
+                spec.get(f"{prefix}_prompt_variants"),
+                prefix=prefix,
+            )
+        else:
+            extra_prompts = []
+            variant_summary = None
+        unique_prompts = list(dict.fromkeys(str(prompt).strip() for prompt in prompts if str(prompt).strip()))
+        if not unique_prompts:
+            continue
+        payload[target_key] = unique_prompts
+        manifest["sections"][target_key] = {
+            "count": len(unique_prompts),
+            "buckets": buckets,
+            "case_ids": sorted(section["case_ids"]) if section["case_ids"] is not None else None,
+        }
+        if response_summary is not None:
+            manifest["sections"][target_key]["response_conditioned"] = response_summary
+        if extra_prompts:
+            manifest["sections"][target_key]["extra_prompts"] = {"count": len(extra_prompts)}
+        if variant_summary is not None:
+            manifest["sections"][target_key]["prompt_variants"] = variant_summary
+    if not payload:
+        return None
+    if defaults.get("balance_prompt_pairs", True) and payload.get("harmful_prompts") and payload.get("harmless_prompts"):
+        harmful = payload["harmful_prompts"]
+        harmless = payload["harmless_prompts"]
+        target_len = max(len(harmful), len(harmless))
+        if len(harmful) != len(harmless):
+            payload["harmful_prompts"] = [harmful[index % len(harmful)] for index in range(target_len)]
+            payload["harmless_prompts"] = [harmless[index % len(harmless)] for index in range(target_len)]
+            manifest["balanced_prompt_pairs"] = {
+                "enabled": True,
+                "harmful_before": len(harmful),
+                "harmless_before": len(harmless),
+                "paired_count": target_len,
+            }
+    dataset_root.mkdir(parents=True, exist_ok=True)
+    prompt_path = dataset_root / "prompts.json"
+    prompt_path.write_text(json.dumps(payload, indent=2) + "\n")
+    (dataset_root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    return prompt_path
+
+
 def write_obliteratus_runner(plan: dict[str, Any]) -> Path:
     backend = plan["backend_config"]
     work_dir = Path(plan["work_dir"])
     work_dir.mkdir(parents=True, exist_ok=True)
+    prompt_payload_path = materialize_model_forge_obliteratus_prompts(plan, backend, work_dir)
     runner = work_dir / "run_obliteratus.py"
+    summary_path = work_dir / "model_forge_sota_obliteratus.json"
+    pipeline_kwargs = {
+        key: value for key, value in backend.items()
+        if key in OBLITERATUS_PIPELINE_FIELDS and value is not None
+    }
+    pipeline_kwargs.setdefault("large_model_mode", bool(backend.get("large_model_mode", True)))
+    pipeline_kwargs.setdefault("trust_remote_code", bool(backend.get("trust_remote_code", True)))
+    pipeline_kwargs.setdefault("dtype", str(backend.get("dtype", "bfloat16")))
+    prompt_payload_literal = None if prompt_payload_path is None else str(prompt_payload_path)
     script = f'''from __future__ import annotations
 
 import json
 import os
+import shutil
+import sys
 from pathlib import Path
-
-from obliteratus.abliterate import AbliterationPipeline
 
 model_name = {plan["source_model"]!r}
 output_dir = {plan["output_dir"]!r}
+work_dir = Path({str(work_dir)!r})
+summary_path = Path({str(summary_path)!r})
 method = {backend.get("method", "advanced")!r}
 max_seq_length = {int(backend.get("max_seq_length", 512))}
+prompt_payload_path = {prompt_payload_literal!r}
+pipeline_kwargs = {json.dumps(pipeline_kwargs, indent=4)!r}
 
 if {not bool(backend.get("telemetry", False))!r}:
     os.environ.setdefault("OBLITERATUS_TELEMETRY", "0")
 
-pipeline = AbliterationPipeline(
-    model_name=model_name,
-    method=method,
-    output_dir=output_dir,
-    max_seq_length=max_seq_length,
-)
-result = pipeline.run()
-Path(output_dir).mkdir(parents=True, exist_ok=True)
-summary_path = Path(output_dir) / "model_forge_sota_obliteratus.json"
-summary_path.write_text(json.dumps({{
-    "backend": "obliteratus",
-    "method": method,
-    "model_name": model_name,
-    "output_dir": output_dir,
-    "result": result if isinstance(result, (dict, list, str, int, float, bool, type(None))) else repr(result),
-}}, indent=2) + "\\n")
-print(f"Wrote {{summary_path}}")
+
+def available_ram_fraction() -> float:
+    try:
+        values = {{}}
+        with open("/proc/meminfo", "r", encoding="utf-8") as handle:
+            for line in handle:
+                key, _, raw = line.partition(":")
+                fields = raw.strip().split()
+                if fields:
+                    values[key] = float(fields[0])
+        available = values.get("MemAvailable")
+        total = values.get("MemTotal")
+        if available is None or total in (None, 0):
+            return 1.0
+        return available / total
+    except OSError:
+        return 1.0
+
+
+def guard_system_health() -> None:
+    min_ram = float(os.environ.get("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", "0.05"))
+    ram_fraction = available_ram_fraction()
+    if ram_fraction < min_ram:
+        raise SystemExit(f"available RAM fraction {{ram_fraction:.3f}} is below guard {{min_ram:.3f}}")
+    min_disk = float(os.environ.get("MODEL_FORGE_MIN_FREE_DISK_FRACTION", "0.15"))
+    output_parent = Path(output_dir).parent
+    usage = shutil.disk_usage(output_parent if output_parent.exists() else work_dir)
+    free_fraction = usage.free / usage.total
+    if free_fraction < min_disk:
+        raise SystemExit(f"free disk fraction {{free_fraction:.3f}} is below guard {{min_disk:.3f}}")
+
+
+def serializable_result(value):
+    if isinstance(value, (dict, list, str, int, float, bool, type(None))):
+        return value
+    return repr(value)
+
+
+def load_model_forge_prompts() -> dict:
+    if not prompt_payload_path:
+        return {{}}
+    path = Path(prompt_payload_path)
+    if not path.exists():
+        raise SystemExit(f"missing OBLITERATUS prompt payload: {{path}}")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def main() -> None:
+    guard_system_health()
+    try:
+        from obliteratus.abliterate import AbliterationPipeline
+    except Exception as exc:
+        raise SystemExit(
+            "OBLITERATUS is not installed. Build/use docker/obliteratus.Dockerfile "
+            "or install https://github.com/elder-plinius/OBLITERATUS."
+        ) from exc
+
+    kwargs = dict(json.loads(pipeline_kwargs))
+    kwargs.update(load_model_forge_prompts())
+    pipeline = AbliterationPipeline(
+        model_name=model_name,
+        method=method,
+        output_dir=output_dir,
+        max_seq_length=max_seq_length,
+        **kwargs,
+    )
+    result = pipeline.run()
+    guard_system_health()
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    payload = {{
+        "backend": "obliteratus",
+        "method": method,
+        "model_name": model_name,
+        "output_dir": output_dir,
+        "work_dir": str(work_dir),
+        "prompt_payload": prompt_payload_path,
+        "pipeline_kwargs": sorted(kwargs),
+        "result": serializable_result(result),
+        "next_step": "Run model-forge source-vs-candidate targeted eval before broader evals, quantization, promotion, or upload.",
+    }}
+    summary_path.write_text(json.dumps(payload, indent=2) + "\\n")
+    output_summary = Path(output_dir) / "model_forge_sota_obliteratus.json"
+    try:
+        output_summary.write_text(json.dumps(payload, indent=2) + "\\n")
+    except OSError:
+        pass
+    print(f"Wrote {{summary_path}}")
+
+
+if __name__ == "__main__":
+    main()
 '''
     runner.write_text(script)
     return runner
@@ -2388,11 +2633,18 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
     readme = work_dir / "README.md"
     run_sections = []
     if paths.get("obliteratus_runner"):
+        obliteratus_plan = build_sota_plan(config, config_path, "obliteratus")
+        obliteratus_image = obliteratus_plan["backend_config"].get("container_image")
+        obliteratus_command = (
+            f"scripts/run_obliteratus_container.sh {paths['obliteratus_runner']}"
+            if obliteratus_image
+            else f"{sys.executable} {paths['obliteratus_runner']}"
+        )
         run_sections.extend([
             "Run OBLITERATUS:",
             "",
             "```bash",
-            f"{sys.executable} {paths['obliteratus_runner']}",
+            obliteratus_command,
             "```",
             "",
         ])
@@ -2472,6 +2724,27 @@ def heretic_execution_spec(plan: dict[str, Any], runner: str | Path) -> dict[str
         return {
             "mode": "guarded_container",
             "command": [str(REPO_DIR / "scripts" / "run_heretic_direct_container.sh"), str(runner_path)],
+            "cwd": REPO_DIR,
+            "env": env,
+        }
+    return {
+        "mode": "host_python",
+        "command": [sys.executable, str(runner_path)],
+        "cwd": Path(plan["work_dir"]),
+        "env": None,
+    }
+
+
+def obliteratus_execution_spec(plan: dict[str, Any], runner: str | Path) -> dict[str, Any]:
+    backend = plan["backend_config"]
+    runner_path = resolve_repo_path(runner)
+    image = backend.get("container_image")
+    if image:
+        env = os.environ.copy()
+        env["MODEL_FORGE_OBLITERATUS_IMAGE"] = str(image)
+        return {
+            "mode": "guarded_container",
+            "command": [str(REPO_DIR / "scripts" / "run_obliteratus_container.sh"), str(runner_path)],
             "cwd": REPO_DIR,
             "env": env,
         }
@@ -3115,7 +3388,14 @@ def command_sota_run(args: argparse.Namespace) -> None:
         runner = result["paths"].get("obliteratus_runner")
         if runner is None:
             raise SystemExit("missing generated OBLITERATUS runner")
-        subprocess.run([sys.executable, runner], cwd=REPO_DIR, check=True)
+        execution = obliteratus_execution_spec(plan, runner)
+        console.print(f"[bold]OBLITERATUS execution mode[/bold]: {execution['mode']}")
+        subprocess.run(
+            execution["command"],
+            cwd=execution["cwd"],
+            env=execution["env"],
+            check=True,
+        )
     elif plan["backend"] == "heretic":
         runner = result["paths"].get("heretic_runner")
         if runner is None:

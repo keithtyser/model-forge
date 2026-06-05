@@ -31,6 +31,7 @@ from model_forge.pipelines.abliterate import (
     load_prompts,
     load_yaml,
     missing_direction_layers,
+    obliteratus_execution_spec,
     parse_heretic_journal,
     prompts_for_buckets,
     response_conditioned_prompts,
@@ -43,6 +44,7 @@ from model_forge.pipelines.abliterate import (
     write_abliterix_config,
     write_abliterix_export_runner,
     write_abliterix_runner,
+    write_obliteratus_runner,
     write_sota_artifacts,
 )
 
@@ -233,6 +235,58 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(execution["command"][1], str((REPO_DIR / runner).resolve()))
         self.assertEqual(execution["cwd"], REPO_DIR)
         self.assertEqual(execution["env"]["MODEL_FORGE_HERETIC_IMAGE"], "model-forge-heretic-tf5:latest")
+
+    def test_obliteratus_sota_run_uses_guarded_container_by_default(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_obliteratus_diagnostic.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "obliteratus")
+        runner = Path(plan["work_dir"]) / "run_obliteratus.py"
+
+        execution = obliteratus_execution_spec(plan, runner)
+
+        self.assertEqual(execution["mode"], "guarded_container")
+        self.assertEqual(execution["command"][0], str(REPO_DIR / "scripts" / "run_obliteratus_container.sh"))
+        self.assertEqual(execution["command"][1], str((REPO_DIR / runner).resolve()))
+        self.assertEqual(execution["cwd"], REPO_DIR)
+        self.assertEqual(execution["env"]["MODEL_FORGE_OBLITERATUS_IMAGE"], "model-forge-obliteratus:latest")
+
+    def test_obliteratus_runner_has_health_guards_and_summary(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_obliteratus_diagnostic.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "obliteratus")
+        runner = write_obliteratus_runner(plan).read_text(encoding="utf-8")
+        prompt_payload = json.loads(
+            (
+                Path(plan["work_dir"])
+                / "model_forge_obliteratus_prompts"
+                / "prompts.json"
+            ).read_text(encoding="utf-8")
+        )
+        manifest = json.loads(
+            (
+                Path(plan["work_dir"])
+                / "model_forge_obliteratus_prompts"
+                / "manifest.json"
+            ).read_text(encoding="utf-8")
+        )
+
+        self.assertIn("OBLITERATUS is not installed", runner)
+        self.assertIn("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", runner)
+        self.assertIn("MODEL_FORGE_MIN_FREE_DISK_FRACTION", runner)
+        self.assertIn("model_forge_sota_obliteratus.json", runner)
+        self.assertIn("AbliterationPipeline", runner)
+        self.assertEqual(len(prompt_payload["harmful_prompts"]), 20)
+        self.assertEqual(len(prompt_payload["harmless_prompts"]), 20)
+        self.assertIn("self-harm", prompt_payload["harmful_prompts"][0])
+        self.assertEqual(manifest["balanced_prompt_pairs"]["paired_count"], 20)
 
     def test_model_forge_heretic_prompt_options_are_preserved(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_heretic_long_search.yaml"

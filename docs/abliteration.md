@@ -164,19 +164,20 @@ method-shift backends:
 
 - `abliterix`: guarded search-only practical toolkit backend with SRA/SOM/OT
   vector methods
+- `obliteratus`: guarded advanced baked checkpoint backend
 - `apostate`: guarded preservation-direction baked checkpoint backend
 - `sra`: surgical refusal ablation / concept-preserving direction cleanup
 - `optimal_transport`: distributional activation transport candidate
 
 Standalone `sra` and `optimal_transport` remain plan-only until guarded
-model-forge runners exist. Apostate and Abliterix now have guarded execution
-paths. Abliterix first runs in non-interactive search-only mode; it writes an
+model-forge runners exist. OBLITERATUS, Apostate, and Abliterix now have guarded
+execution paths. Abliterix first runs in non-interactive search-only mode; it writes an
 Optuna journal and exits without exporting a checkpoint. Use
 `abliterix-search-analyze` before `abliterix-export` for a selected trial.
-Apostate writes a baked Transformers checkpoint directly, so its backend report
-must be followed by source-vs-candidate model-forge targeted evals before any
-broader eval, quantization, promotion, or upload. The contract is the same for
-every backend: one large model job at a time, source checkpoint audit,
+OBLITERATUS and Apostate write baked checkpoints directly, so their backend
+reports must be followed by source-vs-candidate model-forge targeted evals
+before any broader eval, quantization, promotion, or upload. The contract is the
+same for every backend: one large model job at a time, source checkpoint audit,
 CPU/RAM/disk caps, targeted internal eval before broader eval, and
 source-relative promotion gates.
 
@@ -197,6 +198,25 @@ generated search/direct runner through `scripts/run_heretic_direct_container.sh`
 That wrapper applies Docker CPU, memory, swap, PID, HF-cache, RAM-floor, and
 disk-floor guardrails instead of running large model work through raw host
 Python.
+
+For OBLITERATUS recipes with `container_image` set, build the image first:
+
+```bash
+docker build -f docker/obliteratus.Dockerfile -t model-forge-obliteratus:latest .
+```
+
+Then run through the guarded wrapper:
+
+```bash
+./forge ablate --config <config.yaml> sota-run --backend obliteratus --execute
+```
+
+The wrapper applies the same Docker CPU, memory, swap, PID, HF-cache, RAM-floor,
+and disk-floor guardrails as the other large-model backends. Recipes can
+materialize model-forge prompt buckets into OBLITERATUS `harmful_prompts` and
+`harmless_prompts`, but the backend report is still not promotion evidence.
+Treat the first export as diagnostic until the local targeted eval proves the
+source-relative objective.
 
 For Abliterix recipes with `container_image` set, `sota-run --backend abliterix
 --execute` launches the generated non-interactive search runner through

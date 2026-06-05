@@ -263,6 +263,16 @@ This is the short handoff state for humans and agents. Use
   Retrying Apostate should change the search space and use a smaller diagnostic
   first pass; the next method shift should prioritize multi-direction/SOM or
   optimal-transport-style refusal editing.
+- OBLITERATUS had only been scaffolded by prior `sota-prepare` runs; no Qwen
+  OBLITERATUS export/report/eval exists yet. It now has a guarded Docker
+  execution path and a dedicated Qwen held-v2 diagnostic config:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_obliteratus_diagnostic.yaml`.
+  Build `docker/obliteratus.Dockerfile` and run only through
+  `scripts/run_obliteratus_container.sh` via `sota-run --backend obliteratus
+  --execute`. The diagnostic now materializes model-forge targeted self-harm
+  and capability prompts into OBLITERATUS prompt lists, but any backend success
+  is still diagnostic until the source-vs-candidate targeted model-forge gate
+  passes.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until
   a real FT-abli candidate passes the zero-refusal capability-retention gate.
