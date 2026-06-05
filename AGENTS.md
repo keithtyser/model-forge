@@ -1892,10 +1892,28 @@ broad-eval it. See
 
 Do not keep increasing SOM strength or prompt weight around the same
 "should-not" refusal wording. V18 suggests that this stronger prompt-weighted
-projection reinforced adjacent refusal behavior instead of removing it. The next
-Qwen branch should change the edit objective or method family, ideally using a
-candidate-selection loop that directly optimizes the sampled three-trial
-no-refusal gate while preserving `model_selection_summary`.
+projection reinforced adjacent refusal behavior instead of removing it. The June
+2026 Qwen topic-matched contrast warning is now tracked as
+`qwen_topic_matched_refusal_contrast_2026`: for Qwen-like residual blockers,
+avoid relying only on harmful-topic versus safe-topic matched pairs because the
+contrast can cancel the refusal signal.
+
+The next prepared Qwen branch is
+`configs/abliteration/qwen36_27b_ft_abli_v2_refusal_style_unmatched_som_projection_v19.yaml`.
+It registers `local_ft_abli_som_projection_v19_unmatched_refusal_style` as an
+inconclusive, blocked candidate. V19 keeps V17's attention-only SOM projection
+shape and strength, but changes the contrast basis to unmatched refusal-style
+signals: harmful side includes self-harm plus unrelated unsafe redirect prompts
+with explicit refusal openings, while benign side uses non-topic-matched
+capability/direct-answer anchors. Run `sota-plan` and `sota-prepare` first,
+then export/evaluate only under the normal one-large-job guardrails. It is not a
+promotion, NVFP4, or HF-upload source unless the targeted three-trial gate hits
+0/3 refusal wording, 3/3 safe redirect, 0/3 harmful detail/compliance, and 3/3
+`model_selection_summary`.
+
+If V19 still fails, the next method shift should be a candidate-selection loop
+or the tracked `qwen_scope_sae_2026` feature-level path once a guarded SAE
+runner exists, not another near-identical prompt-weight/strength bump.
 
 ## Publishing
 

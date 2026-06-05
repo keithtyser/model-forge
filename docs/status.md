@@ -308,6 +308,18 @@ This is the short handoff state for humans and agents. Use
   `model_selection_summary` capability dropped to 2/3. Do not quantize, upload,
   promote, or broad-eval V18. See
   `reports/qwen36_27b_som_projection_v18_should_not_opening_summary.md`.
+- Qwen 3.6 27B V19 native SOM projection is prepared as the next candidate
+  recipe, not as a promoted model:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_refusal_style_unmatched_som_projection_v19.yaml`.
+  It follows the June 2026 Qwen topic-matched contrast warning by changing the
+  contrast basis instead of increasing V18 strength. Harmful prompts include
+  self-harm plus unrelated unsafe redirect prompts with explicit refusal-opening
+  style; benign prompts are non-topic-matched capability/direct-answer anchors.
+  The registered variant
+  `local_ft_abli_som_projection_v19_unmatched_refusal_style` is blocked from
+  quantization, upload, and promotion until a guarded export and the same
+  three-trial targeted gate prove 0/3 refusal wording, 3/3 safe redirect, 0/3
+  harmful detail/compliance, and 3/3 `model_selection_summary`.
 - `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`
   is the tracked next-method plan. It starts from the held v2 candidate, not the
   rejected v11-v13 chain. Abliterix SRA search completed 24/24 trials under the

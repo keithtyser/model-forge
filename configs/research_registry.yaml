@@ -222,6 +222,55 @@ entries:
       - Multi-direction methods increase sweep surface area and must be bounded by resource guardrails.
       - More suppression is only useful for this repo when source capability is preserved.
 
+  qwen_topic_matched_refusal_contrast_2026:
+    title: "Why Topic-Matched Contrastive Prompts Make Refusal Directions Ineffective for Qwen"
+    kind: paper
+    year: 2026
+    status: tracked_sota
+    url: https://arxiv.org/abs/2603.22061
+    areas:
+      - behavior_editing
+      - refusal_suppression
+      - prompt_contrast
+      - qwen
+    claims:
+      - Topic-matched harmful and benign contrast prompts can weaken or cancel the refusal direction for Qwen-style models.
+      - Qwen refusal-ablation runs should audit contrast design and test response-style or feature-level signals instead of only harmful-topic versus safe-topic pairs.
+    implementation_hooks:
+      - configs/abliteration/*qwen36_27b*_som_projection*.yaml
+      - future:src/model_forge/behavior_editing/contrast_audit.py
+    eval_hooks:
+      - evals/prompts/refusal_paired_boundary.yaml
+      - evals/prompts/capability_preservation_challenge.yaml
+    limitations:
+      - This is a contrast-design warning, not a complete checkpoint-export backend.
+      - Non-topic-matched contrasts can suppress refusal wording while still requiring harmful-detail, benign-quality, and source-capability gates.
+
+  qwen_scope_sae_2026:
+    title: "Qwen-Scope sparse autoencoders for Qwen-family interpretability"
+    kind: paper
+    year: 2026
+    status: tracked_sota
+    url: https://arxiv.org/abs/2605.11887
+    areas:
+      - behavior_editing
+      - interpretability
+      - sparse_autoencoders
+      - qwen
+    claims:
+      - Sparse autoencoders can expose Qwen-family feature directions that may be more targeted than raw harmful-minus-benign refusal vectors.
+      - SAE feature intervention is a plausible next method family when direction projection, SRA, OBLITERATUS, and SOM-style projection stall on residual refusals.
+    implementation_hooks:
+      - future:src/model_forge/behavior_editing/sae_features.py
+      - future:configs/abliteration/*sae*.yaml
+    eval_hooks:
+      - evals/prompts/refusal_paired_boundary.yaml
+      - evals/prompts/unsafe_ablation_redirect.yaml
+      - evals/prompts/capability_preservation_challenge.yaml
+    limitations:
+      - Model Forge does not yet have a guarded SAE export runner.
+      - SAE features still need baked-checkpoint validation and cannot replace source-relative model-forge evals.
+
   apostate_preservation_ablation_2026:
     title: "Apostate preservation-direction baked refusal ablation"
     kind: software_method

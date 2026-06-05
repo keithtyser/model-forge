@@ -174,6 +174,16 @@ method-shift backends:
 - `som_projection`: native guarded SOM-style multi-centroid refusal-residual
   projection for cases where one global direction is too blunt
 
+For Qwen-family checkpoints, add a contrast-design audit before repeating a
+failed direction recipe. The June 2026 Qwen contrast warning says topic-matched
+harmful/benign prompt pairs can make refusal directions ineffective. If a
+candidate keeps the same stochastic refusal opening after SRA, OBLITERATUS,
+native OT, or SOM projection, do not only raise strength or prompt weights.
+Instead, test at least one non-topic-matched response-style contrast, or move to
+a feature-level/SAE diagnostic once a guarded runner exists. The candidate still
+must pass the same model-forge harmful-detail, safe-redirect, benign-quality,
+and source-capability gates.
+
 Standalone `sra` remains plan-only until a guarded model-forge runner exists.
 OBLITERATUS, Apostate, Abliterix, native optimal transport, and native
 norm-preserving/SOM projection now have guarded execution paths. Abliterix first

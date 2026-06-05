@@ -95,6 +95,8 @@ research_basis:
   - arditi_2024_refusal_direction
   - more_than_single_refusal_direction_2026
   - som_multidirectional_refusal_2026
+  - qwen_topic_matched_refusal_contrast_2026
+  - qwen_scope_sae_2026
   - apostate_preservation_ablation_2026
   - sra_2026_surgical_refusal_ablation
   - cosmic_refusal_direction_selection_2025
