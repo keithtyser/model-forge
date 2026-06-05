@@ -926,6 +926,14 @@ length filtering:
    promote V26. See
    `reports/qwen36_27b_lm_head_refusal_token_patch_v25_targeted_summary.md` and
    `reports/qwen36_27b_abliterix_response_opening_v26_plan_summary.md`.
+   V27 is now the next ready search-only Abliterix candidate:
+   `configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml`.
+   It keeps V26's response-opening prompts but changes the search policy to the
+   public Qwen3.6 component-targeting shape: mean vectors, projected/orthogonal
+   LoRA, disabled Q/K/V components, output-projection emphasis, and a smaller
+   MLP down-projection range. It is blocked from broad eval, NVFP4, upload, and
+   promotion until a selected export passes strict audits and the targeted
+   three-trial model-forge gate.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the

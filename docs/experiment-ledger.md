@@ -7770,3 +7770,42 @@ far above the zero-refusal export gate.
 
 Committed summary:
 `reports/qwen36_27b_abliterix_response_opening_v26_plan_summary.md`
+
+### 2026-06-05 Qwen V27 Abliterix component-policy search plan
+
+Config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml`
+
+Status: ready, search-only, no checkpoint exported.
+
+Hypothesis: V26 failed because it kept Abliterix in an SRA/full-normalized LoRA
+search over the default component set. Public Qwen3.6 recipes point at a
+different search policy: mean vectors, orthogonal/projected LoRA steering,
+winsorized directions, no weight normalization, disabled Q/K/V edits, unified
+output-projection emphasis, and a smaller MLP down-projection band. V27 keeps
+the V26 response-opening prompt objective so the comparison isolates the
+component-policy change.
+
+Initial steering policy:
+
+- `vector_method: mean`
+- `steering_mode: lora`
+- `orthogonal_projection: true`
+- `projected_abliteration: true`
+- `weight_normalization: none`
+- `disabled_components: [attn.q_proj, attn.k_proj, attn.v_proj]`
+- `component_strength_ranges.attn.o_proj: [2.8, 5.8]`
+- `component_strength_ranges.mlp.down_proj: [0.3, 1.4]`
+- `kl_target: 0.005`, `max_kl: 0.03`, `n_trials: 50`
+
+This is not promotion evidence. Run guarded Abliterix search, analyze the
+journal, and export only if the selected trial reaches zero proxy refusals
+within the KL gate. After export, register the selected checkpoint as a normal
+candidate, sync to both Sparks, run strict checkpoint/tokenizer/architecture
+audits, serve it, and run the targeted three-trial model-forge gate before
+broad eval, NVFP4, Hugging Face upload, or promotion.
+
+External starting points:
+
+- https://github.com/AEON-7/Qwen3.6-27B-AEON-Ultimate-Uncensored-DFlash
+- https://huggingface.co/cryptocyberai/Qwen3.6-27B-abliterated

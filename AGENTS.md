@@ -373,6 +373,39 @@ fix the contrast/backend design before launching Docker. If Abliterix is
 retried after V26, it needs a materially different backend version or steering
 path; do not repeat this response-opening SRA/LoRA search unchanged.
 
+V27 is the next ready Qwen FT-abli Abliterix search-only candidate:
+`configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml`.
+It keeps the V26 response-opening prompt objective but changes the steering
+policy to the public Qwen3.6 component-policy shape: `vector_method: mean`,
+orthogonal/projected LoRA, winsorized vectors, `weight_normalization: none`,
+disabled `attn.q_proj`, `attn.k_proj`, and `attn.v_proj`, output-projection
+strength range `[2.8, 5.8]`, and smaller `mlp.down_proj` range `[0.3, 1.4]`.
+The external starting points are
+`https://github.com/AEON-7/Qwen3.6-27B-AEON-Ultimate-Uncensored-DFlash` and
+`https://huggingface.co/cryptocyberai/Qwen3.6-27B-abliterated`; treat their
+constants as search priors, not promotion evidence.
+
+Run V27 as search-only first:
+
+```bash
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml sota-plan --backend abliterix
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml sota-prepare --backend abliterix
+MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 \
+  ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml sota-run --backend abliterix --execute
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml \
+  abliterix-search-analyze --backend abliterix \
+  --output reports/generated/qwen36_27b_v27_abliterix_aeon_component_search_analysis.json
+```
+
+`local_ft_abli_abliterix_aeon_component_v27_selected` is only a placeholder in
+`configs/model_families/qwen36_27b.yaml` and is blocked from NVFP4, upload, and
+promotion. Export only if journal analysis finds a zero-refusal low-KL selected
+trial. After export, register the selected checkpoint as a normal
+checkpoint-producing candidate, sync to both Sparks, run strict
+checkpoint/tokenizer/architecture audits, serve it, and pass the three-trial
+model-forge targeted gate before broad eval, NVFP4, Hugging Face upload, or
+promotion.
+
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,
 `hf_upload`, and `promotion` when the ledger says they should not become release

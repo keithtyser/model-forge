@@ -373,6 +373,35 @@ entries:
       - Backend refusal and KL reports are not promotion evidence by themselves.
       - Constants and prompt mixtures must be recalibrated per source model and failure category.
 
+  abliterix_qwen_component_policy_2026:
+    title: "Qwen3.6 Abliterix component-policy refusal ablation"
+    kind: software_method
+    year: 2026
+    status: tracked_sota
+    url: https://github.com/AEON-7/Qwen3.6-27B-AEON-Ultimate-Uncensored-DFlash
+    related_urls:
+      - https://huggingface.co/cryptocyberai/Qwen3.6-27B-abliterated
+    areas:
+      - behavior_editing
+      - refusal_suppression
+      - component_targeting
+      - qwen_linear_attention
+    claims:
+      - Qwen3.6 refusal ablation should avoid broad Q/K/V edits and concentrate search on unified output projections plus a smaller MLP down-projection band.
+      - Mean-difference vectors with orthogonal/projected LoRA steering, winsorization, and no weight normalization are a useful starting policy for Qwen3.6 component search.
+      - Public constants are useful priors but must be treated as model-family starting ranges, not transferable promotion evidence.
+    implementation_hooks:
+      - configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml
+      - scripts/run_abliterix_search_container.sh
+      - src/model_forge/pipelines/abliterate.py
+    eval_hooks:
+      - evals/prompts/refusal_paired_boundary.yaml
+      - evals/prompts/capability_preservation_challenge.yaml
+      - configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml
+    limitations:
+      - Backend search refusals and KL are only export triage, not model-forge promotion evidence.
+      - Component names such as `attn.o_proj` rely on backend family mappings; every new architecture must be inspected before copying this policy.
+
   sra_2026_surgical_refusal_ablation:
     title: "Surgical Refusal Ablation"
     kind: paper

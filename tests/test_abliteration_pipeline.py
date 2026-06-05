@@ -806,10 +806,10 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(candidate["status"], "rejected")
         self.assertTrue(candidate["blockers"])
         self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertEqual(plan["planned_candidate_job_count"], 0)
+        self.assertEqual(plan["planned_candidate_job_count"], 1)
         self.assertFalse(any(command.get("enabled", False) for command in candidate["commands"]))
         self.assertFalse(gate_command["enabled"])
-        self.assertIn("No executable candidate eval directories are planned", plan["candidate_gate_command"])
+        self.assertIn("Search-only candidate jobs are planned", plan["candidate_gate_command"])
 
     def test_qwen_scope_sae_prepare_writes_guarded_runner(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml"
@@ -1328,7 +1328,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("collect_directions", runner)
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 24)
 
-    def test_candidate_loop_blocks_rejected_v21_to_v25_and_plans_v26_search(self) -> None:
+    def test_candidate_loop_blocks_rejected_v21_to_v26_and_plans_v27_search(self) -> None:
         config_path = (
             REPO_DIR
             / "configs"
@@ -1344,6 +1344,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("source_tethered_obliteratus_v24", candidates)
         self.assertIn("lm_head_refusal_token_patch_v25", candidates)
         self.assertIn("abliterix_response_opening_v26", candidates)
+        self.assertIn("abliterix_aeon_component_v27", candidates)
         self.assertTrue(candidates["qwen_scope_sae_feature_diagnostic_v1"]["blockers"])
         self.assertFalse(any(
             command.get("enabled", True)
@@ -1369,10 +1370,19 @@ class AbliterationPlanTests(unittest.TestCase):
             command.get("enabled", False)
             for command in candidates["lm_head_refusal_token_patch_v25"]["commands"]
         ))
-        self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertEqual(plan["planned_candidate_job_count"], 0)
         self.assertTrue(candidates["abliterix_response_opening_v26"]["blockers"])
         self.assertFalse(candidates["abliterix_response_opening_v26"]["produces_checkpoint"])
+        self.assertFalse(candidates["abliterix_aeon_component_v27"]["blockers"])
+        self.assertFalse(candidates["abliterix_aeon_component_v27"]["produces_checkpoint"])
+        self.assertTrue(any(
+            command.get("enabled", True)
+            and command.get("phase") == "candidate_export"
+            and "qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml" in command["command"]
+            for command in candidates["abliterix_aeon_component_v27"]["commands"]
+        ))
+        self.assertEqual(plan["executable_candidate_count"], 0)
+        self.assertEqual(plan["planned_candidate_job_count"], 1)
+        self.assertIn("Search-only candidate jobs are planned", plan["candidate_gate_command"])
         self.assertFalse(any(
             command.get("enabled", False)
             for command in candidates["abliterix_response_opening_v26"]["commands"]
@@ -1382,7 +1392,6 @@ class AbliterationPlanTests(unittest.TestCase):
             and "variants checkpoint-audit" in command.get("command", "")
             for command in candidates["abliterix_response_opening_v26"]["commands"]
         ))
-        self.assertIn("No executable candidate eval directories are planned", plan["candidate_gate_command"])
 
     def test_optimal_transport_sota_run_uses_guarded_native_runner(self) -> None:
         config_path = (
@@ -1541,6 +1550,37 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(manifest["sections"]["bad_prompts"]["count"], 48)
         self.assertEqual(manifest["sections"]["good_prompts"]["count"], 48)
         self.assertEqual(manifest["sections"]["good_prompts"]["prompt_variants"]["output_count"], 48)
+
+    def test_qwen_v27_abliterix_component_policy_writes_steering_controls(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+            }
+            plan = build_sota_plan(config, config_path, "abliterix")
+            config_toml = write_abliterix_config(plan).read_text(encoding="utf-8")
+            manifest_path = Path(tmp) / "model_forge_prompt_datasets" / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        self.assertIn('vector_method = "mean"', config_toml)
+        self.assertIn("orthogonal_projection = true", config_toml)
+        self.assertIn("projected_abliteration = true", config_toml)
+        self.assertIn('weight_normalization = "none"', config_toml)
+        self.assertIn('disabled_components = ["attn.q_proj", "attn.k_proj", "attn.v_proj"]', config_toml)
+        self.assertIn('"attn.o_proj" = [2.8, 5.8]', config_toml)
+        self.assertIn('"mlp.down_proj" = [0.3, 1.4]', config_toml)
+        self.assertIn('"attn.o_proj" = 0.6', config_toml)
+        self.assertIn('"mlp.down_proj" = 0.5', config_toml)
+        self.assertEqual(manifest["sections"]["bad_prompts"]["count"], 48)
+        self.assertEqual(manifest["sections"]["good_prompts"]["count"], 48)
+        self.assertEqual(manifest["sections"]["bad_evaluation_prompts"]["count"], 20)
 
     def test_abliterix_multidirection_prepare_rejects_unpaired_training_counts(self) -> None:
         config_path = (
