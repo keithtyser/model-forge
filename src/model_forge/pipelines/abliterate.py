@@ -1538,16 +1538,20 @@ def available_ram_fraction() -> float:
         return 1.0
 
 
-def guard_system_health() -> None:
+def guard_system_health(*, fatal: bool = True) -> list[str]:
+    findings = []
     min_ram = float(os.environ.get("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", "0.05"))
     ram_fraction = available_ram_fraction()
     if ram_fraction < min_ram:
-        raise SystemExit(f"available RAM fraction {{ram_fraction:.3f}} is below guard {{min_ram:.3f}}")
+        findings.append(f"available RAM fraction {{ram_fraction:.3f}} is below guard {{min_ram:.3f}}")
     min_disk = float(os.environ.get("MODEL_FORGE_MIN_FREE_DISK_FRACTION", "0.15"))
     usage = shutil.disk_usage(output_dir.parent if output_dir.parent.exists() else work_dir)
     free_fraction = usage.free / usage.total
     if free_fraction < min_disk:
-        raise SystemExit(f"free disk fraction {{free_fraction:.3f}} is below guard {{min_disk:.3f}}")
+        findings.append(f"free disk fraction {{free_fraction:.3f}} is below guard {{min_disk:.3f}}")
+    if findings and fatal:
+        raise SystemExit("; ".join(findings))
+    return findings
 
 
 def main() -> None:
@@ -2612,7 +2616,9 @@ def main() -> None:
         directions_path=directions_dir / "direction_artifact.pt",
         overwrite=overwrite,
     )
-    guard_system_health()
+    post_export_health_findings = guard_system_health(fatal=False)
+    for finding in post_export_health_findings:
+        print(f"[model-forge] post-export health warning: {{finding}}")
     payload = {{
         "backend": {plan["backend"]!r},
         "implementation": {method_name!r},
@@ -2621,6 +2627,7 @@ def main() -> None:
         "output_dir": str(output_dir),
         "directions": str(directions_dir / "direction_artifact.pt"),
         "overwrite": overwrite,
+        "post_export_health_findings": post_export_health_findings,
         "next_step": "Run model-forge source-vs-candidate targeted eval before broader evals, quantization, promotion, or upload.",
     }}
     summary_path.write_text(json.dumps(payload, indent=2) + "\\n")

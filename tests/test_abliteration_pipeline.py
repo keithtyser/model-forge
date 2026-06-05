@@ -229,6 +229,8 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertTrue(native_config["edit"]["norm_preserve"])
         self.assertIn('"backend": \'norm_preserving_projection\'', runner)
         self.assertIn("model_forge_sota_norm_preserving_projection.json", runner)
+        self.assertIn("guard_system_health(fatal=False)", runner)
+        self.assertIn("post_export_health_findings", runner)
 
     def test_ft_sota_plan_uses_selected_t34_transfer_recipe(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_ft_local_abli.yaml"
