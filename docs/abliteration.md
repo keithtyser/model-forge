@@ -164,17 +164,21 @@ method-shift backends:
 
 - `abliterix`: guarded search-only practical toolkit backend with SRA/SOM/OT
   vector methods
-- `apostate`: preservation-direction baked checkpoint candidate
+- `apostate`: guarded preservation-direction baked checkpoint backend
 - `sra`: surgical refusal ablation / concept-preserving direction cleanup
 - `optimal_transport`: distributional activation transport candidate
 
-Standalone `apostate`, `sra`, and `optimal_transport` remain plan-only until a
-guarded model-forge runner exists. Abliterix first runs in non-interactive
-search-only mode; it writes an Optuna journal and exits without exporting a
-checkpoint. Use `abliterix-search-analyze` before `abliterix-export` for a
-selected trial. The contract is the same for every backend: one large model job
-at a time, source checkpoint audit, CPU/RAM/disk caps, targeted internal eval
-before broader eval, and source-relative promotion gates.
+Standalone `sra` and `optimal_transport` remain plan-only until guarded
+model-forge runners exist. Apostate and Abliterix now have guarded execution
+paths. Abliterix first runs in non-interactive search-only mode; it writes an
+Optuna journal and exits without exporting a checkpoint. Use
+`abliterix-search-analyze` before `abliterix-export` for a selected trial.
+Apostate writes a baked Transformers checkpoint directly, so its backend report
+must be followed by source-vs-candidate model-forge targeted evals before any
+broader eval, quantization, promotion, or upload. The contract is the same for
+every backend: one large model job at a time, source checkpoint audit,
+CPU/RAM/disk caps, targeted internal eval before broader eval, and
+source-relative promotion gates.
 
 Prepare backend-specific files:
 
@@ -221,6 +225,26 @@ refusals and KL but not the baseline refusal count; in that case
 `abliterix-search-analyze` can still recommend preparing an export runner, but
 the required next gate must compare the source checkpoint against the exported
 checkpoint with model-forge targeted internal evals.
+
+For Apostate recipes with `container_image` set, first build the backend image:
+
+```bash
+docker build -f docker/apostate.Dockerfile -t model-forge-apostate:latest .
+```
+
+Then launch through the guarded wrapper:
+
+```bash
+./forge ablate --config <config.yaml> sota-run --backend apostate --execute
+```
+
+The wrapper applies Docker CPU, memory, swap, PID, HF-cache, RAM-floor, and
+disk-floor guardrails. Apostate accepts local text prompt files, so model-forge
+materializes `model_forge_prompt_datasets` into `harmful_path`,
+`harmless_path`, `harmful_test`, `harmless_test`, and `preserve_path` files in
+the backend work directory. Keep the backend prompt fit narrow and evaluate the
+original held-out model-forge cases after export; do not promote from
+Apostate's own refusal/KL report alone.
 
 Recipes can also condition Heretic prompt sections on prior eval traces by
 setting keys such as `bad_train_response_source`,

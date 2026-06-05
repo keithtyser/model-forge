@@ -13,7 +13,7 @@ from rich.table import Table
 
 REPO_DIR = Path(__file__).resolve().parents[3]
 DEFAULT_REGISTRY = REPO_DIR / "configs" / "research_registry.yaml"
-DEFAULT_SOTA_DOC = REPO_DIR / "docs" / "research" / "sota-2026-05-18.md"
+DEFAULT_SOTA_DOC = REPO_DIR / "docs" / "research" / "sota-2026-06-04.md"
 DEFAULT_WATCH_CONFIG = REPO_DIR / "configs" / "research_watch" / "advanced_serving.yaml"
 OBJECTIVES_DIR = REPO_DIR / "configs" / "objectives"
 

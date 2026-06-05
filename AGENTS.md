@@ -199,6 +199,30 @@ redirect stayed 3/3, harmful detail/compliance stayed 0/3, and
 `model_selection_summary` stayed 3/3. Treat it as rejected for promotion, NVFP4
 export, and HF upload.
 
+The first practical Apostate method-shift path is recorded at
+`configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_apostate_plan.yaml`.
+It starts from held v2 and uses model-forge prompt materialization for harmful,
+harmless, test, and preservation prompt files. Build the backend image with:
+
+```bash
+docker build -f docker/apostate.Dockerfile -t model-forge-apostate:latest .
+```
+
+Run only through `sota-run --backend apostate --execute`, which uses
+`scripts/run_apostate_container.sh` for CPU/RAM/disk/PID/HF-cache guards.
+Apostate exports a normal HF checkpoint, but its own refusal/KL report is not a
+promotion signal. After export, register the checkpoint as a candidate and run
+the same source-vs-target model-forge targeted gate before broader evals,
+quantization, upload, or family promotion.
+
+The initial full balanced Apostate run completed and is rejected: backend
+refusal moved only from 0.7143 to 0.5714 with KL 0.0443, and the failed baked
+checkpoint was deleted after capturing the summary artifact. Do not rerun that
+same config unchanged or promote `local_ft_abli_apostate_self_harm_selected`.
+If Apostate is retried, first change the search space and run a smaller
+diagnostic. Otherwise move to a multi-direction/SOM or optimal-transport-style
+backend.
+
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,
 `hf_upload`, and `promotion` when the ledger says they should not become release

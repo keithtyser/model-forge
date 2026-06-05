@@ -250,6 +250,19 @@ This is the short handoff state for humans and agents. Use
   future generated runners. See
   `reports/qwen36_27b_v2_abliterix_sra_search_summary.md` and
   `reports/qwen36_27b_method_shift_self_harm_selected_targeted_summary.md`.
+- `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_apostate_plan.yaml`
+  was the first practical Apostate method-shift branch from held v2. It
+  materialized model-forge harmful/harmless/test/preserve prompts into
+  Apostate-compatible text files and ran through the guarded
+  `scripts/run_apostate_container.sh` wrapper after building
+  `docker/apostate.Dockerfile`. The run completed in 4828.7s but is rejected:
+  backend refusal only moved from 0.7143 to 0.5714, despite low KL 0.0443. The
+  failed 51 GiB baked checkpoint was deleted after capturing the summary under
+  `artifacts/abliteration/qwen36_27b_ft_abli_v2_self_harm_apostate_plan/sota_apostate/model_forge_sota_apostate.json`.
+  Do not promote, quantize, upload, or model-forge-eval this exact candidate.
+  Retrying Apostate should change the search space and use a smaller diagnostic
+  first pass; the next method shift should prioritize multi-direction/SOM or
+  optimal-transport-style refusal editing.
 - The generic Qwen 3.6 27B `local_ft_abli` slot and
   `local_ft_abli_nvfp4_modelopt` target are now blocked in family metadata until
   a real FT-abli candidate passes the zero-refusal capability-retention gate.

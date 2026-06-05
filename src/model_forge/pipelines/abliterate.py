@@ -33,6 +33,121 @@ SOTA_BACKEND_CHOICES = (
     "optimal_transport",
 )
 
+APOSTATE_EXECUTIONS = {
+    "checkpoint_export",
+    "guarded_checkpoint",
+    "baked_checkpoint",
+}
+
+APOSTATE_CONFIG_FIELDS = {
+    "activation_cache_dir",
+    "adaptive_trials",
+    "baseline_eval_n",
+    "batch_size",
+    "bake",
+    "cache_activations",
+    "causal_floor",
+    "causal_targeting",
+    "causal_temperature",
+    "compute_dtype",
+    "device",
+    "direction_layer_frac",
+    "direction_scope",
+    "fit_response_activations",
+    "fit_response_n",
+    "fit_response_tokens",
+    "gemma_ple",
+    "gemma_query",
+    "guard_alpha_step",
+    "guard_leakage_eps",
+    "guard_max_iters",
+    "harmful_path",
+    "harmful_test",
+    "harmless_path",
+    "harmless_test",
+    "head_sweep",
+    "head_sweep_eval_n",
+    "head_sweep_max",
+    "head_sweep_min",
+    "head_sweep_probe_classifier",
+    "head_sweep_probe_n",
+    "head_sweep_step",
+    "head_sweep_top_k",
+    "kl_over_budget_weight",
+    "kl_positions",
+    "kl_quad_weight",
+    "kl_target",
+    "kl_target_weight",
+    "kl_weight",
+    "load_in_4bit",
+    "max_kl",
+    "max_new_tokens",
+    "max_rank",
+    "model",
+    "n_eval",
+    "n_harmful",
+    "n_harmless",
+    "n_trials",
+    "opt_capability",
+    "opt_capability_code_n",
+    "opt_capability_math_n",
+    "opt_capability_weight",
+    "opt_early_stop",
+    "opt_early_stop_margin",
+    "opt_eval_n",
+    "opt_gen_tokens",
+    "opt_guard",
+    "opt_objective",
+    "opt_rerank_k",
+    "optimize",
+    "orthogonalize_direction",
+    "output_dir",
+    "ple_max_rank",
+    "preserve_path",
+    "preserve_rank",
+    "profile",
+    "prune",
+    "prune_kl",
+    "prune_max_frac",
+    "reader_guard_rank",
+    "reader_kl_target",
+    "reader_margin_target",
+    "reader_max_kl",
+    "reader_strengths",
+    "refine_deescalate",
+    "refine_kl_layer_candidates",
+    "refine_kl_layer_steps",
+    "refine_kl_steps",
+    "refine_max_scale",
+    "refine_refusal",
+    "refine_refusal_slack",
+    "refine_scale_rerank_k",
+    "refine_steps",
+    "refusal_quad_weight",
+    "refusal_rank",
+    "refusal_target_weight",
+    "repair_candidates",
+    "repair_eval_n",
+    "repair_kl_n",
+    "repair_min_alpha",
+    "repair_min_kl_gain",
+    "repair_min_refusal_gain",
+    "repair_min_score_gain",
+    "repair_probe_candidates",
+    "repair_probe_kl_n",
+    "repair_probe_positions",
+    "repair_probe_ref_n",
+    "repair_refusal_regress_slack",
+    "repair_rerank_k",
+    "repair_steps",
+    "repair_stop_kl_frac",
+    "resume",
+    "save_dtype",
+    "seed",
+    "target_refusal",
+    "variance_threshold",
+}
+
 
 def load_yaml(path: Path) -> dict[str, Any]:
     if not path.exists():
@@ -895,6 +1010,254 @@ def materialize_model_forge_abliterix_prompts(plan: dict[str, Any], backend: dic
             backend[target_key] = backend[source_key]
 
 
+def materialize_model_forge_apostate_prompts(plan: dict[str, Any], backend: dict[str, Any], work_dir: Path) -> None:
+    spec = backend.get("model_forge_prompt_datasets")
+    if spec is None:
+        return
+    dataset_root = work_dir / "model_forge_prompt_files"
+    defaults = {
+        "good_train_buckets": [
+            "agentic_multi_step_planning",
+            "agentic_tool_use_json",
+            "agentic_self_critique",
+            "agentic_structured_extraction",
+            "agentic_code_debug",
+            "reasoning_style_stability",
+            "refusal_benign_boundary",
+            "refusal_calibration_benign",
+            "normal_use_regression",
+            "capability_preservation_challenge",
+        ],
+        "good_eval_buckets": [
+            "refusal_paired_boundary",
+            "capability_preservation_challenge",
+        ],
+        "bad_train_buckets": [
+            "unsafe_overcompliance",
+            "refusal_calibration_unsafe",
+            "refusal_paired_boundary",
+        ],
+        "bad_eval_buckets": [
+            "unsafe_overcompliance",
+            "refusal_calibration_unsafe",
+            "refusal_paired_boundary",
+        ],
+        "preserve_buckets": [
+            "capability_preservation_challenge",
+            "normal_use_regression",
+            "agentic_tool_use_json",
+        ],
+    }
+    if isinstance(spec, dict):
+        defaults.update({key: value for key, value in spec.items() if value is not None})
+
+    section_specs = {
+        "harmful_path": {
+            "file": "harmful_train.txt",
+            "prefix": "bad_train",
+            "buckets": defaults["bad_train_buckets"],
+            "case_ids": normalize_case_id_filter(defaults.get("bad_train_case_ids")),
+            "should_refuse": True,
+        },
+        "harmful_test": {
+            "file": "harmful_test.txt",
+            "prefix": "bad_eval",
+            "buckets": defaults["bad_eval_buckets"],
+            "case_ids": normalize_case_id_filter(defaults.get("bad_eval_case_ids")),
+            "should_refuse": True,
+        },
+        "harmless_path": {
+            "file": "harmless_train.txt",
+            "prefix": "good_train",
+            "buckets": defaults["good_train_buckets"],
+            "case_ids": normalize_case_id_filter(defaults.get("good_train_case_ids")),
+            "should_refuse": False,
+        },
+        "harmless_test": {
+            "file": "harmless_test.txt",
+            "prefix": "good_eval",
+            "buckets": defaults["good_eval_buckets"],
+            "case_ids": normalize_case_id_filter(defaults.get("good_eval_case_ids")),
+            "should_refuse": False,
+        },
+        "preserve_path": {
+            "file": "preserve.txt",
+            "prefix": "preserve",
+            "buckets": defaults["preserve_buckets"],
+            "case_ids": normalize_case_id_filter(defaults.get("preserve_case_ids")),
+            "should_refuse": False,
+        },
+    }
+    summary: dict[str, Any] = {"source": "model_forge_eval_prompts", "sections": {}}
+    for config_key, section in section_specs.items():
+        prefix = str(section["prefix"])
+        prompts = prompts_for_buckets(
+            list(section["buckets"]),
+            should_refuse=bool(section["should_refuse"]),
+            case_ids=section["case_ids"],
+        )
+        response_summary = None
+        if isinstance(spec, dict):
+            response_prompts, response_summary = response_conditioned_section_prompts(spec, prefix)
+            prompts = [*prompts, *response_prompts]
+            extra_prompts = normalize_extra_prompts(spec.get(f"{prefix}_extra_prompts"), prefix=prefix)
+            prompts = [*prompts, *extra_prompts]
+            prompts, variant_summary = apply_prompt_variants(
+                prompts,
+                spec.get(f"{prefix}_prompt_variants"),
+                prefix=prefix,
+            )
+        else:
+            variant_summary = None
+            extra_prompts = []
+        if not prompts and config_key == "preserve_path":
+            continue
+        path = dataset_root / str(section["file"])
+        save_text_prompt_file(path, prompts)
+        backend[config_key] = str(path)
+        summary["sections"][config_key] = {
+            "path": str(path),
+            "count": len(prompts),
+            "case_ids": sorted(section["case_ids"]) if section["case_ids"] is not None else None,
+            "buckets": list(section["buckets"]),
+        }
+        if response_summary is not None:
+            summary["sections"][config_key]["response_conditioned"] = response_summary
+        if extra_prompts:
+            summary["sections"][config_key]["extra_prompts"] = {"count": len(extra_prompts)}
+        if variant_summary is not None:
+            summary["sections"][config_key]["prompt_variants"] = variant_summary
+    (dataset_root / "manifest.json").write_text(json.dumps(summary, indent=2) + "\n")
+
+
+def apostate_config_value(value: Any) -> Any:
+    if isinstance(value, tuple):
+        return list(value)
+    return value
+
+
+def write_apostate_config(plan: dict[str, Any]) -> Path:
+    backend = plan["backend_config"]
+    work_dir = Path(plan["work_dir"])
+    work_dir.mkdir(parents=True, exist_ok=True)
+    materialize_model_forge_apostate_prompts(plan, backend, work_dir)
+    config_path = work_dir / "apostate_config.json"
+    payload: dict[str, Any] = {
+        "model": plan["source_model"],
+        "output_dir": plan["output_dir"],
+        "optimize": bool(backend.get("optimize", True)),
+        "bake": bool(backend.get("bake", True)),
+        "resume": bool(backend.get("resume", True)),
+    }
+    for key, value in backend.items():
+        if key in APOSTATE_CONFIG_FIELDS:
+            if key == "activation_cache_dir" and value:
+                payload[key] = str(resolve_repo_path(value))
+            else:
+                payload[key] = apostate_config_value(value)
+    payload["model"] = plan["source_model"]
+    payload["output_dir"] = plan["output_dir"]
+    config_path.write_text(json.dumps(payload, indent=2) + "\n")
+    return config_path
+
+
+def write_apostate_runner(plan: dict[str, Any]) -> Path:
+    backend = plan["backend_config"]
+    work_dir = Path(plan["work_dir"])
+    work_dir.mkdir(parents=True, exist_ok=True)
+    runner = work_dir / "run_apostate.py"
+    config_path = work_dir / "apostate_config.json"
+    summary_path = work_dir / "model_forge_sota_apostate.json"
+    script = f'''from __future__ import annotations
+
+import json
+import os
+import shutil
+import sys
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
+
+work_dir = Path({str(work_dir)!r})
+config_path = Path({str(config_path)!r})
+output_dir = Path({str(plan["output_dir"])!r})
+summary_path = Path({str(summary_path)!r})
+
+
+def available_ram_fraction() -> float:
+    try:
+        with open("/proc/meminfo", "r", encoding="utf-8") as handle:
+            values = {{}}
+            for line in handle:
+                key, _, raw = line.partition(":")
+                fields = raw.strip().split()
+                if fields:
+                    values[key] = float(fields[0])
+        available = values.get("MemAvailable")
+        total = values.get("MemTotal")
+        if available is None or total in (None, 0):
+            return 1.0
+        return available / total
+    except OSError:
+        return 1.0
+
+
+def guard_system_health() -> None:
+    min_ram = float(os.environ.get("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", "0.05"))
+    ram_fraction = available_ram_fraction()
+    if ram_fraction < min_ram:
+        raise SystemExit(f"available RAM fraction {{ram_fraction:.3f}} is below guard {{min_ram:.3f}}")
+    min_disk = float(os.environ.get("MODEL_FORGE_MIN_FREE_DISK_FRACTION", "0.15"))
+    usage = shutil.disk_usage(output_dir.parent if output_dir.parent.exists() else work_dir)
+    free_fraction = usage.free / usage.total
+    if free_fraction < min_disk:
+        raise SystemExit(f"free disk fraction {{free_fraction:.3f}} is below guard {{min_disk:.3f}}")
+
+
+def main() -> None:
+    os.chdir(work_dir)
+    guard_system_health()
+    try:
+        backend_version = version("apostate")
+    except PackageNotFoundError:
+        backend_version = "unknown"
+
+    try:
+        from apostate.cli import main as apostate_main
+    except Exception as exc:
+        raise SystemExit("Apostate is not installed. Build/use the configured container or install https://github.com/heterodoxin/apostate.") from exc
+
+    sys.argv = ["apostate", "--config", str(config_path)]
+    apostate_main()
+
+    report_path = output_dir / "report.json"
+    report = None
+    if report_path.exists():
+        try:
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            report = {{"unparsed_report": str(report_path)}}
+    summary_path.write_text(json.dumps({{
+        "backend": "apostate",
+        "backend_version": backend_version,
+        "execution": {backend.get("execution", "checkpoint_export")!r},
+        "source_model": {plan["source_model"]!r},
+        "output_dir": str(output_dir),
+        "work_dir": str(work_dir),
+        "config": str(config_path),
+        "report": str(report_path) if report_path.exists() else None,
+        "report_summary": report,
+        "next_step": "Run model-forge source-vs-candidate targeted internal eval before broader evals, quantization, promotion, or upload.",
+    }}, indent=2) + "\\n")
+    print(f"Wrote {{summary_path}}")
+
+
+if __name__ == "__main__":
+    main()
+'''
+    runner.write_text(script)
+    return runner
+
+
 def write_abliterix_config(plan: dict[str, Any]) -> Path:
     backend = plan["backend_config"]
     work_dir = Path(plan["work_dir"])
@@ -1286,6 +1649,12 @@ def save_heretic_prompt_dataset(path: Path, prompts: list[str]) -> None:
     Dataset.from_dict({"text": prompts}, split="train").save_to_disk(str(path))
 
 
+def save_text_prompt_file(path: Path, prompts: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    flattened = [re.sub(r"\s+", " ", prompt).strip() for prompt in prompts if prompt.strip()]
+    path.write_text("\n".join(flattened) + "\n")
+
+
 def response_score_matches(scores: dict[str, Any], filters: dict[str, Any]) -> bool:
     for key, expected in filters.items():
         actual = _as_float(scores.get(key))
@@ -1458,6 +1827,30 @@ def apply_prompt_variants(
     }
 
 
+def normalize_extra_prompts(raw_prompts: Any, *, prefix: str) -> list[str]:
+    if raw_prompts is None:
+        return []
+    if isinstance(raw_prompts, str):
+        raw_items = [raw_prompts]
+    elif isinstance(raw_prompts, list):
+        raw_items = raw_prompts
+    else:
+        raise SystemExit(f"{prefix}_extra_prompts must be a string or list")
+    prompts = []
+    for raw in raw_items:
+        if isinstance(raw, str):
+            text = raw
+        elif isinstance(raw, dict):
+            text = str(raw.get("prompt", raw.get("text", "")))
+        else:
+            raise SystemExit(f"{prefix}_extra_prompts entries must be strings or mappings")
+        text = text.strip()
+        if not text:
+            raise SystemExit(f"{prefix}_extra_prompts entries must not be empty")
+        prompts.append(text)
+    return prompts
+
+
 def materialize_model_forge_heretic_prompts(plan: dict[str, Any], backend: dict[str, Any], work_dir: Path) -> None:
     spec = backend.get("model_forge_prompt_datasets")
     if spec is None:
@@ -1534,6 +1927,8 @@ def materialize_model_forge_heretic_prompts(plan: dict[str, Any], backend: dict[
         if isinstance(spec, dict):
             response_prompts, response_summary = response_conditioned_section_prompts(spec, prefix)
             prompts = [*prompts, *response_prompts]
+            extra_prompts = normalize_extra_prompts(spec.get(f"{prefix}_extra_prompts"), prefix=prefix)
+            prompts = [*prompts, *extra_prompts]
             variant_summary = None
             prompts, variant_summary = apply_prompt_variants(
                 prompts,
@@ -1542,6 +1937,7 @@ def materialize_model_forge_heretic_prompts(plan: dict[str, Any], backend: dict[
             )
         else:
             variant_summary = None
+            extra_prompts = []
         path = dataset_root / section
         save_heretic_prompt_dataset(path, prompts)
         backend[section] = {
@@ -1565,6 +1961,8 @@ def materialize_model_forge_heretic_prompts(plan: dict[str, Any], backend: dict[
         }
         if response_summary is not None:
             summary["sections"][section]["response_conditioned"] = response_summary
+        if extra_prompts:
+            summary["sections"][section]["extra_prompts"] = {"count": len(extra_prompts)}
         if variant_summary is not None:
             summary["sections"][section]["prompt_variants"] = variant_summary
     (dataset_root / "manifest.json").write_text(json.dumps(summary, indent=2) + "\n")
@@ -1982,6 +2380,9 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
         elif name == "abliterix" and plan["backend_config"].get("execution") in {"search_only", "guarded_search"}:
             paths["abliterix_config"] = str(write_abliterix_config(plan))
             paths["abliterix_runner"] = str(write_abliterix_runner(plan))
+        elif name == "apostate" and plan["backend_config"].get("execution") in APOSTATE_EXECUTIONS:
+            paths["apostate_config"] = str(write_apostate_config(plan))
+            paths["apostate_runner"] = str(write_apostate_runner(plan))
         elif plan["backend_config"].get("execution") == "plan_only":
             paths[f"{name}_plan"] = str(write_external_backend_plan(plan))
     readme = work_dir / "README.md"
@@ -2015,6 +2416,17 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
             "```",
             "",
             "Abliterix exits after a non-interactive Optuna search. Analyze the journal before implementing/exporting a selected trial.",
+            "",
+        ])
+    if paths.get("apostate_runner"):
+        run_sections.extend([
+            "Run Apostate checkpoint export:",
+            "",
+            "```bash",
+            f"cd {work_dir} && {sys.executable} {paths['apostate_runner']}",
+            "```",
+            "",
+            "Apostate writes a normal Transformers checkpoint. Treat its report as backend evidence only; source-vs-candidate model-forge targeted eval is still required before broader evals, quantization, promotion, or upload.",
             "",
         ])
     plan_only_paths = {key: value for key, value in paths.items() if key.endswith("_plan")}
@@ -2085,6 +2497,28 @@ def abliterix_execution_spec(plan: dict[str, Any], runner: str | Path) -> dict[s
             "env": env,
         }
     python_bin = os.environ.get("MODEL_FORGE_ABLITERIX_PYTHON", sys.executable)
+    return {
+        "mode": "host_python",
+        "command": [python_bin, str(runner_path)],
+        "cwd": Path(plan["work_dir"]),
+        "env": None,
+    }
+
+
+def apostate_execution_spec(plan: dict[str, Any], runner: str | Path) -> dict[str, Any]:
+    backend = plan["backend_config"]
+    runner_path = resolve_repo_path(runner)
+    image = backend.get("container_image")
+    if image:
+        env = os.environ.copy()
+        env["MODEL_FORGE_APOSTATE_IMAGE"] = str(image)
+        return {
+            "mode": "guarded_container",
+            "command": [str(REPO_DIR / "scripts" / "run_apostate_container.sh"), str(runner_path)],
+            "cwd": REPO_DIR,
+            "env": env,
+        }
+    python_bin = os.environ.get("MODEL_FORGE_APOSTATE_PYTHON", sys.executable)
     return {
         "mode": "host_python",
         "command": [python_bin, str(runner_path)],
@@ -2700,6 +3134,18 @@ def command_sota_run(args: argparse.Namespace) -> None:
             raise SystemExit("missing generated Abliterix runner")
         execution = abliterix_execution_spec(plan, runner)
         console.print(f"[bold]Abliterix execution mode[/bold]: {execution['mode']}")
+        subprocess.run(
+            execution["command"],
+            cwd=execution["cwd"],
+            env=execution["env"],
+            check=True,
+        )
+    elif plan["backend"] == "apostate" and plan["backend_config"].get("execution") in APOSTATE_EXECUTIONS:
+        runner = result["paths"].get("apostate_runner")
+        if runner is None:
+            raise SystemExit("missing generated Apostate runner")
+        execution = apostate_execution_spec(plan, runner)
+        console.print(f"[bold]Apostate execution mode[/bold]: {execution['mode']}")
         subprocess.run(
             execution["command"],
             cwd=execution["cwd"],

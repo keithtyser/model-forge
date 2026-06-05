@@ -1,6 +1,6 @@
-version: 2026-05-18
-snapshot_date: 2026-05-18
-last_verified: 2026-05-19
+version: 2026-06-04
+snapshot_date: 2026-06-04
+last_verified: 2026-06-04
 description: >
   Machine-readable research basis for Model Forge. Entries map research claims
   to implementation hooks, eval hooks, limitations, and objective profiles.
@@ -221,6 +221,173 @@ entries:
     limitations:
       - Multi-direction methods increase sweep surface area and must be bounded by resource guardrails.
       - More suppression is only useful for this repo when source capability is preserved.
+
+  apostate_preservation_ablation_2026:
+    title: "Apostate preservation-direction baked refusal ablation"
+    kind: software_method
+    year: 2026
+    status: tracked_sota
+    url: https://github.com/heterodoxin/apostate
+    areas:
+      - behavior_editing
+      - refusal_suppression
+      - checkpoint_export
+    claims:
+      - Refusal subspaces can be cleaned with preservation directions before baking a normal Transformers checkpoint.
+      - Layer influence scoring, KL repair, weak-response guards, and source-relative reports make single-backend ablation safer to orchestrate.
+    implementation_hooks:
+      - configs/abliteration/*apostate*.yaml
+      - docker/apostate.Dockerfile
+      - scripts/run_apostate_container.sh
+      - src/model_forge/pipelines/abliterate.py
+    eval_hooks:
+      - evals/prompts/refusal_paired_boundary.yaml
+      - evals/prompts/unsafe_ablation_redirect.yaml
+      - configs/objectives/zero_refusal_capability_retention.yaml
+    limitations:
+      - Backend refusal and KL reports are not promotion evidence by themselves.
+      - Constants and prompt mixtures must be recalibrated per source model and failure category.
+
+  sra_2026_surgical_refusal_ablation:
+    title: "Surgical Refusal Ablation"
+    kind: paper
+    year: 2026
+    status: tracked_sota
+    url: https://arxiv.org/abs/2601.08489
+    areas:
+      - behavior_editing
+      - refusal_suppression
+      - capability_preservation
+    claims:
+      - Refusal directions should be cleaned against capability and style atoms before projection.
+      - Capability-preserving direction cleanup can reduce refusal while keeping lower KL than broad edits.
+    implementation_hooks:
+      - configs/abliteration/*method_shift*.yaml
+      - configs/abliteration/*abliterix*.yaml
+      - future:src/model_forge/behavior_editing/sra.py
+    eval_hooks:
+      - evals/prompts/refusal_paired_boundary.yaml
+      - evals/prompts/capability_preservation_challenge.yaml
+    limitations:
+      - SRA is a direction-cleaning strategy, not a universal set of constants.
+      - Stochastic refusal blockers still require multi-trial model-forge gates after export.
+
+  cosmic_refusal_direction_selection_2025:
+    title: "COSMIC refusal direction and layer selection"
+    kind: paper
+    year: 2025
+    status: tracked_sota
+    url: https://arxiv.org/abs/2506.00085
+    related_urls:
+      - https://github.com/wang-research-lab/COSMIC
+    areas:
+      - behavior_editing
+      - interpretability
+      - refusal_detection
+    claims:
+      - Refusal-relevant directions and layers can be selected without depending only on surface refusal text.
+      - Direction selection can improve behavior edits when keyword refusal probes have weak baseline signal.
+    implementation_hooks:
+      - future:src/model_forge/behavior_editing/direction_selection.py
+      - configs/abliteration/*.yaml
+    eval_hooks:
+      - evals/prompts/refusal_paired_boundary.yaml
+      - evals/prompts/refusal_benign_boundary.yaml
+    limitations:
+      - Direction-selection improvements still need baked-checkpoint export and source-relative eval evidence.
+      - It should not replace harmful-detail and benign-quality checks.
+
+  optimal_transport_refusal_ablation_2026:
+    title: "Optimal Transport Refusal Ablation"
+    kind: paper
+    year: 2026
+    status: tracked_sota
+    url: https://arxiv.org/abs/2603.04355
+    areas:
+      - behavior_editing
+      - refusal_suppression
+      - activation_transport
+    claims:
+      - Activation distributions for refusal can be transported toward no-refusal harmless behavior instead of deleting one direction.
+      - Layer-selective transport can improve refusal suppression while controlling perplexity drift.
+    implementation_hooks:
+      - configs/abliteration/*method_shift*.yaml
+      - future:src/model_forge/behavior_editing/optimal_transport.py
+    eval_hooks:
+      - evals/prompts/refusal_paired_boundary.yaml
+      - evals/prompts/normal_use_regression.yaml
+    limitations:
+      - Transport maps add tuning surface area and need stronger resource guards than single-vector edits.
+      - It is a research backend until a guarded runner exists in model-forge.
+
+  angular_steering_2025:
+    title: "Angular steering for norm-preserving behavior control"
+    kind: paper
+    year: 2025
+    status: tracked_sota
+    url: https://arxiv.org/abs/2510.26243
+    areas:
+      - behavior_editing
+      - steering
+      - capability_preservation
+    claims:
+      - Rotational or norm-preserving control can reduce drift compared with raw activation addition or deletion.
+      - Norm preservation is useful when the objective is behavior change without broad capability movement.
+    implementation_hooks:
+      - src/model_forge/pipelines/abliterate.py
+      - future:src/model_forge/behavior_editing/angular.py
+    eval_hooks:
+      - evals/prompts/capability_preservation_challenge.yaml
+      - evals/prompts/reasoning_style_stability.yaml
+    limitations:
+      - Inference-time steering ideas must be adapted carefully before baking checkpoints.
+      - Norm preservation alone does not guarantee refusal suppression.
+
+  selective_steering_2026:
+    title: "Selective Steering with Norm-Preserving Control"
+    kind: paper
+    year: 2026
+    status: tracked_sota
+    url: https://arxiv.org/abs/2601.19375
+    areas:
+      - behavior_editing
+      - steering
+      - layer_selection
+    claims:
+      - Steering should be selectively applied to behavior-relevant layers or contexts instead of globally.
+      - Norm-preserving selective control can reduce unwanted side effects.
+    implementation_hooks:
+      - future:src/model_forge/behavior_editing/selective_steering.py
+      - configs/abliteration/*.yaml
+    eval_hooks:
+      - evals/prompts/refusal_paired_boundary.yaml
+      - evals/prompts/capability_preservation_challenge.yaml
+    limitations:
+      - It is more directly an inference-time method until model-forge has a baked-export adaptation.
+      - Context selectivity must be tested against overfitting to search prompts.
+
+  refusal_circuitry_2026:
+    title: "Circuit-level refusal gates and amplifiers"
+    kind: paper
+    year: 2026
+    status: tracked_sota
+    url: https://arxiv.org/abs/2604.04385
+    areas:
+      - behavior_editing
+      - interpretability
+      - refusal_suppression
+    claims:
+      - Refusal behavior can route through sparse gate and amplifier circuits rather than one dense global vector.
+      - Circuit findings explain why stubborn residual refusals can survive simple projection or narrow fine-tune repair.
+    implementation_hooks:
+      - future:src/model_forge/behavior_editing/circuit_targets.py
+      - configs/abliteration/*.yaml
+    eval_hooks:
+      - evals/prompts/refusal_paired_boundary.yaml
+      - evals/prompts/unsafe_ablation_redirect.yaml
+    limitations:
+      - Circuit-level edits are not yet a turnkey backend in model-forge.
+      - Circuit evidence must be converted into bounded target selection before large checkpoint edits.
 
   xstest:
     title: "XSTest: A Test Suite for Identifying Exaggerated Safety Behaviours"

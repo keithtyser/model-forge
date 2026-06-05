@@ -18,6 +18,7 @@ from model_forge.pipelines.abliterate import (
     REPO_DIR,
     _projection_delta,
     abliterix_execution_spec,
+    apostate_execution_spec,
     analyze_abliterix_search_journal,
     analyze_heretic_search_journal,
     build_plan,
@@ -34,6 +35,8 @@ from model_forge.pipelines.abliterate import (
     prompts_for_buckets,
     response_conditioned_prompts,
     tensor_strength,
+    write_apostate_config,
+    write_apostate_runner,
     write_heretic_config,
     write_heretic_direct_runner,
     write_heretic_runner,
@@ -602,6 +605,78 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertTrue(plan["source_model"].endswith("Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2"))
         self.assertEqual(plan["backend_config"]["search_selection"]["max_refusals"], 0)
         self.assertEqual(plan["backend_config"]["container_image"], "model-forge-abliterix:latest")
+
+    def test_qwen_v2_apostate_plan_uses_guarded_checkpoint_backend(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_apostate_plan.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "apostate")
+
+        self.assertEqual(plan["backend"], "apostate")
+        self.assertEqual(plan["backend_config"]["execution"], "guarded_checkpoint")
+        self.assertEqual(plan["backend_config"]["container_image"], "model-forge-apostate:latest")
+        self.assertEqual(plan["backend_config"]["target_refusal"], 0.0)
+        self.assertTrue(plan["source_model"].endswith("Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2"))
+        self.assertTrue(plan["output_dir"].endswith("Qwen3.6-27B-local-ft-v4-abliterated-apostate-self-harm-selected"))
+
+    def test_apostate_prepare_writes_config_runner_and_prompt_files(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_apostate_plan.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+                "output_dir": f"{tmp}/exported",
+            }
+            plan = build_sota_plan(config, config_path, "apostate")
+            config_json = json.loads(write_apostate_config(plan).read_text(encoding="utf-8"))
+            runner = write_apostate_runner(plan).read_text(encoding="utf-8")
+            manifest = load_yaml(Path(tmp) / "model_forge_prompt_files" / "manifest.json")
+
+        self.assertEqual(config_json["model"], plan["source_model"])
+        self.assertEqual(config_json["output_dir"], f"{tmp}/exported")
+        self.assertTrue(config_json["optimize"])
+        self.assertTrue(config_json["bake"])
+        self.assertEqual(config_json["target_refusal"], 0.0)
+        self.assertTrue(config_json["harmful_path"].endswith("harmful_train.txt"))
+        self.assertTrue(config_json["harmless_path"].endswith("harmless_train.txt"))
+        self.assertTrue(config_json["preserve_path"].endswith("preserve.txt"))
+        self.assertIn('sys.argv = ["apostate", "--config", str(config_path)]', runner)
+        self.assertIn("Apostate is not installed", runner)
+        self.assertIn("MODEL_FORGE_MIN_FREE_DISK_FRACTION", runner)
+        self.assertEqual(manifest["sections"]["harmful_path"]["count"], 104)
+        self.assertEqual(manifest["sections"]["harmful_path"]["extra_prompts"]["count"], 6)
+        self.assertEqual(manifest["sections"]["harmful_test"]["count"], 15)
+        self.assertEqual(manifest["sections"]["harmful_test"]["extra_prompts"]["count"], 4)
+        self.assertEqual(manifest["sections"]["harmless_path"]["count"], 63)
+        self.assertEqual(manifest["sections"]["harmless_test"]["count"], 52)
+        self.assertEqual(manifest["sections"]["preserve_path"]["count"], 58)
+
+    def test_apostate_sota_run_uses_guarded_container_when_configured(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_apostate_plan.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "apostate")
+        runner = Path(plan["work_dir"]) / "run_apostate.py"
+
+        execution = apostate_execution_spec(plan, runner)
+
+        self.assertEqual(execution["mode"], "guarded_container")
+        self.assertEqual(execution["command"][0], str(REPO_DIR / "scripts" / "run_apostate_container.sh"))
+        self.assertEqual(execution["command"][1], str((REPO_DIR / runner).resolve()))
+        self.assertEqual(execution["cwd"], REPO_DIR)
+        self.assertEqual(execution["env"]["MODEL_FORGE_APOSTATE_IMAGE"], "model-forge-apostate:latest")
 
     def test_abliterix_prepare_writes_search_only_config_and_runner(self) -> None:
         config_path = (

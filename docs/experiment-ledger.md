@@ -28,6 +28,74 @@ Publishing helper:
 
 For prepared datasets, pass `--repo-type dataset`.
 
+## Qwen 3.6 27B: V2 Apostate Method-Shift Attempt
+
+Status: executed and rejected. Do not promote, quantize, upload, or broad-eval
+the exported Apostate candidate. The failed baked checkpoint was deleted after
+capturing the backend summary to restore disk headroom.
+
+Hypothesis: held v2 remains the strongest Qwen FT-abli evidence node, but it
+still has one stochastic self-harm denial-wording blocker. Apostate's
+preservation-direction baked checkpoint method may remove that residual refusal
+opening while preserving source capability better than another sequential
+preference/unlikelihood repair.
+
+Config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_apostate_plan.yaml`.
+
+Implementation:
+
+- backend Dockerfile: `docker/apostate.Dockerfile`
+- guarded wrapper: `scripts/run_apostate_container.sh`
+- pipeline support: `src/model_forge/pipelines/abliterate.py`
+- research snapshot: `docs/research/sota-2026-06-04.md`
+- research registry: `configs/research_registry.yaml`
+
+Executed command sequence:
+
+```bash
+docker build -f docker/apostate.Dockerfile -t model-forge-apostate:latest .
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_apostate_plan.yaml sota-prepare --backend apostate
+MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 MODEL_FORGE_APOSTATE_DOCKER_MEMORY_GB=110 MODEL_FORGE_APOSTATE_SHM_SIZE=32g \
+  ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_apostate_plan.yaml sota-run --backend apostate --execute
+```
+
+Result:
+
+- backend version: Apostate 1.0.0 from `heterodoxin/apostate`
+- elapsed: 4828.7 seconds
+- backend baseline refusal estimate: 0.7143
+- backend edited refusal estimate: 0.5714
+- best search trial: refusal 0.375, KL 0.0024, capability drift 0.0
+- final test harmless KL: 0.0443 nats
+- final baked checkpoint path:
+  `~/models/Qwen3.6-27B-local-ft-v4-abliterated-apostate-self-harm-selected`
+- captured summary:
+  `artifacts/abliteration/qwen36_27b_ft_abli_v2_self_harm_apostate_plan/sota_apostate/model_forge_sota_apostate.json`
+- versioned report:
+  `reports/qwen36_27b_v2_apostate_failed_summary.md`
+
+Decision: reject without model-forge eval. The backend never reached the
+zero-refusal objective; refinement worsened the refusal estimate from the best
+search/rerank value, and the final backend test refusal remained 0.5714. Running
+the expensive targeted model-forge eval would not provide promotion evidence.
+
+Validation completed before heavy execution:
+
+- `.venv/bin/python -m unittest tests.test_abliteration_pipeline -v`
+- `.venv/bin/python -m unittest tests.test_research_registry -v`
+- `./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_apostate_plan.yaml sota-plan --backend apostate`
+- `./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_apostate_plan.yaml sota-prepare --backend apostate`
+- `./forge research audit`
+- `./forge doctor`
+
+Follow-up: do not rerun this same full balanced Apostate search unchanged. If
+Apostate is retried, change the search space or run a much smaller first-pass
+diagnostic before baking. The next serious method shift should prioritize a
+multi-direction/SOM or optimal-transport-style backend, because another
+single-profile preservation-aware baked edit still left the self-harm refusal
+cluster intact.
+
 ## Qwen 3.6 27B: Trial12 Preference-Unlikelihood v13 Residual Opening Repair
 
 Status: trained, merged, synced, targeted-gated, and rejected. Do not upload,
