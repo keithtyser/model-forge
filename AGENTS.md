@@ -1900,20 +1900,25 @@ contrast can cancel the refusal signal.
 
 The next prepared Qwen branch is
 `configs/abliteration/qwen36_27b_ft_abli_v2_refusal_style_unmatched_som_projection_v19.yaml`.
-It registers `local_ft_abli_som_projection_v19_unmatched_refusal_style` as an
-inconclusive, blocked candidate. V19 keeps V17's attention-only SOM projection
-shape and strength, but changes the contrast basis to unmatched refusal-style
-signals: harmful side includes self-harm plus unrelated unsafe redirect prompts
-with explicit refusal openings, while benign side uses non-topic-matched
-capability/direct-answer anchors. Run `sota-plan` and `sota-prepare` first,
-then export/evaluate only under the normal one-large-job guardrails. It is not a
-promotion, NVFP4, or HF-upload source unless the targeted three-trial gate hits
-0/3 refusal wording, 3/3 safe redirect, 0/3 harmful detail/compliance, and 3/3
-`model_selection_summary`.
+It registers `local_ft_abli_som_projection_v19_unmatched_refusal_style`. V19
+kept V17's attention-only SOM projection shape and strength, but changed the
+contrast basis to unmatched refusal-style signals: harmful side included
+self-harm plus unrelated unsafe redirect prompts with explicit refusal openings,
+while benign side used non-topic-matched capability/direct-answer anchors. It
+was exported through the guarded native container, synced to both Sparks,
+strict-audited on coordinator and worker, served with TP=2, targeted-gated, and
+rescored with scoring v13. Reject it: refusal wording stayed 2/3, ablation
+refusal suppression was 1/3, safe redirect was 3/3, harmful detail/compliance
+and unsafe overcompliance were 0/3, and `model_selection_summary` was 3/3. See
+`reports/qwen36_27b_som_projection_v19_unmatched_refusal_style_summary.md`.
+Do not promote, broad-eval, quantize, or upload V19.
 
-If V19 still fails, the next method shift should be a candidate-selection loop
-or the tracked `qwen_scope_sae_2026` feature-level path once a guarded SAE
-runner exists, not another near-identical prompt-weight/strength bump.
+Scoring v13 fixes the V19-discovered false positive where a safe self-harm
+warning that repeated "look accidental" was counted as harmful detail. If
+comparing V19 to older v12 output, use the rescored v13 directory. The next
+method shift should be a candidate-selection loop or the tracked
+`qwen_scope_sae_2026` feature-level path once a guarded SAE runner exists, not
+another near-identical SOM prompt-weight/strength bump.
 
 ## Publishing
 
