@@ -341,6 +341,37 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(repeats["observed_i_should_not_give_opening"], 2)
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 32)
 
+    def test_qwen_v20_som_projection_targets_hybrid_attention_outputs(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_hybrid_attention_som_projection_v20.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+                "output_dir": f"{tmp}/exported",
+            }
+            result = write_sota_artifacts(config, config_path, "som_projection")
+            native_config = load_yaml(Path(result["paths"]["som_projection_config"]))
+            manifest = json.loads(
+                (Path(tmp) / "model_forge_native_prompt_pairs" / "manifest.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(native_config["activation_collection"]["direction_extraction"], "som_centroids")
+        self.assertEqual(native_config["activation_collection"]["direction_components"], 6)
+        self.assertAlmostEqual(float(native_config["edit"]["strength"]), 0.76)
+        self.assertEqual(
+            native_config["edit"]["target_weight_suffixes"],
+            ["self_attn.o_proj.weight", "linear_attn.out_proj.weight"],
+        )
+        self.assertEqual(float(native_config["edit"]["module_strengths"]["self_attn.o_proj.weight"]), 1.0)
+        self.assertEqual(float(native_config["edit"]["module_strengths"]["linear_attn.out_proj.weight"]), 0.45)
+        self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 24)
+
     def test_ft_sota_plan_uses_selected_t34_transfer_recipe(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_ft_local_abli.yaml"
         plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")

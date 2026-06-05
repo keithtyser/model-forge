@@ -246,6 +246,54 @@ entries:
       - This is a contrast-design warning, not a complete checkpoint-export backend.
       - Non-topic-matched contrasts can suppress refusal wording while still requiring harmful-detail, benign-quality, and source-capability gates.
 
+  refusal_steering_qwen_next_2025:
+    title: "Refusal Steering: Fine-grained Control over LLM Refusal Behaviour"
+    kind: paper
+    year: 2025
+    status: tracked_sota
+    url: https://arxiv.org/abs/2512.16602
+    areas:
+      - behavior_editing
+      - refusal_suppression
+      - steering_vectors
+      - qwen
+    claims:
+      - Refusal behavior can be controlled with targeted steering directions rather than broad safety fine-tuning.
+      - Qwen-family refusal work should evaluate direct refusal-wording suppression separately from harmful-detail leakage and capability retention.
+    implementation_hooks:
+      - configs/abliteration/*qwen36_27b*_som_projection*.yaml
+      - configs/objectives/zero_refusal_capability_retention.yaml
+    eval_hooks:
+      - evals/prompts/refusal_paired_boundary.yaml
+      - evals/prompts/unsafe_ablation_redirect.yaml
+      - evals/prompts/capability_preservation_challenge.yaml
+    limitations:
+      - Steering vectors are not enough as evidence; Model Forge requires baked-checkpoint evals against source capability and safety-detail gates.
+
+  expert_aware_refusal_steering_2026:
+    title: "Expert-Aware Refusal Steering for Mixture-of-Experts LLMs"
+    kind: paper
+    year: 2026
+    status: tracked_sota
+    url: https://arxiv.org/abs/2606.04160
+    areas:
+      - behavior_editing
+      - refusal_suppression
+      - mixture_of_experts
+      - architecture_inspection
+    claims:
+      - Refusal behavior in sparse or hybrid architectures can depend on architecture-specific paths, so edits should inspect active target modules instead of assuming a single dense-transformer projection name.
+      - Attention and expert/MLP routing paths should be considered separately, with preservation gates before promoting a baked edit.
+    implementation_hooks:
+      - configs/abliteration/*hybrid_attention*.yaml
+      - configs/model_families/*yaml
+      - future:src/model_forge/behavior_editing/target_discovery.py
+    eval_hooks:
+      - evals/prompts/refusal_paired_boundary.yaml
+      - evals/prompts/capability_preservation_challenge.yaml
+    limitations:
+      - Expert-aware methods do not imply editing router or expert tensors by default; Model Forge should keep router/expert exclusions until target inspection and source-relative evals justify changing them.
+
   qwen_scope_sae_2026:
     title: "Qwen-Scope sparse autoencoders for Qwen-family interpretability"
     kind: paper

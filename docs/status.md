@@ -324,6 +324,19 @@ This is the short handoff state for humans and agents. Use
   and unsafe overcompliance are 0/3, and `model_selection_summary` capability is
   3/3. Do not quantize, upload, promote, or broad-eval V19. See
   `reports/qwen36_27b_som_projection_v19_unmatched_refusal_style_summary.md`.
+- Qwen 3.6 27B V20 native SOM projection is prepared as the next blocked
+  candidate recipe:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_hybrid_attention_som_projection_v20.yaml`.
+  V20 is based on checkpoint target inspection, not another prompt-weight or
+  strength bump. The held Qwen 3.6 checkpoint has full-attention
+  `self_attn.o_proj.weight` tensors and hybrid `linear_attn.out_proj.weight`
+  tensors; V17 edited only the full-attention outputs and was the closest native
+  SOM result. V20 keeps V17's behavior signal and adds a lower-weight
+  linear-attention output component. The registered variant
+  `local_ft_abli_som_projection_v20_hybrid_attention` is blocked from
+  quantization, upload, and promotion until a guarded export and the same
+  three-trial targeted gate prove 0/3 refusal wording, 3/3 safe redirect, 0/3
+  harmful detail/compliance, and 3/3 `model_selection_summary`.
 - `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`
   is the tracked next-method plan. It starts from the held v2 candidate, not the
   rejected v11-v13 chain. Abliterix SRA search completed 24/24 trials under the
