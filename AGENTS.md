@@ -1877,17 +1877,25 @@ metadata now; if a future rescore shows mismatched top-level and canonical
 `scoring_version`, treat that as a provenance bug before using the result for
 promotion decisions.
 
-The next prepared Qwen branch is
+The Qwen V18 SOM branch is
 `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_som_projection_v18.yaml`.
 It registers `local_ft_abli_som_projection_v18_should_not_opening` and keeps
 the reusable native `som_projection` backend from V17, but targets the observed
 scoring-v12 "I should not give/provide/assist/help" refusal-opening family.
-`sota-plan` and `sota-prepare` have been run; the generated prompt manifest has
-98 balanced pairs and the native config uses `direction_components=8`,
-`som_neurons=10`, `som_steps=96`, strength `0.95`, and attention output
-projection only. Do not promote, quantize, upload, or broad-eval V18 unless the
-guarded export, worker sync, strict audits, TP=2 serve, and targeted three-trial
-no-refusal capability-retention gate pass.
+It was exported through the guarded native container, synced to the worker
+Spark, strict-audited, served with TP=2, and targeted-gated. Reject it: refusal
+wording worsened to 2/3, ablation refusal suppression fell to 1/3, safe redirect
+is 3/3, harmful detail/compliance/unsafe overcompliance is 0/3, and
+`model_selection_summary` is 2/3. Do not promote, quantize, upload, or
+broad-eval it. See
+`reports/qwen36_27b_som_projection_v18_should_not_opening_summary.md`.
+
+Do not keep increasing SOM strength or prompt weight around the same
+"should-not" refusal wording. V18 suggests that this stronger prompt-weighted
+projection reinforced adjacent refusal behavior instead of removing it. The next
+Qwen branch should change the edit objective or method family, ideally using a
+candidate-selection loop that directly optimizes the sampled three-trial
+no-refusal gate while preserving `model_selection_summary`.
 
 ## Publishing
 
