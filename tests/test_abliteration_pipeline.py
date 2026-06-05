@@ -55,6 +55,7 @@ from model_forge.pipelines.abliterate import (
     write_native_optimal_transport_config,
     write_optimal_transport_runner,
     write_qwen_scope_sae_runner,
+    write_selective_direction_artifact,
     write_sota_artifacts,
 )
 
@@ -1083,6 +1084,101 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(manifest["sections"]["harmful_prompts"]["count"], 3)
         self.assertEqual(manifest["sections"]["benign_prompts"]["count"], 4)
         self.assertEqual(manifest["balanced_prompt_pairs"]["paired_count"], 4)
+
+    def test_selective_direction_artifact_keeps_top_scoring_layers(self) -> None:
+        import torch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_path = root / "direction_artifact.pt"
+            output_path = root / "selective_direction_artifact.pt"
+            report_path = root / "selective_projection_report.json"
+            torch.save(
+                {
+                    "refusal_directions": {
+                        10: torch.tensor([1.0, 0.0]),
+                        11: torch.tensor([1.0, 0.0]),
+                        12: torch.tensor([0.0, 1.0]),
+                    },
+                    "harmful_means": {
+                        10: torch.tensor([1.0, 0.0]),
+                        11: torch.tensor([3.0, 0.0]),
+                        12: torch.tensor([0.0, 1.0]),
+                    },
+                    "benign_means": {
+                        10: torch.tensor([0.5, 0.0]),
+                        11: torch.tensor([0.0, 0.0]),
+                        12: torch.tensor([0.0, 0.9]),
+                    },
+                },
+                input_path,
+            )
+
+            report = write_selective_direction_artifact(
+                input_path,
+                output_path,
+                layer_start=10,
+                layer_end=12,
+                top_k=2,
+                report_path=report_path,
+            )
+            selected = json.loads(report_path.read_text(encoding="utf-8"))
+            artifact = torch.load(output_path, map_location="cpu")
+
+        self.assertEqual(report["selected_layers"], [11, 10])
+        self.assertEqual(selected["selected_layers"], [11, 10])
+        self.assertEqual(sorted(artifact["refusal_directions"]), [10, 11])
+
+    def test_qwen_v22_selective_projection_writes_guarded_runner(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_selective_projection_v22.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+                "output_dir": f"{tmp}/exported",
+            }
+            result = write_sota_artifacts(config, config_path, "selective_projection")
+            native_config = load_yaml(Path(result["paths"]["selective_projection_config"]))
+            runner = Path(result["paths"]["selective_projection_runner"]).read_text(encoding="utf-8")
+            manifest = json.loads(
+                (Path(tmp) / "model_forge_native_prompt_pairs" / "manifest.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(native_config["native_backend"]["backend"], "selective_projection")
+        self.assertEqual(native_config["method"], "native_selective_layer_projection")
+        self.assertEqual(native_config["native_backend"]["layer_selection"]["top_k"], 8)
+        self.assertIn("write_selective_direction_artifact", runner)
+        self.assertIn("selective_projection_report", runner)
+        self.assertIn("model_forge_sota_selective_projection.json", runner)
+        self.assertFalse(native_config["edit"]["require_all_target_directions"])
+        self.assertIn("linear_attn.out_proj.weight", native_config["edit"]["target_weight_suffixes"])
+        self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 24)
+
+    def test_candidate_loop_skips_rejected_v21_and_emits_v22(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_candidate_gate.yaml"
+        )
+        plan = build_candidate_loop_plan(load_yaml(config_path), config_path)
+        candidates = {item["name"]: item for item in plan["candidates"]}
+
+        self.assertIn("qwen_scope_sae_feature_diagnostic_v1", candidates)
+        self.assertIn("selective_projection_v22_circuit_gate", candidates)
+        self.assertTrue(candidates["qwen_scope_sae_feature_diagnostic_v1"]["blockers"])
+        self.assertFalse(any(
+            command.get("enabled", True)
+            for command in candidates["qwen_scope_sae_feature_diagnostic_v1"]["commands"]
+        ))
+        self.assertFalse(candidates["selective_projection_v22_circuit_gate"]["blockers"])
+        self.assertIn("selective_projection_v22_circuit_gate", plan["candidate_gate_command"])
 
     def test_optimal_transport_sota_run_uses_guarded_native_runner(self) -> None:
         config_path = (

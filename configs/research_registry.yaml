@@ -386,6 +386,8 @@ entries:
       - Refusal-relevant directions and layers can be selected without depending only on surface refusal text.
       - Direction selection can improve behavior edits when keyword refusal probes have weak baseline signal.
     implementation_hooks:
+      - src/model_forge/pipelines/abliterate.py
+      - configs/abliteration/*selective_projection*.yaml
       - future:src/model_forge/behavior_editing/direction_selection.py
       - configs/abliteration/*.yaml
     eval_hooks:
@@ -457,6 +459,8 @@ entries:
       - Steering should be selectively applied to behavior-relevant layers or contexts instead of globally.
       - Norm-preserving selective control can reduce unwanted side effects.
     implementation_hooks:
+      - src/model_forge/pipelines/abliterate.py
+      - configs/abliteration/*selective_projection*.yaml
       - future:src/model_forge/behavior_editing/selective_steering.py
       - configs/abliteration/*.yaml
     eval_hooks:
@@ -480,6 +484,8 @@ entries:
       - Refusal behavior can route through sparse gate and amplifier circuits rather than one dense global vector.
       - Circuit findings explain why stubborn residual refusals can survive simple projection or narrow fine-tune repair.
     implementation_hooks:
+      - src/model_forge/pipelines/abliterate.py
+      - configs/abliteration/*selective_projection*.yaml
       - future:src/model_forge/behavior_editing/circuit_targets.py
       - configs/abliteration/*.yaml
     eval_hooks:

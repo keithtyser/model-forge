@@ -1948,20 +1948,20 @@ wording, and V18 also loses capability.
 
 The same config now has a `candidate_selection.loop` runbook. Run
 `./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml candidate-loop-plan --write-plan`
-before launching the next ablation branch. The current loop has one next method
-candidate, `qwen_scope_sae_feature_diagnostic_v1`, implemented as
-`configs/abliteration/qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml` and
-registered as `local_ft_abli_qwen_scope_sae_v21`. It uses the native
-`qwen_scope_sae` backend: collect source-relative residual refusal-opening
-directions, constrain each layer to the official
-`Qwen/SAE-Res-Qwen3.5-27B-W80K-L0_50` decoder features, then export through the
-normal norm-preserving projection path. V21 is intentionally narrowed to edit
-layers 20-23 for the first probe: an attempted 20-47 run was stopped after the
-first SAE layer download took 17 minutes, making the full window too slow for an
-initial signal. Run plan/prepare first, then execute only when the two-Spark
-cluster is healthy. After export, sync, run strict
-checkpoint/tokenizer/architecture audits, serve exactly one candidate, and run
-the targeted three-trial gate before broad eval, NVFP4, HF upload, or promotion.
+before launching the next ablation branch. The loop now marks
+`qwen_scope_sae_feature_diagnostic_v1` as `rejected`, so it documents the V21
+failure but emits no executable heavy-job commands for it. The active candidate
+is `selective_projection_v22_circuit_gate`, implemented as
+`configs/abliteration/qwen36_27b_ft_abli_v2_selective_projection_v22.yaml` and
+registered as `local_ft_abli_selective_projection_v22_circuit_gate`. It uses the
+native `selective_projection` backend: collect source-relative
+refusal-opening directions, score layers by harmful-vs-benign activation
+separation explained by the direction basis, keep the highest-signal layers,
+then export through the normal norm-preserving projection path. Run
+plan/prepare first, then execute only when the two-Spark cluster is healthy.
+After export, sync, run strict checkpoint/tokenizer/architecture audits, serve
+exactly one candidate, and run the targeted three-trial gate before broad eval,
+NVFP4, HF upload, or promotion.
 
 V21 execution note: the first narrowed 20-23 export was discarded because the
 recipe targeted only `self_attn.o_proj.weight`; in this Qwen checkpoint layers
@@ -1977,9 +1977,9 @@ redirect stayed 3/3, harmful detail/compliance stayed 0/3, and
 promote V21. See `reports/qwen36_27b_qwen_scope_sae_v21_targeted_summary.md`.
 
 The next Qwen method shift should use this candidate gate as the selection
-objective for the bounded V21 SAE loop. Do not keep repeating
-V18/V19/V20 SOM prompt-weight, strength, contrast, or output-projection tweaks
-outside a gate-driven loop.
+objective for V22. Do not keep repeating V18/V19/V20 SOM prompt-weight,
+strength, contrast, output-projection, or V21 SAE layer-window tweaks outside a
+gate-driven loop.
 
 ## Publishing
 

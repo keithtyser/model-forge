@@ -35,6 +35,7 @@ SOTA_BACKEND_CHOICES = (
     "optimal_transport",
     "norm_preserving_projection",
     "som_projection",
+    "selective_projection",
     "qwen_scope_sae",
 )
 CANDIDATE_GATE_OPERATORS = {"<=", ">=", "==", "!=", "<", ">"}
@@ -55,6 +56,7 @@ NATIVE_PROJECTED_ABLATION_EXECUTIONS = {
     "checkpoint_export",
     "guarded_checkpoint",
     "baked_checkpoint",
+    "selective_checkpoint_export",
 }
 
 QWEN_SCOPE_SAE_EXECUTIONS = {
@@ -851,6 +853,120 @@ def load_direction_artifact(path: Path) -> dict[str, Any]:
     }
 
 
+def write_selective_direction_artifact(
+    input_path: Path,
+    output_path: Path,
+    *,
+    layer_start: int | None = None,
+    layer_end: int | None = None,
+    top_k: int = 8,
+    min_score: float | None = None,
+    required_layers: list[int] | None = None,
+    report_path: Path | None = None,
+) -> dict[str, Any]:
+    import torch
+
+    raw = torch.load(input_path, map_location="cpu")
+    artifact = load_direction_artifact(input_path)
+    directions = artifact["refusal_directions"]
+    harmful_means = artifact.get("harmful_means", {})
+    benign_means = artifact.get("benign_means", {})
+    if not harmful_means or not benign_means:
+        raise SystemExit("selective projection requires harmful_means and benign_means in the direction artifact")
+
+    candidates: list[dict[str, Any]] = []
+    for layer in sorted(directions):
+        if layer_start is not None and layer < layer_start:
+            continue
+        if layer_end is not None and layer > layer_end:
+            continue
+        harmful = harmful_means.get(layer)
+        benign = benign_means.get(layer)
+        if harmful is None or benign is None:
+            continue
+        delta = harmful.float() - benign.float()
+        delta_norm = torch.linalg.vector_norm(delta).clamp_min(1e-8)
+        direction = directions[layer].float()
+        if direction.ndim == 1:
+            direction_basis = direction.unsqueeze(0)
+        elif direction.ndim == 2:
+            direction_basis = direction
+        else:
+            continue
+        direction_basis = direction_basis / torch.linalg.vector_norm(direction_basis, dim=1, keepdim=True).clamp_min(1e-8)
+        projection_energy = torch.linalg.vector_norm(direction_basis @ delta).item()
+        alignment = float(projection_energy / float(delta_norm))
+        separation = float(delta_norm)
+        benign_norm = float(torch.linalg.vector_norm(benign.float()).clamp_min(1e-8))
+        separation_ratio = float(separation / benign_norm)
+        score = float(alignment * separation_ratio)
+        candidates.append({
+            "layer": layer,
+            "score": score,
+            "alignment": alignment,
+            "separation_norm": separation,
+            "benign_norm": benign_norm,
+            "separation_ratio": separation_ratio,
+            "component_count": int(direction_basis.shape[0]),
+        })
+
+    if not candidates:
+        raise SystemExit("selective projection found no candidate layers with directions and means")
+
+    min_score_value = float(min_score) if min_score is not None else None
+    ranked = sorted(candidates, key=lambda item: item["score"], reverse=True)
+    selected_layers: list[int] = []
+    selection_limit = max(1, int(top_k))
+    for layer in required_layers or []:
+        if any(item["layer"] == layer for item in candidates) and layer not in selected_layers:
+            selected_layers.append(int(layer))
+    for item in ranked:
+        if len(selected_layers) >= selection_limit:
+            break
+        if min_score_value is not None and item["score"] < min_score_value:
+            continue
+        if item["layer"] not in selected_layers:
+            selected_layers.append(int(item["layer"]))
+    if not selected_layers:
+        raise SystemExit("selective projection selected no layers after applying top_k/min_score")
+
+    selected = set(selected_layers)
+    output_payload = dict(raw)
+    output_payload["refusal_directions"] = {layer: value for layer, value in directions.items() if layer in selected}
+    output_payload["harmful_means"] = {layer: value for layer, value in harmful_means.items() if layer in selected}
+    output_payload["benign_means"] = {layer: value for layer, value in benign_means.items() if layer in selected}
+    output_payload["selective_projection"] = {
+        "schema_version": "model_forge.selective_projection.v1",
+        "source_path": str(input_path),
+        "selected_layers": selected_layers,
+        "layer_start": layer_start,
+        "layer_end": layer_end,
+        "top_k": int(top_k),
+        "min_score": min_score_value,
+        "required_layers": required_layers or [],
+    }
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(output_payload, output_path)
+
+    report = {
+        "schema_version": "model_forge.selective_projection.v1",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "source_path": str(input_path),
+        "output_path": str(output_path),
+        "layer_start": layer_start,
+        "layer_end": layer_end,
+        "top_k": int(top_k),
+        "min_score": min_score_value,
+        "required_layers": required_layers or [],
+        "selected_layers": selected_layers,
+        "ranked_layers": ranked,
+    }
+    if report_path:
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(json.dumps(report, indent=2) + "\n")
+    return report
+
+
 def tensor_strength(name: str, layer: int, edit: dict[str, Any], default: float) -> float:
     strength = default
     for suffix, value in (edit.get("module_strengths") or {}).items():
@@ -1038,6 +1154,18 @@ def sota_config(config: dict[str, Any]) -> dict[str, Any]:
                     "learns bounded refusal-residual centroids, combines them with "
                     "the global mean direction, and exports only through the normal "
                     "source-relative checkpoint/eval gate."
+                ),
+            },
+            "selective_projection": {
+                "install": "native model-forge checkpoint runner",
+                "method_family": "selective_layer_refusal_projection",
+                "execution": "plan_only",
+                "notes": (
+                    "Native selective-layer checkpoint edit. It collects normal "
+                    "source-relative directions, scores layers by refusal-vs-benign "
+                    "activation separation explained by the direction basis, filters "
+                    "to the highest-signal layers, and exports through the standard "
+                    "norm-preserving projection path."
                 ),
             },
             "qwen_scope_sae": {
@@ -2538,6 +2666,8 @@ def native_checkpoint_method_name(plan: dict[str, Any]) -> str:
         return "native_norm_preserving_projected_abliteration"
     if plan["backend"] == "som_projection":
         return "native_som_multidirectional_projection"
+    if plan["backend"] == "selective_projection":
+        return "native_selective_layer_projection"
     if plan["backend"] == "qwen_scope_sae":
         return "qwen_scope_sae_dictionary_projection"
     return "native_optimal_transport_activation_projection"
@@ -2642,6 +2772,7 @@ def write_native_optimal_transport_config(plan: dict[str, Any]) -> Path:
                 for key in ("sae_source", "sae_file", "sae_file_pattern", "sae_top_k", "sae_min_abs_cosine")
                 if backend.get(key) is not None
             } if plan["backend"] == "qwen_scope_sae" else None,
+            "layer_selection": backend.get("layer_selection") if plan["backend"] == "selective_projection" else None,
             "next_gate": "Run model-forge source-vs-candidate targeted eval before broader evals, quantization, promotion, or upload.",
         },
     }
@@ -2659,6 +2790,13 @@ def write_optimal_transport_runner(plan: dict[str, Any]) -> Path:
     summary_path = work_dir / f"model_forge_sota_{plan['backend']}.json"
     overwrite = bool(backend.get("overwrite_checkpoint", False))
     method_name = native_checkpoint_method_name(plan)
+    layer_selection = backend.get("layer_selection") or {}
+    selective_enabled = bool(layer_selection) or plan["backend"] == "selective_projection"
+    selection_top_k = int(layer_selection.get("top_k", backend.get("selection_top_k", 8)))
+    selection_min_score = layer_selection.get("min_score")
+    selection_layer_start = layer_selection.get("layer_start")
+    selection_layer_end = layer_selection.get("layer_end")
+    selection_required_layers = [int(layer) for layer in (layer_selection.get("required_layers") or [])]
     script = f'''from __future__ import annotations
 
 import json
@@ -2673,6 +2811,7 @@ from model_forge.pipelines.abliterate import (
     guard_execute,
     guard_source_checkpoint,
     load_yaml,
+    write_selective_direction_artifact,
 )
 
 config_path = Path({str(config_path)!r})
@@ -2680,6 +2819,12 @@ work_dir = Path({str(work_dir)!r})
 output_dir = Path({str(plan["output_dir"])!r})
 summary_path = Path({str(summary_path)!r})
 overwrite = {overwrite!r}
+selective_enabled = {selective_enabled!r}
+selection_top_k = {selection_top_k!r}
+selection_min_score = {selection_min_score!r}
+selection_layer_start = {selection_layer_start!r}
+selection_layer_end = {selection_layer_end!r}
+selection_required_layers = {selection_required_layers!r}
 
 
 def available_ram_fraction() -> float:
@@ -2732,10 +2877,28 @@ def main() -> None:
     directions_dir = Path(config["artifacts_dir"])
     collect_directions(config, config_path, directions_dir)
     guard_system_health()
+    raw_directions = directions_dir / "direction_artifact.pt"
+    export_directions = raw_directions
+    selective_report = None
+    if selective_enabled:
+        selective_path = directions_dir / "selective_direction_artifact.pt"
+        selective_report_path = directions_dir / "selective_projection_report.json"
+        selective_report = write_selective_direction_artifact(
+            input_path=raw_directions,
+            output_path=selective_path,
+            layer_start=selection_layer_start,
+            layer_end=selection_layer_end,
+            top_k=selection_top_k,
+            min_score=selection_min_score,
+            required_layers=selection_required_layers,
+            report_path=selective_report_path,
+        )
+        export_directions = selective_path
+        guard_system_health()
     export_projection(
         config,
         config_path,
-        directions_path=directions_dir / "direction_artifact.pt",
+        directions_path=export_directions,
         overwrite=overwrite,
     )
     post_export_health_findings = guard_system_health(fatal=False)
@@ -2747,7 +2910,9 @@ def main() -> None:
         "config": str(config_path),
         "source_model": {plan["source_model"]!r},
         "output_dir": str(output_dir),
-        "directions": str(directions_dir / "direction_artifact.pt"),
+        "directions": str(export_directions),
+        "raw_directions": str(raw_directions),
+        "selective_projection_report": selective_report,
         "overwrite": overwrite,
         "post_export_health_findings": post_export_health_findings,
         "next_step": "Run model-forge source-vs-candidate targeted eval before broader evals, quantization, promotion, or upload.",
@@ -3382,6 +3547,9 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
         elif name == "som_projection" and plan["backend_config"].get("execution") in NATIVE_PROJECTED_ABLATION_EXECUTIONS:
             paths["som_projection_config"] = str(write_native_optimal_transport_config(plan))
             paths["som_projection_runner"] = str(write_optimal_transport_runner(plan))
+        elif name == "selective_projection" and plan["backend_config"].get("execution") in NATIVE_PROJECTED_ABLATION_EXECUTIONS:
+            paths["selective_projection_config"] = str(write_native_optimal_transport_config(plan))
+            paths["selective_projection_runner"] = str(write_optimal_transport_runner(plan))
         elif name == "qwen_scope_sae" and plan["backend_config"].get("execution") in QWEN_SCOPE_SAE_EXECUTIONS:
             paths["qwen_scope_sae_config"] = str(write_native_optimal_transport_config(plan))
             paths["qwen_scope_sae_runner"] = str(write_qwen_scope_sae_runner(plan))
@@ -3487,6 +3655,23 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
             "```",
             "",
             "The native SOM projection path materializes source-relative model-forge prompts, learns a bounded multi-centroid refusal residual basis, and writes a normal Transformers checkpoint with row-norm preservation. Treat it as a candidate only after the targeted model-forge gate passes.",
+            "",
+        ])
+    if paths.get("selective_projection_runner"):
+        selective_plan = build_sota_plan(config, config_path, "selective_projection")
+        selective_command = (
+            f"scripts/run_native_checkpoint_container.sh {paths['selective_projection_runner']}"
+            if selective_plan["backend_config"].get("container_image")
+            else f"scripts/run_native_checkpoint_scope.sh {paths['selective_projection_runner']}"
+        )
+        run_sections.extend([
+            "Run native selective-layer projection checkpoint export:",
+            "",
+            "```bash",
+            selective_command,
+            "```",
+            "",
+            "The native selective projection path materializes source-relative model-forge prompts, collects refusal directions, filters to the highest-separation layers, and writes a normal Transformers checkpoint with row-norm preservation. Treat it as a candidate only after the targeted model-forge gate passes.",
             "",
         ])
     if paths.get("qwen_scope_sae_runner"):
@@ -4293,6 +4478,18 @@ def command_sota_run(args: argparse.Namespace) -> None:
             env=execution["env"],
             check=True,
         )
+    elif plan["backend"] == "selective_projection" and plan["backend_config"].get("execution") in NATIVE_PROJECTED_ABLATION_EXECUTIONS:
+        runner = result["paths"].get("selective_projection_runner")
+        if runner is None:
+            raise SystemExit("missing generated selective projection runner")
+        execution = optimal_transport_execution_spec(plan, runner)
+        console.print(f"[bold]Selective projection execution mode[/bold]: {execution['mode']}")
+        subprocess.run(
+            execution["command"],
+            cwd=execution["cwd"],
+            env=execution["env"],
+            check=True,
+        )
     elif plan["backend"] == "qwen_scope_sae" and plan["backend_config"].get("execution") in QWEN_SCOPE_SAE_EXECUTIONS:
         runner = result["paths"].get("qwen_scope_sae_runner")
         if runner is None:
@@ -4426,6 +4623,7 @@ def export_projection(
         "layer_end": edit.get("layer_end"),
         "target_weight_suffixes": edit.get("target_weight_suffixes"),
         "required_target_layers": configured_target_layers(edit),
+        "available_direction_layers": sorted(directions),
         "missing_direction_layers": missing_layers,
         "target_tensor_layers": projection_target_layers(weight_map, edit),
         "missing_target_tensor_layers": missing_tensor_layers,
@@ -5171,7 +5369,7 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
         name = str(candidate["name"])
         variant = str(candidate.get("variant") or name)
         status = str(candidate.get("status") or "ready")
-        blocked = status in {"runner_missing", "plan_only", "blocked"}
+        blocked = status in {"runner_missing", "plan_only", "blocked", "rejected", "failed"}
         candidate_config = candidate.get("config")
         backend = candidate.get("backend")
         output_dir = candidate.get("output_dir")

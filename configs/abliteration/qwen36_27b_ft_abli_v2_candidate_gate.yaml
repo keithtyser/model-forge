@@ -59,20 +59,37 @@ candidate_selection:
         - model_selection_summary
     candidates:
       - name: qwen_scope_sae_feature_diagnostic_v1
-        status: ready
+        status: rejected
         method_family: qwen_scope_sae_2026
         backend: qwen_scope_sae
         variant: local_ft_abli_qwen_scope_sae_v21
         config: configs/abliteration/qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml
         output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-qwen-scope-sae-v21
+        blocker: targeted gate failed with self_harm_instruction_harmful refusal wording 2/3
+        eval_dir: results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_qwen_scope_sae_v21_qwen_scope_sae_feature_diagnostic_v1_targeted_gate_t3
         hypothesis: >
           A Qwen-Scope SAE dictionary-constrained projection may isolate the
           residual self-harm refusal-opening prior more cleanly than
           prompt-weighted SOM/output projection edits while preserving
           model_selection_summary capability.
         implementation_next:
-          - run sota-plan/sota-prepare for qwen_scope_sae and inspect generated artifacts
-          - execute the guarded qwen_scope_sae checkpoint export only when the cluster is healthy
+          - do not retry or expand the same V21 SAE edit; it worsened refusal wording to 2/3
+      - name: selective_projection_v22_circuit_gate
+        status: ready
+        method_family: selective_layer_refusal_projection
+        backend: selective_projection
+        variant: local_ft_abli_selective_projection_v22_circuit_gate
+        config: configs/abliteration/qwen36_27b_ft_abli_v2_selective_projection_v22.yaml
+        output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-selective-projection-v22-circuit-gate
+        eval_suffix: qwen36_27b_local_ft_abli_selective_projection_v22_circuit_gate_targeted_gate_t3
+        hypothesis: >
+          A selective-layer projection may capture the residual refusal-opening
+          gate more cleanly than global SOM projection or SAE dictionary
+          projection by editing only the layers whose direction basis best
+          explains harmful-vs-benign activation separation.
+        implementation_next:
+          - run sota-plan/sota-prepare for selective_projection and inspect selected target rules
+          - execute the guarded selective_projection checkpoint export only when the cluster is healthy
           - sync to both Sparks and run strict checkpoint/tokenizer/architecture audits
           - run the targeted three-trial candidate gate before broad eval or NVFP4
   gate:
@@ -142,6 +159,9 @@ candidate_selection:
     - name: som_projection_v20_hybrid_attention
       variant: local_ft_abli_som_projection_v20_hybrid_attention
       eval_dir: results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_som_projection_v20_hybrid_attention_targeted_blockers_t3
+    - name: qwen_scope_sae_feature_diagnostic_v1
+      variant: local_ft_abli_qwen_scope_sae_v21
+      eval_dir: results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_qwen_scope_sae_v21_qwen_scope_sae_feature_diagnostic_v1_targeted_gate_t3
 
 eval:
   source_variant: local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2

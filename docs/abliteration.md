@@ -173,6 +173,8 @@ method-shift backends:
   edit with optional row-norm preservation for MPOA/NPBA-style method shifts
 - `som_projection`: native guarded SOM-style multi-centroid refusal-residual
   projection for cases where one global direction is too blunt
+- `selective_projection`: native guarded selective-layer projection that scores
+  layers by refusal-vs-benign activation separation before baking a checkpoint
 - `qwen_scope_sae`: native guarded SAE dictionary-constrained checkpoint
   projection for Qwen-family residual refusal blockers
 
@@ -183,8 +185,10 @@ candidate keeps the same stochastic refusal opening after SRA, OBLITERATUS,
 native OT, or SOM projection, do not only raise strength or prompt weights.
 Instead, test at least one non-topic-matched response-style contrast, or run a
 guarded `qwen_scope_sae` dictionary-constrained diagnostic when a compatible
-SAE dictionary exists. The candidate still must pass the same model-forge
-harmful-detail, safe-redirect, benign-quality, and source-capability gates.
+SAE dictionary exists. If that also fails, use `selective_projection` to keep
+only the highest-separation layers before expanding edit scope. The candidate
+still must pass the same model-forge harmful-detail, safe-redirect,
+benign-quality, and source-capability gates.
 
 Standalone `sra` remains plan-only until a guarded model-forge runner exists.
 OBLITERATUS, Apostate, Abliterix, native optimal transport, and native
@@ -192,13 +196,13 @@ norm-preserving/SOM projection now have guarded execution paths. Abliterix first
 runs in non-interactive search-only mode; it writes an Optuna journal and exits
 without exporting a checkpoint. Use
 `abliterix-search-analyze` before `abliterix-export` for a selected trial.
-OBLITERATUS, Apostate, native optimal transport, native norm-preserving/SOM
-projection, and `qwen_scope_sae` write baked checkpoints directly, so their
-backend reports must be followed by source-vs-candidate model-forge targeted
-evals before any broader eval, quantization, promotion, or upload. The contract
-is the same for every backend: one large model job at a time, source checkpoint
-audit, CPU/RAM/disk caps, targeted internal eval before broader eval, and
-source-relative promotion gates.
+OBLITERATUS, Apostate, native optimal transport, native norm-preserving/SOM/
+selective projection, and `qwen_scope_sae` write baked checkpoints directly, so
+their backend reports must be followed by source-vs-candidate model-forge
+targeted evals before any broader eval, quantization, promotion, or upload. The
+contract is the same for every backend: one large model job at a time, source
+checkpoint audit, CPU/RAM/disk caps, targeted internal eval before broader eval,
+and source-relative promotion gates.
 
 When several diagnostics have completed, rank them with the same case-level gate
 used for promotion instead of comparing backend proxy scores or reading reports
@@ -223,9 +227,10 @@ To plan the next bounded candidate loop before starting any heavy job:
 `reports/generated/abliteration_candidate_loop/`. It lists preflight checks,
 per-candidate export/sync/audit/serve/eval commands, expected eval directories,
 the final `candidate-gate` command, and cleanup policy. Candidates with
-`status: runner_missing`, `plan_only`, or `blocked` are documented but do not
-emit executable heavy-job commands. This is the intended handoff format when the
-next method family needs a new guarded runner before model work can continue.
+`status: runner_missing`, `plan_only`, `blocked`, `rejected`, or `failed` are
+documented but do not emit executable heavy-job commands. This is the intended
+handoff format when the next method family needs a new guarded runner before
+model work can continue.
 
 The Qwen-Scope SAE backend uses the same SOTA lifecycle:
 
@@ -239,6 +244,21 @@ MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0
 This backend requires a compatible SAE decoder dictionary. The V21 Qwen config
 uses `Qwen/SAE-Res-Qwen3.5-27B-W80K-L0_50` with per-layer
 `layer{layer}.sae.pt` files and validates hidden size before export.
+
+The selective-layer backend uses the same lifecycle:
+
+```bash
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_selective_projection_v22.yaml sota-plan --backend selective_projection
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_selective_projection_v22.yaml sota-prepare --backend selective_projection
+MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 \
+  ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_selective_projection_v22.yaml sota-run --backend selective_projection --execute
+```
+
+This backend writes both the raw direction artifact and
+`selective_projection_report.json`; inspect the selected layer list before
+treating the checkpoint as a candidate. Because only selected layers keep
+directions, selective recipes should set `require_all_target_directions: false`
+and rely on the report plus strict checkpoint audits.
 
 Prepare backend-specific files:
 
