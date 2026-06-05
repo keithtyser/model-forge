@@ -16,9 +16,10 @@ TOTAL_MEM_GB="${MODEL_FORGE_ABLITERIX_DOCKER_MEMORY_GB:-$(awk '/MemTotal/ {print
 CPU_LIMIT="${MODEL_FORGE_ABLITERIX_DOCKER_CPUS:-$(python3 - <<'PY'
 import os
 cores = os.cpu_count() or 2
-print(max(1, int(cores * 0.8)))
+print(max(1, cores - 1))
 PY
 )}"
+THREAD_LIMIT="${MODEL_FORGE_ABLITERIX_THREADS:-$CPU_LIMIT}"
 RAM_FLOOR="${MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION:-0.05}"
 WATCHDOG_INTERVAL="${MODEL_FORGE_ABLITERIX_HOST_WATCHDOG_INTERVAL_SECONDS:-10}"
 CONTAINER_NAME="${MODEL_FORGE_ABLITERIX_CONTAINER_NAME:-model-forge-abliterix-$(id -u)-$$}"
@@ -105,6 +106,7 @@ echo "[model-forge] image: $IMAGE"
 echo "[model-forge] runner: $RUNNER"
 echo "[model-forge] docker CPU limit: $CPU_LIMIT"
 echo "[model-forge] docker memory limit: ${TOTAL_MEM_GB}g"
+echo "[model-forge] thread limit: $THREAD_LIMIT"
 echo "[model-forge] docker container: $CONTAINER_NAME"
 echo "[model-forge] host RAM floor: $RAM_FLOOR"
 df -h "$MODELS_DIR"
@@ -123,6 +125,11 @@ docker run --rm --gpus all \
   -e HF_HOME="$HF_CACHE" \
   -e HF_TOKEN \
   -e HUGGINGFACE_HUB_TOKEN \
+  -e OMP_NUM_THREADS="$THREAD_LIMIT" \
+  -e MKL_NUM_THREADS="$THREAD_LIMIT" \
+  -e OPENBLAS_NUM_THREADS="$THREAD_LIMIT" \
+  -e NUMEXPR_NUM_THREADS="$THREAD_LIMIT" \
+  -e TOKENIZERS_PARALLELISM=false \
   -e MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION="${MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION:-0.05}" \
   -e MODEL_FORGE_MIN_FREE_DISK_FRACTION="${MODEL_FORGE_MIN_FREE_DISK_FRACTION:-0.15}" \
   -v "$REPO_DIR:$REPO_DIR" \
