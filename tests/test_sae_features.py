@@ -79,6 +79,40 @@ class SaeFeatureTests(unittest.TestCase):
             self.assertIn("sae_dictionary_constraint", rewritten)
             self.assertEqual(tuple(rewritten["refusal_directions"][1].shape), (1, 3))
 
+    def test_rewrite_direction_artifact_filters_layers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact_path = root / "direction_artifact.pt"
+            output_path = root / "sae_direction_artifact.pt"
+            torch.save(
+                {
+                    "refusal_directions": {
+                        1: torch.tensor([1.0, 0.0, 0.0]),
+                        2: torch.tensor([0.0, 1.0, 0.0]),
+                    },
+                    "harmful_means": {},
+                    "benign_means": {},
+                },
+                artifact_path,
+            )
+            torch.save({"W_dec": torch.eye(3)}, root / "layer2.sae.pt")
+
+            report = rewrite_direction_artifact_with_sae(
+                input_path=artifact_path,
+                output_path=output_path,
+                sae_source=str(root),
+                hidden_size=3,
+                top_k=1,
+                sae_file_pattern="layer{layer}.sae.pt",
+                layer_filter={2},
+            )
+
+            rewritten = torch.load(output_path, map_location="cpu")
+            self.assertEqual(report["sae"]["loaded_decoder_count"], 1)
+            self.assertEqual(sorted(report["layers"]), ["2"])
+            self.assertEqual(tuple(rewritten["refusal_directions"][1].shape), (3,))
+            self.assertEqual(tuple(rewritten["refusal_directions"][2].shape), (1, 3))
+
     def test_resolve_sae_source_passes_allow_patterns_for_remote_repos(self) -> None:
         calls = {}
 

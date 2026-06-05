@@ -2866,6 +2866,8 @@ def main() -> None:
     raw_artifact = directions_dir / "direction_artifact.pt"
     constrained_artifact = directions_dir / "qwen_scope_sae_direction_artifact.pt"
     hidden_size = infer_hidden_size({plan["source_model"]!r})
+    edit = config.get("edit") or {{}}
+    layer_filter = set(range(int(edit.get("layer_start", 0)), int(edit.get("layer_end", -1)) + 1))
     sae_report = rewrite_direction_artifact_with_sae(
         input_path=raw_artifact,
         output_path=constrained_artifact,
@@ -2876,6 +2878,7 @@ def main() -> None:
         sae_file=sae_file,
         sae_file_pattern=sae_file_pattern,
         local_files_only=local_files_only,
+        layer_filter=layer_filter,
     )
     guard_system_health()
     export_projection(

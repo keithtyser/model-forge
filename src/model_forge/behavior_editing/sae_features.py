@@ -325,6 +325,7 @@ def rewrite_direction_artifact_with_sae(
     sae_file: str | None = None,
     sae_file_pattern: str | None = None,
     local_files_only: bool = False,
+    layer_filter: set[int] | None = None,
 ) -> dict[str, Any]:
     import torch
 
@@ -361,6 +362,7 @@ def rewrite_direction_artifact_with_sae(
         decoder_for_layer=decoder_for_layer,
         top_k=top_k,
         min_abs_cosine=min_abs_cosine,
+        layer_filter=layer_filter,
     )
     report["sae"] = {
         "source": sae_source,
