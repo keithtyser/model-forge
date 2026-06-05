@@ -220,6 +220,16 @@ class ModelForgeDgxServeTests(unittest.TestCase):
         self.assertIn("docker\", \"stop\", \"--time\", \"10\", container_name", script)
         self.assertIn("exit 137", script)
 
+    def test_native_checkpoint_container_runner_has_host_memory_watchdog(self) -> None:
+        script = (REPO_DIR / "scripts" / "run_native_checkpoint_container.sh").read_text(encoding="utf-8")
+        self.assertIn("model-forge-posttrain-tf5:latest", script)
+        self.assertIn("--gpus all", script)
+        self.assertIn("--name \"$CONTAINER_NAME\"", script)
+        self.assertIn("MODEL_FORGE_NATIVE_CHECKPOINT_HOST_WATCHDOG_INTERVAL_SECONDS", script)
+        self.assertIn("MemAvailable", script)
+        self.assertIn("docker\", \"stop\", \"--time\", \"10\", container_name", script)
+        self.assertIn("exit 137", script)
+
     def test_external_ablation_container_runners_have_host_memory_watchdogs(self) -> None:
         expected = {
             "run_abliterix_search_container.sh": (
