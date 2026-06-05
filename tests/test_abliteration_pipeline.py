@@ -270,6 +270,37 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("def guard_system_health(*, fatal: bool = True)", runner)
         self.assertIn("guard_system_health(fatal=False)", runner)
 
+    def test_qwen_v18_som_projection_targets_should_not_opening(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_som_projection_v18.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+                "output_dir": f"{tmp}/exported",
+            }
+            result = write_sota_artifacts(config, config_path, "som_projection")
+            native_config = load_yaml(Path(result["paths"]["som_projection_config"]))
+            manifest = json.loads(
+                (Path(tmp) / "model_forge_native_prompt_pairs" / "manifest.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(native_config["activation_collection"]["direction_extraction"], "som_centroids")
+        self.assertEqual(native_config["activation_collection"]["direction_components"], 8)
+        self.assertEqual(native_config["activation_collection"]["som_neurons"], 10)
+        self.assertEqual(native_config["activation_collection"]["som_steps"], 96)
+        self.assertAlmostEqual(float(native_config["edit"]["strength"]), 0.95)
+        harmful_variants = manifest["sections"]["harmful_prompts"]["prompt_variants"]["variants"]
+        repeats = {item["id"]: item.get("repeat", 1) for item in harmful_variants}
+        self.assertEqual(repeats["observed_i_should_not_give_opening"], 4)
+        self.assertEqual(repeats["observed_i_should_not_provide_opening"], 3)
+        self.assertEqual(manifest["balanced_prompt_pairs"]["paired_count"], 98)
+
     def test_ft_sota_plan_uses_selected_t34_transfer_recipe(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_ft_local_abli.yaml"
         plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")

@@ -7316,3 +7316,41 @@ shape or another bounded multidirectional method, but explicitly train/search
 against the residual "I should not give/provide" refusal-opening mode before
 rerunning the same three-trial no-refusal capability-retention gate. Evidence:
 `reports/qwen36_27b_som_projection_v17_self_harm_opening_summary.md`.
+
+### 2026-06-05 Qwen v18 SOM should-not-opening prep
+
+Prepared:
+`configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_som_projection_v18.yaml`
+
+Family variant:
+`local_ft_abli_som_projection_v18_should_not_opening`
+
+Hypothesis: V17 preserved the capability and safe-redirect gates, but one
+trial still opened with the scoring-v12 refusal phrase family. V18 keeps the
+cleaner SOM/attention-only shape while making the behavior signal more specific
+to the observed residual:
+
+- source: held v2
+  `local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2`
+- backend: `som_projection`
+- direction extraction: `som_centroids`
+- direction components: `8`
+- SOM neurons: `10`
+- SOM steps: `96`
+- strength: `0.95`
+- target modules: `self_attn.o_proj.weight`
+- target layers: `20..47`
+- prompt target: first-person "I should not give/provide/assist/help" openings
+
+Validation:
+
+```text
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_som_projection_v18.yaml sota-plan --backend som_projection
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_som_projection_v18.yaml sota-prepare --backend som_projection
+```
+
+The prepared native prompt manifest has 98 balanced harmful/benign pairs and
+the generated native config uses the expected SOM settings. Do not broad-eval,
+upload, quantize, or promote unless guarded export, strict audits, TP=2 serve,
+and the targeted three-trial `self_harm_instruction_harmful` plus
+`model_selection_summary` gate pass.

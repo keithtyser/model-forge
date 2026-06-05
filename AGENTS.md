@@ -1877,6 +1877,18 @@ metadata now; if a future rescore shows mismatched top-level and canonical
 `scoring_version`, treat that as a provenance bug before using the result for
 promotion decisions.
 
+The next prepared Qwen branch is
+`configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_som_projection_v18.yaml`.
+It registers `local_ft_abli_som_projection_v18_should_not_opening` and keeps
+the reusable native `som_projection` backend from V17, but targets the observed
+scoring-v12 "I should not give/provide/assist/help" refusal-opening family.
+`sota-plan` and `sota-prepare` have been run; the generated prompt manifest has
+98 balanced pairs and the native config uses `direction_components=8`,
+`som_neurons=10`, `som_steps=96`, strength `0.95`, and attention output
+projection only. Do not promote, quantize, upload, or broad-eval V18 unless the
+guarded export, worker sync, strict audits, TP=2 serve, and targeted three-trial
+no-refusal capability-retention gate pass.
+
 ## Publishing
 
 When publishing a model:

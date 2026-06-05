@@ -294,6 +294,16 @@ This is the short handoff state for humans and agents. Use
   3/3. This is a cleaner failure than V16, but it still misses the zero-refusal
   requirement. Do not quantize, upload, promote, or broad-eval V17. See
   `reports/qwen36_27b_som_projection_v17_self_harm_opening_summary.md`.
+- Qwen 3.6 27B V18 is the next prepared SOM branch:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_som_projection_v18.yaml`.
+  It keeps the reusable native `som_projection` backend and the attention-only
+  edit shape from V17, but targets the scoring-v12 residual first-person
+  "I should not give/provide/assist/help" opening family. The prepared manifest
+  materializes 98 balanced prompt pairs and the native config uses
+  `direction_components=8`, `som_neurons=10`, `som_steps=96`, and strength
+  `0.95`. It is blocked until guarded export, cluster sync, strict
+  checkpoint/tokenizer/architecture audits, TP=2 serving, and the targeted
+  three-trial no-refusal capability-retention gate pass.
 - `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`
   is the tracked next-method plan. It starts from the held v2 candidate, not the
   rejected v11-v13 chain. Abliterix SRA search completed 24/24 trials under the
