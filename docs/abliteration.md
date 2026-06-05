@@ -203,6 +203,12 @@ so mismatched counts would otherwise fail only after the model had loaded.
 Prefer adding deliberate prompt variants or broader filters to balance the
 contrast; do not treat prompt cycling as a quality-neutral substitute unless the
 experiment explicitly says so.
+Abliterix v1.8.0 also failed the guarded Qwen run when `n_directions > 1` was
+combined with `steering_mode = "lora"`: the backend produced a vector tensor
+with size `n_directions`, then indexed it by transformer layer during
+`apply_steering`. The guarded runner blocks that combination by default. Use
+`n_directions: 1` unless a newer backend version has been validated or the
+recipe explicitly opts into the experimental path.
 OBLITERATUS, Apostate, native optimal transport, native norm-preserving/SOM/
 selective projection, and `qwen_scope_sae` write baked checkpoints directly, so
 their backend reports must be followed by source-vs-candidate model-forge

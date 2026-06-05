@@ -1757,6 +1757,7 @@ def materialize_model_forge_abliterix_prompts(plan: dict[str, Any], backend: dic
     """Materialize model-forge prompt buckets into local HF datasets for Abliterix."""
     materialize_model_forge_heretic_prompts(plan, backend, work_dir)
     validate_abliterix_train_prompt_counts(backend, work_dir)
+    validate_abliterix_multidirection_steering(backend)
     mapping = {
         "good_prompts": "benign_prompts",
         "bad_prompts": "target_prompts",
@@ -1803,6 +1804,24 @@ def validate_abliterix_train_prompt_counts(backend: dict[str, Any], work_dir: Pa
         f"Materialized good_prompts={good_count}, bad_prompts={bad_count}. "
         "Add good_train_prompt_variants/bad_train_prompt_variants, adjust prompt filters, "
         "or reduce n_directions to 1 before running sota-run."
+    )
+
+
+def validate_abliterix_multidirection_steering(backend: dict[str, Any]) -> None:
+    if int(backend.get("n_directions", 1)) <= 1:
+        return
+    steering_mode = str(backend.get("steering_mode", "lora")).strip().lower()
+    if steering_mode != "lora":
+        return
+    if bool(backend.get("allow_experimental_multidirection_lora", False)):
+        return
+    raise SystemExit(
+        "Abliterix n_directions > 1 with steering_mode='lora' is blocked for the "
+        "guarded model-forge runner. Abliterix v1.8.0 can produce a steering "
+        "vector tensor with size n_directions and then index it by transformer "
+        "layer during apply_steering, failing after model load. Set "
+        "n_directions: 1 or explicitly set allow_experimental_multidirection_lora: "
+        "true after validating the backend version supports this combination."
     )
 
 

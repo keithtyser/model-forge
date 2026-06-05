@@ -1542,7 +1542,6 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(manifest["sections"]["bad_prompts"]["count"], 48)
         self.assertEqual(manifest["sections"]["good_prompts"]["count"], 48)
         self.assertEqual(manifest["sections"]["good_prompts"]["prompt_variants"]["output_count"], 48)
-        self.assertEqual(manifest["abliterix_train_prompt_count_validation"]["status"], "passed")
 
     def test_abliterix_multidirection_prepare_rejects_unpaired_training_counts(self) -> None:
         config_path = (
@@ -1552,6 +1551,7 @@ class AbliterationPlanTests(unittest.TestCase):
             / "qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml"
         )
         config = json.loads(json.dumps(load_yaml(config_path)))
+        config["sota"]["backends"]["abliterix"]["n_directions"] = 2
         del config["sota"]["backends"]["abliterix"]["model_forge_prompt_datasets"]["good_train_prompt_variants"]
         with tempfile.TemporaryDirectory() as tmp:
             config["sota"] = {
@@ -1560,6 +1560,24 @@ class AbliterationPlanTests(unittest.TestCase):
             }
             plan = build_sota_plan(config, config_path, "abliterix")
             with self.assertRaisesRegex(SystemExit, "requires equal good/bad training prompt counts"):
+                write_abliterix_config(plan)
+
+    def test_abliterix_multidirection_lora_is_blocked_before_model_load(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml"
+        )
+        config = json.loads(json.dumps(load_yaml(config_path)))
+        config["sota"]["backends"]["abliterix"]["n_directions"] = 2
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+            }
+            plan = build_sota_plan(config, config_path, "abliterix")
+            with self.assertRaisesRegex(SystemExit, "n_directions > 1 with steering_mode='lora' is blocked"):
                 write_abliterix_config(plan)
 
     def test_abliterix_sota_run_uses_guarded_container_when_configured(self) -> None:

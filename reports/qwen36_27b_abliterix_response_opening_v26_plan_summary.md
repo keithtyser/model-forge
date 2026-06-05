@@ -1,7 +1,8 @@
 # Qwen 3.6 27B Abliterix Response-Opening V26 Plan
 
-Status: prepared after config repair; first search launch stopped before trial
-search because Abliterix rejected mismatched multi-direction train counts.
+Status: prepared after config repair; first two launch attempts exposed
+Abliterix multi-direction backend constraints before any useful trial completed.
+The current V26 retry uses `n_directions: 1`.
 
 ## Objective
 
@@ -26,8 +27,8 @@ but aligns the search objective more closely with the real gate by adding:
 - observed refusal-opening traces as bad contrast
 - no-refusal safe redirect traces as preservation contrast
 - 48 search trials instead of 24
-- explicit benign-preservation prompt variants so SRA multi-direction steering
-  gets 48 good train rows and 48 bad train rows
+- explicit benign-preservation prompt variants so the search gets 48 good train
+  rows and 48 bad train rows
 
 ## Config
 
@@ -63,18 +64,7 @@ Prepared prompt counts:
 | good train | 48 |
 | good eval | 3 |
 
-The prompt manifest records:
-
-```json
-{
-  "requires_equal_counts": true,
-  "good_prompts": 48,
-  "bad_prompts": 48,
-  "status": "passed"
-}
-```
-
-## Failed First Launch
+## Failed Launches
 
 The first two-shard run on 2026-06-05 loaded the model on both Sparks, selected
 batch size 16, measured baseline refusals at 12/20, and then stopped before
@@ -89,6 +79,19 @@ Abliterix v1.8.0 computes paired residual differences in its
 fast during `sota-prepare` for future Abliterix multi-direction configs with
 unequal train counts, and V26 now uses deliberate good prompt variants rather
 than duplicate-only cycling.
+
+The second two-shard run passed residual extraction with 48/48 train prompts and
+started trial 1, but both shards then failed in Abliterix v1.8.0 LoRA steering:
+
+```text
+IndexError: index 10 is out of bounds for dimension 0 with size 2
+```
+
+The backend sampled a layer/vector index while the multi-direction SRA tensor
+only had size `n_directions=2`. Model-forge now blocks `n_directions > 1` with
+`steering_mode: lora` unless the recipe explicitly opts into the experimental
+path. V26 has been changed to `n_directions: 1`; the broader prompt objective
+and 48-trial budget remain the actual hypothesis under test.
 
 ## Resource State
 

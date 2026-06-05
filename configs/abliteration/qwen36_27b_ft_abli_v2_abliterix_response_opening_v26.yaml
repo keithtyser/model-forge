@@ -53,7 +53,7 @@ sota:
       sra_base_method: mean
       sra_n_atoms: 12
       sra_ridge_alpha: 0.08
-      n_directions: 2
+      n_directions: 1
       weight_normalization: full
       full_norm_lora_rank: 4
       strength_range: [0.35, 1.85]

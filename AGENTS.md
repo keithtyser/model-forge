@@ -343,9 +343,9 @@ and
 
 V26 is the current Qwen FT-abli next candidate and is search-only:
 `configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml`.
-It uses Abliterix SRA/LoRA with a broader response-opening objective than the
-previous one-prompt Abliterix run: 48 bad train prompts, 48 good train prompts,
-20 bad eval prompts,
+It uses single-direction Abliterix SRA/LoRA with a broader response-opening
+objective than the previous one-prompt Abliterix run: 48 bad train prompts, 48
+good train prompts, 20 bad eval prompts,
 observed refusal-opening traces from
 `datasets/abliteration/qwen36_trial12_response_conditioned_traces.jsonl`, and
 no-refusal safe redirect traces as preservation contrast. Run:
@@ -370,10 +370,14 @@ Operational note: the first V26 two-shard launch on 2026-06-05 stopped before
 search because Abliterix `n_directions: 2` requires equal good/bad training
 prompt counts and the initial config had 12 good vs 48 bad prompts. The config
 now uses explicit benign-preservation variants to prepare 48/48 train rows, and
-`write_abliterix_config` records
-`abliterix_train_prompt_count_validation.status = passed` in the prompt
-manifest. If a future Abliterix multi-direction recipe fails this prepare-time
-guard, fix the contrast design before launching Docker.
+future multi-direction recipes fail this prepare-time guard before Docker
+launch. The second V26 two-shard launch passed that prompt-count problem and
+started trial 1, but Abliterix v1.8.0 then failed with an internal
+multi-direction LoRA steering index error. V26 has therefore been changed to
+`n_directions: 1`; model-forge now blocks `n_directions > 1` with
+`steering_mode: lora` unless the recipe explicitly opts into that experimental
+backend path. If a future Abliterix multi-direction recipe fails either guard,
+fix the contrast/backend design before launching Docker.
 
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,
