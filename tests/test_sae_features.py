@@ -9,6 +9,7 @@ import torch
 from model_forge.behavior_editing.sae_features import (
     constrain_direction_to_decoder,
     discover_decoder_tensor,
+    resolve_sae_source,
     rewrite_direction_artifact_with_sae,
 )
 
@@ -78,7 +79,24 @@ class SaeFeatureTests(unittest.TestCase):
             self.assertIn("sae_dictionary_constraint", rewritten)
             self.assertEqual(tuple(rewritten["refusal_directions"][1].shape), (1, 3))
 
+    def test_resolve_sae_source_passes_allow_patterns_for_remote_repos(self) -> None:
+        calls = {}
+
+        def fake_snapshot_download(repo_id: str, **kwargs: object) -> str:
+            calls["repo_id"] = repo_id
+            calls.update(kwargs)
+            return "/tmp/fake-sae"
+
+        with unittest.mock.patch("huggingface_hub.snapshot_download", side_effect=fake_snapshot_download):
+            path = resolve_sae_source(
+                "Qwen/SAE-Res-Qwen3.5-27B-W80K-L0_50",
+                allow_patterns=["layer20.sae.pt"],
+            )
+
+        self.assertEqual(str(path), "/tmp/fake-sae")
+        self.assertEqual(calls["repo_id"], "Qwen/SAE-Res-Qwen3.5-27B-W80K-L0_50")
+        self.assertEqual(calls["allow_patterns"], ["layer20.sae.pt"])
+
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -82,7 +82,12 @@ def _load_state_file(path: Path) -> dict[str, Any]:
     raise SystemExit(f"unsupported SAE state file suffix: {path}")
 
 
-def resolve_sae_source(source: str | Path, *, local_files_only: bool = False) -> Path:
+def resolve_sae_source(
+    source: str | Path,
+    *,
+    local_files_only: bool = False,
+    allow_patterns: list[str] | None = None,
+) -> Path:
     path = Path(str(source)).expanduser()
     if path.exists():
         return path
@@ -92,7 +97,13 @@ def resolve_sae_source(source: str | Path, *, local_files_only: bool = False) ->
         raise SystemExit(
             f"SAE source {source!r} is not a local path and huggingface_hub is not installed"
         ) from exc
-    return Path(snapshot_download(str(source), local_files_only=local_files_only))
+    return Path(
+        snapshot_download(
+            str(source),
+            local_files_only=local_files_only,
+            allow_patterns=allow_patterns,
+        )
+    )
 
 
 def load_decoder_dictionary(
@@ -102,7 +113,10 @@ def load_decoder_dictionary(
     file_name: str | None = None,
     local_files_only: bool = False,
 ) -> dict[str, Any]:
-    root = resolve_sae_source(source, local_files_only=local_files_only)
+    allow_patterns = None
+    if file_name:
+        allow_patterns = [file_name, "config.json", "README.md", "LICENSE"]
+    root = resolve_sae_source(source, local_files_only=local_files_only, allow_patterns=allow_patterns)
     files: list[Path]
     if root.is_file():
         files = [root]
