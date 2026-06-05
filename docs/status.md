@@ -873,6 +873,14 @@ length filtering:
    `scripts/rescore_internal_eval.py` now refreshes canonical rescore metadata
    so rescored manifests do not carry stale scoring-version or output-dir
    fields.
+   A Qwen held-v2 candidate gate is now available at
+   `configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml`.
+   It ranks completed candidate eval directories by the exact three-trial target
+   gate instead of backend proxy scores. The first report is
+   `reports/qwen36_27b_ft_abli_v2_candidate_gate_summary.md`: no candidate
+   passed. Held-v2, native OT, V17, and V20 tie as the best failed group with one
+   residual self-harm refusal-wording trial; OBLITERATUS and V19 are worse at two
+   refusal-wording trials; V18 also regressed capability.
 
 ## Operational Guardrails
 

@@ -198,6 +198,19 @@ every backend: one large model job at a time, source checkpoint audit,
 CPU/RAM/disk caps, targeted internal eval before broader eval, and
 source-relative promotion gates.
 
+When several diagnostics have completed, rank them with the same case-level gate
+used for promotion instead of comparing backend proxy scores or reading reports
+by hand:
+
+```bash
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml candidate-gate --write-report
+```
+
+`candidate-gate` consumes completed model-forge eval directories with
+`responses.jsonl`. It does not start servers or export checkpoints. Add a
+`candidate_selection.gate.requirements` block to make the same workflow apply to
+another model family, refusal category, or capability-retention case.
+
 Prepare backend-specific files:
 
 ```bash

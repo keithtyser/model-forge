@@ -24,6 +24,7 @@ console = Console()
 
 
 REPO_DIR = Path(__file__).resolve().parents[3]
+CANDIDATE_GATE_SCHEMA_VERSION = "model_forge.abliteration_candidate_gate.v1"
 SOTA_BACKEND_CHOICES = (
     "obliteratus",
     "heretic",
@@ -34,6 +35,7 @@ SOTA_BACKEND_CHOICES = (
     "norm_preserving_projection",
     "som_projection",
 )
+CANDIDATE_GATE_OPERATORS = {"<=", ">=", "==", "!=", "<", ">"}
 
 APOSTATE_EXECUTIONS = {
     "checkpoint_export",
@@ -225,6 +227,14 @@ def resolve_repo_path(raw: str | Path, base: Path | None = None) -> Path:
     if path.is_absolute():
         return path
     return (base or REPO_DIR) / path
+
+
+def display_path(path: str | Path) -> str:
+    resolved = Path(path)
+    try:
+        return str(resolved.resolve().relative_to(REPO_DIR))
+    except ValueError:
+        return str(resolved)
 
 
 def resolve_model_source(raw: str | Path | None) -> str:
@@ -4465,6 +4475,350 @@ def command_sweep_reference(args: argparse.Namespace) -> None:
     console.print(table)
 
 
+def candidate_gate_defaults() -> dict[str, Any]:
+    return {
+        "trials": 3,
+        "temperature": 1,
+        "requirements": [],
+    }
+
+
+def candidate_gate_config(config: dict[str, Any]) -> dict[str, Any]:
+    merged = candidate_gate_defaults()
+    user = config.get("candidate_selection") or {}
+    if isinstance(user, dict):
+        for key in ("objective", "trials", "temperature"):
+            if user.get(key) is not None:
+                merged[key] = user[key]
+    gate = user.get("gate") if isinstance(user.get("gate"), dict) else user
+    if isinstance(gate, dict):
+        for key, value in gate.items():
+            if key == "requirements" and value:
+                merged["requirements"] = list(value)
+            elif key != "candidates":
+                merged[key] = value
+    default_min_count = int(merged.get("trials") or 1)
+    normalized = []
+    for index, item in enumerate(merged.get("requirements") or []):
+        if not isinstance(item, dict):
+            raise SystemExit(f"candidate gate requirement {index} must be a mapping")
+        requirement = dict(item)
+        requirement.setdefault("name", f"{requirement.get('bucket', 'bucket')}.{requirement.get('metric', 'metric')}")
+        requirement.setdefault("operator", "==")
+        requirement.setdefault("required", True)
+        requirement.setdefault("min_count", default_min_count)
+        missing = [key for key in ("bucket", "metric", "value") if requirement.get(key) is None]
+        if missing:
+            raise SystemExit(f"candidate gate requirement {requirement['name']!r} missing: {', '.join(missing)}")
+        if requirement["operator"] not in CANDIDATE_GATE_OPERATORS:
+            raise SystemExit(
+                f"candidate gate requirement {requirement['name']!r} has unsupported operator "
+                f"{requirement['operator']!r}; valid: {', '.join(sorted(CANDIDATE_GATE_OPERATORS))}"
+            )
+        normalized.append(requirement)
+    if not normalized:
+        raise SystemExit(
+            "candidate-gate requires candidate_selection.gate.requirements in the config; "
+            "define the target bucket/case/metric requirements for this model family"
+        )
+    merged["requirements"] = normalized
+    return merged
+
+
+def parse_candidate_gate_arg(raw: str) -> dict[str, Any]:
+    raw = raw.strip()
+    if not raw:
+        raise SystemExit("empty --candidate entry")
+    if "," in raw:
+        parsed: dict[str, str] = {}
+        for item in raw.split(","):
+            key, sep, value = item.partition("=")
+            if not sep:
+                raise SystemExit(f"candidate entries must be key=value pairs, got {item!r}")
+            parsed[key.strip()] = value.strip()
+        eval_dir = parsed.get("eval") or parsed.get("eval_dir") or parsed.get("path")
+        if not eval_dir:
+            raise SystemExit("--candidate key-value entries require eval=<dir>")
+        return {
+            "name": parsed.get("name") or parsed.get("variant") or Path(eval_dir).name,
+            "variant": parsed.get("variant"),
+            "eval_dir": eval_dir,
+            **{key: value for key, value in parsed.items() if key not in {"name", "variant", "eval", "eval_dir", "path"}},
+        }
+    name, sep, eval_dir = raw.partition("=")
+    if sep:
+        return {"name": name.strip(), "eval_dir": eval_dir.strip()}
+    return {"name": Path(raw).name, "eval_dir": raw}
+
+
+def candidate_gate_entries(config: dict[str, Any], cli_candidates: list[str] | None) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    if cli_candidates:
+        entries.extend(parse_candidate_gate_arg(raw) for raw in cli_candidates)
+    configured = (config.get("candidate_selection") or {}).get("candidates") or []
+    if not entries and configured:
+        for item in configured:
+            if isinstance(item, str):
+                entries.append(parse_candidate_gate_arg(item))
+            elif isinstance(item, dict):
+                eval_dir = item.get("eval_dir") or item.get("eval") or item.get("path")
+                if not eval_dir:
+                    raise SystemExit(f"candidate selection entry missing eval_dir/eval/path: {item}")
+                entry = dict(item)
+                entry["eval_dir"] = str(eval_dir)
+                entry.setdefault("name", entry.get("variant") or Path(str(eval_dir)).name)
+                entries.append(entry)
+            else:
+                raise SystemExit(f"candidate selection entries must be mappings or strings, got {type(item).__name__}")
+    if not entries:
+        raise SystemExit("candidate-gate needs --candidate entries or candidate_selection.candidates in the config")
+    return entries
+
+
+def load_candidate_response_rows(eval_dir: str | Path) -> list[dict[str, Any]]:
+    path = resolve_repo_path(eval_dir)
+    responses_path = path / "responses.jsonl" if path.is_dir() else path
+    if not responses_path.exists():
+        raise SystemExit(f"missing candidate responses file: {responses_path}")
+    rows = []
+    with responses_path.open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            text = line.strip()
+            if not text:
+                continue
+            try:
+                rows.append(json.loads(text))
+            except json.JSONDecodeError as exc:
+                raise SystemExit(f"invalid JSON in {responses_path}:{line_number}: {exc}") from exc
+    return rows
+
+
+def compare_candidate_gate_value(actual: float, operator: str, target: float) -> bool:
+    tolerance = 1e-9
+    if operator == "==":
+        return abs(actual - target) <= tolerance
+    if operator == "!=":
+        return abs(actual - target) > tolerance
+    if operator == "<=":
+        return actual <= target + tolerance
+    if operator == ">=":
+        return actual >= target - tolerance
+    if operator == "<":
+        return actual < target - tolerance
+    if operator == ">":
+        return actual > target + tolerance
+    raise SystemExit(f"unsupported candidate gate operator: {operator}")
+
+
+def candidate_gate_deficit(actual: float | None, operator: str, target: float, missing: bool) -> float:
+    if missing or actual is None:
+        return 100.0
+    if operator in {"==", "!="}:
+        if compare_candidate_gate_value(actual, operator, target):
+            return 0.0
+        return abs(actual - target) if operator == "==" else 1.0
+    if operator == "<=":
+        return max(0.0, actual - target)
+    if operator == "<":
+        return max(0.0, actual - target + 1e-9)
+    if operator == ">=":
+        return max(0.0, target - actual)
+    if operator == ">":
+        return max(0.0, target - actual + 1e-9)
+    return 100.0
+
+
+def summarize_candidate_requirement(rows: list[dict[str, Any]], requirement: dict[str, Any]) -> dict[str, Any]:
+    bucket = str(requirement["bucket"])
+    case_id = requirement.get("case_id")
+    metric = str(requirement["metric"])
+    target = float(requirement["value"])
+    operator = str(requirement["operator"])
+    min_count = int(requirement.get("min_count") or 1)
+    values: list[float] = []
+    trial_values: list[dict[str, Any]] = []
+    for row in rows:
+        if str(row.get("bucket") or "") != bucket:
+            continue
+        if case_id is not None and str(row.get("case_id") or "") != str(case_id):
+            continue
+        scores = row.get("scores") or {}
+        if metric not in scores:
+            continue
+        value = float(scores[metric])
+        values.append(value)
+        trial_values.append({
+            "trial_index": row.get("trial_index"),
+            "value": value,
+        })
+    actual = sum(values) / len(values) if values else None
+    missing = len(values) < min_count
+    passed = False if missing or actual is None else compare_candidate_gate_value(actual, operator, target)
+    return {
+        "name": requirement["name"],
+        "bucket": bucket,
+        "case_id": case_id,
+        "metric": metric,
+        "operator": operator,
+        "target": target,
+        "required": bool(requirement.get("required", True)),
+        "min_count": min_count,
+        "count": len(values),
+        "value": None if actual is None else round(actual, 6),
+        "passed": passed,
+        "missing": missing,
+        "deficit": round(candidate_gate_deficit(actual, operator, target, missing), 6),
+        "trial_values": trial_values,
+    }
+
+
+def build_candidate_gate_report(
+    config: dict[str, Any],
+    config_path: Path,
+    candidates: list[dict[str, Any]],
+    *,
+    run_id: str | None = None,
+) -> dict[str, Any]:
+    gate = candidate_gate_config(config)
+    reports = []
+    for candidate in candidates:
+        rows = load_candidate_response_rows(candidate["eval_dir"])
+        requirement_reports = [
+            summarize_candidate_requirement(rows, requirement)
+            for requirement in gate["requirements"]
+        ]
+        required_failures = [
+            item for item in requirement_reports
+            if item["required"] and not item["passed"]
+        ]
+        total_deficit = round(sum(float(item["deficit"]) for item in requirement_reports if item["required"]), 6)
+        reports.append({
+            "name": str(candidate.get("name") or Path(str(candidate["eval_dir"])).name),
+            "variant": candidate.get("variant"),
+            "eval_dir": display_path(resolve_repo_path(candidate["eval_dir"])),
+            "status": "passed" if not required_failures else "failed",
+            "required_failure_count": len(required_failures),
+            "total_required_deficit": total_deficit,
+            "response_count": len(rows),
+            "requirements": requirement_reports,
+            "blockers": [
+                {
+                    "name": item["name"],
+                    "bucket": item["bucket"],
+                    "case_id": item["case_id"],
+                    "metric": item["metric"],
+                    "value": item["value"],
+                    "target": item["target"],
+                    "operator": item["operator"],
+                    "count": item["count"],
+                    "min_count": item["min_count"],
+                }
+                for item in required_failures
+            ],
+        })
+    ranked = sorted(reports, key=lambda item: (item["required_failure_count"], item["total_required_deficit"], item["name"]))
+    passed = [item for item in ranked if item["status"] == "passed"]
+    return {
+        "schema_version": CANDIDATE_GATE_SCHEMA_VERSION,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "run_id": run_id or sanitize_report_id(f"{Path(config_path).stem}_candidate_gate"),
+        "config": display_path(config_path),
+        "objective": gate.get("objective") or "zero_refusal_capability_retention",
+        "trials": int(gate.get("trials") or 1),
+        "temperature": gate.get("temperature"),
+        "candidate_count": len(reports),
+        "recommended_candidate": passed[0]["name"] if passed else None,
+        "best_failed_candidate": ranked[0]["name"] if ranked and not passed else None,
+        "decision": "promote_candidate" if passed else "no_candidate_passed_gate",
+        "ranked_candidates": ranked,
+        "notes": [
+            "This report consumes completed model-forge eval outputs; it does not run servers, exports, or eval jobs.",
+            "Promotion still requires checkpoint/tokenizer/architecture audits and source-relative broader evals after this targeted gate.",
+        ],
+    }
+
+
+def sanitize_report_id(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", value).strip("_") or "candidate_gate"
+
+
+def write_candidate_gate_report(report: dict[str, Any], output_dir: Path | None = None) -> Path:
+    root = resolve_repo_path(output_dir or Path("reports/generated/abliteration_candidate_gate") / report["run_id"])
+    root.mkdir(parents=True, exist_ok=True)
+    json_path = root / "candidate_gate.json"
+    json_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    lines = [
+        f"# Abliteration Candidate Gate: {report['run_id']}",
+        "",
+        f"- Decision: `{report['decision']}`",
+        f"- Recommended candidate: `{report['recommended_candidate'] or '<none>'}`",
+        f"- Best failed candidate: `{report['best_failed_candidate'] or '<none>'}`",
+        f"- Candidate count: `{report['candidate_count']}`",
+        f"- Trials: `{report['trials']}`",
+        "",
+        "## Ranked Candidates",
+        "",
+        "| Rank | Candidate | Status | Required failures | Deficit | Blockers |",
+        "|---:|---|---|---:|---:|---|",
+    ]
+    for rank, candidate in enumerate(report["ranked_candidates"], start=1):
+        blockers = ", ".join(f"{item['name']}={item['value']}" for item in candidate["blockers"]) or "none"
+        lines.append(
+            f"| {rank} | `{candidate['name']}` | `{candidate['status']}` | "
+            f"{candidate['required_failure_count']} | {candidate['total_required_deficit']} | {blockers} |"
+        )
+    lines.extend([
+        "",
+        "## Notes",
+        "",
+        *[f"- {note}" for note in report["notes"]],
+        "",
+    ])
+    (root / "candidate_gate.md").write_text("\n".join(lines), encoding="utf-8")
+    return json_path
+
+
+def command_candidate_gate(args: argparse.Namespace) -> None:
+    config_path = resolve_repo_path(args.config)
+    config = load_yaml(config_path)
+    candidates = candidate_gate_entries(config, args.candidate)
+    report = build_candidate_gate_report(
+        config,
+        config_path,
+        candidates,
+        run_id=args.run_id,
+    )
+    if args.write_report:
+        path = write_candidate_gate_report(report, args.output_dir)
+        if not args.json:
+            console.print(f"[bold green]Wrote candidate gate report[/bold green]: {path}")
+    if args.json:
+        print(json.dumps(report, indent=2) + "\n")
+        return
+    table = Table(title="Abliteration Candidate Gate")
+    table.add_column("rank")
+    table.add_column("candidate")
+    table.add_column("status")
+    table.add_column("failures")
+    table.add_column("deficit")
+    table.add_column("blockers")
+    for rank, candidate in enumerate(report["ranked_candidates"], start=1):
+        blockers = ", ".join(item["name"] for item in candidate["blockers"]) or "none"
+        table.add_row(
+            str(rank),
+            candidate["name"],
+            candidate["status"],
+            str(candidate["required_failure_count"]),
+            str(candidate["total_required_deficit"]),
+            blockers,
+        )
+    console.print(table)
+    if report["recommended_candidate"]:
+        console.print(f"[bold green]Recommended[/bold green]: {report['recommended_candidate']}")
+    else:
+        console.print("[yellow]No candidate passed the targeted gate.[/yellow]")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Plan and run memory-guarded model abliteration steps")
     parser.add_argument("--config", required=True, help="Path to abliteration YAML config")
@@ -4502,6 +4856,22 @@ def build_parser() -> argparse.ArgumentParser:
     sweep.add_argument("--top-k", type=int, default=12)
     sweep.add_argument("--output", default=None)
     sweep.set_defaults(func=command_sweep_reference)
+
+    candidate_gate = sub.add_parser(
+        "candidate-gate",
+        help="Rank completed ablation candidates by the configured case-level eval gate",
+    )
+    candidate_gate.add_argument(
+        "--candidate",
+        action="append",
+        default=None,
+        help="Candidate eval entry: name=<id>,variant=<variant>,eval=<run_dir> or name=<run_dir>",
+    )
+    candidate_gate.add_argument("--run-id", default=None)
+    candidate_gate.add_argument("--output-dir", type=Path, default=None)
+    candidate_gate.add_argument("--write-report", action="store_true")
+    candidate_gate.add_argument("--json", action="store_true")
+    candidate_gate.set_defaults(func=command_candidate_gate)
 
     sota_plan = sub.add_parser("sota-plan", help="Inspect SOTA external backend plan")
     sota_plan.add_argument("--backend", choices=SOTA_BACKEND_CHOICES, default=None)

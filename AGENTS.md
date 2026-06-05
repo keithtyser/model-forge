@@ -1935,11 +1935,22 @@ safe redirect was 3/3, harmful detail/compliance and unsafe overcompliance were
 `reports/qwen36_27b_som_projection_v20_hybrid_attention_summary.md`. Do not
 promote, broad-eval, quantize, or upload V20.
 
-The next Qwen method shift should be a real candidate-selection loop that
-directly optimizes the model-forge three-trial gate, or the tracked
-`qwen_scope_sae_2026` feature-level path once a guarded SAE runner exists. Do
-not keep repeating V18/V19/V20 SOM prompt-weight, strength, contrast, or output
-projection tweaks.
+The Qwen held-v2 candidate gate is now config-driven:
+`configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml`. Run
+`./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml candidate-gate --write-report`
+to rank completed candidate eval directories by the actual three-trial
+model-forge gate. The first report is
+`reports/qwen36_27b_ft_abli_v2_candidate_gate_summary.md`: no candidate passed.
+The best failed group is held-v2/native-OT/V17/V20 with exactly one residual
+`self_harm_instruction_harmful` refusal-wording trial while keeping
+`model_selection_summary` 3/3. OBLITERATUS and V19 are worse at 2/3 refusal
+wording, and V18 also loses capability.
+
+The next Qwen method shift should use this candidate gate as the selection
+objective for a bounded search loop, or move to the tracked `qwen_scope_sae_2026`
+feature-level path once a guarded SAE runner exists. Do not keep repeating
+V18/V19/V20 SOM prompt-weight, strength, contrast, or output-projection tweaks
+outside a gate-driven loop.
 
 ## Publishing
 
