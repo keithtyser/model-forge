@@ -422,7 +422,7 @@ data = {
     "work_dir_exists": work_dir.exists(),
     "forge_exists": (work_dir / "forge").exists(),
     "git_branch": run(["git", "branch", "--show-current"], cwd=work_dir) if work_dir.exists() else None,
-    "git_head": run(["git", "rev-parse", "--short", "HEAD"], cwd=work_dir) if work_dir.exists() else None,
+    "git_head": run(["git", "rev-parse", "HEAD"], cwd=work_dir) if work_dir.exists() else None,
     "git_status": run(["git", "status", "-sb"], cwd=work_dir) if work_dir.exists() else None,
     "gpu": run(["nvidia-smi", "--query-gpu=name,memory.total,memory.used,utilization.gpu", "--format=csv,noheader,nounits"]),
     "memory": memory,
@@ -457,6 +457,14 @@ def git_status_is_clean(status: str | None) -> bool:
     return len([line for line in status.splitlines() if line.strip()]) == 1
 
 
+def git_heads_match(left: str, right: str) -> bool:
+    if left == right:
+        return True
+    if len(left) < 7 or len(right) < 7:
+        return False
+    return left.startswith(right) or right.startswith(left)
+
+
 def apply_health_consistency(results: list[dict[str, Any]]) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     expected_branch: str | None = None
@@ -480,7 +488,7 @@ def apply_health_consistency(results: list[dict[str, Any]]) -> dict[str, Any]:
             node_findings.append("git head could not be read")
         elif expected_head is None:
             expected_head = head
-        elif head != expected_head:
+        elif not git_heads_match(head, expected_head):
             node_findings.append(f"git head {head!r} does not match expected {expected_head!r}")
 
         if not git_status_is_clean(status):

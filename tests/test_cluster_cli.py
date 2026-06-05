@@ -207,6 +207,33 @@ class ClusterCliTests(unittest.TestCase):
         self.assertFalse(nodes[1]["ok"])
         self.assertTrue(any("git head" in finding["message"] for finding in consistency["findings"]))
 
+    def test_health_consistency_accepts_equivalent_head_prefixes(self) -> None:
+        nodes = [
+            {
+                "name": "coordinator",
+                "ok": True,
+                "payload": {
+                    "git_branch": {"ok": True, "stdout": "main"},
+                    "git_head": {"ok": True, "stdout": "95a4a31"},
+                    "git_status": {"ok": True, "stdout": "## main...origin/main"},
+                },
+            },
+            {
+                "name": "worker",
+                "ok": True,
+                "payload": {
+                    "git_branch": {"ok": True, "stdout": "main"},
+                    "git_head": {"ok": True, "stdout": "95a4a317"},
+                    "git_status": {"ok": True, "stdout": "## main...origin/main"},
+                },
+            },
+        ]
+
+        consistency = apply_health_consistency(nodes)
+
+        self.assertTrue(consistency["ok"])
+        self.assertTrue(nodes[1]["ok"])
+
     def test_health_consistency_fails_dirty_worker(self) -> None:
         nodes = [
             {
