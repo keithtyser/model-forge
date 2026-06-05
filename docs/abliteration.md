@@ -277,14 +277,19 @@ stayed `3/3`, harmful detail/compliance stayed `0/3`, and
 `model_selection_summary` passed `3/3`. Do not broad-eval, quantize, upload,
 promote, or rerun V32 unchanged.
 
-V33 is the next ready OBLITERATUS candidate:
+V33 OBLITERATUS RDO CUDA has been attempted and is blocked:
 `configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_rdo_cuda_v33.yaml`.
-It is not a repeat of the blocked V24/V30 runs. V33 passes `device: cuda`
-directly to OBLITERATUS, switches from `advanced` to `rdo`, keeps a low
-verification/sample envelope for the first guarded export, uses streaming
-rebirth, remaps Qwen wrapper keys, and source-tethers back toward the held
-FT-abli source. Treat it as unpromoted until export, cluster sync, strict local
-and worker audits, TP=2 serving, and the targeted three-trial gate all pass.
+It was not a repeat of the blocked V24/V30 runs: V33 passed `device: cuda`
+directly to OBLITERATUS, switched from `advanced` to `rdo`, kept a low
+verification/sample envelope, used streaming rebirth, remapped Qwen wrapper
+keys, and source-tethered back toward the held FT-abli source. The guarded run
+still drove host `MemAvailable` below the configured 5% floor before any
+checkpoint directory or streamed shard was produced. Do not rerun V33 unchanged.
+The next ready candidate is V34:
+`configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_hybrid_projection_v34.yaml`.
+V34 uses the native sharded selective-projection path, keeps V32's
+response-opening preservation anchors, expands selected layers from 6 to 12,
+and reintroduces MLP down-projection only at very low strength.
 OBLITERATUS, Apostate, native optimal transport, native norm-preserving/SOM/
 selective projection, and `qwen_scope_sae` write baked checkpoints directly, so
 their backend reports must be followed by source-vs-candidate model-forge

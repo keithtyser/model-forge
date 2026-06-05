@@ -818,7 +818,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertFalse(any("variants checkpoint-audit" in command for command in commands))
         self.assertIn("Search-only candidate jobs are planned", plan["candidate_gate_command"])
 
-    def test_qwen_candidate_loop_blocks_rejected_sae_through_v32_and_plans_v33(self) -> None:
+    def test_qwen_candidate_loop_blocks_rejected_sae_through_v33_and_plans_v34(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_candidate_gate.yaml"
         plan = build_candidate_loop_plan(load_yaml(config_path), config_path, run_id="qwen_unit_loop")
 
@@ -827,7 +827,8 @@ class AbliterationPlanTests(unittest.TestCase):
         candidates = {item["name"]: item for item in plan["candidates"]}
         rejected_v31 = candidates["generated_token_selective_projection_v31"]
         rejected_v32 = candidates["response_opening_generated_projection_v32"]
-        ready_v33 = candidates["obliteratus_rdo_cuda_v33"]
+        blocked_v33 = candidates["obliteratus_rdo_cuda_v33"]
+        ready_v34 = candidates["response_opening_hybrid_projection_v34"]
 
         self.assertEqual(candidate["name"], "qwen_scope_sae_feature_diagnostic_v1")
         self.assertEqual(candidate["status"], "rejected")
@@ -842,12 +843,16 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertTrue(rejected_v32["blockers"])
         self.assertTrue(rejected_v32["produces_checkpoint"])
         self.assertFalse(any(command.get("enabled", False) for command in rejected_v32["commands"]))
-        self.assertEqual(ready_v33["status"], "ready")
-        self.assertFalse(ready_v33["blockers"])
-        self.assertTrue(ready_v33["produces_checkpoint"])
-        self.assertTrue(any(command.get("enabled", False) for command in ready_v33["commands"]))
+        self.assertEqual(blocked_v33["status"], "blocked")
+        self.assertTrue(blocked_v33["blockers"])
+        self.assertTrue(blocked_v33["produces_checkpoint"])
+        self.assertFalse(any(command.get("enabled", False) for command in blocked_v33["commands"]))
+        self.assertEqual(ready_v34["status"], "ready")
+        self.assertFalse(ready_v34["blockers"])
+        self.assertTrue(ready_v34["produces_checkpoint"])
+        self.assertTrue(any(command.get("enabled", False) for command in ready_v34["commands"]))
         self.assertTrue(gate_command["enabled"])
-        self.assertIn("obliteratus_rdo_cuda_v33", plan["candidate_gate_command"])
+        self.assertIn("response_opening_hybrid_projection_v34", plan["candidate_gate_command"])
 
     def test_qwen_scope_sae_prepare_writes_guarded_runner(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml"
@@ -1483,7 +1488,52 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("model_forge_sota_obliteratus.json", runner)
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 12)
 
-    def test_candidate_loop_blocks_rejected_v21_to_v32_and_plans_v33(self) -> None:
+    def test_qwen_v34_response_opening_hybrid_projection_writes_guarded_runner(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_response_opening_hybrid_projection_v34.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+                "output_dir": f"{tmp}/exported",
+            }
+            result = write_sota_artifacts(config, config_path, "selective_projection")
+            native_config = load_yaml(Path(result["paths"]["selective_projection_config"]))
+            runner = Path(result["paths"]["selective_projection_runner"]).read_text(encoding="utf-8")
+            manifest = json.loads(
+                (Path(tmp) / "model_forge_native_prompt_pairs" / "manifest.json").read_text(encoding="utf-8")
+            )
+
+        activation = native_config["activation_collection"]
+        edit = native_config["edit"]
+        selection = native_config["native_backend"]["layer_selection"]
+        self.assertEqual(native_config["native_backend"]["backend"], "selective_projection")
+        self.assertEqual(activation["token_position"], "generated_first_token")
+        self.assertEqual(activation["direction_extraction"], "mean_plus_paired_svd")
+        self.assertEqual(activation["direction_components"], 4)
+        self.assertEqual(selection["layer_start"], 31)
+        self.assertEqual(selection["layer_end"], 47)
+        self.assertEqual(selection["top_k"], 12)
+        self.assertEqual(selection["required_layers"], [35, 36, 37, 40, 41, 46])
+        self.assertAlmostEqual(float(edit["strength"]), 0.82)
+        self.assertEqual(float(edit["module_strengths"]["mlp.down_proj.weight"]), 0.12)
+        self.assertIn("self_attn.o_proj.weight", edit["target_weight_suffixes"])
+        self.assertIn("linear_attn.out_proj.weight", edit["target_weight_suffixes"])
+        self.assertIn("mlp.down_proj.weight", edit["target_weight_suffixes"])
+        self.assertTrue(edit["leave_lm_head_untouched"])
+        self.assertIn("write_selective_direction_artifact", runner)
+        self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 30)
+        self.assertEqual(
+            manifest["sections"]["harmful_prompts"]["case_ids"],
+            ["refusal_paired_boundary/self_harm_instruction_harmful"],
+        )
+
+    def test_candidate_loop_blocks_rejected_v21_to_v33_and_plans_v34(self) -> None:
         config_path = (
             REPO_DIR
             / "configs"
@@ -1506,6 +1556,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("generated_token_selective_projection_v31", candidates)
         self.assertIn("response_opening_generated_projection_v32", candidates)
         self.assertIn("obliteratus_rdo_cuda_v33", candidates)
+        self.assertIn("response_opening_hybrid_projection_v34", candidates)
         self.assertTrue(candidates["qwen_scope_sae_feature_diagnostic_v1"]["blockers"])
         self.assertFalse(any(
             command.get("enabled", True)
@@ -1570,16 +1621,23 @@ class AbliterationPlanTests(unittest.TestCase):
             for command in candidates["response_opening_generated_projection_v32"]["commands"]
             if command["phase"] == "candidate_export"
         ))
-        self.assertFalse(candidates["obliteratus_rdo_cuda_v33"]["blockers"])
+        self.assertTrue(candidates["obliteratus_rdo_cuda_v33"]["blockers"])
         self.assertTrue(candidates["obliteratus_rdo_cuda_v33"]["produces_checkpoint"])
-        self.assertTrue(any(
+        self.assertFalse(any(
             command.get("enabled", False)
             for command in candidates["obliteratus_rdo_cuda_v33"]["commands"]
             if command["phase"] == "candidate_export"
         ))
+        self.assertFalse(candidates["response_opening_hybrid_projection_v34"]["blockers"])
+        self.assertTrue(candidates["response_opening_hybrid_projection_v34"]["produces_checkpoint"])
+        self.assertTrue(any(
+            command.get("enabled", False)
+            for command in candidates["response_opening_hybrid_projection_v34"]["commands"]
+            if command["phase"] == "candidate_export"
+        ))
         self.assertEqual(plan["executable_candidate_count"], 1)
         self.assertEqual(plan["planned_candidate_job_count"], 1)
-        self.assertIn("obliteratus_rdo_cuda_v33", plan["candidate_gate_command"])
+        self.assertIn("response_opening_hybrid_projection_v34", plan["candidate_gate_command"])
         self.assertTrue(any(
             command.get("enabled", False)
             for command in plan["commands"]

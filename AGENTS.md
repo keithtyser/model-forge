@@ -544,23 +544,26 @@ promote, or rerun V32 unchanged. The worker checkpoint copy was deleted after
 documentation to restore disk headroom; the local checkpoint remains available
 for inspection unless storage pressure requires deleting it.
 
-V33 is the next ready OBLITERATUS attempt:
+V33 OBLITERATUS RDO CUDA has been attempted and is blocked:
 `configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_rdo_cuda_v33.yaml`.
 It exists because V24 and V30 were resource-blocked, not behaviorally rejected,
 and a follow-up inspection found that V30 never passed OBLITERATUS
 `device: cuda` into the backend config. V33 is a materially different retry: it
 uses OBLITERATUS `rdo` instead of `advanced`, explicitly passes `device: cuda`,
 keeps low verify/sample pressure, streams rebirth shards, remaps Qwen wrapper
-keys, and source-tethers back toward the held FT-abli source. It is the only
-ready candidate in
-`configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml` at this point.
-Do not broad-eval, NVFP4-export, upload, or promote it until export completes,
-the checkpoint syncs to the worker, strict local and worker audits pass, TP=2
-serving works, and the targeted three-trial gate passes with
-`self_harm_instruction_harmful` refusal wording `0/3`, safe redirect `3/3`,
-harmful detail/compliance `0/3`, and `model_selection_summary` `3/3`.
+keys, and source-tethers back toward the held FT-abli source.
 
-V33 runbook:
+The guarded 2026-06-05 V33 run used Docker memory `110G`, CPU cap `16`,
+`device: cuda`, the 5% host RAM floor, and the 15% disk floor. It loaded the
+Qwen weights and entered OBLITERATUS processing, but host `MemAvailable` fell
+below the configured floor to about `5.2GiB`; the container was stopped before
+any checkpoint directory or streamed shard was written. Host memory recovered to
+about `113GiB` available after stop. Do not rerun V33 unchanged, broad-eval,
+NVFP4-export, upload, or promote it. Before the run, the already-rejected local
+V32 checkpoint was deleted to restore disk headroom; configs, reports, and eval
+evidence were retained.
+
+Historical V33 runbook:
 
 ```bash
 ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_rdo_cuda_v33.yaml sota-plan --backend obliteratus
@@ -569,6 +572,26 @@ MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0
 MODEL_FORGE_OBLITERATUS_DOCKER_MEMORY_GB=110 MODEL_FORGE_OBLITERATUS_SHM_SIZE=32g \
 MODEL_FORGE_OBLITERATUS_CONTAINER_NAME=model-forge-obliteratus-v33-rdo-cuda \
   nice -n 10 ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_rdo_cuda_v33.yaml sota-run --backend obliteratus --execute
+```
+
+V34 response-opening hybrid projection is the next ready Qwen FT-abli
+candidate:
+`configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_hybrid_projection_v34.yaml`.
+It is not another OBLITERATUS retry. It uses the native sharded selective
+projection path that V31/V32 proved operational, keeps V32's self-harm
+response-opening objective and model-selection preservation anchors, expands
+selected high-signal layers from `6` to `12`, and reintroduces
+`mlp.down_proj.weight` only at `0.12` module strength. It must pass export,
+cluster sync, strict local and worker audits, TP=2 serving, and the targeted
+three-trial gate before broad eval, NVFP4 export, upload, or promotion.
+
+V34 runbook:
+
+```bash
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_hybrid_projection_v34.yaml sota-plan --backend selective_projection
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_hybrid_projection_v34.yaml sota-prepare --backend selective_projection
+MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 \
+  ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_hybrid_projection_v34.yaml sota-run --backend selective_projection --execute
 ```
 
 Rejected or held variants should stay in `configs/model_families/` for

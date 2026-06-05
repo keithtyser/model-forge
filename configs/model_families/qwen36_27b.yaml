@@ -819,11 +819,28 @@ variants:
     preserve_variant: local_ft_v4
     downloadable: false
     promotion:
-      decision: inconclusive
+      decision: research_report_only
       blocked_actions: [quantization_export, hf_upload, promotion]
-      reason: "V33 is the next ready Qwen FT-abli candidate after V32 exported safely but failed the zero-refusal gate. It tests a materially different OBLITERATUS RDO path with explicit device=cuda on Spark GB10 unified memory, low verify/sample pressure, streaming export, Qwen wrapper key remap, and source tethering back toward the held FT-abli source. Do not broad-eval, quantize, upload, or promote until export completes, cluster sync succeeds, strict checkpoint/tokenizer/architecture audits pass, and the targeted three-trial gate passes."
+      reason: "V33 tested a materially different OBLITERATUS RDO path with explicit device=cuda on Spark GB10 unified memory, low verify/sample pressure, streaming export, Qwen wrapper key remap, and source tethering back toward the held FT-abli source. The 2026-06-05 guarded export entered OBLITERATUS processing but was stopped when MemAvailable fell below the configured 5% floor at about 5.2 GiB. No checkpoint directory or streamed shard was produced. Do not rerun unchanged, broad-eval, quantize, upload, or promote this branch."
       evidence:
         - configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_rdo_cuda_v33.yaml
+        - configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml
+        - src/model_forge/pipelines/abliterate.py
+        - reports/qwen36_27b_obliteratus_rdo_cuda_v33_plan_summary.md
+  local_ft_abli_response_opening_hybrid_projection_v34:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-ft-v4-abliterated-response-opening-hybrid-projection-v34
+    served_model_name: local/qwen36-27b-local-ft-v4-abliterated-response-opening-hybrid-projection-v34
+    transform_type: behavior_edit
+    base_variant: local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2
+    preserve_variant: local_ft_v4
+    downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "V34 is the next ready Qwen FT-abli candidate after V33 proved the current OBLITERATUS path is still pre-export memory-blocked. It uses the native sharded selective-projection path, keeps V32's self-harm response-opening objective and model-selection preservation anchors, expands high-signal layer selection from 6 to 12, and reintroduces MLP down-projection only at very low strength. Do not broad-eval, quantize, upload, or promote until export completes, cluster sync succeeds, strict checkpoint/tokenizer/architecture audits pass, and the targeted three-trial gate passes."
+      evidence:
+        - configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_hybrid_projection_v34.yaml
         - configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml
         - src/model_forge/pipelines/abliterate.py
   local_ft_abli_checkpoint_blend_v2_v12_alpha1p25:

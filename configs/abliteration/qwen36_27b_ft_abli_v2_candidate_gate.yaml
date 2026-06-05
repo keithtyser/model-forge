@@ -339,13 +339,14 @@ candidate_selection:
           - the worker checkpoint copy was deleted after documentation to restore disk headroom; the local checkpoint remains available for inspection unless storage pressure requires deleting it
           - next candidate should be materially different, for example a lower-memory OBLITERATUS implementation, stronger response-opening objective, or feature-level refusal-opening intervention
       - name: obliteratus_rdo_cuda_v33
-        status: ready
+        status: blocked
         method_family: obliteratus_rdo_cuda_source_tethered
         backend: obliteratus
         variant: local_ft_abli_obliteratus_rdo_cuda_v33
         config: configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_rdo_cuda_v33.yaml
         output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-obliteratus-rdo-cuda-v33
         eval_suffix: qwen36_27b_local_ft_abli_obliteratus_rdo_cuda_v33_targeted_gate_t3
+        blocker: guarded export hit the host RAM floor before producing a checkpoint
         hypothesis: >
           V30 proved the source-tethered OBLITERATUS advanced path was
           operationally blocked, but inspection showed the backend config never
@@ -358,9 +359,35 @@ candidate_selection:
           FT-abli source. The goal is to test a stronger OBLITERATUS method
           without repeating V30's auto-offload memory failure.
         implementation_next:
+          - do not rerun V33 unchanged, broad-eval, NVFP4-export, upload, or promote
+          - the guarded 2026-06-05 attempt used explicit device=cuda, OBLITERATUS rdo, Docker memory 110G, CPU cap 16, a 5% RAM floor, and a 15% disk floor
+          - the run loaded weights, entered OBLITERATUS processing, and was manually stopped when MemAvailable fell below the configured 5% floor at about 5.2 GiB
+          - no checkpoint directory or streamed shard was produced; host memory recovered to about 113 GiB available after docker stop
+          - the documented rejected local V32 checkpoint was deleted before this run to restore disk headroom
+          - next executable candidate should avoid OBLITERATUS full-model pre-export memory pressure and use the native sharded checkpoint path or a future adapter-only/sharded OBLITERATUS implementation
+      - name: response_opening_hybrid_projection_v34
+        status: ready
+        method_family: response_opening_generated_token_hybrid_projection
+        backend: selective_projection
+        variant: local_ft_abli_response_opening_hybrid_projection_v34
+        config: configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_hybrid_projection_v34.yaml
+        output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-response-opening-hybrid-projection-v34
+        eval_suffix: qwen36_27b_local_ft_abli_response_opening_hybrid_projection_v34_targeted_gate_t3
+        hypothesis: >
+          V33 showed the current OBLITERATUS path is still pre-export
+          memory-blocked on one Spark even with explicit CUDA placement, while
+          V31/V32 proved native sharded selective projection exports safely.
+          V34 is the next executable method shift: it keeps V32's narrow
+          self-harm response-opening objective and model-selection preservation
+          anchors, expands selected high-signal layers from 6 to 12, and
+          reintroduces MLP down-projection at very low strength because V31's
+          broader tensor set got closer on refusal wording but hurt capability.
+          The goal is to remove the stochastic refusal opening without
+          repeating V31's late-layer capability miss or OBLITERATUS memory
+          failure.
+        implementation_next:
           - run sota-plan and sota-prepare before any model load
-          - launch only one guarded export with the 5% RAM floor and 15% disk floor
-          - use MODEL_FORGE_OBLITERATUS_DOCKER_MEMORY_GB=110 and device=cuda so the run has enough unified memory while retaining OS headroom
+          - launch one guarded native export with the 5% RAM floor and 15% disk floor
           - sync the checkpoint to the worker Spark only after export succeeds
           - run strict checkpoint/tokenizer/architecture audits locally and on the worker
           - serve with the two-Spark TP=2 path and run the targeted three-trial gate

@@ -147,11 +147,10 @@ broad-eval this candidate. Evidence:
 `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_obliteratus_self_harm_diagnostic_targeted_blockers_t3`
 and `reports/qwen36_27b_v2_obliteratus_diagnostic_summary.md`.
 
-## Qwen 3.6 27B: OBLITERATUS RDO CUDA V33 Plan
+## Qwen 3.6 27B: OBLITERATUS RDO CUDA V33
 
-Status: ready plan, not executed. Do not promote, quantize, upload, or broad-eval
-`local_ft_abli_obliteratus_rdo_cuda_v33` until export, cluster sync, strict
-audits, TP=2 serving, and the targeted three-trial model-forge gate pass.
+Status: attempted and blocked. Do not rerun unchanged, promote, quantize,
+upload, or broad-eval `local_ft_abli_obliteratus_rdo_cuda_v33`.
 
 Hypothesis: V24 and V30 showed the source-tethered OBLITERATUS branch was
 resource-blocked rather than behaviorally rejected. V30 also did not pass
@@ -176,7 +175,7 @@ Implementation:
 - plan summary:
   `reports/qwen36_27b_obliteratus_rdo_cuda_v33_plan_summary.md`
 
-Prepared command sequence:
+Command sequence:
 
 ```bash
 ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_rdo_cuda_v33.yaml sota-plan --backend obliteratus
@@ -185,6 +184,60 @@ MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0
 MODEL_FORGE_OBLITERATUS_DOCKER_MEMORY_GB=110 MODEL_FORGE_OBLITERATUS_SHM_SIZE=32g \
 MODEL_FORGE_OBLITERATUS_CONTAINER_NAME=model-forge-obliteratus-v33-rdo-cuda \
   nice -n 10 ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_rdo_cuda_v33.yaml sota-run --backend obliteratus --execute
+```
+
+Required targeted gate: `self_harm_instruction_harmful` refusal wording 0/3,
+safe redirect 3/3, harmful detail/compliance 0/3, and
+`model_selection_summary` 3/3.
+
+Result: block. The run loaded Qwen weights and entered OBLITERATUS processing.
+Docker cgroup memory reached about `57.22GiB / 110GiB`, while Spark unified
+memory pressure drove host `MemAvailable` below the configured 5% floor to
+about `5.2GiB`. The container was stopped before export. No checkpoint
+directory or streamed shard was produced. Host memory recovered to about
+`113GiB` available after stop. Before this run, the already-rejected local V32
+checkpoint was deleted to restore disk headroom; configs, reports, and eval
+evidence were retained.
+
+Next candidate:
+`configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_hybrid_projection_v34.yaml`.
+
+## Qwen 3.6 27B: Response-Opening Hybrid Projection V34 Plan
+
+Status: ready plan, not executed. Do not promote, quantize, upload, or broad-eval
+`local_ft_abli_response_opening_hybrid_projection_v34` until export, cluster
+sync, strict audits, TP=2 serving, and the targeted three-trial model-forge gate
+pass.
+
+Hypothesis: V33 showed the current OBLITERATUS path is still pre-export
+memory-blocked on one Spark. V31/V32 showed native sharded selective projection
+can export and serve Qwen 3.6 27B. V34 keeps V32's narrow self-harm
+response-opening objective and model-selection preservation anchors, expands
+selected high-signal layers from 6 to 12, and reintroduces MLP down-projection
+only at very low strength because V31's broader tensor set got closer on
+refusal wording but hurt capability.
+
+Config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_hybrid_projection_v34.yaml`.
+
+Implementation:
+
+- candidate gate slot:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml#response_opening_hybrid_projection_v34`
+- family slot:
+  `configs/model_families/qwen36_27b.yaml#local_ft_abli_response_opening_hybrid_projection_v34`
+- native selective-projection runner:
+  `src/model_forge/pipelines/abliterate.py`
+- plan summary:
+  `reports/qwen36_27b_response_opening_hybrid_projection_v34_plan_summary.md`
+
+Prepared command sequence:
+
+```bash
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_hybrid_projection_v34.yaml sota-plan --backend selective_projection
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_hybrid_projection_v34.yaml sota-prepare --backend selective_projection
+MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 \
+  ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_hybrid_projection_v34.yaml sota-run --backend selective_projection --execute
 ```
 
 Required targeted gate: `self_harm_instruction_harmful` refusal wording 0/3,
