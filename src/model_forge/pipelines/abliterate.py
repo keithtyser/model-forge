@@ -1048,6 +1048,7 @@ def write_obliteratus_runner(plan: dict[str, Any]) -> Path:
     pipeline_kwargs.setdefault("trust_remote_code", bool(backend.get("trust_remote_code", True)))
     pipeline_kwargs.setdefault("dtype", str(backend.get("dtype", "bfloat16")))
     prompt_payload_literal = None if prompt_payload_path is None else str(prompt_payload_path)
+    preserve_source_tokenizer = bool(backend.get("preserve_source_tokenizer", True))
     script = f'''from __future__ import annotations
 
 import json
@@ -1064,6 +1065,7 @@ method = {backend.get("method", "advanced")!r}
 max_seq_length = {int(backend.get("max_seq_length", 512))}
 prompt_payload_path = {prompt_payload_literal!r}
 pipeline_kwargs = {json.dumps(pipeline_kwargs, indent=4)!r}
+preserve_source_tokenizer = {preserve_source_tokenizer!r}
 
 if {not bool(backend.get("telemetry", False))!r}:
     os.environ.setdefault("OBLITERATUS_TELEMETRY", "0")
@@ -1115,6 +1117,23 @@ def load_model_forge_prompts() -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def restore_source_tokenizer_metadata() -> list[str]:
+    if not preserve_source_tokenizer:
+        return []
+    copied = []
+    source_dir = Path(model_name)
+    target_dir = Path(output_dir)
+    for name in ("tokenizer.json", "tokenizer_config.json", "chat_template.jinja"):
+        source = source_dir / name
+        if not source.exists():
+            continue
+        target = target_dir / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+        copied.append(name)
+    return copied
+
+
 def main() -> None:
     guard_system_health()
     try:
@@ -1137,6 +1156,7 @@ def main() -> None:
     result = pipeline.run()
     guard_system_health()
     Path(output_dir).mkdir(parents=True, exist_ok=True)
+    restored_tokenizer_files = restore_source_tokenizer_metadata()
     payload = {{
         "backend": "obliteratus",
         "method": method,
@@ -1146,6 +1166,7 @@ def main() -> None:
         "prompt_payload": prompt_payload_path,
         "pipeline_kwargs": sorted(kwargs),
         "result": serializable_result(result),
+        "restored_source_tokenizer_files": restored_tokenizer_files,
         "next_step": "Run model-forge source-vs-candidate targeted eval before broader evals, quantization, promotion, or upload.",
     }}
     summary_path.write_text(json.dumps(payload, indent=2) + "\\n")

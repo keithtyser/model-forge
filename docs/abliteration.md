@@ -218,6 +218,14 @@ materialize model-forge prompt buckets into OBLITERATUS `harmful_prompts` and
 Treat the first export as diagnostic until the local targeted eval proves the
 source-relative objective.
 
+Some external backends save a different checkpoint namespace than the source
+model. In the Qwen 3.6 27B diagnostic, OBLITERATUS flattened the source wrapper
+from `model.language_model.*` to `model.*` and wrote a text-only config that
+the Spark vLLM build could not serve. Before eval, normalize those exports with
+`scripts/remap_safetensors_checkpoint.py`, verify the remapped tensor keys
+against the source checkpoint, restore source tokenizer/config metadata, and
+rerun strict checkpoint/tokenizer/architecture audits.
+
 For Abliterix recipes with `container_image` set, `sota-run --backend abliterix
 --execute` launches the generated non-interactive search runner through
 `scripts/run_abliterix_search_container.sh`. The runner does not export a model.

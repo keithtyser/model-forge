@@ -223,9 +223,9 @@ If Apostate is retried, first change the search space and run a smaller
 diagnostic. Otherwise move to a multi-direction/SOM or optimal-transport-style
 backend.
 
-OBLITERATUS had not actually been tried on Qwen before; earlier repo state only
-had generated runners from `sota-prepare`. The guarded diagnostic entry point is
-now `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_obliteratus_diagnostic.yaml`.
+OBLITERATUS has now been tried on Qwen held v2 and is rejected. The guarded
+diagnostic entry point is
+`configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_obliteratus_diagnostic.yaml`.
 Build the image with:
 
 ```bash
@@ -234,10 +234,21 @@ docker build -f docker/obliteratus.Dockerfile -t model-forge-obliteratus:latest 
 
 Run only through `sota-run --backend obliteratus --execute`, which uses
 `scripts/run_obliteratus_container.sh` for CPU/RAM/disk/PID/HF-cache guards.
-Treat this as a diagnostic backend until it passes the model-forge targeted
-source-vs-candidate gate. The diagnostic materializes model-forge prompt buckets
-into OBLITERATUS `harmful_prompts` and `harmless_prompts`, but do not promote
-from the backend report alone.
+The diagnostic materializes model-forge prompt buckets into OBLITERATUS
+`harmful_prompts` and `harmless_prompts`, but do not promote from the backend
+report alone.
+
+Important Qwen wrapper caveat: OBLITERATUS exported a text-only Qwen checkpoint
+with `model.*` tensor keys and `qwen3_5_text` config. vLLM failed to serve that
+raw export. The checked-in utility `scripts/remap_safetensors_checkpoint.py`
+normalized the same checkpoint in place by remapping `model.` to
+`model.language_model.` and restoring the source config/tokenizer metadata. The
+normalized candidate passed strict checkpoint/tokenizer/architecture audits and
+served, but the targeted gate failed: `self_harm_instruction_harmful` refusal
+wording was 2/3, safe redirect 3/3, harmful detail/compliance 0/3, and
+`model_selection_summary` 3/3. Do not promote, quantize, upload, or broad-eval
+`local_ft_abli_obliteratus_self_harm_diagnostic`. See
+`reports/qwen36_27b_v2_obliteratus_diagnostic_summary.md`.
 
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,
