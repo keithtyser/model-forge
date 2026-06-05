@@ -434,9 +434,28 @@ def _torch_dtype(torch: Any, dtype_name: str) -> Any:
     return "auto"
 
 
+def _select_transformers_auto_model(source: str, trust_remote_code: bool) -> Any:
+    from transformers import AutoConfig, AutoModelForCausalLM
+
+    try:
+        config = AutoConfig.from_pretrained(source, trust_remote_code=trust_remote_code)
+    except Exception:
+        return AutoModelForCausalLM
+    architectures = [str(item) for item in getattr(config, "architectures", []) or []]
+    if any(name.endswith("ForConditionalGeneration") for name in architectures):
+        try:
+            from transformers import AutoModelForImageTextToText
+
+            AutoModelForImageTextToText._model_mapping[type(config)]
+            return AutoModelForImageTextToText
+        except Exception:
+            return AutoModelForCausalLM
+    return AutoModelForCausalLM
+
+
 def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Path) -> None:
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoTokenizer
 
     plan = build_plan(config, config_path)
     model_cfg = plan["model"]
@@ -457,7 +476,8 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
     if device_map == "auto":
         load_kwargs["device_map"] = "auto"
         load_kwargs["low_cpu_mem_usage"] = True
-    model = AutoModelForCausalLM.from_pretrained(source, **load_kwargs)
+    auto_model = _select_transformers_auto_model(source, bool(model_cfg["trust_remote_code"]))
+    model = auto_model.from_pretrained(source, **load_kwargs)
     if device_map in {"cuda", "cuda:0"}:
         if not torch.cuda.is_available():
             raise SystemExit("device_map=cuda requested but CUDA is not available")
@@ -2576,6 +2596,15 @@ def optimal_transport_execution_spec(plan: dict[str, Any], runner: str | Path) -
     env = dict(os.environ)
     env.setdefault("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", "0.05")
     env.setdefault("MODEL_FORGE_MIN_FREE_DISK_FRACTION", "0.15")
+    image = plan["backend_config"].get("container_image")
+    if image:
+        env["MODEL_FORGE_NATIVE_CHECKPOINT_IMAGE"] = str(image)
+        return {
+            "mode": "guarded_container",
+            "command": [str(REPO_DIR / "scripts" / "run_native_checkpoint_container.sh"), str(runner_path)],
+            "cwd": REPO_DIR,
+            "env": env,
+        }
     return {
         "mode": "guarded_native_checkpoint",
         "command": [str(REPO_DIR / "scripts" / "run_native_checkpoint_scope.sh"), str(runner_path)],
@@ -3056,11 +3085,17 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
             "",
         ])
     if paths.get("optimal_transport_runner"):
+        optimal_transport_plan = build_sota_plan(config, config_path, "optimal_transport")
+        optimal_transport_command = (
+            f"scripts/run_native_checkpoint_container.sh {paths['optimal_transport_runner']}"
+            if optimal_transport_plan["backend_config"].get("container_image")
+            else f"scripts/run_native_checkpoint_scope.sh {paths['optimal_transport_runner']}"
+        )
         run_sections.extend([
             "Run native optimal-transport checkpoint export:",
             "",
             "```bash",
-            f"scripts/run_native_checkpoint_scope.sh {paths['optimal_transport_runner']}",
+            optimal_transport_command,
             "```",
             "",
             "The native optimal-transport path materializes source-relative model-forge prompts, collects multi-component activation directions, and writes a normal Transformers checkpoint. Treat it as a candidate only after the targeted model-forge gate passes.",

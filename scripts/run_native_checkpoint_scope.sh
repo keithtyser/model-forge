@@ -46,14 +46,25 @@ df -h /
 
 cd "$REPO_DIR"
 
+scope_command=()
+if command -v systemd-run >/dev/null 2>&1 && [[ ! -f /.dockerenv ]] && [[ "${MODEL_FORGE_DISABLE_SYSTEMD_SCOPE:-0}" != "1" ]]; then
+  if [[ "${MODEL_FORGE_NATIVE_CHECKPOINT_USE_USER_SCOPE:-1}" == "1" ]] \
+    && systemd-run --user --scope true >/dev/null 2>&1; then
+    scope_command=(systemd-run --user --scope)
+  elif timeout 5s systemd-run --scope true >/dev/null 2>&1; then
+    scope_command=(systemd-run --scope)
+  fi
+fi
+
 run_limited() {
-  if command -v systemd-run >/dev/null 2>&1 && [[ ! -f /.dockerenv ]] && [[ "${MODEL_FORGE_DISABLE_SYSTEMD_SCOPE:-0}" != "1" ]]; then
-    systemd-run --scope \
+  if [[ "${#scope_command[@]}" -gt 0 ]]; then
+    "${scope_command[@]}" \
       -p "CPUQuota=$CPU_QUOTA" \
       -p "MemoryMax=$MEMORY_MAX" \
       -p "IOWeight=$IO_WEIGHT" \
       nice -n "$NICE_LEVEL" "$@"
   else
+    echo "[model-forge] systemd scope unavailable; falling back to nice" >&2
     nice -n "$NICE_LEVEL" "$@"
   fi
 }

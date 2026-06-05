@@ -70,6 +70,7 @@ sota:
       execution: checkpoint_export
       method_family: optimal_transport_refusal_ablation
       install: native model-forge checkpoint runner
+      container_image: model-forge-posttrain-tf5:latest
       output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-native-ot-self-harm-diagnostic
       device_map: cuda
       trust_remote_code: true

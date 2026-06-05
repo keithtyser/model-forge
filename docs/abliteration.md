@@ -275,12 +275,13 @@ MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 \
 This path approximates activation transport with multi-component
 whitened-paired-SVD directions and a norm-preserving baked projection. `sota-run`
 launches the generated runner through `scripts/run_native_checkpoint_scope.sh`,
-which applies `systemd-run --scope` CPU/RAM/IO limits when available and falls
-back to `nice` with one-core headroom. It is a diagnostic method-shift backend,
-not promotion evidence. After export, register the checkpoint if needed, run
-strict checkpoint/tokenizer/architecture audits, then run the
-source-vs-candidate targeted gate before broader evals, quantization, upload, or
-family promotion.
+which uses `scripts/run_native_checkpoint_container.sh` when the recipe sets
+`container_image` and otherwise uses `scripts/run_native_checkpoint_scope.sh`.
+Use the container path for new architectures when the host venv is CPU-only or
+does not recognize the model type. It is a diagnostic method-shift backend, not
+promotion evidence. After export, register the checkpoint if needed, run strict
+checkpoint/tokenizer/architecture audits, then run the source-vs-candidate
+targeted gate before broader evals, quantization, upload, or family promotion.
 
 For Apostate recipes with `container_image` set, first build the backend image:
 

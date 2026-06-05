@@ -676,6 +676,7 @@ class AbliterationPlanTests(unittest.TestCase):
 
         self.assertEqual(plan["backend"], "optimal_transport")
         self.assertEqual(plan["backend_config"]["execution"], "checkpoint_export")
+        self.assertEqual(plan["backend_config"]["container_image"], "model-forge-posttrain-tf5:latest")
         self.assertTrue(plan["output_dir"].endswith("Qwen3.6-27B-local-ft-v4-abliterated-native-ot-self-harm-diagnostic"))
         self.assertTrue(plan["source_model"].endswith("Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2"))
         self.assertEqual(native_config["method"], "native_optimal_transport_activation_projection")
@@ -703,11 +704,12 @@ class AbliterationPlanTests(unittest.TestCase):
 
         execution = optimal_transport_execution_spec(plan, runner)
 
-        self.assertEqual(execution["mode"], "guarded_native_checkpoint")
-        self.assertEqual(execution["command"][0], str(REPO_DIR / "scripts" / "run_native_checkpoint_scope.sh"))
+        self.assertEqual(execution["mode"], "guarded_container")
+        self.assertEqual(execution["command"][0], str(REPO_DIR / "scripts" / "run_native_checkpoint_container.sh"))
         self.assertEqual(execution["command"][1], str((REPO_DIR / runner).resolve()))
         self.assertEqual(execution["cwd"], REPO_DIR)
         self.assertEqual(execution["env"]["MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION"], "0.05")
+        self.assertEqual(execution["env"]["MODEL_FORGE_NATIVE_CHECKPOINT_IMAGE"], "model-forge-posttrain-tf5:latest")
 
     def test_qwen_v2_method_shift_uses_guarded_abliterix_sra_search(self) -> None:
         config_path = (
