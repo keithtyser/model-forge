@@ -17,6 +17,7 @@ from model_forge.hardware import (
 from model_forge.pipelines.abliterate import (
     REPO_DIR,
     _projection_delta,
+    _progress_every,
     abliterix_execution_spec,
     apostate_execution_spec,
     analyze_abliterix_search_journal,
@@ -113,6 +114,18 @@ class HardwareProfileTests(unittest.TestCase):
 
 
 class AbliterationPlanTests(unittest.TestCase):
+    def test_native_progress_cadence_is_bounded_and_overridable(self) -> None:
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("MODEL_FORGE_NATIVE_PROGRESS_EVERY", None)
+            self.assertEqual(_progress_every(4), 1)
+            self.assertEqual(_progress_every(1000), 10)
+
+        with mock.patch.dict(os.environ, {"MODEL_FORGE_NATIVE_PROGRESS_EVERY": "3"}):
+            self.assertEqual(_progress_every(1000), 3)
+
+        with mock.patch.dict(os.environ, {"MODEL_FORGE_NATIVE_PROGRESS_EVERY": "bad"}):
+            self.assertEqual(_progress_every(1000), 1000)
+
     def test_gemma_plan_is_dry_run_friendly_and_paired(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_local_abli.yaml"
         with mock.patch.dict(os.environ, {"MODEL_FORGE_HARDWARE_PROFILE": "dgx_spark"}):

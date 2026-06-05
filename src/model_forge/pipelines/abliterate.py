@@ -453,6 +453,16 @@ def _select_transformers_auto_model(source: str, trust_remote_code: bool) -> Any
     return AutoModelForCausalLM
 
 
+def _progress_every(total: int, env_name: str = "MODEL_FORGE_NATIVE_PROGRESS_EVERY") -> int:
+    raw = os.environ.get(env_name)
+    if raw:
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            return max(1, total)
+    return max(1, min(10, total // 20 or 1))
+
+
 def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Path) -> None:
     import torch
     from transformers import AutoTokenizer
@@ -477,6 +487,8 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
         load_kwargs["device_map"] = "auto"
         load_kwargs["low_cpu_mem_usage"] = True
     auto_model = _select_transformers_auto_model(source, bool(model_cfg["trust_remote_code"]))
+    console.print(f"[cyan]Loading native collection model[/cyan]: {source}")
+    console.print(f"[cyan]Transformers auto class[/cyan]: {getattr(auto_model, '__name__', auto_model.__class__.__name__)}")
     model = auto_model.from_pretrained(source, **load_kwargs)
     if device_map in {"cuda", "cuda:0"}:
         if not torch.cuda.is_available():
@@ -484,10 +496,16 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
         model.to(torch.device("cuda:0"))
     model.eval()
     first_device = next(model.parameters()).device
+    console.print(f"[cyan]Native collection device[/cyan]: {first_device}")
 
-    def prompt_vectors(prompts: list[str], suffix: str | None) -> dict[int, list[Any]]:
+    def prompt_vectors(label: str, prompts: list[str], suffix: str | None) -> dict[int, list[Any]]:
         vectors: dict[int, list[Any]] = {}
-        for prompt in prompts:
+        total = len(prompts)
+        every = _progress_every(total)
+        console.print(f"[cyan]Collecting {label} activations[/cyan]: {total} prompt(s)")
+        for prompt_index, prompt in enumerate(prompts, start=1):
+            if prompt_index == 1 or prompt_index == total or prompt_index % every == 0:
+                console.print(f"[dim]native activations {label}: {prompt_index}/{total}[/dim]")
             full_prompt = prompt if not suffix else prompt.rstrip() + suffix
             if activation.get("use_chat_template"):
                 inputs = tokenizer.apply_chat_template(
@@ -555,9 +573,10 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
                 vectors.setdefault(layer_index, []).append(vector.detach().float().cpu())
         return vectors
 
-    harmful_vectors = prompt_vectors(harmful, activation.get("harmful_suffix"))
-    benign_vectors = prompt_vectors(benign, activation.get("benign_suffix"))
+    harmful_vectors = prompt_vectors("harmful", harmful, activation.get("harmful_suffix"))
+    benign_vectors = prompt_vectors("benign", benign, activation.get("benign_suffix"))
     layer_count = min(len(harmful_vectors), len(benign_vectors))
+    console.print(f"[cyan]Collected activations for {layer_count} layer(s)[/cyan]")
     first = activation["layer_skip_first"]
     last_exclusive = layer_count - activation["layer_skip_last"]
     directions = {}
@@ -636,7 +655,11 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
         source_layer_index = None
 
     extracted_directions = {}
-    for layer_index in sorted(target_layers):
+    sorted_target_layers = sorted(target_layers)
+    every_layer = _progress_every(len(sorted_target_layers), "MODEL_FORGE_NATIVE_LAYER_PROGRESS_EVERY")
+    for offset, layer_index in enumerate(sorted_target_layers, start=1):
+        if offset == 1 or offset == len(sorted_target_layers) or offset % every_layer == 0:
+            console.print(f"[dim]native direction extraction: layer {layer_index} ({offset}/{len(sorted_target_layers)})[/dim]")
         harmful_stack = maybe_winsorize(torch.stack(harmful_vectors[layer_index]))
         benign_stack = maybe_winsorize(torch.stack(benign_vectors[layer_index]))
         harmful_mean = harmful_stack.mean(dim=0)

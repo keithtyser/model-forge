@@ -282,6 +282,10 @@ does not recognize the model type. It is a diagnostic method-shift backend, not
 promotion evidence. After export, register the checkpoint if needed, run strict
 checkpoint/tokenizer/architecture audits, then run the source-vs-candidate
 targeted gate before broader evals, quantization, upload, or family promotion.
+Native activation collection prints model-load, prompt, and layer progress;
+override `MODEL_FORGE_NATIVE_PROGRESS_EVERY` or
+`MODEL_FORGE_NATIVE_LAYER_PROGRESS_EVERY` only when a very large prompt set needs
+less frequent logging.
 
 For Apostate recipes with `container_image` set, first build the backend image:
 

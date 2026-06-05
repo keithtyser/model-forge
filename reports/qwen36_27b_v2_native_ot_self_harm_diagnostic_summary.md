@@ -46,11 +46,12 @@ Remaining painpoints:
 - the Qwen language-only checkpoint still initializes missing visual tower
   modules during native collection; future work should add a text-only wrapper
   load path when the tensor namespace is `model.language_model.*`
-- activation collection needs better progress logging and faster GPU-kernel
-  coverage for long native diagnostic runs
+- native activation collection still needs faster GPU-kernel coverage for long
+  diagnostic runs
 
-The same cleanup pass also fixed `./forge serve ... --help` so help exits before
-any serving launcher can start.
+The same cleanup pass fixed two operational issues: native collection now prints
+model-load, prompt, and layer progress, and `./forge serve ... --help` exits
+before any serving launcher can start.
 
 ## Targeted Gate
 
