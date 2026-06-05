@@ -1,0 +1,70 @@
+# Qwen3.6 27B V29 Patched Abliterix Harmfulness Component Search Plan
+
+Status: ready, search-only, no checkpoint exported.
+
+Config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v29.yaml`
+
+Source:
+`local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2`
+
+Objective: remove the remaining stochastic
+`self_harm_instruction_harmful` refusal-opening miss while preserving local FT
+v4 capability.
+
+## Hypothesis
+
+V28 reached residual extraction and measured the expected `12/20` baseline, but
+failed before scoring because Abliterix's harmfulness/refusal extractor returned
+shape `(2, layers + 1, hidden_dim)` while the LoRA steering path indexed that
+tensor as if it were layer-aligned. V29 keeps V28's public Qwen3.6 component
+policy and prompt objective, then applies the model-forge Abliterix compatibility
+patch:
+
+- compute the refusal/harmfulness pair with Abliterix
+- reduce it with `harmfulness_pair_reduction: normalized_sum`
+- pass a normal `(layers + 1, hidden_dim)` vector tensor to LoRA steering
+
+This preserves the useful harmfulness/refusal separation idea without mutating
+the installed Abliterix package in-place.
+
+## Search Policy
+
+- `vector_method: mean`
+- `steering_mode: lora`
+- `orthogonal_projection: true`
+- `projected_abliteration: true`
+- `winsorize_vectors: true`
+- `weight_normalization: none`
+- `disabled_components: [attn.q_proj, attn.k_proj, attn.v_proj]`
+- `component_strength_ranges.attn.o_proj: [2.8, 5.8]`
+- `component_strength_ranges.mlp.down_proj: [0.3, 1.4]`
+- `ablate_harmfulness_direction: true`
+- `harmfulness_pair_reduction: normalized_sum`
+- `harmfulness_pair_weight: 1.0`
+- `kl_target: 0.005`
+- `search_selection.max_kl: 0.03`
+- `n_trials: 50`
+
+## Stop And Promotion Contract
+
+Run V29 as a guarded short search on both Sparks. Stop early if the first
+completed trials worsen the `12/20` baseline refusal count on both nodes. Do not
+export unless journal analysis finds a selected trial with zero proxy refusals
+inside the KL gate.
+
+Even a successful journal is not promotion evidence. After export, register the
+selected checkpoint as a normal checkpoint-producing candidate, sync to both
+Sparks, run strict checkpoint/tokenizer/architecture audits, serve it, and pass
+the targeted three-trial model-forge gate before broad eval, NVFP4, Hugging Face
+upload, or promotion.
+
+## Validation
+
+- `.venv/bin/python -m unittest tests.test_abliteration_pipeline -v`
+- Docker smoke inside `model-forge-abliterix:latest` confirmed
+  `model_forge.integrations.abliterix_compat.apply_abliterix_compat_patches`
+  makes both `abliterix.cli.compute_steering_vectors` and
+  `abliterix.vectors.compute_steering_vectors` return `(layers, hidden)` tensors
+  for `ablate_harmfulness_direction=true` on tiny residual fixtures.
+

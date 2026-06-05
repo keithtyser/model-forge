@@ -941,6 +941,11 @@ length filtering:
    Sparks, then failed on trial 1 before scoring because Abliterix
    harmfulness-direction vectors were not layer-aligned for component steering.
    It remains blocked from broad eval, NVFP4, upload, and promotion.
+   V29 is now the next ready search-only candidate:
+   `configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v29.yaml`.
+   It keeps V28's policy but applies model-forge's Abliterix compatibility
+   patch, reducing the refusal/harmfulness pair with `normalized_sum` before
+   LoRA steering.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the

@@ -407,9 +407,34 @@ Do not rerun V28 unchanged or run `abliterix-export`.
 
 `local_ft_abli_abliterix_harmfulness_component_v28_selected` is only a placeholder in
 `configs/model_families/qwen36_27b.yaml` and is blocked from NVFP4, upload, and
-promotion. Next work should patch/fork Abliterix so harmfulness-direction
-steering returns layer-aligned vectors for component LoRA application, or return
-to a safer streamed/source-tethered OBLITERATUS export path.
+promotion.
+
+V29 is the patched retry and is the next ready search-only Qwen FT-abli
+candidate:
+`configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v29.yaml`.
+It keeps V28's component policy and prompt objective, but the generated
+Abliterix runner calls
+`model_forge.integrations.abliterix_compat.apply_abliterix_compat_patches` with
+`harmfulness_pair_reduction: normalized_sum`. That reducer turns Abliterix's
+stacked refusal/harmfulness pair into layer-aligned vectors before LoRA
+steering, avoiding the V28 `apply_steering` indexing failure without modifying
+the installed package in place.
+
+```bash
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v29.yaml sota-plan --backend abliterix
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v29.yaml sota-prepare --backend abliterix
+MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 \
+  ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v29.yaml sota-run --backend abliterix --execute
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v29.yaml \
+  abliterix-search-analyze --backend abliterix \
+  --output reports/generated/qwen36_27b_v29_abliterix_harmfulness_component_search_analysis.json
+```
+
+Run V29 as a guarded short two-Spark search. Stop early if completed trials
+worsen the 12/20 proxy baseline on both nodes. Export only if journal analysis
+finds a zero-refusal low-KL selected trial; after export, register it as a
+normal checkpoint-producing candidate and run strict audits plus the three-trial
+model-forge targeted gate before broad eval, NVFP4, upload, or promotion.
 
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,

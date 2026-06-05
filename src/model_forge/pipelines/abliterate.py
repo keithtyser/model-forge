@@ -2192,6 +2192,18 @@ def write_abliterix_runner(plan: dict[str, Any]) -> Path:
     runner = work_dir / "run_abliterix_search.py"
     config_path = work_dir / "abliterix.toml"
     checkpoint_dir = resolve_repo_path(backend.get("checkpoint_dir", "abliterix_checkpoints"), work_dir)
+    pair_reduction = backend.get("harmfulness_pair_reduction")
+    harmfulness_weight = float(backend.get("harmfulness_pair_weight", 1.0))
+    compat_patch = ""
+    if pair_reduction is not None:
+        compat_patch = f'''
+    from model_forge.integrations.abliterix_compat import apply_abliterix_compat_patches
+
+    apply_abliterix_compat_patches(
+        reduction={str(pair_reduction)!r},
+        harmfulness_weight={harmfulness_weight!r},
+    )
+'''
     script = f'''from __future__ import annotations
 
 import json
@@ -2212,7 +2224,7 @@ def main() -> None:
         backend_version = version("abliterix")
     except PackageNotFoundError as exc:
         raise SystemExit("Abliterix is not installed. Build/use the configured container or run `pip install abliterix`.") from exc
-
+{compat_patch}
     from abliterix.cli import main as abliterix_main
 
     os.environ["AX_CONFIG"] = str(config_path)
@@ -2250,6 +2262,18 @@ def write_abliterix_export_runner(plan: dict[str, Any], trial_index: int, overwr
     runner = work_dir / f"run_abliterix_export_trial{trial_index}.py"
     config_path = work_dir / "abliterix.toml"
     checkpoint_dir = resolve_repo_path(backend.get("checkpoint_dir", "abliterix_checkpoints"), work_dir)
+    pair_reduction = backend.get("harmfulness_pair_reduction")
+    harmfulness_weight = float(backend.get("harmfulness_pair_weight", 1.0))
+    compat_patch = ""
+    if pair_reduction is not None:
+        compat_patch = f'''
+    from model_forge.integrations.abliterix_compat import apply_abliterix_compat_patches
+
+    apply_abliterix_compat_patches(
+        reduction={str(pair_reduction)!r},
+        harmfulness_weight={harmfulness_weight!r},
+    )
+'''
     script = f'''from __future__ import annotations
 
 import json
@@ -2357,7 +2381,7 @@ def main() -> None:
         backend_version = version("abliterix")
     except PackageNotFoundError as exc:
         raise SystemExit("Abliterix is not installed. Build/use the configured container or run `pip install abliterix`.") from exc
-
+{compat_patch}
     import abliterix.cli as ax_cli
     import abliterix.interactive as ax_interactive
 

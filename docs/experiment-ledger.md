@@ -7844,3 +7844,26 @@ failed with `IndexError: index 39 is out of bounds for dimension 0 with size 2`.
 Do not rerun V28 unchanged or export it. Next work should patch/fork Abliterix's
 harmfulness-direction tensor shaping for component steering, or switch back to a
 safer streamed/source-tethered OBLITERATUS export path.
+
+### 2026-06-05 Qwen V29 patched Abliterix harmfulness component-policy plan
+
+Config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v29.yaml`
+
+Status: ready, search-only, no checkpoint exported.
+
+Hypothesis: V28's method failed operationally because the external Abliterix
+LoRA path consumed a stacked `(refusal, harmfulness)` vector pair as if it were
+layer-aligned. V29 keeps the same component policy and prompt objective, but
+uses `model_forge.integrations.abliterix_compat` to reduce that pair with
+`harmfulness_pair_reduction: normalized_sum` before steering. Docker smoke
+inside `model-forge-abliterix:latest` confirmed the patched
+`abliterix.cli.compute_steering_vectors` and `abliterix.vectors.compute_steering_vectors`
+return `(layers, hidden)` tensors for `ablate_harmfulness_direction=true` on
+tiny residual fixtures.
+
+Stop early if completed trials worsen the 12/20 baseline on both Sparks. Export
+only if journal analysis finds a selected trial with zero proxy refusals inside
+the KL gate, then register the selected checkpoint as a normal candidate and run
+the model-forge targeted gate before broad eval, NVFP4, Hugging Face upload, or
+promotion.

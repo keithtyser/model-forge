@@ -393,6 +393,8 @@ entries:
     implementation_hooks:
       - configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml
       - configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml
+      - configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v29.yaml
+      - src/model_forge/integrations/abliterix_compat.py
       - scripts/run_abliterix_search_container.sh
       - src/model_forge/pipelines/abliterate.py
     eval_hooks:
@@ -403,6 +405,7 @@ entries:
       - Backend search refusals and KL are only export triage, not model-forge promotion evidence.
       - Component names such as `attn.o_proj` rely on backend family mappings; every new architecture must be inspected before copying this policy.
       - The Qwen V28 harmfulness-direction attempt reached baseline scoring but failed in Abliterix apply_steering because the harmfulness vector stack was not layer-aligned for component LoRA steering; do not rerun that config unchanged.
+      - V29 uses a model-forge compatibility reducer for Abliterix harmfulness pairs; treat it as a repo-owned workaround until the upstream package handles pair vectors in all steering modes.
 
   sra_2026_surgical_refusal_ablation:
     title: "Surgical Refusal Ablation"
