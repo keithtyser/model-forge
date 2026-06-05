@@ -336,6 +336,18 @@ the local rejected checkpoint-blend, native-OT, and OBLITERATUS diagnostics were
 deleted, and the rejected worker checkpoint-blend copy was deleted, before
 rerunning the merge.
 
+The next Qwen FT-abli candidate is
+`local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v15_prefix_opening_repair`.
+Its repo-level change is general: fine-tune configs can set
+`trainer.unlikelihood_scope: assistant_prefix` and
+`trainer.unlikelihood_prefix_tokens: <n>`. Pairwise preference still scores the
+full chosen/rejected responses, while unlikelihood only penalizes the rejected
+assistant opening. Use this when the failure is first-person refusal wording at
+the start of an otherwise useful safety redirect. V15 is prepared from held v2;
+data prep produced 80 rows with 64 paired rows. It still needs guarded
+two-Spark training, merge, sync, audits, serve, and targeted gate evidence before
+any promotion, quantization, or upload.
+
 Known Qwen 3.6 27B state: local FT v4 is the current FT source. Trial2
 scale0.75 preserves full-suite measured capability and benign quality after
 scorer/rubric v4, but it still refuses 75% of paired harmful prompts, so it is

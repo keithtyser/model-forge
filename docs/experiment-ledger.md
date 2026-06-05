@@ -7038,3 +7038,40 @@ path unless the objective changes. The next Qwen FT-abli candidate should either
 directly optimize a stochastic no-first-person-refusal gate or use a method shift
 that edits refusal-opening directions without touching capability-heavy
 subspaces.
+
+### 2026-06-05 Prefix-scoped unlikelihood objective and Qwen v15 prep
+
+Pain point found after v14: the generated trainer used the same
+`rejected_labels` tensor for pairwise preference and unlikelihood. That made
+unlikelihood penalize every assistant token in the rejected response. For the
+Qwen self-harm repair rows, the rejected response often contains exactly the
+thing we dislike in the opening, followed by safety redirect content we still
+want the model to preserve. Penalizing the full rejected assistant response is
+therefore too blunt.
+
+Implemented a generic trainer option:
+
+- `trainer.unlikelihood_scope: assistant` keeps the old full-assistant behavior.
+- `trainer.unlikelihood_scope: assistant_prefix` scopes unlikelihood to the
+  first `trainer.unlikelihood_prefix_tokens` assistant tokens in the rejected
+  response.
+- Pairwise preference still uses full rejected labels, so the preference signal
+  is not shortened when prefix-scoped unlikelihood is enabled.
+
+Prepared Qwen v15:
+
+- config:
+  `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v15_prefix_opening_repair.yaml`
+- data manifest:
+  `datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v15_prefix_opening_repair.yaml`
+- family variant:
+  `local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v15_prefix_opening_repair`
+- source: held v2
+  `local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2`
+- unlikelihood scope: `assistant_prefix`
+- prefix tokens: `32`
+- data prep: 80 rows, 64 paired rows
+
+V15 is still blocked for promotion, quantization, and HF upload until it is
+trained, merged, synced to the worker Spark, audited, served with TP=2, and
+passes the same targeted three-trial no-refusal capability-retention gate.

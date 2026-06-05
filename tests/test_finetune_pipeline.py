@@ -331,6 +331,32 @@ class FinetunePlanTests(unittest.TestCase):
         self.assertIn("Unlikelihood weight: `0.18`", method_card)
         self.assertIn("primary_evalstyle_refusal_preference_unlikelihood_pairs", method_card)
 
+    def test_pairwise_unlikelihood_can_scope_to_rejected_opening(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "finetuning"
+            / "qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v14_multi_run_stochastic_repair.yaml"
+        )
+        config = load_yaml(config_path)
+        config["trainer"]["unlikelihood_scope"] = "assistant_prefix"
+        config["trainer"]["unlikelihood_prefix_tokens"] = 24
+        with tempfile.TemporaryDirectory() as tmp:
+            config["run_dir"] = tmp
+            plan = build_plan(config, config_path)
+            outputs = write_artifacts(plan, overwrite=False)
+            trainer_script = Path(outputs["trainer"]).read_text()
+            method_card = Path(outputs["method_card"]).read_text()
+
+        self.assertEqual(plan["trainer"]["unlikelihood_scope"], "assistant_prefix")
+        self.assertEqual(plan["trainer"]["unlikelihood_prefix_tokens"], 24)
+        self.assertIn("def scoped_unlikelihood_labels", trainer_script)
+        self.assertIn("rejected_unlikelihood_labels", trainer_script)
+        self.assertIn("rejected_logps, rejected_counts = self._sequence_logps(rejected_outputs.logits, rejected_labels)", trainer_script)
+        self.assertIn("labels = rejected_unlikelihood_labels[:, 1:]", trainer_script)
+        self.assertIn("Unlikelihood scope: `assistant_prefix`", method_card)
+        self.assertIn("Unlikelihood prefix tokens: `24`", method_card)
+
     def test_qwen36_trial12_v3_repair_starts_from_v2_candidate(self) -> None:
         config_path = (
             REPO_DIR

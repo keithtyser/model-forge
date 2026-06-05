@@ -346,6 +346,17 @@ This is the short handoff state for humans and agents. Use
   checkpoints instead of lowering the guard. In this run, the local copies of the
   rejected checkpoint-blend, native-OT, and OBLITERATUS diagnostics were deleted;
   the worker copy of the rejected checkpoint-blend diagnostic was also deleted.
+- The next prepared Qwen FT-abli branch is
+  `local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v15_prefix_opening_repair`.
+  V15 starts again from held v2 and isolates the v14 pain point: full rejected
+  responses often contain a bad refusal opening followed by good safety redirect
+  text. The trainer now supports `unlikelihood_scope: assistant_prefix` with
+  `unlikelihood_prefix_tokens`, so pairwise preference can still compare full
+  responses while unlikelihood only penalizes the rejected assistant opening. The
+  v15 run directory is prepared, and data prep produced 80 rows with 64 paired
+  rows. It is blocked for promotion, quantization, and HF upload until training,
+  merge, strict audits, TP=2 serving, and the targeted three-trial no-refusal
+  gate pass.
 - Generated fine-tune `training_result.json` files now include LoRA rank, alpha,
   dropout, and target modules so run postmortems can verify which modules were
   actually trained.

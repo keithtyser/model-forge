@@ -82,6 +82,8 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "method": trainer_method,
             "assistant_only_loss": bool(trainer.get("assistant_only_loss", False)),
             "unlikelihood_weight": float(trainer.get("unlikelihood_weight", 0.0) or 0.0),
+            "unlikelihood_scope": str(trainer.get("unlikelihood_scope", "assistant")),
+            "unlikelihood_prefix_tokens": int(trainer.get("unlikelihood_prefix_tokens", 0) or 0),
             "preference_weight": float(trainer.get("preference_weight", preference_default_weight) or 0.0),
             "preference_beta": float(trainer.get("preference_beta", 0.1) or 0.1),
             "preference_margin": float(trainer.get("preference_margin", 0.0) or 0.0),
@@ -242,6 +244,8 @@ def render_training_method_card(plan: dict[str, Any]) -> str:
             f"- Method: `{trainer['method']}`",
             f"- Assistant-only loss: `{trainer['assistant_only_loss']}`",
             f"- Unlikelihood weight: `{trainer['unlikelihood_weight']}`",
+            f"- Unlikelihood scope: `{trainer['unlikelihood_scope']}`",
+            f"- Unlikelihood prefix tokens: `{trainer['unlikelihood_prefix_tokens']}`",
             f"- Preference weight/beta/margin: `{trainer['preference_weight']}` / `{trainer['preference_beta']}` / `{trainer['preference_margin']}`",
             f"- SFT replay weight: `{trainer['sft_weight']}`",
             f"- Preference length normalize: `{trainer['preference_length_normalize']}`",
@@ -763,6 +767,8 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
     method = str(plan["trainer"].get("method", "")).lower()
     use_pairwise_preference = any(marker in method for marker in ("pairwise_preference", "preference_dpo", "preference", "simpo"))
     unlikelihood_weight = float(plan["trainer"].get("unlikelihood_weight", 0.0) or 0.0)
+    unlikelihood_scope = str(plan["trainer"].get("unlikelihood_scope", "assistant") or "assistant").lower()
+    unlikelihood_prefix_tokens = int(plan["trainer"].get("unlikelihood_prefix_tokens", 0) or 0)
     use_unlikelihood = unlikelihood_weight > 0 or "unlikelihood" in method
     assistant_only_loss = bool(plan["trainer"].get("assistant_only_loss", False)) or use_unlikelihood or use_pairwise_preference
 
@@ -779,6 +785,21 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
         for index in range(prefix_len):
             labels[index] = -100
         return labels
+
+    def scoped_unlikelihood_labels(labels: list[int]) -> list[int]:
+        if unlikelihood_scope not in {"assistant_prefix", "prefix"}:
+            return list(labels)
+        if unlikelihood_prefix_tokens <= 0:
+            return list(labels)
+        scoped = [-100] * len(labels)
+        seen = 0
+        for index, label in enumerate(labels):
+            if label == -100:
+                continue
+            if seen < unlikelihood_prefix_tokens:
+                scoped[index] = label
+            seen += 1
+        return scoped
 
     tokenized_path = Path(plan["run_dir"]) / f"tokenized_train_{max_seq_length}"
     if tokenized_path.exists():
@@ -805,6 +826,7 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
                 rejected_input_ids = []
                 rejected_attention_mask = []
                 rejected_labels = []
+                rejected_unlikelihood_labels = []
                 for rejected_text, rejected_messages in zip(rejected_texts, rejected_messages_batch, strict=False):
                     if isinstance(rejected_text, str) and rejected_text.strip() and isinstance(rejected_messages, list):
                         rejected_tokenized = tokenizer(
@@ -814,16 +836,20 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
                             padding=False,
                         )
                         rejected_ids = rejected_tokenized["input_ids"]
+                        labels = assistant_labels(rejected_ids, rejected_messages)
                         rejected_input_ids.append(rejected_ids)
                         rejected_attention_mask.append(rejected_tokenized["attention_mask"])
-                        rejected_labels.append(assistant_labels(rejected_ids, rejected_messages))
+                        rejected_labels.append(labels)
+                        rejected_unlikelihood_labels.append(scoped_unlikelihood_labels(labels))
                     else:
                         rejected_input_ids.append([])
                         rejected_attention_mask.append([])
                         rejected_labels.append([])
+                        rejected_unlikelihood_labels.append([])
                 tokenized["rejected_input_ids"] = rejected_input_ids
                 tokenized["rejected_attention_mask"] = rejected_attention_mask
                 tokenized["rejected_labels"] = rejected_labels
+                tokenized["rejected_unlikelihood_labels"] = rejected_unlikelihood_labels
             return tokenized
 
         dataset = raw_dataset.map(
@@ -1016,9 +1042,14 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
                 feature.get("rejected_labels") or [-100]
                 for feature in features
             ]
+            rejected_unlikelihood_labels = [
+                feature.get("rejected_unlikelihood_labels") or feature.get("rejected_labels") or [-100]
+                for feature in features
+            ]
             batch["rejected_input_ids"] = self._pad(rejected_input_ids, self.tokenizer.pad_token_id)
             batch["rejected_attention_mask"] = self._pad(rejected_attention_mask, 0)
             batch["rejected_labels"] = self._pad(rejected_labels, -100)
+            batch["rejected_unlikelihood_labels"] = self._pad(rejected_unlikelihood_labels, -100)
             return batch
 
     class RefusalUnlikelihoodTrainer(Trainer):
@@ -1030,18 +1061,19 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
             rejected_input_ids = inputs.pop("rejected_input_ids", None)
             rejected_attention_mask = inputs.pop("rejected_attention_mask", None)
             rejected_labels = inputs.pop("rejected_labels", None)
+            rejected_unlikelihood_labels = inputs.pop("rejected_unlikelihood_labels", None)
             outputs = model(**inputs)
             loss = outputs.loss
             if (
                 rejected_input_ids is not None
                 and rejected_attention_mask is not None
-                and rejected_labels is not None
+                and rejected_unlikelihood_labels is not None
                 and self.unlikelihood_weight > 0
             ):
                 rejected_outputs = model(input_ids=rejected_input_ids, attention_mask=rejected_attention_mask)
-                if bool((rejected_labels != -100).any()):
+                if bool((rejected_unlikelihood_labels != -100).any()):
                     logits = rejected_outputs.logits[:, :-1, :].float()
-                    labels = rejected_labels[:, 1:]
+                    labels = rejected_unlikelihood_labels[:, 1:]
                     mask = labels.ne(-100)
                     safe_labels = labels.masked_fill(~mask, 0)
                     token_probs = torch.softmax(logits, dim=-1).gather(-1, safe_labels.unsqueeze(-1)).squeeze(-1)
@@ -1090,6 +1122,7 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
             rejected_input_ids = inputs.pop("rejected_input_ids", None)
             rejected_attention_mask = inputs.pop("rejected_attention_mask", None)
             rejected_labels = inputs.pop("rejected_labels", None)
+            rejected_unlikelihood_labels = inputs.pop("rejected_unlikelihood_labels", None)
             chosen_labels = inputs.get("labels")
             outputs = model(**inputs)
             loss = outputs.loss * self.sft_weight
@@ -1108,9 +1141,11 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
                 preference_loss = -F.logsigmoid(preference_logits).mean()
                 loss = loss + (self.preference_weight * preference_loss)
                 used_rejected_loss = True
-            if bool((rejected_labels != -100).any()) and self.unlikelihood_weight > 0:
+            if rejected_unlikelihood_labels is None:
+                rejected_unlikelihood_labels = rejected_labels
+            if bool((rejected_unlikelihood_labels != -100).any()) and self.unlikelihood_weight > 0:
                 logits = rejected_outputs.logits[:, :-1, :].float()
-                labels = rejected_labels[:, 1:]
+                labels = rejected_unlikelihood_labels[:, 1:]
                 mask = labels.ne(-100)
                 safe_labels = labels.masked_fill(~mask, 0)
                 token_probs = torch.softmax(logits, dim=-1).gather(-1, safe_labels.unsqueeze(-1)).squeeze(-1)
@@ -1188,6 +1223,8 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
                 "method": plan["trainer"].get("method"),
                 "assistant_only_loss": assistant_only_loss,
                 "unlikelihood_weight": unlikelihood_weight,
+                "unlikelihood_scope": unlikelihood_scope,
+                "unlikelihood_prefix_tokens": unlikelihood_prefix_tokens,
                 "refusal_unlikelihood": use_unlikelihood,
                 "pairwise_preference": use_pairwise_preference,
                 "preference_weight": float(plan["trainer"].get("preference_weight", 0.0) or 0.0),
