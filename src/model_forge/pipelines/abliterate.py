@@ -5460,6 +5460,37 @@ def command_entry(
     }
 
 
+def candidate_custom_command_entries(candidate: dict[str, Any], *, blocked: bool) -> list[dict[str, Any]]:
+    raw_commands = candidate.get("custom_commands") or candidate.get("commands") or []
+    if raw_commands is None:
+        return []
+    if not isinstance(raw_commands, list):
+        raise SystemExit(f"candidate {candidate.get('name') or candidate.get('variant')} custom_commands must be a list")
+    entries: list[dict[str, Any]] = []
+    for index, raw in enumerate(raw_commands, start=1):
+        if isinstance(raw, str):
+            command = raw
+            raw = {}
+        elif isinstance(raw, dict):
+            command = raw.get("command")
+        else:
+            raise SystemExit(f"candidate custom command {index} must be a string or mapping")
+        if not command:
+            raise SystemExit(f"candidate custom command {index} is missing command")
+        phase = str(raw.get("phase") or f"candidate_custom_{index}") if isinstance(raw, dict) else f"candidate_custom_{index}"
+        purpose = str(raw.get("purpose") or "Run candidate-specific custom command.") if isinstance(raw, dict) else "Run candidate-specific custom command."
+        entries.append(command_entry(
+            str(command),
+            phase=phase,
+            candidate=str(candidate.get("name") or candidate.get("variant") or f"candidate_{index}"),
+            purpose=purpose,
+            starts_heavy_job=bool(raw.get("starts_heavy_job", False)) if isinstance(raw, dict) else False,
+            requires_execute=bool(raw.get("requires_execute", True)) if isinstance(raw, dict) else True,
+            enabled=not blocked and bool(raw.get("enabled", True)) if isinstance(raw, dict) else not blocked,
+        ))
+    return entries
+
+
 def candidate_loop_config(config: dict[str, Any]) -> dict[str, Any]:
     selection = config.get("candidate_selection") or {}
     loop = selection.get("loop") or {}
@@ -5563,15 +5594,16 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
         candidate_config = candidate.get("config")
         backend = candidate.get("backend")
         output_dir = candidate.get("output_dir")
+        custom_commands = candidate_custom_command_entries(candidate, blocked=blocked)
         eval_suffix = candidate_loop_eval_suffix(family, candidate, int(eval_spec["trials"]))
         eval_dir = display_path(output_root / eval_suffix)
         candidate_commands: list[dict[str, Any]] = []
         blockers: list[str] = []
         if blocked:
             blockers.append(str(candidate.get("blocker") or f"candidate status is {status}"))
-        if not candidate_config and not blocked:
+        if not candidate_config and not custom_commands and not blocked:
             blockers.append("candidate config is missing")
-        if not backend and not blocked:
+        if not backend and not custom_commands and not blocked:
             blockers.append("candidate backend is missing")
         if candidate_config and backend:
             candidate_commands.extend([
@@ -5603,6 +5635,7 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
                     enabled=not blocked,
                 ),
             ])
+        candidate_commands.extend(custom_commands)
         if cluster_config and output_dir and not blocked:
             model_sync_parts = [
                 "./forge cluster model-sync",

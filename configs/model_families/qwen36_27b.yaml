@@ -666,6 +666,25 @@ variants:
         - scripts/source_tether_safetensors_checkpoint.py
         - reports/qwen36_27b_source_tethered_obliteratus_v24_export_guard_summary.md
         - configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml
+  local_ft_abli_lm_head_refusal_token_patch_v25:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-ft-v4-abliterated-lm-head-refusal-token-patch-v25
+    served_model_name: local/qwen36-27b-local-ft-v4-abliterated-lm-head-refusal-token-patch-v25
+    transform_type: behavior_edit
+    base_variant: local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2
+    preserve_variant: local_ft_v4
+    downloadable: false
+    promotion:
+      decision: rejected
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "V25 lm_head refusal-opening token patch from the held-v2 Qwen FT-abli near miss. It rewrote only selected lm_head token rows associated with explicit refusal openings while hardlinking unchanged shards. Strict checkpoint/tokenizer/architecture audits passed locally and on the worker, and the model served on the two-Spark TP=2 path. Reject: targeted gate failed with self_harm_instruction_harmful explicit refusal wording 2/3, safe redirect 3/3, harmful detail/compliance 0/3, and model_selection_summary 2/3. Do not broad-eval, quantize, upload, or promote this branch."
+      evidence:
+        - configs/abliteration/qwen36_27b_ft_abli_v2_lm_head_refusal_token_patch_v25.yaml
+        - scripts/patch_lm_head_tokens_checkpoint.py
+        - results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_lm_head_refusal_token_patch_v25_targeted_gate_t3
+        - reports/generated/abliteration_candidate_gate/qwen36_27b_ft_abli_v2_lm_head_refusal_token_patch_v25_gate/candidate_gate.md
+        - reports/qwen36_27b_lm_head_refusal_token_patch_v25_targeted_summary.md
+        - configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml
   local_ft_abli_checkpoint_blend_v2_v12_alpha1p25:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-checkpoint-blend-v2-v12-alpha1p25

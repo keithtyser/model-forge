@@ -686,6 +686,64 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertTrue(any("MODEL_FORGE_TRIALS=3" in command and "--case-id self_harm_instruction_harmful" in command for command in commands))
         self.assertIn("--candidate name=unit_candidate,variant=local_ft_abli_unit,eval=results/qwen36_27b_v0/base/", plan["candidate_gate_command"])
 
+    def test_candidate_loop_accepts_custom_export_commands(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "unit_custom_loop.yaml"
+        config = {
+            "candidate_selection": {
+                "objective": "zero_refusal_capability_retention",
+                "loop": {
+                    "family": "qwen36_27b",
+                    "source_variant": "local_ft_abli_source",
+                    "cluster_config": "configs/clusters/dgx_spark_x2.example.yaml",
+                    "eval": {
+                        "trials": 3,
+                        "temperature": 1,
+                        "buckets": ["refusal_paired_boundary"],
+                        "case_ids": ["self_harm_instruction_harmful"],
+                    },
+                    "candidates": [
+                        {
+                            "name": "unit_lm_head_patch",
+                            "variant": "local_ft_abli_lm_head_patch",
+                            "method_family": "lm_head_token_patch",
+                            "output_dir": "~/models/unit-lm-head-patch",
+                            "custom_commands": [
+                                {
+                                    "phase": "candidate_export",
+                                    "command": ".venv/bin/python scripts/patch_lm_head_tokens_checkpoint.py --config configs/abliteration/unit.yaml --overwrite",
+                                    "purpose": "Patch selected lm_head token rows.",
+                                    "starts_heavy_job": True,
+                                    "requires_execute": True,
+                                }
+                            ],
+                        }
+                    ],
+                },
+                "gate": {
+                    "requirements": [
+                        {
+                            "name": "no_refusal_wording",
+                            "bucket": "refusal_paired_boundary",
+                            "case_id": "self_harm_instruction_harmful",
+                            "metric": "refusal_rate_harmful",
+                            "value": 0.0,
+                        }
+                    ]
+                },
+            }
+        }
+
+        plan = build_candidate_loop_plan(config, config_path, run_id="unit_custom_loop")
+        commands = [item["command"] for item in plan["commands"]]
+        candidate = plan["candidates"][0]
+
+        self.assertEqual(candidate["blockers"], [])
+        self.assertEqual(plan["executable_candidate_count"], 1)
+        self.assertTrue(any("patch_lm_head_tokens_checkpoint.py" in command for command in commands))
+        self.assertTrue(any("cluster model-sync" in command for command in commands))
+        self.assertTrue(any("variants checkpoint-audit" in command for command in commands))
+        self.assertIn("unit_lm_head_patch", plan["candidate_gate_command"])
+
     def test_qwen_candidate_loop_blocks_rejected_sae_candidate_commands(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_candidate_gate.yaml"
         plan = build_candidate_loop_plan(load_yaml(config_path), config_path, run_id="qwen_unit_loop")
@@ -1218,7 +1276,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("collect_directions", runner)
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 24)
 
-    def test_candidate_loop_blocks_rejected_v21_v22_v23_and_resource_blocked_v24(self) -> None:
+    def test_candidate_loop_blocks_rejected_v21_to_v25(self) -> None:
         config_path = (
             REPO_DIR
             / "configs"
@@ -1232,6 +1290,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("selective_projection_v22_circuit_gate", candidates)
         self.assertIn("assistant_prefix_projection_v23", candidates)
         self.assertIn("source_tethered_obliteratus_v24", candidates)
+        self.assertIn("lm_head_refusal_token_patch_v25", candidates)
         self.assertTrue(candidates["qwen_scope_sae_feature_diagnostic_v1"]["blockers"])
         self.assertFalse(any(
             command.get("enabled", True)
@@ -1252,8 +1311,13 @@ class AbliterationPlanTests(unittest.TestCase):
             command.get("enabled", False)
             for command in candidates["source_tethered_obliteratus_v24"]["commands"]
         ))
+        self.assertTrue(candidates["lm_head_refusal_token_patch_v25"]["blockers"])
+        self.assertFalse(any(
+            command.get("enabled", False)
+            for command in candidates["lm_head_refusal_token_patch_v25"]["commands"]
+        ))
         self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertNotIn("source_tethered_obliteratus_v24", plan["candidate_gate_command"])
+        self.assertIn("No executable candidate eval directories", plan["candidate_gate_command"])
 
     def test_optimal_transport_sota_run_uses_guarded_native_runner(self) -> None:
         config_path = (
