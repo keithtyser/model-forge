@@ -127,7 +127,24 @@ USAGE
 }
 
 ACTION=${1:-help}
+case "$ACTION" in
+  help|-h|--help)
+    usage
+    exit 0
+    ;;
+esac
 shift || true
+
+wants_help() {
+  for arg in "$@"; do
+    case "$arg" in
+      help|-h|--help)
+        return 0
+        ;;
+    esac
+  done
+  return 1
+}
 
 require_config() {
   local path=$1
@@ -148,6 +165,15 @@ case "$ACTION" in
     "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" download "$VARIANT"
     ;;
   serve)
+    if wants_help "$@"; then
+      cat <<'USAGE'
+Usage:
+  ./forge serve <family> [variant]
+
+Starts the configured serving launcher for the model family and variant.
+USAGE
+      exit 0
+    fi
     FAMILY=${1:?family is required}
     VARIANT=${2:-base}
     "$PYTHON" "$REPO_DIR/scripts/model_forge_dgx.py" "$FAMILY" serve "$VARIANT"

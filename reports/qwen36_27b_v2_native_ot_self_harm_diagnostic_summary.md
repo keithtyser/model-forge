@@ -48,7 +48,9 @@ Remaining painpoints:
   load path when the tensor namespace is `model.language_model.*`
 - activation collection needs better progress logging and faster GPU-kernel
   coverage for long native diagnostic runs
-- `./forge serve ... --help` should show help without starting a server
+
+The same cleanup pass also fixed `./forge serve ... --help` so help exits before
+any serving launcher can start.
 
 ## Targeted Gate
 
