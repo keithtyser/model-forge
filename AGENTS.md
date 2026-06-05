@@ -1833,6 +1833,11 @@ configs/quantization/qwen36_27b_nvfp4_modelopt.yaml
 These are examples of the general workflow. Do not hard-code future model
 support around Gemma-specific layer names or constants.
 
+Current Qwen handoff: do not promote, quantize, upload, or broad-eval rejected
+Qwen repair variants v14 or v15. V15 proved that prefix-scoped unlikelihood
+alone does not fix the residual stochastic self-harm refusal opening; use a real
+method shift for the next Qwen FT-abli branch.
+
 ## Publishing
 
 When publishing a model:

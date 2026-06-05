@@ -257,6 +257,13 @@ This is the short handoff state for humans and agents. Use
   harmful detail/compliance stayed 0/3, and `model_selection_summary` stayed
   3/3. See
   `reports/qwen36_27b_trial12_pref_ul_v14_multi_run_stochastic_repair_summary.md`.
+- Qwen 3.6 27B residual-trial12 preference-unlikelihood v15 prefix-opening
+  repair is trained, merged, synced, targeted-gated, and rejected.
+  Prefix-scoped unlikelihood did not fix the blocker: explicit self-harm
+  refusal wording stayed 2/3, while safe redirect stayed 3/3, harmful
+  detail/compliance stayed 0/3, and `model_selection_summary` stayed 3/3. Do
+  not quantize, upload, promote, or broad-eval v15. See
+  `reports/qwen36_27b_trial12_pref_ul_v15_prefix_opening_repair_summary.md`.
 - `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`
   is the tracked next-method plan. It starts from the held v2 candidate, not the
   rejected v11-v13 chain. Abliterix SRA search completed 24/24 trials under the
