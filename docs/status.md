@@ -236,13 +236,16 @@ This is the short handoff state for humans and agents. Use
   multi-direction/SRA/OT-style behavior edit or a stochastic objective that
   directly optimizes the same three-trial no-refusal gate while preserving
   harmful detail/compliance at zero.
-- A checkpoint-arithmetic method-shift candidate is now exported and registered
-  as `local_ft_abli_checkpoint_blend_v2_v12_alpha1p25`. It uses
+- The checkpoint-arithmetic method-shift candidate
+  `local_ft_abli_checkpoint_blend_v2_v12_alpha1p25` is rejected. It used
   `scripts/blend_safetensors_checkpoints.py` to write
   `held_v2 + 1.25 * (v12 - held_v2)` across the matching safetensors shard maps.
-  Strict checkpoint/tokenizer/architecture audits passed. Keep promotion,
-  quantization, HF upload, and broader eval blocked until the same targeted
-  three-trial no-refusal gate passes.
+  Strict checkpoint/tokenizer/architecture audits passed, the checkpoint was
+  synced to the worker Spark, served with TP=2 across both Sparks, and targeted
+  gated. It preserved safe redirect 3/3, harmful detail/compliance 0/3, and
+  `model_selection_summary` 3/3, but refusal wording remained 1/3. Do not
+  promote, quantize, upload, or broad-eval this branch. See
+  `reports/qwen36_27b_checkpoint_blend_v2_v12_alpha1p25_targeted_summary.md`.
 - `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`
   is the tracked next-method plan. It starts from the held v2 candidate, not the
   rejected v11-v13 chain. Abliterix SRA search completed 24/24 trials under the
