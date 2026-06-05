@@ -210,6 +210,16 @@ class ModelForgeDgxServeTests(unittest.TestCase):
         self.assertIn("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", script)
         self.assertIn("MODEL_FORGE_MIN_FREE_DISK_FRACTION", script)
 
+    def test_obliteratus_container_runner_has_host_memory_watchdog(self) -> None:
+        script = (REPO_DIR / "scripts" / "run_obliteratus_container.sh").read_text(encoding="utf-8")
+        self.assertIn("model-forge-obliteratus:latest", script)
+        self.assertIn("--gpus all", script)
+        self.assertIn("--name \"$CONTAINER_NAME\"", script)
+        self.assertIn("MODEL_FORGE_OBLITERATUS_HOST_WATCHDOG_INTERVAL_SECONDS", script)
+        self.assertIn("MemAvailable", script)
+        self.assertIn("docker\", \"stop\", \"--time\", \"10\", container_name", script)
+        self.assertIn("exit 137", script)
+
     def test_generic_vllm_launcher_uses_model_family_env(self) -> None:
         script = (REPO_DIR / "scripts" / "serve_vllm_dgx_spark.sh").read_text(encoding="utf-8")
         self.assertIn("MODEL=${1:-${MODEL_FORGE_MODEL:-Qwen/Qwen3.5-9B}}", script)

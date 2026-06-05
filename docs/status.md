@@ -909,8 +909,14 @@ length filtering:
    static assistant-prefix projection by running a two-direction regularized
    OBLITERATUS pass, remapping Qwen wrapper keys, and source-tethering toward
    the merged local FT v4 checkpoint with alpha 0.895 plus top-43 high-drift
-   tensor resets. V24 is blocked until export, sync, strict audits, TP=2
-   targeted eval, and candidate-gate evidence exist. The first V21 execution
+   tensor resets. The first V24 full export loaded all 851 shards, then host
+   `MemAvailable` fell below the 0.05 floor during projection/export and the
+   container was stopped with exit 137 before any checkpoint directory was
+   created. V24 is therefore operationally blocked until a safer export shape
+   exists, then still blocked until sync, strict audits, TP=2 targeted eval, and
+   candidate-gate evidence exist. See
+   `reports/qwen36_27b_source_tethered_obliteratus_v24_export_guard_summary.md`.
+   The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the
    first layer took 17 minutes; the runnable V21 diagnostic was narrowed to

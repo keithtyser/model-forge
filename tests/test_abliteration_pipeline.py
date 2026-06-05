@@ -686,21 +686,20 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertTrue(any("MODEL_FORGE_TRIALS=3" in command and "--case-id self_harm_instruction_harmful" in command for command in commands))
         self.assertIn("--candidate name=unit_candidate,variant=local_ft_abli_unit,eval=results/qwen36_27b_v0/base/", plan["candidate_gate_command"])
 
-    def test_qwen_candidate_loop_emits_sae_candidate_commands(self) -> None:
+    def test_qwen_candidate_loop_blocks_rejected_sae_candidate_commands(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_candidate_gate.yaml"
         plan = build_candidate_loop_plan(load_yaml(config_path), config_path, run_id="qwen_unit_loop")
 
         candidate = plan["candidates"][0]
-        commands = [item["command"] for item in plan["commands"]]
+        gate_command = [item for item in plan["commands"] if item["phase"] == "candidate_gate"][0]
 
         self.assertEqual(candidate["name"], "qwen_scope_sae_feature_diagnostic_v1")
-        self.assertEqual(candidate["status"], "ready")
-        self.assertEqual(candidate["blockers"], [])
-        self.assertEqual(plan["executable_candidate_count"], 1)
-        self.assertTrue(any("sota-run --backend qwen_scope_sae --execute" in command for command in commands))
-        self.assertTrue(any("cluster model-sync" in command for command in commands))
-        self.assertIn("local_ft_abli_qwen_scope_sae_v21", plan["candidate_gate_command"])
-        self.assertTrue([item for item in plan["commands"] if item["phase"] == "candidate_gate"][0]["enabled"])
+        self.assertEqual(candidate["status"], "rejected")
+        self.assertTrue(candidate["blockers"])
+        self.assertEqual(plan["executable_candidate_count"], 0)
+        self.assertFalse(any(command.get("enabled", False) for command in candidate["commands"]))
+        self.assertFalse(gate_command["enabled"])
+        self.assertIn("No executable candidate eval directories", plan["candidate_gate_command"])
 
     def test_qwen_scope_sae_prepare_writes_guarded_runner(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml"
@@ -1219,7 +1218,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("collect_directions", runner)
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 24)
 
-    def test_candidate_loop_skips_rejected_v21_v22_v23_and_emits_v24(self) -> None:
+    def test_candidate_loop_blocks_rejected_v21_v22_v23_and_resource_blocked_v24(self) -> None:
         config_path = (
             REPO_DIR
             / "configs"
@@ -1248,13 +1247,13 @@ class AbliterationPlanTests(unittest.TestCase):
             command.get("enabled", True)
             for command in candidates["assistant_prefix_projection_v23"]["commands"]
         ))
-        self.assertFalse(candidates["source_tethered_obliteratus_v24"]["blockers"])
-        self.assertTrue(any(
+        self.assertTrue(candidates["source_tethered_obliteratus_v24"]["blockers"])
+        self.assertFalse(any(
             command.get("enabled", False)
             for command in candidates["source_tethered_obliteratus_v24"]["commands"]
         ))
-        self.assertEqual(plan["executable_candidate_count"], 1)
-        self.assertIn("source_tethered_obliteratus_v24", plan["candidate_gate_command"])
+        self.assertEqual(plan["executable_candidate_count"], 0)
+        self.assertNotIn("source_tethered_obliteratus_v24", plan["candidate_gate_command"])
 
     def test_optimal_transport_sota_run_uses_guarded_native_runner(self) -> None:
         config_path = (

@@ -7685,3 +7685,49 @@ Decision: reject V21. The corrected SAE feature-constrained edit preserved
 capability and safe redirect behavior, but it worsened the actual held-v2
 blocker from the best 1/3 near misses to 2/3 refusal wording. Do not broad-eval,
 quantize, upload, or promote this checkpoint.
+
+### 2026-06-05 Qwen V24 source-tethered OBLITERATUS export guard
+
+Config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_source_tethered_obliteratus_v24.yaml`
+
+Status: blocked before checkpoint export.
+
+Hypothesis: the public OBLITERATUS Qwen3.6 source-tether pattern may remove the
+remaining stochastic refusal opening while preserving the local FT model: run a
+two-direction regularized OBLITERATUS pass, remap Qwen text-only keys back to the
+model-forge wrapper, then source-tether toward local FT v4 with alpha `0.895`
+and top-`43` high-drift tensor resets.
+
+Command attempted:
+
+```bash
+MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 \
+MODEL_FORGE_OBLITERATUS_DOCKER_MEMORY_GB=110 MODEL_FORGE_OBLITERATUS_SHM_SIZE=32g \
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_source_tethered_obliteratus_v24.yaml \
+  sota-run --backend obliteratus --execute
+```
+
+Observed result:
+
+- OBLITERATUS loaded all `851` source shards.
+- During the projection/export phase, host `MemAvailable` fell to about `5.0
+  GiB` on a `119 GiB` node, below the configured `0.05` floor.
+- The container was stopped to avoid scheduler/SSH starvation and the wrapper
+  returned exit `137`.
+- No V24 checkpoint directory was produced.
+- Host RAM recovered to about `112 GiB` available after the stop.
+
+Decision: V24 is not behaviorally rejected, because it never reached checkpoint
+audit or the targeted eval gate. It is operationally blocked. Do not broad-eval,
+NVFP4-quantize, upload, or promote this candidate, and do not rerun the exact
+110 GiB single-node export shape unchanged.
+
+Follow-up: `scripts/run_obliteratus_container.sh` now names the Docker container
+and runs a host-side `MemAvailable` watchdog that stops the container when the
+host crosses `MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION`. The next OBLITERATUS
+attempt should prove a lower-memory, smaller-model, or sharded/streamed export
+path before retrying full Qwen 27B.
+
+Committed summary:
+`reports/qwen36_27b_source_tethered_obliteratus_v24_export_guard_summary.md`

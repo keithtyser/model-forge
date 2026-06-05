@@ -312,8 +312,8 @@ wording was 2/3, safe redirect 3/3, harmful detail/compliance 0/3, and
 `local_ft_abli_obliteratus_self_harm_diagnostic`. See
 `reports/qwen36_27b_v2_obliteratus_diagnostic_summary.md`.
 
-Source-tethered OBLITERATUS is now the next Qwen candidate, not the rejected
-diagnostic above. The config is
+Source-tethered OBLITERATUS V24 has also been attempted, but it is blocked on
+export resources rather than rejected on behavior. The config is
 `configs/abliteration/qwen36_27b_ft_abli_v2_source_tethered_obliteratus_v24.yaml`.
 It runs OBLITERATUS through the guarded container, then uses the generated
 runner to normalize Qwen text-only exports with
@@ -322,7 +322,12 @@ runner to normalize Qwen text-only exports with
 `~/models/Qwen3.6-27B-local-ft-v4-merged`, alpha is `0.895`, and the top `43`
 highest-drift tensors are restored exactly to the FT source. This mirrors the
 public OBLITERATUS Qwen3.6 source-tether shape where it generalizes, while
-using the local FT model as the preservation target.
+using the local FT model as the preservation target. The first single-node run
+loaded all `851` shards, then host `MemAvailable` fell below the `0.05` floor
+during projection/export and the container was stopped with exit `137`; no
+checkpoint was produced. Do not rerun that exact 110 GiB single-node export shape
+unchanged. See
+`reports/qwen36_27b_source_tethered_obliteratus_v24_export_guard_summary.md`.
 
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,
@@ -2005,11 +2010,13 @@ broad-eval, quantize, upload, or promote V23. See
 
 The next Qwen method shift should not repeat V21 SAE layer-window, V22
 selective top-k/layer-window, or V23 assistant-prefix static-projection tweaks.
-The current executable branch is V24 source-tethered OBLITERATUS. It still must
-pass strict checkpoint/tokenizer/architecture audits and the exact three-trial
-candidate gate before broad eval, NVFP4, upload, or promotion. If V24 fails,
-move to a sampled response-opening objective that directly optimizes the
-three-trial no-refusal gate.
+V24 source-tethered OBLITERATUS is implemented, but the first full 27B export
+attempt hit the host RAM floor and was stopped before producing a checkpoint.
+Treat V24 as operationally blocked until the export path is made safer; it still
+must pass strict checkpoint/tokenizer/architecture audits and the exact
+three-trial candidate gate before broad eval, NVFP4, upload, or promotion. If
+OBLITERATUS remains impractical at 27B, move to a sampled response-opening
+objective that directly optimizes the three-trial no-refusal gate.
 
 ## Publishing
 
