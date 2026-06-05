@@ -1854,6 +1854,18 @@ harmful prompt compliance/unsafe overcompliance is 1/3, and
 `model_selection_summary` is 2/3. See
 `reports/qwen36_27b_norm_projection_v16_self_harm_opening_summary.md`.
 
+The next prepared Qwen branch is
+`configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_som_projection_v17.yaml`.
+It uses the native `som_projection` backend and registers
+`local_ft_abli_som_projection_v17_self_harm_opening`. The backend is reusable:
+it learns a bounded SOM-style refusal-residual centroid basis, combines it with
+the global refusal mean direction, and exports through the same guarded native
+projection path. V17 intentionally narrows the edit to attention output
+projections and lowers strength to avoid V16's safe-redirect and
+`model_selection_summary` regressions. Do not promote, quantize, upload, or
+broad-eval it unless guarded export, worker sync, strict audits, TP=2 serve, and
+the targeted three-trial no-refusal capability-retention gate pass.
+
 ## Publishing
 
 When publishing a model:

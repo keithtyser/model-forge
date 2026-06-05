@@ -171,20 +171,22 @@ method-shift backends:
   transport-style checkpoint edits
 - `norm_preserving_projection`: native guarded projected/biprojected checkpoint
   edit with optional row-norm preservation for MPOA/NPBA-style method shifts
+- `som_projection`: native guarded SOM-style multi-centroid refusal-residual
+  projection for cases where one global direction is too blunt
 
 Standalone `sra` remains plan-only until a guarded model-forge runner exists.
 OBLITERATUS, Apostate, Abliterix, native optimal transport, and native
-norm-preserving projection now have guarded execution paths. Abliterix first
+norm-preserving/SOM projection now have guarded execution paths. Abliterix first
 runs in non-interactive search-only mode; it writes an Optuna journal and exits
 without exporting a checkpoint. Use
 `abliterix-search-analyze` before `abliterix-export` for a selected trial.
 OBLITERATUS, Apostate, native optimal transport, and native norm-preserving
-projection write baked checkpoints directly, so their backend reports must be
-followed by source-vs-candidate model-forge targeted evals before any broader
-eval, quantization, promotion, or upload. The contract is the same for every
-backend: one large model job at a time, source checkpoint audit, CPU/RAM/disk
-caps, targeted internal eval before broader eval, and source-relative promotion
-gates.
+or SOM projection write baked checkpoints directly, so their backend reports
+must be followed by source-vs-candidate model-forge targeted evals before any
+broader eval, quantization, promotion, or upload. The contract is the same for
+every backend: one large model job at a time, source checkpoint audit,
+CPU/RAM/disk caps, targeted internal eval before broader eval, and
+source-relative promotion gates.
 
 Prepare backend-specific files:
 
@@ -290,6 +292,16 @@ Native activation collection prints model-load, prompt, and layer progress;
 override `MODEL_FORGE_NATIVE_PROGRESS_EVERY` or
 `MODEL_FORGE_NATIVE_LAYER_PROGRESS_EVERY` only when a very large prompt set needs
 less frequent logging.
+
+For native SOM projection recipes, use `sota-prepare --backend som_projection`.
+The generated runner is the same guarded checkpoint-export path, but activation
+collection uses `direction_extraction: som_centroids`. The extractor learns a
+bounded set of refusal residual centroids from harmful prompts relative to the
+benign mean, combines them with the global mean direction, orthonormalizes the
+resulting basis, then applies the configured projection. Keep `som_neurons`,
+`som_steps`, and `direction_components` small until the targeted gate improves;
+multi-direction methods increase search surface and can over-edit capability if
+the edit scope is broad.
 
 For Apostate recipes with `container_image` set, first build the backend image:
 

@@ -281,6 +281,16 @@ This is the short handoff state for humans and agents. Use
   overcompliance is 1/3, and `model_selection_summary` capability is 2/3. Do
   not quantize, upload, promote, or broad-eval V16. See
   `reports/qwen36_27b_norm_projection_v16_self_harm_opening_summary.md`.
+- Qwen 3.6 27B V17 is the next prepared method-shift branch:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_som_projection_v17.yaml`.
+  It adds a reusable native `som_projection` backend and registers
+  `local_ft_abli_som_projection_v17_self_harm_opening`. The hypothesis is that
+  a bounded SOM-style refusal-residual centroid basis plus attention-only,
+  lower-strength projection can target stochastic refusal openings without the
+  V16 safe-redirect and `model_selection_summary` regressions. It is blocked
+  until guarded export, cluster sync, strict checkpoint/tokenizer/architecture
+  audits, TP=2 serving, and the targeted three-trial no-refusal
+  capability-retention gate pass.
 - `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`
   is the tracked next-method plan. It starts from the held v2 candidate, not the
   rejected v11-v13 chain. Abliterix SRA search completed 24/24 trials under the

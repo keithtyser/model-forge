@@ -214,7 +214,7 @@ entries:
       - Self-organizing maps are one path to discover multiple refusal-related directions.
     implementation_hooks:
       - configs/abliteration/*.yaml
-      - future:src/model_forge/behavior_editing/multidirectional.py
+      - src/model_forge/pipelines/abliterate.py
     eval_hooks:
       - evals/prompts/refusal_paired_boundary.yaml
       - configs/promotion/

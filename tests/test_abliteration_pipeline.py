@@ -229,8 +229,46 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertTrue(native_config["edit"]["norm_preserve"])
         self.assertIn('"backend": \'norm_preserving_projection\'', runner)
         self.assertIn("model_forge_sota_norm_preserving_projection.json", runner)
+        self.assertIn("def guard_system_health(*, fatal: bool = True)", runner)
         self.assertIn("guard_system_health(fatal=False)", runner)
         self.assertIn("post_export_health_findings", runner)
+
+    def test_sota_plan_can_select_som_projection(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_local_abli.yaml"
+        plan = build_sota_plan(load_yaml(config_path), config_path, "som_projection")
+        self.assertEqual(plan["backend"], "som_projection")
+        self.assertEqual(plan["backend_config"]["method_family"], "som_multidirectional_refusal_projection")
+        self.assertEqual(plan["backend_config"]["execution"], "plan_only")
+
+    def test_som_projection_writes_guarded_native_runner(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_som_projection_v17.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+                "output_dir": f"{tmp}/exported",
+            }
+            result = write_sota_artifacts(config, config_path, "som_projection")
+            native_config = load_yaml(Path(result["paths"]["som_projection_config"]))
+            runner = Path(result["paths"]["som_projection_runner"]).read_text(encoding="utf-8")
+
+        self.assertEqual(native_config["native_backend"]["backend"], "som_projection")
+        self.assertEqual(native_config["method"], "native_som_multidirectional_projection")
+        self.assertEqual(native_config["activation_collection"]["direction_extraction"], "som_centroids")
+        self.assertEqual(native_config["activation_collection"]["som_neurons"], 8)
+        self.assertEqual(native_config["activation_collection"]["som_steps"], 64)
+        self.assertTrue(native_config["artifacts_dir"].endswith("native_som_projection"))
+        self.assertEqual(native_config["edit"]["target_weight_suffixes"], ["self_attn.o_proj.weight"])
+        self.assertIn('"backend": \'som_projection\'', runner)
+        self.assertIn("model_forge_sota_som_projection.json", runner)
+        self.assertIn("def guard_system_health(*, fatal: bool = True)", runner)
+        self.assertIn("guard_system_health(fatal=False)", runner)
 
     def test_ft_sota_plan_uses_selected_t34_transfer_recipe(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_ft_local_abli.yaml"

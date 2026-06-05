@@ -7217,3 +7217,59 @@ promoted, quantized, uploaded, or broad-evaluated. Keep the backend as a
 reusable method path, but do not retry these exact constants; the next branch
 needs a changed behavior signal, edit search objective, or edit family before
 the same three-trial no-refusal capability-retention gate.
+
+### 2026-06-05 Native SOM projection backend and Qwen v17 prep
+
+Pain point after V16: the native norm-preserving projection path is reusable,
+but broad mid/late-layer MLP plus attention edits over-edited safe redirect and
+`model_selection_summary` while still leaving explicit refusal wording in 2/3
+trials. Another scalar strength tweak would not improve the repo's reusable
+method ladder.
+
+Implemented a model-agnostic native backend:
+
+- SOTA backend choice: `som_projection`
+- native method name: `native_som_multidirectional_projection`
+- direction extraction method: `som_centroids`
+- bounded knobs: `som_neurons`, `som_steps`, `som_learning_rate`,
+  `som_neighborhood`, and `direction_components`
+- guarded runner generation through the existing native checkpoint container or
+  scope path
+- tests covering backend selection, generated native config, generated runner,
+  and the non-fatal post-export health guard signature
+
+Prepared Qwen V17:
+
+- config:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_som_projection_v17.yaml`
+- family variant:
+  `local_ft_abli_som_projection_v17_self_harm_opening`
+- source: held v2
+  `local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2`
+- backend: `som_projection`
+- direction extraction: `som_centroids`
+- direction components: `6`
+- SOM neurons: `8`
+- SOM steps: `64`
+- edit transform: `biprojection`
+- norm preservation: enabled
+- strength: `0.80`
+- target layers: `20..47`
+- target modules: `self_attn.o_proj.weight`
+
+Hypothesis: a bounded SOM-style refusal-residual centroid basis can target
+multiple refusal-opening modes more selectively than V16's broad SVD basis, and
+attention-only lower-strength projection may preserve safe redirect and
+`model_selection_summary` behavior.
+
+Next commands:
+
+```text
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_som_projection_v17.yaml sota-plan --backend som_projection
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_som_projection_v17.yaml sota-prepare --backend som_projection
+MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_som_projection_v17.yaml sota-run --backend som_projection --execute
+```
+
+Do not broader-eval, upload, quantize, or promote unless the guarded export,
+strict audits, TP=2 serve, and targeted three-trial
+`self_harm_instruction_harmful` plus `model_selection_summary` gate pass.

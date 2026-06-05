@@ -32,6 +32,7 @@ SOTA_BACKEND_CHOICES = (
     "sra",
     "optimal_transport",
     "norm_preserving_projection",
+    "som_projection",
 )
 
 APOSTATE_EXECUTIONS = {
@@ -612,6 +613,45 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
         q, _ = torch.linalg.qr(direction.float().T, mode="reduced")
         return q.T.contiguous()
 
+    def som_residual_centroids(values: Any, components: int, mean_direction: Any) -> Any:
+        values = values.float()
+        if values.ndim != 2 or values.shape[0] == 0:
+            raise SystemExit("SOM direction extraction requires a non-empty 2D activation stack")
+        centroid_count = min(
+            int(activation.get("som_neurons", max(2, components))),
+            values.shape[0],
+        )
+        centroid_count = max(1, centroid_count)
+        steps = max(1, int(activation.get("som_steps", 32)))
+        initial_lr = float(activation.get("som_learning_rate", 0.35))
+        initial_sigma = float(activation.get("som_neighborhood", max(1.0, centroid_count / 2.0)))
+        mean_axis = mean_direction.float()
+        mean_axis = mean_axis / torch.linalg.vector_norm(mean_axis).clamp_min(1e-6)
+        order = torch.argsort(values @ mean_axis)
+        if centroid_count == 1:
+            init_indices = order[-1:]
+        else:
+            init_offsets = torch.linspace(0, values.shape[0] - 1, centroid_count).round().long()
+            init_indices = order[init_offsets]
+        centroids = values[init_indices].clone()
+        positions = torch.arange(centroid_count, dtype=torch.float32)
+        sample_order = order.flip(0)
+        for step in range(steps):
+            lr = initial_lr * (1.0 - (step / max(steps, 1)))
+            lr = max(lr, initial_lr * 0.1)
+            sigma = max(0.5, initial_sigma * (1.0 - (step / max(steps, 1))))
+            for sample_index in sample_order:
+                sample = values[int(sample_index)]
+                distances = torch.sum((centroids - sample) ** 2, dim=1)
+                winner = int(torch.argmin(distances).item())
+                neighborhood = torch.exp(-((positions - float(winner)) ** 2) / (2.0 * sigma * sigma)).unsqueeze(1)
+                centroids = centroids + lr * neighborhood * (sample - centroids)
+        assignments = torch.argmin(torch.cdist(values, centroids), dim=1)
+        counts = torch.bincount(assignments, minlength=centroid_count).float()
+        energy = torch.linalg.vector_norm(centroids, dim=1) * torch.sqrt(counts + 1.0)
+        selected = torch.argsort(energy, descending=True)[:components]
+        return centroids[selected]
+
     def extract_direction(harmful_stack: Any, benign_stack: Any) -> Any:
         method = str(activation.get("direction_extraction", "mean_difference")).lower()
         components = max(1, int(activation.get("direction_components", 1)))
@@ -634,6 +674,10 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
             centered = contrast - contrast.mean(dim=0, keepdim=True)
             _, _, vh = torch.linalg.svd(centered.float(), full_matrices=False)
             direction = torch.vstack([mean_direction.float(), vh[: max(0, components - 1)]])
+        elif method in {"som", "som_centroids", "som_refusal_centroids"}:
+            residuals = harmful_stack.float() - benign_stack.float().mean(dim=0, keepdim=True)
+            centroids = som_residual_centroids(residuals, max(1, components - 1), mean_direction)
+            direction = torch.vstack([mean_direction.float(), centroids]) if components > 1 else mean_direction
         else:
             raise SystemExit(f"unsupported direction_extraction: {method!r}")
         if direction.ndim == 1:
@@ -692,6 +736,10 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
             "direction_method": activation["token_position"],
             "direction_extraction": activation["direction_extraction"],
             "direction_components": int(activation.get("direction_components", 1)),
+            "som_neurons": activation.get("som_neurons"),
+            "som_steps": activation.get("som_steps"),
+            "som_learning_rate": activation.get("som_learning_rate"),
+            "som_neighborhood": activation.get("som_neighborhood"),
             "direction_source_layer": source_layer_index,
             "replicate_source_direction": bool(activation.get("replicate_source_direction", False)),
             "use_chat_template": bool(activation.get("use_chat_template", False)),
@@ -943,6 +991,18 @@ def sota_config(config: dict[str, Any]) -> dict[str, Any]:
                     "row-norm preservation. Use this for MPOA/NPBA-style "
                     "method-shift recipes when an activation-direction edit should "
                     "preserve row norms and avoid capability-heavy benign subspaces."
+                ),
+            },
+            "som_projection": {
+                "install": "native model-forge checkpoint runner",
+                "method_family": "som_multidirectional_refusal_projection",
+                "execution": "plan_only",
+                "notes": (
+                    "Native SOM-style multi-centroid refusal projection. Use this "
+                    "when one global refusal direction is too blunt: the extractor "
+                    "learns bounded refusal-residual centroids, combines them with "
+                    "the global mean direction, and exports only through the normal "
+                    "source-relative checkpoint/eval gate."
                 ),
             },
         },
@@ -2431,6 +2491,8 @@ def materialize_native_prompt_pair_files(plan: dict[str, Any], backend: dict[str
 def native_checkpoint_method_name(plan: dict[str, Any]) -> str:
     if plan["backend"] == "norm_preserving_projection":
         return "native_norm_preserving_projected_abliteration"
+    if plan["backend"] == "som_projection":
+        return "native_som_multidirectional_projection"
     return "native_optimal_transport_activation_projection"
 
 
@@ -2448,6 +2510,10 @@ def write_native_optimal_transport_config(plan: dict[str, Any]) -> Path:
         "token_position",
         "direction_extraction",
         "direction_components",
+        "som_neurons",
+        "som_steps",
+        "som_learning_rate",
+        "som_neighborhood",
         "direction_source_layer",
         "replicate_source_direction",
         "use_chat_template",
@@ -2515,7 +2581,7 @@ def write_native_optimal_transport_config(plan: dict[str, Any]) -> Path:
             "min_free_cuda_gb": float(backend.get("min_free_cuda_gb", base_plan["safety"]["min_free_cuda_gb"])),
             "one_model_process_at_a_time": True,
         },
-        "artifacts_dir": str(work_dir / "native_optimal_transport"),
+        "artifacts_dir": str(work_dir / f"native_{plan['backend']}"),
         "native_backend": {
             "backend": plan["backend"],
             "method_family": backend.get("method_family", "optimal_transport_refusal_ablation"),
@@ -2582,16 +2648,20 @@ def available_ram_fraction() -> float:
         return 1.0
 
 
-def guard_system_health() -> None:
+def guard_system_health(*, fatal: bool = True) -> list[str]:
+    findings = []
     min_ram = float(os.environ.get("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", "0.05"))
     ram_fraction = available_ram_fraction()
     if ram_fraction < min_ram:
-        raise SystemExit(f"available RAM fraction {{ram_fraction:.3f}} is below guard {{min_ram:.3f}}")
+        findings.append(f"available RAM fraction {{ram_fraction:.3f}} is below guard {{min_ram:.3f}}")
     min_disk = float(os.environ.get("MODEL_FORGE_MIN_FREE_DISK_FRACTION", "0.15"))
     usage = shutil.disk_usage(output_dir.parent if output_dir.parent.exists() else work_dir)
     free_fraction = usage.free / usage.total
     if free_fraction < min_disk:
-        raise SystemExit(f"free disk fraction {{free_fraction:.3f}} is below guard {{min_disk:.3f}}")
+        findings.append(f"free disk fraction {{free_fraction:.3f}} is below guard {{min_disk:.3f}}")
+    if findings and fatal:
+        raise SystemExit("; ".join(findings))
+    return findings
 
 
 def reserve_cpu_headroom() -> None:
@@ -3090,6 +3160,9 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
         elif name == "norm_preserving_projection" and plan["backend_config"].get("execution") in NATIVE_PROJECTED_ABLATION_EXECUTIONS:
             paths["norm_preserving_projection_config"] = str(write_native_optimal_transport_config(plan))
             paths["norm_preserving_projection_runner"] = str(write_optimal_transport_runner(plan))
+        elif name == "som_projection" and plan["backend_config"].get("execution") in NATIVE_PROJECTED_ABLATION_EXECUTIONS:
+            paths["som_projection_config"] = str(write_native_optimal_transport_config(plan))
+            paths["som_projection_runner"] = str(write_optimal_transport_runner(plan))
         elif plan["backend_config"].get("execution") == "plan_only":
             paths[f"{name}_plan"] = str(write_external_backend_plan(plan))
     readme = work_dir / "README.md"
@@ -3175,6 +3248,23 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
             "```",
             "",
             "The native norm-preserving projection path materializes source-relative model-forge prompts, collects projected activation directions, and writes a normal Transformers checkpoint with row-norm preservation. Treat it as a candidate only after the targeted model-forge gate passes.",
+            "",
+        ])
+    if paths.get("som_projection_runner"):
+        som_plan = build_sota_plan(config, config_path, "som_projection")
+        som_command = (
+            f"scripts/run_native_checkpoint_container.sh {paths['som_projection_runner']}"
+            if som_plan["backend_config"].get("container_image")
+            else f"scripts/run_native_checkpoint_scope.sh {paths['som_projection_runner']}"
+        )
+        run_sections.extend([
+            "Run native SOM projection checkpoint export:",
+            "",
+            "```bash",
+            som_command,
+            "```",
+            "",
+            "The native SOM projection path materializes source-relative model-forge prompts, learns a bounded multi-centroid refusal residual basis, and writes a normal Transformers checkpoint with row-norm preservation. Treat it as a candidate only after the targeted model-forge gate passes.",
             "",
         ])
     plan_only_paths = {key: value for key, value in paths.items() if key.endswith("_plan")}
@@ -3946,6 +4036,18 @@ def command_sota_run(args: argparse.Namespace) -> None:
             raise SystemExit("missing generated norm-preserving projection runner")
         execution = optimal_transport_execution_spec(plan, runner)
         console.print(f"[bold]Norm-preserving projection execution mode[/bold]: {execution['mode']}")
+        subprocess.run(
+            execution["command"],
+            cwd=execution["cwd"],
+            env=execution["env"],
+            check=True,
+        )
+    elif plan["backend"] == "som_projection" and plan["backend_config"].get("execution") in NATIVE_PROJECTED_ABLATION_EXECUTIONS:
+        runner = result["paths"].get("som_projection_runner")
+        if runner is None:
+            raise SystemExit("missing generated SOM projection runner")
+        execution = optimal_transport_execution_spec(plan, runner)
+        console.print(f"[bold]SOM projection execution mode[/bold]: {execution['mode']}")
         subprocess.run(
             execution["command"],
             cwd=execution["cwd"],
