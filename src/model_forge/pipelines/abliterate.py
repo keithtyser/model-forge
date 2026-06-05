@@ -350,6 +350,9 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "winsorize_quantile": activation.get("winsorize_quantile"),
             "harmful_suffix": activation.get("harmful_suffix"),
             "benign_suffix": activation.get("benign_suffix"),
+            "harmful_assistant_prefix": activation.get("harmful_assistant_prefix"),
+            "benign_assistant_prefix": activation.get("benign_assistant_prefix"),
+            "assistant_prefix_template": activation.get("assistant_prefix_template", "\n\nAssistant: {prefix}"),
             "preprocessing_parallelism": activation.get("preprocessing_parallelism", "auto"),
             "effective_parallelism": int(training_env.get("MODEL_FORGE_PARALLELISM", "1")),
             "high_parallelism_c": int(activation.get("high_parallelism_c", training_env.get("MODEL_FORGE_HIGH_PARALLELISM", "1"))),
@@ -398,6 +401,10 @@ def print_plan(plan: dict[str, Any]) -> None:
     table.add_row("direction components", str(plan["activation_collection"]["direction_components"]))
     table.add_row("direction source layer", str(plan["activation_collection"]["direction_source_layer"]))
     table.add_row("chat template", str(plan["activation_collection"]["use_chat_template"]))
+    table.add_row("assistant prefix contrast", str(bool(
+        plan["activation_collection"].get("harmful_assistant_prefix")
+        or plan["activation_collection"].get("benign_assistant_prefix")
+    )))
     table.add_row("effective preprocessing c", str(plan["activation_collection"]["effective_parallelism"]))
     table.add_row("high-throughput c", str(plan["activation_collection"]["high_parallelism_c"]))
     free = plan["safety"]["free_cuda_gb"]
@@ -527,18 +534,31 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
     first_device = next(model.parameters()).device
     console.print(f"[cyan]Native collection device[/cyan]: {first_device}")
 
-    def prompt_vectors(label: str, prompts: list[str], suffix: str | None) -> dict[int, list[Any]]:
-        vectors: dict[int, list[Any]] = {}
-        total = len(prompts)
-        every = _progress_every(total)
-        console.print(f"[cyan]Collecting {label} activations[/cyan]: {total} prompt(s)")
-        for prompt_index, prompt in enumerate(prompts, start=1):
-            if prompt_index == 1 or prompt_index == total or prompt_index % every == 0:
-                console.print(f"[dim]native activations {label}: {prompt_index}/{total}[/dim]")
-            full_prompt = prompt if not suffix else prompt.rstrip() + suffix
+    def prompt_inputs_for_activation(
+        prompt: str,
+        *,
+        suffix: str | None,
+        assistant_prefix: str | None,
+    ) -> tuple[dict[str, Any], int | None]:
+        if suffix and assistant_prefix:
+            raise SystemExit("activation collection cannot combine suffix and assistant_prefix for the same prompt set")
+        if assistant_prefix:
+            prefix = assistant_prefix.strip()
             if activation.get("use_chat_template"):
-                inputs = tokenizer.apply_chat_template(
-                    [{"role": "user", "content": full_prompt}],
+                full_inputs = tokenizer.apply_chat_template(
+                    [
+                        {"role": "user", "content": prompt},
+                        {"role": "assistant", "content": prefix},
+                    ],
+                    add_generation_prompt=False,
+                    tokenize=True,
+                    return_dict=True,
+                    return_tensors="pt",
+                    truncation=True,
+                    max_length=activation["max_seq_len"],
+                )
+                prompt_inputs = tokenizer.apply_chat_template(
+                    [{"role": "user", "content": prompt}],
                     add_generation_prompt=True,
                     tokenize=True,
                     return_dict=True,
@@ -547,37 +567,91 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
                     max_length=activation["max_seq_len"],
                 )
             else:
-                inputs = tokenizer(
+                template = str(activation.get("assistant_prefix_template") or "\n\nAssistant: {prefix}")
+                if "{prefix}" not in template:
+                    raise SystemExit("assistant_prefix_template must include {prefix}")
+                full_prompt = prompt.rstrip() + template.format(prefix=prefix)
+                prompt_base = prompt.rstrip() + template.format(prefix="")
+                full_inputs = tokenizer(
                     full_prompt,
                     return_tensors="pt",
                     truncation=True,
                     max_length=activation["max_seq_len"],
                     padding=False,
                 )
+                prompt_inputs = tokenizer(
+                    prompt_base,
+                    return_tensors="pt",
+                    truncation=True,
+                    max_length=activation["max_seq_len"],
+                    padding=False,
+                )
+            return full_inputs, int(prompt_inputs["attention_mask"][0].sum().item())
+
+        full_prompt = prompt if not suffix else prompt.rstrip() + suffix
+        if activation.get("use_chat_template"):
+            full_inputs = tokenizer.apply_chat_template(
+                [{"role": "user", "content": full_prompt}],
+                add_generation_prompt=True,
+                tokenize=True,
+                return_dict=True,
+                return_tensors="pt",
+                truncation=True,
+                max_length=activation["max_seq_len"],
+            )
+        else:
+            full_inputs = tokenizer(
+                full_prompt,
+                return_tensors="pt",
+                truncation=True,
+                max_length=activation["max_seq_len"],
+                padding=False,
+            )
+        if not suffix:
+            return full_inputs, None
+        if activation.get("use_chat_template"):
+            prompt_inputs = tokenizer.apply_chat_template(
+                [{"role": "user", "content": prompt}],
+                add_generation_prompt=True,
+                tokenize=True,
+                return_dict=True,
+                return_tensors="pt",
+                truncation=True,
+                max_length=activation["max_seq_len"],
+            )
+        else:
+            prompt_inputs = tokenizer(
+                prompt,
+                return_tensors="pt",
+                truncation=True,
+                max_length=activation["max_seq_len"],
+                padding=False,
+            )
+        return full_inputs, int(prompt_inputs["attention_mask"][0].sum().item())
+
+    def prompt_vectors(
+        label: str,
+        prompts: list[str],
+        suffix: str | None,
+        assistant_prefix: str | None,
+    ) -> dict[int, list[Any]]:
+        vectors: dict[int, list[Any]] = {}
+        total = len(prompts)
+        every = _progress_every(total)
+        console.print(f"[cyan]Collecting {label} activations[/cyan]: {total} prompt(s)")
+        for prompt_index, prompt in enumerate(prompts, start=1):
+            if prompt_index == 1 or prompt_index == total or prompt_index % every == 0:
+                console.print(f"[dim]native activations {label}: {prompt_index}/{total}[/dim]")
+            inputs, contrast_start_index = prompt_inputs_for_activation(
+                prompt,
+                suffix=suffix,
+                assistant_prefix=assistant_prefix,
+            )
             inputs = {key: value.to(first_device) for key, value in inputs.items()}
             last_index = int(inputs["attention_mask"][0].sum().item()) - 1
             first_pool_index = last_index
-            if suffix and activation["token_position"] == "suffix_mean":
-                if activation.get("use_chat_template"):
-                    prompt_inputs = tokenizer.apply_chat_template(
-                        [{"role": "user", "content": prompt}],
-                        add_generation_prompt=True,
-                        tokenize=True,
-                        return_dict=True,
-                        return_tensors="pt",
-                        truncation=True,
-                        max_length=activation["max_seq_len"],
-                    )
-                else:
-                    prompt_inputs = tokenizer(
-                        prompt,
-                        return_tensors="pt",
-                        truncation=True,
-                        max_length=activation["max_seq_len"],
-                        padding=False,
-                    )
-                prompt_len = int(prompt_inputs["attention_mask"][0].sum().item())
-                first_pool_index = min(max(prompt_len, 0), last_index)
+            if contrast_start_index is not None and activation["token_position"] in {"suffix_mean", "assistant_prefix_mean"}:
+                first_pool_index = min(max(contrast_start_index, 0), last_index)
             with torch.no_grad():
                 if activation["token_position"] == "generation_last_token":
                     outputs = model.generate(
@@ -595,15 +669,25 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
             for layer_index, states in enumerate(hidden_states):
                 if activation["token_position"] == "generation_last_token":
                     vector = states[0, -1, :]
-                elif activation["token_position"] == "suffix_mean" and suffix:
+                elif activation["token_position"] in {"suffix_mean", "assistant_prefix_mean"} and contrast_start_index is not None:
                     vector = states[0, first_pool_index : last_index + 1, :].mean(dim=0)
                 else:
                     vector = states[0, last_index, :]
                 vectors.setdefault(layer_index, []).append(vector.detach().float().cpu())
         return vectors
 
-    harmful_vectors = prompt_vectors("harmful", harmful, activation.get("harmful_suffix"))
-    benign_vectors = prompt_vectors("benign", benign, activation.get("benign_suffix"))
+    harmful_vectors = prompt_vectors(
+        "harmful",
+        harmful,
+        activation.get("harmful_suffix"),
+        activation.get("harmful_assistant_prefix"),
+    )
+    benign_vectors = prompt_vectors(
+        "benign",
+        benign,
+        activation.get("benign_suffix"),
+        activation.get("benign_assistant_prefix"),
+    )
     layer_count = min(len(harmful_vectors), len(benign_vectors))
     console.print(f"[cyan]Collected activations for {layer_count} layer(s)[/cyan]")
     first = activation["layer_skip_first"]
@@ -764,6 +848,9 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
             "direction_source_layer": source_layer_index,
             "replicate_source_direction": bool(activation.get("replicate_source_direction", False)),
             "use_chat_template": bool(activation.get("use_chat_template", False)),
+            "harmful_assistant_prefix": activation.get("harmful_assistant_prefix"),
+            "benign_assistant_prefix": activation.get("benign_assistant_prefix"),
+            "assistant_prefix_template": activation.get("assistant_prefix_template"),
             "created_at": datetime.now(timezone.utc).isoformat(),
         },
         output_dir / "direction_artifact.pt",
@@ -2697,6 +2784,9 @@ def write_native_optimal_transport_config(plan: dict[str, Any]) -> Path:
         "winsorize_quantile",
         "harmful_suffix",
         "benign_suffix",
+        "harmful_assistant_prefix",
+        "benign_assistant_prefix",
+        "assistant_prefix_template",
         "layer_skip_first",
         "layer_skip_last",
     ):

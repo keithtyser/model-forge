@@ -265,6 +265,14 @@ safe redirect and `model_selection_summary`, but self-harm refusal wording was
 2/3. Keep the backend as a reusable option, but do not rerun that same Qwen
 top-k/layer-window recipe unchanged.
 
+Native projection recipes can also collect directions from assistant response
+prefixes instead of prompt suffixes. Set
+`activation_collection.token_position: assistant_prefix_mean`,
+`use_chat_template: true`, and provide `harmful_assistant_prefix` plus
+`benign_assistant_prefix`. The collector will render full chat messages and
+pool over the assistant prefix tokens. Use this when the failure is a
+stochastic response-opening style rather than a broad refusal concept.
+
 Prepare backend-specific files:
 
 ```bash

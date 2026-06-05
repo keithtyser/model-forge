@@ -388,6 +388,7 @@ entries:
     implementation_hooks:
       - src/model_forge/pipelines/abliterate.py
       - configs/abliteration/*selective_projection*.yaml
+      - configs/abliteration/*assistant_prefix_projection*.yaml
       - future:src/model_forge/behavior_editing/direction_selection.py
       - configs/abliteration/*.yaml
     eval_hooks:
@@ -461,6 +462,7 @@ entries:
     implementation_hooks:
       - src/model_forge/pipelines/abliterate.py
       - configs/abliteration/*selective_projection*.yaml
+      - configs/abliteration/*assistant_prefix_projection*.yaml
       - future:src/model_forge/behavior_editing/selective_steering.py
       - configs/abliteration/*.yaml
     eval_hooks:
@@ -486,6 +488,7 @@ entries:
     implementation_hooks:
       - src/model_forge/pipelines/abliterate.py
       - configs/abliteration/*selective_projection*.yaml
+      - configs/abliteration/*assistant_prefix_projection*.yaml
       - future:src/model_forge/behavior_editing/circuit_targets.py
       - configs/abliteration/*.yaml
     eval_hooks:

@@ -92,6 +92,24 @@ candidate_selection:
         implementation_next:
           - do not retry the same V22 selective top-k/layer-window recipe; it worsened refusal wording to 2/3
           - next candidate should optimize the stochastic response-opening objective more directly
+      - name: assistant_prefix_projection_v23
+        status: ready
+        method_family: assistant_prefix_refusal_opening_projection
+        backend: norm_preserving_projection
+        variant: local_ft_abli_assistant_prefix_projection_v23
+        config: configs/abliteration/qwen36_27b_ft_abli_v2_assistant_prefix_projection_v23.yaml
+        output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-assistant-prefix-projection-v23
+        eval_suffix: qwen36_27b_local_ft_abli_assistant_prefix_projection_v23_targeted_gate_t3
+        hypothesis: >
+          A native assistant-prefix projection should target the residual
+          stochastic refusal-opening state more directly than V22, because it
+          collects directions from actual assistant continuation prefixes under
+          the chat template instead of user-side suffix instructions.
+        implementation_next:
+          - run sota-plan/sota-prepare and inspect assistant-prefix activation settings
+          - execute the guarded norm_preserving_projection checkpoint export only when the cluster is healthy
+          - sync to both Sparks and run strict checkpoint/tokenizer/architecture audits
+          - run the targeted three-trial candidate gate before broad eval or NVFP4
   gate:
     trials: 3
     temperature: 1

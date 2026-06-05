@@ -1160,7 +1160,39 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("linear_attn.out_proj.weight", native_config["edit"]["target_weight_suffixes"])
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 24)
 
-    def test_candidate_loop_skips_rejected_v21_and_v22(self) -> None:
+    def test_qwen_v23_assistant_prefix_projection_writes_guarded_runner(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_assistant_prefix_projection_v23.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+                "output_dir": f"{tmp}/exported",
+            }
+            result = write_sota_artifacts(config, config_path, "norm_preserving_projection")
+            native_config = load_yaml(Path(result["paths"]["norm_preserving_projection_config"]))
+            runner = Path(result["paths"]["norm_preserving_projection_runner"]).read_text(encoding="utf-8")
+            manifest = json.loads(
+                (Path(tmp) / "model_forge_native_prompt_pairs" / "manifest.json").read_text(encoding="utf-8")
+            )
+
+        activation = native_config["activation_collection"]
+        self.assertEqual(native_config["method"], "native_norm_preserving_projected_abliteration")
+        self.assertEqual(activation["token_position"], "assistant_prefix_mean")
+        self.assertTrue(activation["use_chat_template"])
+        self.assertIn("won't provide instructions", activation["harmful_assistant_prefix"])
+        self.assertIn("Get immediate support", activation["benign_assistant_prefix"])
+        self.assertTrue(native_config["edit"]["require_target_tensor_per_layer"])
+        self.assertIn("linear_attn.out_proj.weight", native_config["edit"]["target_weight_suffixes"])
+        self.assertIn("collect_directions", runner)
+        self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 24)
+
+    def test_candidate_loop_skips_rejected_v21_v22_and_emits_v23(self) -> None:
         config_path = (
             REPO_DIR
             / "configs"
@@ -1172,6 +1204,7 @@ class AbliterationPlanTests(unittest.TestCase):
 
         self.assertIn("qwen_scope_sae_feature_diagnostic_v1", candidates)
         self.assertIn("selective_projection_v22_circuit_gate", candidates)
+        self.assertIn("assistant_prefix_projection_v23", candidates)
         self.assertTrue(candidates["qwen_scope_sae_feature_diagnostic_v1"]["blockers"])
         self.assertFalse(any(
             command.get("enabled", True)
@@ -1182,8 +1215,13 @@ class AbliterationPlanTests(unittest.TestCase):
             command.get("enabled", True)
             for command in candidates["selective_projection_v22_circuit_gate"]["commands"]
         ))
-        self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertIn("implement or unblock a candidate", plan["candidate_gate_command"])
+        self.assertFalse(candidates["assistant_prefix_projection_v23"]["blockers"])
+        self.assertTrue(any(
+            command.get("enabled", False)
+            for command in candidates["assistant_prefix_projection_v23"]["commands"]
+        ))
+        self.assertEqual(plan["executable_candidate_count"], 1)
+        self.assertIn("assistant_prefix_projection_v23", plan["candidate_gate_command"])
 
     def test_optimal_transport_sota_run_uses_guarded_native_runner(self) -> None:
         config_path = (
