@@ -31,6 +31,9 @@ wrappers, operational helpers, or hardware-specific launchers.
 - `run_native_checkpoint_container.sh`: guarded CUDA container launcher for
   generated native checkpoint-edit runners when the host Python environment is
   CPU-only or too old for the model architecture.
+- `blend_safetensors_checkpoints.py`: guarded shard-streaming checkpoint
+  arithmetic helper. It writes `output = base + alpha * (target - base)` for
+  matching safetensors checkpoints and records `model_forge_checkpoint_blend.json`.
 - `quantization/gemma4_moe_nvfp4.py`: lower-level ModelOpt helper used by
   `./forge quantize export` for Gemma4 full-MoE NVFP4 checkpoint creation.
 - `merge_peft_adapter.py`: PEFT adapter merge helper when live LoRA serving is

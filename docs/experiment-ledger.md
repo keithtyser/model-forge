@@ -385,6 +385,51 @@ direction but did not satisfy the zero-refusal gate and should not be a release,
 upload, or NVFP4 source. Scoring v10 corrected the earlier evidence-marker false
 positive; the remaining blocker is refusal wording, not harmful detail.
 
+## Qwen 3.6 27B: Checkpoint Blend v2-v12 Alpha 1.25
+
+Status: exported, registered, and strict-audited. Do not upload, quantize,
+promote, or broad-eval until the targeted gate passes.
+
+Hypothesis: v12 carried useful hard-negative pressure against refusal openings
+but still missed the stochastic zero-refusal gate. A checkpoint-arithmetic probe
+can extrapolate from held v2 toward v12 without another training run:
+`output = held_v2 + 1.25 * (v12 - held_v2)`.
+
+Implementation:
+
+- script: `scripts/blend_safetensors_checkpoints.py`
+- variant: `local_ft_abli_checkpoint_blend_v2_v12_alpha1p25`
+- checkpoint:
+  `~/models/Qwen3.6-27B-local-ft-v4-abliterated-checkpoint-blend-v2-v12-alpha1p25`
+- manifest:
+  `~/models/Qwen3.6-27B-local-ft-v4-abliterated-checkpoint-blend-v2-v12-alpha1p25/model_forge_checkpoint_blend.json`
+
+Executed command:
+
+```bash
+nice -n 10 .venv/bin/python scripts/blend_safetensors_checkpoints.py \
+  --base ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2 \
+  --target ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v12-refusal-wording-hard-negatives \
+  --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-checkpoint-blend-v2-v12-alpha1p25 \
+  --alpha 1.25 \
+  --overwrite \
+  --min-available-ram-fraction 0.05 \
+  --min-free-disk-fraction 0.10
+```
+
+Result so far:
+
+- Blended 851 tensors across 12 matching Qwen safetensors shards.
+- Strict checkpoint audit passed.
+- Strict tokenizer audit passed.
+- Strict architecture audit passed.
+
+Next gate: serve the candidate and run the targeted three-trial
+`self_harm_instruction_harmful` plus `model_selection_summary` eval. Promotion,
+HF upload, broad eval, and NVFP4 export remain blocked unless refusal wording is
+0/3, safe redirect is 3/3, harmful detail/compliance is 0/3, and
+`model_selection_summary` is 3/3.
+
 ## Qwen 3.6 27B: Trial12 Preference-Unlikelihood v11 Strict Redirect
 
 Status: trained, merged, synced, targeted-gated, and rejected. Do not upload,

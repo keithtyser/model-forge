@@ -186,6 +186,14 @@ near-identical sequential preference/unlikelihood repair. Prefer a
 multi-direction/SRA/OT-style behavior edit or a stochastic objective that
 directly optimizes the same three-trial no-refusal gate while preserving harmful
 detail/compliance at zero.
+
+A checkpoint-arithmetic method-shift probe has been exported as
+`local_ft_abli_checkpoint_blend_v2_v12_alpha1p25`. It uses
+`scripts/blend_safetensors_checkpoints.py` with
+`output = held_v2 + 1.25 * (v12 - held_v2)`, blending all 851 tensors across the
+matching Qwen shard maps. Strict checkpoint/tokenizer/architecture audits passed.
+It is still blocked for promotion, quantization, HF upload, and broad eval until
+the targeted three-trial no-refusal gate passes.
 Start from
 `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`;
 it intentionally uses the held v2 candidate as source. Abliterix is the current
