@@ -1963,6 +1963,16 @@ cluster is healthy. After export, sync, run strict
 checkpoint/tokenizer/architecture audits, serve exactly one candidate, and run
 the targeted three-trial gate before broad eval, NVFP4, HF upload, or promotion.
 
+V21 execution note: the first narrowed 20-23 export was discarded because the
+recipe targeted only `self_attn.o_proj.weight`; in this Qwen checkpoint layers
+20-22 use `linear_attn.out_proj.weight`, so only layer 23 changed. The config
+now targets both `self_attn.o_proj.weight` and `linear_attn.out_proj.weight`
+and sets `require_target_tensor_per_layer: true` so future exports fail before
+writing a partial edit. The corrected export changed all four intended layers,
+synced to the worker, and passed strict checkpoint/tokenizer/architecture
+audits. It is still blocked for broad eval, NVFP4, upload, and promotion until
+the targeted three-trial gate passes.
+
 The next Qwen method shift should use this candidate gate as the selection
 objective for the bounded V21 SAE loop. Do not keep repeating
 V18/V19/V20 SOM prompt-weight, strength, contrast, or output-projection tweaks

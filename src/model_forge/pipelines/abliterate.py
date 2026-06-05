@@ -807,6 +807,22 @@ def missing_direction_layers(edit: dict[str, Any], directions: dict[int, Any]) -
     return [layer for layer in configured_target_layers(edit) if layer not in directions]
 
 
+def projection_target_layers(weight_map: dict[str, str], edit: dict[str, Any]) -> list[int]:
+    layers = {
+        layer
+        for name in weight_map
+        if is_projection_target(name, edit)
+        for layer in [language_layer_index(name)]
+        if layer is not None
+    }
+    return sorted(layers)
+
+
+def missing_target_tensor_layers(weight_map: dict[str, str], edit: dict[str, Any]) -> list[int]:
+    target_layers = set(projection_target_layers(weight_map, edit))
+    return [layer for layer in configured_target_layers(edit) if layer not in target_layers]
+
+
 def _is_layer_tensor_dict(value: Any) -> bool:
     return isinstance(value, dict) and all(isinstance(key, int) for key in value)
 
@@ -4331,6 +4347,7 @@ def export_projection(
 
     index_path = source_dir / "model.safetensors.index.json"
     index = json.loads(index_path.read_text())
+    weight_map = index["weight_map"]
     artifact = load_direction_artifact(directions_path)
     directions = artifact["refusal_directions"]
     missing_layers = missing_direction_layers(edit, directions)
@@ -4340,11 +4357,18 @@ def export_projection(
             f"{missing_layers}. Re-run collection with matching layer_skip settings, "
             "or set edit.require_all_target_directions=false for exploratory exports."
         )
+    missing_tensor_layers = missing_target_tensor_layers(weight_map, edit)
+    if missing_tensor_layers and edit.get("require_target_tensor_per_layer", False):
+        raise SystemExit(
+            "refusing export because target layers have no tensors matching "
+            f"target_weight_suffixes: {missing_tensor_layers}. Inspect the model "
+            "architecture and include the correct attention/MLP suffixes for this family, "
+            "or set edit.require_target_tensor_per_layer=false for exploratory exports."
+        )
 
     copy_non_weight_files(source_dir, output_dir)
     (output_dir / "model.safetensors.index.json").write_text(json.dumps(index, indent=2) + "\n")
 
-    weight_map = index["weight_map"]
     shards = sorted(set(weight_map.values()))
     changed: list[dict[str, Any]] = []
     for shard in shards:
@@ -4403,6 +4427,9 @@ def export_projection(
         "target_weight_suffixes": edit.get("target_weight_suffixes"),
         "required_target_layers": configured_target_layers(edit),
         "missing_direction_layers": missing_layers,
+        "target_tensor_layers": projection_target_layers(weight_map, edit),
+        "missing_target_tensor_layers": missing_tensor_layers,
+        "require_target_tensor_per_layer": bool(edit.get("require_target_tensor_per_layer", False)),
         "changed_tensor_count": len(changed),
         "changed_tensors": changed,
     }

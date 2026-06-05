@@ -891,6 +891,14 @@ length filtering:
    original 20-47 layer window and was stopped during SAE download after the
    first layer took 17 minutes; the runnable diagnostic is narrowed to layers
    20-23 for a faster gate signal.
+   Corrected export note: an initial narrowed 20-23 export changed only layer
+   23 because the recipe targeted `self_attn.o_proj.weight` while layers 20-22
+   in this Qwen checkpoint expose `linear_attn.out_proj.weight`. That partial
+   export was moved aside and deleted after verification. The config now targets
+   both attention-output suffixes and requires at least one target tensor per
+   configured edit layer. The corrected export changed layers 20, 21, 22, and
+   23, synced to the worker, and passed strict checkpoint/tokenizer/architecture
+   audits. It is still blocked until the targeted three-trial gate passes.
 
 ## Operational Guardrails
 

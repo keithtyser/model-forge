@@ -35,10 +35,12 @@ from model_forge.pipelines.abliterate import (
     load_prompts,
     load_yaml,
     missing_direction_layers,
+    missing_target_tensor_layers,
     obliteratus_execution_spec,
     optimal_transport_execution_spec,
     parse_heretic_journal,
     prompts_for_buckets,
+    projection_target_layers,
     response_conditioned_prompts,
     tensor_strength,
     write_apostate_config,
@@ -375,6 +377,25 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(float(native_config["edit"]["module_strengths"]["self_attn.o_proj.weight"]), 1.0)
         self.assertEqual(float(native_config["edit"]["module_strengths"]["linear_attn.out_proj.weight"]), 0.45)
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 24)
+
+    def test_projection_target_layer_guard_catches_hybrid_suffix_gap(self) -> None:
+        weight_map = {
+            "model.language_model.layers.20.linear_attn.out_proj.weight": "a.safetensors",
+            "model.language_model.layers.21.linear_attn.out_proj.weight": "a.safetensors",
+            "model.language_model.layers.22.linear_attn.out_proj.weight": "a.safetensors",
+            "model.language_model.layers.23.self_attn.o_proj.weight": "b.safetensors",
+        }
+        edit = {
+            "layer_start": 20,
+            "layer_end": 23,
+            "target_weight_suffixes": ["self_attn.o_proj.weight"],
+        }
+        self.assertEqual(projection_target_layers(weight_map, edit), [23])
+        self.assertEqual(missing_target_tensor_layers(weight_map, edit), [20, 21, 22])
+
+        edit["target_weight_suffixes"] = ["self_attn.o_proj.weight", "linear_attn.out_proj.weight"]
+        self.assertEqual(projection_target_layers(weight_map, edit), [20, 21, 22, 23])
+        self.assertEqual(missing_target_tensor_layers(weight_map, edit), [])
 
     def test_ft_sota_plan_uses_selected_t34_transfer_recipe(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_ft_local_abli.yaml"

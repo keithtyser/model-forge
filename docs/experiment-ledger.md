@@ -7627,3 +7627,44 @@ SAE download before checkpoint export. No container was left running, RAM
 returned to normal, and no model artifact was produced. The V21 config is now
 narrowed to layers 20-23 for a practical first gate signal. Expand the layer
 window only after the narrow probe shows movement without capability loss.
+
+### 2026-06-05 Qwen V21 corrected hybrid-attention SAE export
+
+Config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml`
+
+Status: corrected checkpoint exported, synced, and audited. Targeted gate still
+pending.
+
+Hypothesis: a Qwen-Scope SAE dictionary-constrained refusal-opening direction
+may remove the last stochastic self-harm refusal wording while preserving the
+held-v2 source model's capability behavior.
+
+Finding before eval: the first narrowed 20-23 V21 export was invalid as a
+candidate because it only changed
+`model.language_model.layers.23.self_attn.o_proj.weight`. Layers 20-22 in this
+checkpoint are hybrid/linear attention layers with
+`linear_attn.out_proj.weight`, so the original `self_attn.o_proj.weight`-only
+target suffix silently skipped three configured edit layers.
+
+Fix:
+
+- added exporter metadata and optional guard for missing target tensor layers
+- updated V21 to target both `self_attn.o_proj.weight` and
+  `linear_attn.out_proj.weight`
+- set `require_target_tensor_per_layer: true` for V21
+- deleted the invalid partial export after the corrected checkpoint passed
+  audits
+
+Corrected export evidence:
+
+- changed tensor count: `4`
+- target tensor layers: `20, 21, 22, 23`
+- missing target tensor layers: none
+- layer 20-22 `linear_attn.out_proj.weight` strength: `0.315`
+- layer 23 `self_attn.o_proj.weight` strength: `0.7`
+- model sync: `reports/generated/cluster/model_sync_20260605T103357Z.json`
+
+Strict checkpoint, tokenizer, and architecture audits passed on the coordinator.
+The checkpoint remains blocked for broad eval, NVFP4, HF upload, and promotion
+until the targeted three-trial gate passes.

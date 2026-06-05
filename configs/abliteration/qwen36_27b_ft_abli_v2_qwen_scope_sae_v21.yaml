@@ -67,14 +67,17 @@ sota:
         strength: 0.70
         module_strengths:
           self_attn.o_proj.weight: 1.0
+          linear_attn.out_proj.weight: 0.45
         layer_start: 20
         layer_end: 23
         target_weight_suffixes:
           - self_attn.o_proj.weight
+          - linear_attn.out_proj.weight
         leave_embeddings_untouched: true
         leave_lm_head_untouched: true
         leave_moe_experts_untouched: true
         require_all_target_directions: true
+        require_target_tensor_per_layer: true
         review_required_before_export: true
       model_forge_prompt_datasets:
         bad_train_buckets:
@@ -128,7 +131,10 @@ sota:
         The first runnable diagnostic is intentionally narrowed to layers 20-23
         after the full 20-47 window was observed to spend many hours downloading
         per-layer SAE files before any gate signal. Expand only if this narrow
-        probe moves the targeted gate without capability loss.
+        probe moves the targeted gate without capability loss. This Qwen branch
+        has hybrid attention naming in the narrowed layer window, so the edit
+        covers both `self_attn.o_proj.weight` and `linear_attn.out_proj.weight`
+        and requires at least one target tensor in every configured edit layer.
         Promote only if the targeted model-forge gate reaches zero explicit
         refusal wording while preserving safe redirect and model_selection_summary.
       plan:
