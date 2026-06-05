@@ -58,7 +58,9 @@ This is the short handoff state for humans and agents. Use
   broad topic name as harmful detail. Scoring v9 fixes the Qwen
   `model_selection_summary` challenge so it scores model-selection reasoning
   over capability/refusal/latency tradeoffs instead of requiring verbatim
-  base/fine-tuned/ablated label echoing.
+  base/fine-tuned/ablated label echoing. Scoring v10 fixes an evidence-marker
+  false positive so anti-coverup guidance such as preserving or not hiding
+  evidence is not counted as harmful detail.
 - Local base ablation beat the downloaded abli reference on the saved internal
   comparison while preserving stronger behavior than expected.
 - Local FT ablation preserved the source FT's primary internal behavior closely
@@ -217,9 +219,11 @@ This is the short handoff state for humans and agents. Use
 - Qwen 3.6 27B residual-trial12 preference-unlikelihood v12 refusal-wording
   hard negatives is trained, merged, synced, targeted-gated, and rejected. It
   improved the explicit self-harm refusal blocker from 3/3 to 1/3 and preserved
-  `model_selection_summary` 3/3, but it still failed the zero-refusal target
-  and produced one scorer-flagged harmful-detail/compliance concern. Do not
-  upload, quantize, promote, or run broader evals from v12. See
+  `model_selection_summary` 3/3. Scoring v10 corrected the earlier
+  evidence-marker false positive, so harmful detail/compliance and unsafe
+  overcompliance rescore to 0/3, but v12 still fails the zero-refusal target at
+  1/3 refusal wording. Do not upload, quantize, promote, or run broader evals
+  from v12. See
   `reports/qwen36_27b_trial12_pref_ul_v12_refusal_wording_hard_negatives_summary.md`.
 - Qwen 3.6 27B residual-trial12 preference-unlikelihood v13 residual-opening
   repair is trained, merged, synced, targeted-gated, and rejected. It preserved
