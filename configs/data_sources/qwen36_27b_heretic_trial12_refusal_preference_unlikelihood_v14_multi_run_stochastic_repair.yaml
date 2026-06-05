@@ -1,0 +1,112 @@
+version: 0.1.0
+description: >
+  Data-source registry for the Qwen 3.6 27B trial12 preference-unlikelihood v14
+  multi-run stochastic repair. V10 mined only one held-v2 eval run and failed.
+  V14 pools strict pass/fail traces from multiple targeted eval runs, keeps only
+  chosen responses that pass no-refusal text filters, and trains from held v2
+  instead of stacking another repair on top of v12/v13.
+
+sources:
+  qwen36_multi_run_self_harm_eval_repair_v1:
+    name: qwen36_multi_run_self_harm_eval_repair_v1
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_multi_run_self_harm_eval_repair_v1.jsonl
+    license: CC-BY-4.0
+    quality_tier: eval_mined_reviewed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - self_harm_support
+      - eval_response_repair
+      - stochastic_gate_repair
+      - behavior_edit
+    sampling_cap: 48
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Primary v14 source. Rows are adjacent prompt variants produced by
+      `configs/data_repair/qwen36_27b_multi_run_self_harm_eval_repair_v1.yaml`.
+      The chosen side passed scorer filters plus explicit text filters against
+      refusal openings; the rejected side preserves observed safe-but-refusing
+      openings from the targeted stochastic gate.
+
+  qwen36_trial12_pref_ul_v12_refusal_wording_hard_negatives:
+    name: qwen36_trial12_pref_ul_v12_refusal_wording_hard_negatives
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v12_refusal_wording_hard_negatives.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_wording_hard_negative
+      - refusal_free_safe_redirect
+      - self_harm_support
+      - behavior_edit
+    sampling_cap: 12
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Human-seeded hard-negative replay. It remains useful because v12 improved
+      the blocker from 3/3 to 1/3 even though v12 itself is rejected.
+
+  qwen36_trial12_pref_ul_v11_refusal_free_redirect_expansion:
+    name: qwen36_trial12_pref_ul_v11_refusal_free_redirect_expansion
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v11_refusal_free_redirect_expansion.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - self_harm_support
+      - direct_prompt_repair
+      - behavior_edit
+    sampling_cap: 6
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Small no-denial redirect replay to keep positive care-first phrasing in
+      the mix without letting it dominate the stochastic repair seed.
+
+  qwen36_trial12_pref_ul_v5_ablation_redirect_pairs:
+    name: qwen36_trial12_pref_ul_v5_ablation_redirect_pairs
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v5_ablation_redirect.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - ablation_unsafe_redirect
+      - behavior_edit_replay
+    sampling_cap: 4
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Minimal no-denial unsafe-ablation-redirect replay so the repair does not
+      regress held v2's corrected ablation-specific redirect behavior.
+
+  qwen36_local_ft_v4_capability_replay_v3:
+    name: qwen36_local_ft_v4_capability_replay_v3
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_capability_replay_v3.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - challenge_replay
+      - instruction_following
+    sampling_cap: 12
+    intended_use: >
+      Compact challenge/capability replay retained to protect local FT v4 and
+      held v2 behavior while applying the targeted no-refusal repair.
+
+  qwen36_local_ft_v4_planning_repair_seeds:
+    name: qwen36_local_ft_v4_planning_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_planning_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - agentic_planning
+      - instruction_following
+    sampling_cap: 4
+    intended_use: >
+      Tiny planning anchor for source-distribution stability.

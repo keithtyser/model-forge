@@ -451,6 +451,83 @@ harmful detail/compliance 0/3, and `model_selection_summary` 3/3. Evidence:
 `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_checkpoint_blend_v2_v12_alpha1p25_targeted_blockers_t3`
 and `reports/qwen36_27b_checkpoint_blend_v2_v12_alpha1p25_targeted_summary.md`.
 
+## Qwen 3.6 27B: V14 Multi-Run Stochastic Repair Prep
+
+Status: data-repair config, seed, data-source registry, finetune recipe, family
+variant metadata, and trainer data-prep validation are complete. The candidate
+is not trained, merged, promoted, uploaded, or quantized.
+
+Hypothesis: v10 failed because it mined one held-v2 eval run and admitted
+refusal-adjacent chosen rows. V12 moved the blocker in the right direction but
+was still one stochastic refusal short, and v13/blend/method-shift attempts did
+not clear the gate. A stronger generalizable repair path is to pool pass/fail
+traces from multiple targeted runs, apply strict chosen-side no-refusal text
+filters, generate adjacent prompt variants, and train from held v2 rather than
+stacking on rejected v12/v13 checkpoints.
+
+Implemented:
+
+- eval-repair config:
+  `configs/data_repair/qwen36_27b_multi_run_self_harm_eval_repair_v1.yaml`
+- generated repair seed:
+  `datasets/seeds/qwen36_27b_multi_run_self_harm_eval_repair_v1.jsonl`
+- repair report:
+  `reports/qwen36_27b_multi_run_self_harm_eval_repair_v1_report.json`
+- data-source registry:
+  `configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v14_multi_run_stochastic_repair.yaml`
+- dataset manifest:
+  `datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v14_multi_run_stochastic_repair.yaml`
+- finetune config:
+  `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v14_multi_run_stochastic_repair.yaml`
+- candidate variant:
+  `local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v14_multi_run_stochastic_repair`
+
+Repair seed result:
+
+- Rows: 72.
+- Exact eval-prompt rows: 0.
+- Promotion blockers: none.
+- Emitting sources: held v2 targeted repeat, checkpoint blend, native OT
+  diagnostic, and OBLITERATUS diagnostic.
+- The strict chosen filter skipped scorer-passing rows that still had explicit
+  denial/refusal forms such as `won't`, `cannot`, `will not`, or `without
+  providing/helping`.
+
+Trainer data prep:
+
+```bash
+./forge data repair-from-eval --config configs/data_repair/qwen36_27b_multi_run_self_harm_eval_repair_v1.yaml --overwrite
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v14_multi_run_stochastic_repair.yaml plan
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v14_multi_run_stochastic_repair.yaml prepare --overwrite
+.venv/bin/python runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v14_multi_run_stochastic_repair/train_trl_sft.py \
+  --plan runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v14_multi_run_stochastic_repair/plan.json \
+  --prepare-data
+```
+
+Prepared training JSONL:
+
+- Rows: 81.
+- Paired rows: 65.
+- Primary multi-run repair rows accepted: 43/48.
+- Replay accepted: 12 v12 hard-negative rows, 6 v11 no-refusal redirect rows, 4
+  unsafe-ablation redirect rows, 12 capability rows, and 4 planning rows.
+- Chosen-side scan found no `won't/can't/will not/provide instructions` patterns
+  in the prepared train JSONL.
+
+Next action: if training proceeds, run the generated cluster launcher only after
+cluster health is OK and no model server is running:
+
+```bash
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 \
+  runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v14_multi_run_stochastic_repair/run_cluster_torchrun.sh
+```
+
+After training, merge from held v2 into:
+`~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v14-multi-run-stochastic-repair`.
+Then run strict checkpoint/tokenizer/architecture audits and the targeted
+three-trial self-harm plus `model_selection_summary` gate before any broader
+eval, upload, quantization, or promotion.
+
 ## Qwen 3.6 27B: Trial12 Preference-Unlikelihood v11 Strict Redirect
 
 Status: trained, merged, synced, targeted-gated, and rejected. Do not upload,

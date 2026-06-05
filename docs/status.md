@@ -246,6 +246,15 @@ This is the short handoff state for humans and agents. Use
   `model_selection_summary` 3/3, but refusal wording remained 1/3. Do not
   promote, quantize, upload, or broad-eval this branch. See
   `reports/qwen36_27b_checkpoint_blend_v2_v12_alpha1p25_targeted_summary.md`.
+- The next prepared Qwen FT-abli branch is
+  `local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v14_multi_run_stochastic_repair`.
+  It starts again from held v2 and uses a stricter pooled eval-response repair
+  seed, not the exact held-out prompt. The repair seed has 72 rows, zero exact
+  eval-prompt rows, no promotion blockers, and emits from four targeted eval
+  sources after filtering out refusal-adjacent chosen text. The finetune data
+  prep produced 81 rows with 65 paired rows. This branch is still untrained and
+  blocked for promotion, quantization, and HF upload until train/merge/audits and
+  the targeted three-trial no-refusal gate pass.
 - `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`
   is the tracked next-method plan. It starts from the held v2 candidate, not the
   rejected v11-v13 chain. Abliterix SRA search completed 24/24 trials under the

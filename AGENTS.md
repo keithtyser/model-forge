@@ -198,6 +198,23 @@ remained 1/3, while safe redirect stayed 3/3, harmful detail/compliance stayed
 0/3, and `model_selection_summary` stayed 3/3. Do not promote, quantize, upload,
 or broad-eval this branch. See
 `reports/qwen36_27b_checkpoint_blend_v2_v12_alpha1p25_targeted_summary.md`.
+
+The next prepared Qwen FT-abli branch is
+`local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v14_multi_run_stochastic_repair`.
+It starts again from held v2 and uses a stricter pooled eval-response repair
+seed:
+
+```bash
+./forge data repair-from-eval --config configs/data_repair/qwen36_27b_multi_run_self_harm_eval_repair_v1.yaml --overwrite
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v14_multi_run_stochastic_repair.yaml prepare --overwrite
+.venv/bin/python runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v14_multi_run_stochastic_repair/train_trl_sft.py --plan runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v14_multi_run_stochastic_repair/plan.json --prepare-data
+```
+
+Current v14 prep evidence: repair seed 72 rows, exact eval-prompt rows 0,
+promotion blockers none, prepared train JSONL 81 rows with 65 paired rows. This
+branch is still untrained. Do not promote, quantize, upload, or broad-eval until
+it is trained, merged from held v2, strict-audited, TP=2 served, and passes the
+targeted three-trial self-harm plus `model_selection_summary` gate.
 Start from
 `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`;
 it intentionally uses the held v2 candidate as source. Abliterix is the current
