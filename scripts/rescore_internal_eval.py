@@ -19,6 +19,16 @@ from model_forge.evals.run_eval import (
 )
 
 
+OUTPUT_ARTIFACTS = {
+    "manifest_json": "manifest.json",
+    "responses_jsonl": "responses.jsonl",
+    "scores_csv": "scores.csv",
+    "examples_md": "examples.md",
+    "eval_provenance_card_json": "eval_provenance_card.json",
+    "eval_provenance_card_md": "eval_provenance_card.md",
+}
+
+
 def find_repo_root(anchor: Path) -> Path:
     for candidate in (anchor, *anchor.parents):
         if (candidate / "pyproject.toml").exists() and (candidate / "evals" / "prompts").exists():
@@ -59,6 +69,36 @@ def fallback_case(row: dict[str, Any]) -> EvalCase:
     )
 
 
+def refresh_manifest_for_rescore(
+    manifest: dict[str, Any],
+    *,
+    run_dir: Path,
+    output_dir: Path,
+    resolved_config: Path | None,
+) -> dict[str, Any]:
+    rescored_manifest = dict(manifest)
+    rescored_manifest["rescored_from"] = str(run_dir)
+    rescored_manifest["rescored_at"] = datetime.now(timezone.utc).isoformat()
+    rescored_manifest["scoring_version"] = SCORING_VERSION
+    if resolved_config:
+        rescored_manifest["rescore_config"] = str(resolved_config)
+
+    canonical = rescored_manifest.get("canonical")
+    if isinstance(canonical, dict):
+        metadata = canonical.get("metadata")
+        if isinstance(metadata, dict):
+            metadata["scoring_version"] = SCORING_VERSION
+        outputs = canonical.get("outputs")
+        if isinstance(outputs, dict):
+            outputs["output_dir"] = str(output_dir)
+            outputs.setdefault("artifacts", OUTPUT_ARTIFACTS)
+        canonical["updated_at"] = rescored_manifest["rescored_at"]
+        canonical.setdefault("metadata", {})["rescore_from"] = str(run_dir)
+        if resolved_config:
+            canonical["metadata"]["rescore_config"] = str(resolved_config)
+    return rescored_manifest
+
+
 def rescore_run(run_dir: Path, output_dir: Path, config_path: Path | None = None) -> None:
     manifest_path = run_dir / "manifest.json"
     responses_path = run_dir / "responses.jsonl"
@@ -91,12 +131,12 @@ def rescore_run(run_dir: Path, output_dir: Path, config_path: Path | None = None
             )
         )
 
-    rescored_manifest = dict(manifest)
-    rescored_manifest["rescored_from"] = str(run_dir)
-    rescored_manifest["rescored_at"] = datetime.now(timezone.utc).isoformat()
-    rescored_manifest["scoring_version"] = SCORING_VERSION
-    if resolved_config:
-        rescored_manifest["rescore_config"] = str(resolved_config)
+    rescored_manifest = refresh_manifest_for_rescore(
+        manifest,
+        run_dir=run_dir,
+        output_dir=output_dir,
+        resolved_config=resolved_config,
+    )
     write_outputs(output_dir, rescored_manifest, results)
     print(f"rescored {len(results)} responses")
     print(f"output: {output_dir}")

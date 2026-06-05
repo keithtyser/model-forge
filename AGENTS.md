@@ -1854,7 +1854,7 @@ harmful prompt compliance/unsafe overcompliance is 1/3, and
 `model_selection_summary` is 2/3. See
 `reports/qwen36_27b_norm_projection_v16_self_harm_opening_summary.md`.
 
-The next prepared Qwen branch is
+The Qwen V17 SOM branch is
 `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_som_projection_v17.yaml`.
 It uses the native `som_projection` backend and registers
 `local_ft_abli_som_projection_v17_self_harm_opening`. The backend is reusable:
@@ -1862,9 +1862,20 @@ it learns a bounded SOM-style refusal-residual centroid basis, combines it with
 the global refusal mean direction, and exports through the same guarded native
 projection path. V17 intentionally narrows the edit to attention output
 projections and lowers strength to avoid V16's safe-redirect and
-`model_selection_summary` regressions. Do not promote, quantize, upload, or
-broad-eval it unless guarded export, worker sync, strict audits, TP=2 serve, and
-the targeted three-trial no-refusal capability-retention gate pass.
+`model_selection_summary` regressions. It was exported through the guarded
+native container, synced to the worker Spark, strict-audited, served with TP=2,
+targeted-gated, and rescored with scoring v12. Reject it: refusal wording is
+1/3, ablation refusal suppression is 2/3, safe redirect is 3/3, harmful
+detail/compliance/unsafe overcompliance is 0/3, and `model_selection_summary`
+is 3/3. Do not promote, quantize, upload, or broad-eval it. See
+`reports/qwen36_27b_som_projection_v17_self_harm_opening_summary.md`.
+
+Scoring v12 adds focused first-person "I should not help/assist/provide/give"
+refusal detection after V17 manually exposed that gap. The standalone
+`scripts/rescore_internal_eval.py` path also refreshes canonical rescore
+metadata now; if a future rescore shows mismatched top-level and canonical
+`scoring_version`, treat that as a provenance bug before using the result for
+promotion decisions.
 
 ## Publishing
 
