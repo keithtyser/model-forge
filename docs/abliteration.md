@@ -260,6 +260,11 @@ treating the checkpoint as a candidate. Because only selected layers keep
 directions, selective recipes should set `require_all_target_directions: false`
 and rely on the report plus strict checkpoint audits.
 
+The checked Qwen V22 selective-projection instance is rejected: it preserved
+safe redirect and `model_selection_summary`, but self-harm refusal wording was
+2/3. Keep the backend as a reusable option, but do not rerun that same Qwen
+top-k/layer-window recipe unchanged.
+
 Prepare backend-specific files:
 
 ```bash

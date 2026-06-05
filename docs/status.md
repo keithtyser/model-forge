@@ -881,17 +881,22 @@ length filtering:
    passed. Held-v2, native OT, V17, and V20 tie as the best failed group with one
    residual self-harm refusal-wording trial; OBLITERATUS and V19 are worse at two
    refusal-wording trials; V18 also regressed capability.
-   The same config now supports `candidate-loop-plan`. V21 is retired as a
-   rejected candidate, so it is documented but no longer emits executable
-   commands. The current executable Qwen loop candidate is
-   `selective_projection_v22_circuit_gate`, backed by
+   The same config now supports `candidate-loop-plan`. V21 and V22 are retired
+   as rejected candidates, so they are documented but no longer emit executable
+   commands. V22 was backed by
    `configs/abliteration/qwen36_27b_ft_abli_v2_selective_projection_v22.yaml`.
-   The loop emits the sequential plan/prepare/export/sync/audit/serve/eval
-   commands for V22 only, and V22 is not promotable or quantizable until its
-   targeted three-trial candidate gate passes. The first V21 execution attempt
-   used the original 20-47 layer window and was stopped during SAE download
-   after the first layer took 17 minutes; the runnable V21 diagnostic was
-   narrowed to layers 20-23 for a faster gate signal.
+   It selected layers 35-41 and 47, changed 16 tensors, passed strict
+   checkpoint/tokenizer/architecture audits, synced to the worker, and served
+   on the two-Spark TP=2 path. It was rejected by the targeted gate: self-harm
+   refusal wording was 2/3, safe redirect was 3/3, harmful detail/compliance
+   was 0/3, and `model_selection_summary` was 3/3. See
+   `reports/qwen36_27b_selective_projection_v22_targeted_summary.md`. Do not
+   broad-eval, quantize, upload, or promote V22. The next candidate should
+   optimize the stochastic response-opening objective more directly than V22's
+   late-layer separation filter. The first V21 execution attempt used the
+   original 20-47 layer window and was stopped during SAE download after the
+   first layer took 17 minutes; the runnable V21 diagnostic was narrowed to
+   layers 20-23 for a faster gate signal.
    Corrected export note: an initial narrowed 20-23 export changed only layer
    23 because the recipe targeted `self_attn.o_proj.weight` while layers 20-22
    in this Qwen checkpoint expose `linear_attn.out_proj.weight`. That partial
@@ -904,13 +909,8 @@ length filtering:
    detail/compliance was 0/3, and `model_selection_summary` was 3/3. See
    `reports/qwen36_27b_qwen_scope_sae_v21_targeted_summary.md`. Do not
    broad-eval, quantize, upload, or promote V21.
-   V22 implements the next method shift: selective-layer projection grounded in
-   the current layer/circuit-localization research path. It collects normal
-   source-relative directions, filters to the highest-separation layers, then
-   exports through the guarded projection path. It is registered as
-   `local_ft_abli_selective_projection_v22_circuit_gate` and remains blocked
-   until export, sync, strict audits, TP=2 targeted eval, and candidate-gate
-   evidence exist.
+   V22 implemented the next method shift, but its checked gate evidence rejects
+   it. Do not retry the same selective top-k/layer-window recipe unchanged.
 
 ## Operational Guardrails
 

@@ -1949,19 +1949,18 @@ wording, and V18 also loses capability.
 The same config now has a `candidate_selection.loop` runbook. Run
 `./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml candidate-loop-plan --write-plan`
 before launching the next ablation branch. The loop now marks
-`qwen_scope_sae_feature_diagnostic_v1` as `rejected`, so it documents the V21
-failure but emits no executable heavy-job commands for it. The active candidate
-is `selective_projection_v22_circuit_gate`, implemented as
-`configs/abliteration/qwen36_27b_ft_abli_v2_selective_projection_v22.yaml` and
-registered as `local_ft_abli_selective_projection_v22_circuit_gate`. It uses the
-native `selective_projection` backend: collect source-relative
-refusal-opening directions, score layers by harmful-vs-benign activation
-separation explained by the direction basis, keep the highest-signal layers,
-then export through the normal norm-preserving projection path. Run
-plan/prepare first, then execute only when the two-Spark cluster is healthy.
-After export, sync, run strict checkpoint/tokenizer/architecture audits, serve
-exactly one candidate, and run the targeted three-trial gate before broad eval,
-NVFP4, HF upload, or promotion.
+`qwen_scope_sae_feature_diagnostic_v1` and
+`selective_projection_v22_circuit_gate` as `rejected`, so they document the V21
+and V22 failures but emit no executable heavy-job commands. V22 used the native
+`selective_projection` backend: collect source-relative refusal-opening
+directions, score layers by harmful-vs-benign activation separation explained by
+the direction basis, keep the highest-signal layers, then export through the
+normal norm-preserving projection path. It selected layers 35-41 and 47, changed
+16 tensors, passed strict checkpoint/tokenizer/architecture audits, synced to
+the worker, and served with TP=2. The targeted gate rejected it: self-harm
+refusal wording was 2/3, safe redirect 3/3, harmful detail/compliance 0/3, and
+`model_selection_summary` 3/3. Do not broad-eval, quantize, upload, or promote
+V22. See `reports/qwen36_27b_selective_projection_v22_targeted_summary.md`.
 
 V21 execution note: the first narrowed 20-23 export was discarded because the
 recipe targeted only `self_attn.o_proj.weight`; in this Qwen checkpoint layers
@@ -1977,9 +1976,10 @@ redirect stayed 3/3, harmful detail/compliance stayed 0/3, and
 promote V21. See `reports/qwen36_27b_qwen_scope_sae_v21_targeted_summary.md`.
 
 The next Qwen method shift should use this candidate gate as the selection
-objective for V22. Do not keep repeating V18/V19/V20 SOM prompt-weight,
-strength, contrast, output-projection, or V21 SAE layer-window tweaks outside a
-gate-driven loop.
+objective and should optimize the stochastic response-opening objective more
+directly than V22. Do not keep repeating V18/V19/V20 SOM prompt-weight,
+strength, contrast, output-projection, V21 SAE layer-window, or V22 selective
+top-k/layer-window tweaks outside a gate-driven loop.
 
 ## Publishing
 

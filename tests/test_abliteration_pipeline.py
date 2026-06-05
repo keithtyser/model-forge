@@ -1160,7 +1160,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("linear_attn.out_proj.weight", native_config["edit"]["target_weight_suffixes"])
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 24)
 
-    def test_candidate_loop_skips_rejected_v21_and_emits_v22(self) -> None:
+    def test_candidate_loop_skips_rejected_v21_and_v22(self) -> None:
         config_path = (
             REPO_DIR
             / "configs"
@@ -1177,8 +1177,13 @@ class AbliterationPlanTests(unittest.TestCase):
             command.get("enabled", True)
             for command in candidates["qwen_scope_sae_feature_diagnostic_v1"]["commands"]
         ))
-        self.assertFalse(candidates["selective_projection_v22_circuit_gate"]["blockers"])
-        self.assertIn("selective_projection_v22_circuit_gate", plan["candidate_gate_command"])
+        self.assertTrue(candidates["selective_projection_v22_circuit_gate"]["blockers"])
+        self.assertFalse(any(
+            command.get("enabled", True)
+            for command in candidates["selective_projection_v22_circuit_gate"]["commands"]
+        ))
+        self.assertEqual(plan["executable_candidate_count"], 0)
+        self.assertIn("implement or unblock a candidate", plan["candidate_gate_command"])
 
     def test_optimal_transport_sota_run_uses_guarded_native_runner(self) -> None:
         config_path = (
