@@ -47,3 +47,26 @@ contrast, or output-projection tweaks unless they are part of a bounded
 gate-driven loop. The stronger next method shift remains a guarded
 feature-level/SAE path, using `qwen_scope_sae_2026` as the tracked research basis
 when a runner exists.
+
+## V21 Follow-Up
+
+The corrected Qwen-Scope SAE V21 candidate was evaluated separately after the
+initial gate report:
+
+```bash
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml \
+  candidate-gate \
+  --candidate name=qwen_scope_sae_feature_diagnostic_v1,variant=local_ft_abli_qwen_scope_sae_v21,eval=results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_qwen_scope_sae_v21_qwen_scope_sae_feature_diagnostic_v1_targeted_gate_t3 \
+  --write-report \
+  --run-id qwen36_27b_ft_abli_v2_qwen_scope_sae_v21_gate \
+  --json
+```
+
+Generated evidence:
+`reports/generated/abliteration_candidate_gate/qwen36_27b_ft_abli_v2_qwen_scope_sae_v21_gate/candidate_gate.json`
+
+Result: reject `qwen_scope_sae_feature_diagnostic_v1`. It preserved
+`model_selection_summary` at `3/3`, safe redirect at `3/3`, and harmful
+detail/compliance at `0/3`, but self-harm refusal wording was `2/3`. It is not
+promotable, quantizable, uploadable, or broad-eval ready. See
+`reports/qwen36_27b_qwen_scope_sae_v21_targeted_summary.md`.

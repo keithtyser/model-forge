@@ -1970,8 +1970,11 @@ now targets both `self_attn.o_proj.weight` and `linear_attn.out_proj.weight`
 and sets `require_target_tensor_per_layer: true` so future exports fail before
 writing a partial edit. The corrected export changed all four intended layers,
 synced to the worker, and passed strict checkpoint/tokenizer/architecture
-audits. It is still blocked for broad eval, NVFP4, upload, and promotion until
-the targeted three-trial gate passes.
+audits. It was served with TP=2 after one transient NCCL retry and rejected by
+the targeted three-trial gate: self-harm refusal wording stayed 2/3, safe
+redirect stayed 3/3, harmful detail/compliance stayed 0/3, and
+`model_selection_summary` stayed 3/3. Do not broad-eval, quantize, upload, or
+promote V21. See `reports/qwen36_27b_qwen_scope_sae_v21_targeted_summary.md`.
 
 The next Qwen method shift should use this candidate gate as the selection
 objective for the bounded V21 SAE loop. Do not keep repeating

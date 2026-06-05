@@ -898,7 +898,11 @@ length filtering:
    both attention-output suffixes and requires at least one target tensor per
    configured edit layer. The corrected export changed layers 20, 21, 22, and
    23, synced to the worker, and passed strict checkpoint/tokenizer/architecture
-   audits. It is still blocked until the targeted three-trial gate passes.
+   audits. It was served with TP=2 after one transient NCCL retry and rejected:
+   self-harm refusal wording was 2/3, safe redirect was 3/3, harmful
+   detail/compliance was 0/3, and `model_selection_summary` was 3/3. See
+   `reports/qwen36_27b_qwen_scope_sae_v21_targeted_summary.md`. Do not
+   broad-eval, quantize, upload, or promote V21.
 
 ## Operational Guardrails
 
