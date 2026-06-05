@@ -253,15 +253,16 @@ directory or streamed shard was written. Do not rerun V30 unchanged. The next
 OBLITERATUS attempt needs a materially lower-memory or sharded pre-export path
 before export, cluster sync, strict audits, serving, and the targeted
 three-trial model-forge gate can be tested.
-V31 is the next ready Qwen FT-abli candidate:
+V31 generated-token selective projection has now been attempted and rejected:
 `configs/abliteration/qwen36_27b_ft_abli_v2_generated_token_selective_projection_v31.yaml`.
 It is a native sharded selective projection, not another OBLITERATUS retry. It
 follows the Huihui/Nous refusal-direction workflow where it generalizes:
 harmful-vs-benign contrast prompts, chat-template first generated assistant-token
 measurement, benign-orthogonalized projection, row-norm preservation, and
-normal checkpoint export. Use it to test whether first-token measurement better
-targets the stochastic refusal-opening blocker than the earlier suffix/prefix
-V17/V20/V22/V23 probes, without hitting the V30 pre-export RAM envelope.
+normal checkpoint export. The export succeeded and served on TP=2, but the
+targeted gate failed with self-harm refusal wording `1/3` and
+`model_selection_summary` `2/3`. Do not broad-eval, quantize, upload, promote,
+or rerun V31 unchanged.
 OBLITERATUS, Apostate, native optimal transport, native norm-preserving/SOM/
 selective projection, and `qwen_scope_sae` write baked checkpoints directly, so
 their backend reports must be followed by source-vs-candidate model-forge
