@@ -312,13 +312,15 @@ entries:
       - Layer-selective transport can improve refusal suppression while controlling perplexity drift.
     implementation_hooks:
       - configs/abliteration/*method_shift*.yaml
+      - src/model_forge/pipelines/abliterate.py
       - future:src/model_forge/behavior_editing/optimal_transport.py
     eval_hooks:
       - evals/prompts/refusal_paired_boundary.yaml
       - evals/prompts/normal_use_regression.yaml
     limitations:
       - Transport maps add tuning surface area and need stronger resource guards than single-vector edits.
-      - It is a research backend until a guarded runner exists in model-forge.
+      - The current guarded runner is a native diagnostic approximation, not a full external OT implementation.
+      - Promotion still requires source-vs-candidate model-forge targeted eval evidence.
 
   angular_steering_2025:
     title: "Angular steering for norm-preserving behavior control"

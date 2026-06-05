@@ -167,18 +167,19 @@ method-shift backends:
 - `obliteratus`: guarded advanced baked checkpoint backend
 - `apostate`: guarded preservation-direction baked checkpoint backend
 - `sra`: surgical refusal ablation / concept-preserving direction cleanup
-- `optimal_transport`: distributional activation transport candidate
+- `optimal_transport`: native guarded diagnostic for distributional activation
+  transport-style checkpoint edits
 
-Standalone `sra` and `optimal_transport` remain plan-only until guarded
-model-forge runners exist. OBLITERATUS, Apostate, and Abliterix now have guarded
-execution paths. Abliterix first runs in non-interactive search-only mode; it writes an
-Optuna journal and exits without exporting a checkpoint. Use
+Standalone `sra` remains plan-only until a guarded model-forge runner exists.
+OBLITERATUS, Apostate, Abliterix, and the native optimal-transport diagnostic
+now have guarded execution paths. Abliterix first runs in non-interactive
+search-only mode; it writes an Optuna journal and exits without exporting a checkpoint. Use
 `abliterix-search-analyze` before `abliterix-export` for a selected trial.
-OBLITERATUS and Apostate write baked checkpoints directly, so their backend
-reports must be followed by source-vs-candidate model-forge targeted evals
-before any broader eval, quantization, promotion, or upload. The contract is the
-same for every backend: one large model job at a time, source checkpoint audit,
-CPU/RAM/disk caps, targeted internal eval before broader eval, and
+OBLITERATUS, Apostate, and native optimal-transport write baked checkpoints
+directly, so their backend reports must be followed by source-vs-candidate
+model-forge targeted evals before any broader eval, quantization, promotion, or
+upload. The contract is the same for every backend: one large model job at a
+time, source checkpoint audit, CPU/RAM/disk caps, targeted internal eval before broader eval, and
 source-relative promotion gates.
 
 Prepare backend-specific files:
@@ -253,6 +254,33 @@ refusals and KL but not the baseline refusal count; in that case
 `abliterix-search-analyze` can still recommend preparing an export runner, but
 the required next gate must compare the source checkpoint against the exported
 checkpoint with model-forge targeted internal evals.
+
+For native optimal-transport recipes, `sota-prepare --backend
+optimal_transport` writes three artifacts under the backend work directory:
+
+- `model_forge_native_prompt_pairs/`: source-relative harmful/benign prompt
+  text files and manifest
+- `native_optimal_transport_config.yaml`: the derived model-forge
+  `collect`/`export` config
+- `run_native_optimal_transport.py`: the guarded runner
+
+Run it through:
+
+```bash
+MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 \
+MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 \
+./forge ablate --config <config.yaml> sota-run --backend optimal_transport --execute
+```
+
+This path approximates activation transport with multi-component
+whitened-paired-SVD directions and a norm-preserving baked projection. `sota-run`
+launches the generated runner through `scripts/run_native_checkpoint_scope.sh`,
+which applies `systemd-run --scope` CPU/RAM/IO limits when available and falls
+back to `nice` with one-core headroom. It is a diagnostic method-shift backend,
+not promotion evidence. After export, register the checkpoint if needed, run
+strict checkpoint/tokenizer/architecture audits, then run the
+source-vs-candidate targeted gate before broader evals, quantization, upload, or
+family promotion.
 
 For Apostate recipes with `container_image` set, first build the backend image:
 

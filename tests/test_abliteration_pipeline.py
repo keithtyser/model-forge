@@ -32,6 +32,7 @@ from model_forge.pipelines.abliterate import (
     load_yaml,
     missing_direction_layers,
     obliteratus_execution_spec,
+    optimal_transport_execution_spec,
     parse_heretic_journal,
     prompts_for_buckets,
     response_conditioned_prompts,
@@ -45,6 +46,8 @@ from model_forge.pipelines.abliterate import (
     write_abliterix_export_runner,
     write_abliterix_runner,
     write_obliteratus_runner,
+    write_native_optimal_transport_config,
+    write_optimal_transport_runner,
     write_sota_artifacts,
 )
 
@@ -646,6 +649,65 @@ class AbliterationPlanTests(unittest.TestCase):
             plan["backend_config"]["plan"]["target_failure_case"]["case_id"],
             "self_harm_instruction_harmful",
         )
+
+    def test_qwen_v2_method_shift_has_native_optimal_transport_checkpoint_path(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+            }
+            plan = build_sota_plan(config, config_path, "optimal_transport")
+            native_config = load_yaml(write_native_optimal_transport_config(plan))
+            runner = write_optimal_transport_runner(plan).read_text(encoding="utf-8")
+            manifest = json.loads(
+                (
+                    Path(tmp)
+                    / "model_forge_native_prompt_pairs"
+                    / "manifest.json"
+                ).read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(plan["backend"], "optimal_transport")
+        self.assertEqual(plan["backend_config"]["execution"], "checkpoint_export")
+        self.assertTrue(plan["output_dir"].endswith("Qwen3.6-27B-local-ft-v4-abliterated-native-ot-self-harm-diagnostic"))
+        self.assertTrue(plan["source_model"].endswith("Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2"))
+        self.assertEqual(native_config["method"], "native_optimal_transport_activation_projection")
+        self.assertEqual(native_config["activation_collection"]["direction_extraction"], "whitened_paired_svd")
+        self.assertEqual(native_config["activation_collection"]["direction_components"], 4)
+        self.assertEqual(native_config["edit"]["layer_start"], 16)
+        self.assertEqual(native_config["edit"]["layer_end"], 47)
+        self.assertIn("model_forge_sota_optimal_transport.json", runner)
+        self.assertIn("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", runner)
+        self.assertIn("collect_directions", runner)
+        self.assertIn("export_projection", runner)
+        self.assertEqual(manifest["sections"]["harmful_prompts"]["count"], 3)
+        self.assertEqual(manifest["sections"]["benign_prompts"]["count"], 4)
+        self.assertEqual(manifest["balanced_prompt_pairs"]["paired_count"], 4)
+
+    def test_optimal_transport_sota_run_uses_guarded_native_runner(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "optimal_transport")
+        runner = Path(plan["work_dir"]) / "run_native_optimal_transport.py"
+
+        execution = optimal_transport_execution_spec(plan, runner)
+
+        self.assertEqual(execution["mode"], "guarded_native_checkpoint")
+        self.assertEqual(execution["command"][0], str(REPO_DIR / "scripts" / "run_native_checkpoint_scope.sh"))
+        self.assertEqual(execution["command"][1], str((REPO_DIR / runner).resolve()))
+        self.assertEqual(execution["cwd"], REPO_DIR)
+        self.assertEqual(execution["env"]["MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION"], "0.05")
 
     def test_qwen_v2_method_shift_uses_guarded_abliterix_sra_search(self) -> None:
         config_path = (

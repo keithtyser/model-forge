@@ -39,6 +39,12 @@ APOSTATE_EXECUTIONS = {
     "baked_checkpoint",
 }
 
+NATIVE_OPTIMAL_TRANSPORT_EXECUTIONS = {
+    "checkpoint_export",
+    "guarded_checkpoint",
+    "baked_checkpoint",
+}
+
 APOSTATE_CONFIG_FIELDS = {
     "activation_cache_dir",
     "adaptive_trials",
@@ -868,13 +874,14 @@ def sota_config(config: dict[str, Any]) -> dict[str, Any]:
                 ),
             },
             "optimal_transport": {
-                "install": "external OT refusal-ablation implementation required",
+                "install": "native model-forge checkpoint runner",
                 "method_family": "optimal_transport_refusal_ablation",
                 "execution": "plan_only",
                 "notes": (
                     "Optimal-transport refusal ablation maps harmful activations "
                     "toward harmless activations instead of deleting one direction. "
-                    "Add a guarded runner before executing large model edits."
+                    "Use checkpoint_export only with a narrow, source-relative "
+                    "prompt materialization and a targeted gate."
                 ),
             },
         },
@@ -898,19 +905,22 @@ def build_sota_plan(config: dict[str, Any], config_path: Path, backend: str | No
     if selected not in backends:
         raise SystemExit(f"unknown SOTA backend {selected!r}; valid backends: {', '.join(sorted(backends))}")
     model_cfg = plan["model"]
+    selected_backend = backends[selected]
     source = resolve_model_source(model_cfg["local_dir"] or model_cfg["source"])
-    output_dir = resolve_repo_path(sota.get("output_dir") or model_cfg["output_dir"])
+    output_dir = resolve_repo_path(selected_backend.get("output_dir") or sota.get("output_dir") or model_cfg["output_dir"])
     work_dir = resolve_repo_path(sota.get("work_dir", Path(config.get("artifacts_dir", "artifacts/abliteration/sota")) / "sota"))
     return {
         "name": plan["name"],
         "backend": selected,
+        "config_path": str(config_path),
         "source_model": source,
         "output_dir": str(output_dir),
         "work_dir": str(work_dir),
-        "backend_config": backends[selected],
-        "install": backends[selected].get("install"),
+        "backend_config": selected_backend,
+        "install": selected_backend.get("install"),
         "license_notice": sota.get("license_notice"),
         "all_backends": backends,
+        "model_forge_plan": plan,
     }
 
 
@@ -2234,6 +2244,346 @@ def materialize_model_forge_heretic_prompts(plan: dict[str, Any], backend: dict[
     (dataset_root / "manifest.json").write_text(json.dumps(summary, indent=2) + "\n")
 
 
+def materialize_native_prompt_pair_files(plan: dict[str, Any], backend: dict[str, Any], work_dir: Path) -> dict[str, Any] | None:
+    spec = backend.get("model_forge_prompt_datasets")
+    if spec is None:
+        return None
+    dataset_root = work_dir / "model_forge_native_prompt_pairs"
+    defaults = {
+        "good_train_buckets": [
+            "agentic_multi_step_planning",
+            "agentic_tool_use_json",
+            "agentic_self_critique",
+            "agentic_structured_extraction",
+            "agentic_code_debug",
+            "reasoning_style_stability",
+            "refusal_benign_boundary",
+            "refusal_calibration_benign",
+            "normal_use_regression",
+            "capability_preservation_challenge",
+        ],
+        "bad_train_buckets": [
+            "unsafe_overcompliance",
+            "refusal_calibration_unsafe",
+            "refusal_paired_boundary",
+        ],
+        "balance_prompt_pairs": True,
+    }
+    if isinstance(spec, dict):
+        defaults.update({key: value for key, value in spec.items() if value is not None})
+    sections = {
+        "harmful_prompts": {
+            "file": "harmful_train.txt",
+            "prefix": "bad_train",
+            "buckets": list(defaults["bad_train_buckets"]),
+            "case_ids": normalize_case_id_filter(defaults.get("bad_train_case_ids")),
+            "should_refuse": True,
+        },
+        "benign_prompts": {
+            "file": "benign_train.txt",
+            "prefix": "good_train",
+            "buckets": list(defaults["good_train_buckets"]),
+            "case_ids": normalize_case_id_filter(defaults.get("good_train_case_ids")),
+            "should_refuse": False,
+        },
+    }
+    prompts_by_key: dict[str, list[str]] = {}
+    summary: dict[str, Any] = {"source": "model_forge_eval_prompts", "sections": {}}
+    for key, section in sections.items():
+        prefix = str(section["prefix"])
+        prompts = prompts_for_buckets(
+            list(section["buckets"]),
+            should_refuse=bool(section["should_refuse"]),
+            case_ids=section["case_ids"],
+        )
+        response_summary = None
+        if isinstance(spec, dict):
+            response_prompts, response_summary = response_conditioned_section_prompts(spec, prefix)
+            prompts = [*prompts, *response_prompts]
+            extra_prompts = normalize_extra_prompts(spec.get(f"{prefix}_extra_prompts"), prefix=prefix)
+            prompts = [*prompts, *extra_prompts]
+            prompts, variant_summary = apply_prompt_variants(
+                prompts,
+                spec.get(f"{prefix}_prompt_variants"),
+                prefix=prefix,
+            )
+        else:
+            extra_prompts = []
+            variant_summary = None
+        materialized_prompts = [prompt for prompt in (str(item).strip() for item in prompts) if prompt]
+        if not materialized_prompts:
+            raise SystemExit(f"no native prompt-pair rows materialized for {key}")
+        prompts_by_key[key] = materialized_prompts
+        summary["sections"][key] = {
+            "count": len(materialized_prompts),
+            "buckets": list(section["buckets"]),
+            "case_ids": sorted(section["case_ids"]) if section["case_ids"] is not None else None,
+        }
+        if response_summary is not None:
+            summary["sections"][key]["response_conditioned"] = response_summary
+        if extra_prompts:
+            summary["sections"][key]["extra_prompts"] = {"count": len(extra_prompts)}
+        if variant_summary is not None:
+            summary["sections"][key]["prompt_variants"] = variant_summary
+
+    harmful = prompts_by_key["harmful_prompts"]
+    benign = prompts_by_key["benign_prompts"]
+    if bool(defaults.get("balance_prompt_pairs", True)) and len(harmful) != len(benign):
+        target_len = max(len(harmful), len(benign))
+        prompts_by_key["harmful_prompts"] = [harmful[index % len(harmful)] for index in range(target_len)]
+        prompts_by_key["benign_prompts"] = [benign[index % len(benign)] for index in range(target_len)]
+        summary["balanced_prompt_pairs"] = {
+            "enabled": True,
+            "harmful_before": len(harmful),
+            "benign_before": len(benign),
+            "paired_count": target_len,
+        }
+    else:
+        summary["balanced_prompt_pairs"] = {
+            "enabled": bool(defaults.get("balance_prompt_pairs", True)),
+            "paired_count": min(len(harmful), len(benign)),
+        }
+
+    dataset_root.mkdir(parents=True, exist_ok=True)
+    paths = {
+        "harmful_prompts": dataset_root / "harmful_train.txt",
+        "benign_prompts": dataset_root / "benign_train.txt",
+    }
+    for key, path in paths.items():
+        save_text_prompt_file(path, prompts_by_key[key])
+        summary["sections"][key]["path"] = str(path)
+        summary["sections"][key]["count_after_balance"] = len(prompts_by_key[key])
+    manifest_path = dataset_root / "manifest.json"
+    manifest_path.write_text(json.dumps(summary, indent=2) + "\n")
+    return {
+        "harmful_prompts": str(paths["harmful_prompts"]),
+        "benign_prompts": str(paths["benign_prompts"]),
+        "manifest": str(manifest_path),
+        "paired_count": int(summary["balanced_prompt_pairs"]["paired_count"]),
+    }
+
+
+def write_native_optimal_transport_config(plan: dict[str, Any]) -> Path:
+    backend = plan["backend_config"]
+    work_dir = Path(plan["work_dir"])
+    work_dir.mkdir(parents=True, exist_ok=True)
+    prompt_files = materialize_native_prompt_pair_files(plan, backend, work_dir)
+    base_plan = plan["model_forge_plan"]
+    activation = json.loads(json.dumps(base_plan["activation_collection"]))
+    for key in (
+        "batch_size",
+        "max_pairs",
+        "max_seq_len",
+        "token_position",
+        "direction_extraction",
+        "direction_components",
+        "direction_source_layer",
+        "replicate_source_direction",
+        "use_chat_template",
+        "winsorize_quantile",
+        "harmful_suffix",
+        "benign_suffix",
+        "layer_skip_first",
+        "layer_skip_last",
+    ):
+        if key in backend:
+            activation[key] = backend[key]
+    activation["direction_extraction"] = backend.get("direction_extraction", "whitened_paired_svd")
+    activation["direction_components"] = int(backend.get("direction_components", 4))
+    activation["max_pairs"] = int(backend.get("max_pairs", prompt_files["paired_count"] if prompt_files else activation["max_pairs"]))
+
+    edit = {
+        "mode": "projection",
+        "direction_transform": "biprojection",
+        "norm_preserve": True,
+        "strength": 1.0,
+        "module_strengths": {
+            "self_attn.o_proj.weight": 1.0,
+            "mlp.down_proj.weight": 1.0,
+        },
+        "layer_start": 8,
+        "layer_end": 48,
+        "target_weight_suffixes": [
+            "mlp.down_proj.weight",
+            "self_attn.o_proj.weight",
+        ],
+        "leave_embeddings_untouched": True,
+        "leave_lm_head_untouched": True,
+        "leave_moe_experts_untouched": True,
+        "require_all_target_directions": True,
+        "review_required_before_export": True,
+    }
+    edit.update(base_plan.get("edit") or {})
+    edit.update(backend.get("edit") or {})
+
+    data = {
+        "harmful_prompts": base_plan["data"]["harmful_prompts"],
+        "benign_prompts": base_plan["data"]["benign_prompts"],
+    }
+    if prompt_files:
+        data["harmful_prompts"] = prompt_files["harmful_prompts"]
+        data["benign_prompts"] = prompt_files["benign_prompts"]
+
+    payload = {
+        "name": f"{plan['name']}_native_optimal_transport",
+        "method": "native_optimal_transport_activation_projection",
+        "model": {
+            "source": base_plan["model"]["source"],
+            "local_dir": plan["source_model"],
+            "output_dir": plan["output_dir"],
+            "dtype": backend.get("dtype", base_plan["model"]["dtype"]),
+            "device_map": backend.get("device_map", base_plan["model"]["device_map"]),
+            "trust_remote_code": bool(backend.get("trust_remote_code", base_plan["model"]["trust_remote_code"])),
+        },
+        "data": data,
+        "activation_collection": activation,
+        "edit": edit,
+        "safety": {
+            "require_execute_flag": True,
+            "min_free_cuda_gb": float(backend.get("min_free_cuda_gb", base_plan["safety"]["min_free_cuda_gb"])),
+            "one_model_process_at_a_time": True,
+        },
+        "artifacts_dir": str(work_dir / "native_optimal_transport"),
+        "native_backend": {
+            "backend": "optimal_transport",
+            "method_family": backend.get("method_family", "optimal_transport_refusal_ablation"),
+            "execution": backend.get("execution"),
+            "prompt_manifest": prompt_files["manifest"] if prompt_files else None,
+            "source_config": plan["config_path"],
+            "source_model": plan["source_model"],
+            "output_dir": plan["output_dir"],
+            "next_gate": "Run model-forge source-vs-candidate targeted eval before broader evals, quantization, promotion, or upload.",
+        },
+    }
+    config_path = work_dir / "native_optimal_transport_config.yaml"
+    config_path.write_text(yaml.safe_dump(payload, sort_keys=False))
+    return config_path
+
+
+def write_optimal_transport_runner(plan: dict[str, Any]) -> Path:
+    backend = plan["backend_config"]
+    work_dir = Path(plan["work_dir"])
+    work_dir.mkdir(parents=True, exist_ok=True)
+    config_path = write_native_optimal_transport_config(plan)
+    runner = work_dir / "run_native_optimal_transport.py"
+    summary_path = work_dir / "model_forge_sota_optimal_transport.json"
+    overwrite = bool(backend.get("overwrite_checkpoint", False))
+    script = f'''from __future__ import annotations
+
+import json
+import os
+import shutil
+from pathlib import Path
+
+from model_forge.pipelines.abliterate import (
+    build_plan,
+    collect_directions,
+    export_projection,
+    guard_execute,
+    guard_source_checkpoint,
+    load_yaml,
+)
+
+config_path = Path({str(config_path)!r})
+work_dir = Path({str(work_dir)!r})
+output_dir = Path({str(plan["output_dir"])!r})
+summary_path = Path({str(summary_path)!r})
+overwrite = {overwrite!r}
+
+
+def available_ram_fraction() -> float:
+    try:
+        values = {{}}
+        with open("/proc/meminfo", "r", encoding="utf-8") as handle:
+            for line in handle:
+                key, _, raw = line.partition(":")
+                fields = raw.strip().split()
+                if fields:
+                    values[key] = float(fields[0])
+        available = values.get("MemAvailable")
+        total = values.get("MemTotal")
+        if available is None or total in (None, 0):
+            return 1.0
+        return available / total
+    except OSError:
+        return 1.0
+
+
+def guard_system_health() -> None:
+    min_ram = float(os.environ.get("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", "0.05"))
+    ram_fraction = available_ram_fraction()
+    if ram_fraction < min_ram:
+        raise SystemExit(f"available RAM fraction {{ram_fraction:.3f}} is below guard {{min_ram:.3f}}")
+    min_disk = float(os.environ.get("MODEL_FORGE_MIN_FREE_DISK_FRACTION", "0.15"))
+    usage = shutil.disk_usage(output_dir.parent if output_dir.parent.exists() else work_dir)
+    free_fraction = usage.free / usage.total
+    if free_fraction < min_disk:
+        raise SystemExit(f"free disk fraction {{free_fraction:.3f}} is below guard {{min_disk:.3f}}")
+
+
+def reserve_cpu_headroom() -> None:
+    usable_cores = max(1, (os.cpu_count() or 2) - 1)
+    os.environ.setdefault("OMP_NUM_THREADS", str(usable_cores))
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+
+def main() -> None:
+    reserve_cpu_headroom()
+    guard_system_health()
+    config = load_yaml(config_path)
+    plan = build_plan(config, config_path)
+    guard_execute(plan, True)
+    guard_source_checkpoint(plan)
+    directions_dir = Path(config["artifacts_dir"])
+    collect_directions(config, config_path, directions_dir)
+    guard_system_health()
+    export_projection(
+        config,
+        config_path,
+        directions_path=directions_dir / "direction_artifact.pt",
+        overwrite=overwrite,
+    )
+    guard_system_health()
+    payload = {{
+        "backend": "optimal_transport",
+        "implementation": "native_optimal_transport_activation_projection",
+        "config": str(config_path),
+        "source_model": {plan["source_model"]!r},
+        "output_dir": str(output_dir),
+        "directions": str(directions_dir / "direction_artifact.pt"),
+        "overwrite": overwrite,
+        "next_step": "Run model-forge source-vs-candidate targeted eval before broader evals, quantization, promotion, or upload.",
+    }}
+    summary_path.write_text(json.dumps(payload, indent=2) + "\\n")
+    try:
+        (output_dir / "model_forge_sota_optimal_transport.json").write_text(json.dumps(payload, indent=2) + "\\n")
+    except OSError:
+        pass
+    print(f"Wrote {{summary_path}}")
+
+
+if __name__ == "__main__":
+    main()
+'''
+    runner.write_text(script)
+    return runner
+
+
+def optimal_transport_execution_spec(plan: dict[str, Any], runner: str | Path) -> dict[str, Any]:
+    runner_path = Path(runner)
+    if not runner_path.is_absolute():
+        runner_path = REPO_DIR / runner_path
+    env = dict(os.environ)
+    env.setdefault("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", "0.05")
+    env.setdefault("MODEL_FORGE_MIN_FREE_DISK_FRACTION", "0.15")
+    return {
+        "mode": "guarded_native_checkpoint",
+        "command": [str(REPO_DIR / "scripts" / "run_native_checkpoint_scope.sh"), str(runner_path)],
+        "cwd": REPO_DIR,
+        "env": env,
+    }
+
+
 def write_heretic_runner(plan: dict[str, Any]) -> Path:
     backend = plan["backend_config"]
     work_dir = Path(plan["work_dir"])
@@ -2649,6 +2999,9 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
         elif name == "apostate" and plan["backend_config"].get("execution") in APOSTATE_EXECUTIONS:
             paths["apostate_config"] = str(write_apostate_config(plan))
             paths["apostate_runner"] = str(write_apostate_runner(plan))
+        elif name == "optimal_transport" and plan["backend_config"].get("execution") in NATIVE_OPTIMAL_TRANSPORT_EXECUTIONS:
+            paths["optimal_transport_config"] = str(write_native_optimal_transport_config(plan))
+            paths["optimal_transport_runner"] = str(write_optimal_transport_runner(plan))
         elif plan["backend_config"].get("execution") == "plan_only":
             paths[f"{name}_plan"] = str(write_external_backend_plan(plan))
     readme = work_dir / "README.md"
@@ -2700,6 +3053,17 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
             "```",
             "",
             "Apostate writes a normal Transformers checkpoint. Treat its report as backend evidence only; source-vs-candidate model-forge targeted eval is still required before broader evals, quantization, promotion, or upload.",
+            "",
+        ])
+    if paths.get("optimal_transport_runner"):
+        run_sections.extend([
+            "Run native optimal-transport checkpoint export:",
+            "",
+            "```bash",
+            f"scripts/run_native_checkpoint_scope.sh {paths['optimal_transport_runner']}",
+            "```",
+            "",
+            "The native optimal-transport path materializes source-relative model-forge prompts, collects multi-component activation directions, and writes a normal Transformers checkpoint. Treat it as a candidate only after the targeted model-forge gate passes.",
             "",
         ])
     plan_only_paths = {key: value for key, value in paths.items() if key.endswith("_plan")}
@@ -3447,6 +3811,18 @@ def command_sota_run(args: argparse.Namespace) -> None:
             raise SystemExit("missing generated Apostate runner")
         execution = apostate_execution_spec(plan, runner)
         console.print(f"[bold]Apostate execution mode[/bold]: {execution['mode']}")
+        subprocess.run(
+            execution["command"],
+            cwd=execution["cwd"],
+            env=execution["env"],
+            check=True,
+        )
+    elif plan["backend"] == "optimal_transport" and plan["backend_config"].get("execution") in NATIVE_OPTIMAL_TRANSPORT_EXECUTIONS:
+        runner = result["paths"].get("optimal_transport_runner")
+        if runner is None:
+            raise SystemExit("missing generated optimal-transport runner")
+        execution = optimal_transport_execution_spec(plan, runner)
+        console.print(f"[bold]Optimal-transport execution mode[/bold]: {execution['mode']}")
         subprocess.run(
             execution["command"],
             cwd=execution["cwd"],

@@ -250,6 +250,18 @@ This is the short handoff state for humans and agents. Use
   future generated runners. See
   `reports/qwen36_27b_v2_abliterix_sra_search_summary.md` and
   `reports/qwen36_27b_method_shift_self_harm_selected_targeted_summary.md`.
+- The same method-shift config now includes a native `optimal_transport`
+  checkpoint-export diagnostic. It starts from the held v2 source, materializes
+  focused self-harm refusal-opening prompts plus preservation prompts, and
+  approximates transport with multi-component whitened paired SVD directions
+  before a narrow norm-preserving baked projection. The registered slot is
+  `local_ft_abli_native_ot_self_harm_diagnostic`, backed by
+  `~/models/Qwen3.6-27B-local-ft-v4-abliterated-native-ot-self-harm-diagnostic`.
+  This candidate has not been exported or evaluated yet. Keep promotion,
+  quantization, and HF upload blocked until checkpoint/tokenizer/architecture
+  audits pass and the same three-trial targeted gate clears zero refusal
+  wording, safe redirect 3/3, harmful detail/compliance 0/3, and
+  `model_selection_summary` 3/3.
 - `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_apostate_plan.yaml`
   was the first practical Apostate method-shift branch from held v2. It
   materialized model-forge harmful/harmless/test/preserve prompts into

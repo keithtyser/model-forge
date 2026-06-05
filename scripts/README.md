@@ -23,6 +23,10 @@ wrappers, operational helpers, or hardware-specific launchers.
   generated Abliterix non-interactive search runners and reviewed selected-trial
   export runners. Search runs do not export a checkpoint; analyze the journal
   before running `abliterix-export --execute`.
+- `run_native_checkpoint_scope.sh`: guarded host launcher for generated native
+  checkpoint-edit runners, including the native optimal-transport diagnostic.
+  It applies `systemd-run --scope` CPU/RAM/IO limits when available and falls
+  back to `nice` with one-core headroom.
 - `quantization/gemma4_moe_nvfp4.py`: lower-level ModelOpt helper used by
   `./forge quantize export` for Gemma4 full-MoE NVFP4 checkpoint creation.
 - `merge_peft_adapter.py`: PEFT adapter merge helper when live LoRA serving is
