@@ -806,10 +806,10 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(candidate["status"], "rejected")
         self.assertTrue(candidate["blockers"])
         self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertEqual(plan["planned_candidate_job_count"], 1)
+        self.assertEqual(plan["planned_candidate_job_count"], 0)
         self.assertFalse(any(command.get("enabled", False) for command in candidate["commands"]))
         self.assertFalse(gate_command["enabled"])
-        self.assertIn("Search-only candidate jobs are planned", plan["candidate_gate_command"])
+        self.assertIn("No executable candidate eval directories are planned", plan["candidate_gate_command"])
 
     def test_qwen_scope_sae_prepare_writes_guarded_runner(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml"
@@ -1370,12 +1370,11 @@ class AbliterationPlanTests(unittest.TestCase):
             for command in candidates["lm_head_refusal_token_patch_v25"]["commands"]
         ))
         self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertEqual(plan["planned_candidate_job_count"], 1)
-        self.assertFalse(candidates["abliterix_response_opening_v26"]["blockers"])
+        self.assertEqual(plan["planned_candidate_job_count"], 0)
+        self.assertTrue(candidates["abliterix_response_opening_v26"]["blockers"])
         self.assertFalse(candidates["abliterix_response_opening_v26"]["produces_checkpoint"])
-        self.assertTrue(any(
+        self.assertFalse(any(
             command.get("enabled", False)
-            and "sota-run --backend abliterix --execute" in command.get("command", "")
             for command in candidates["abliterix_response_opening_v26"]["commands"]
         ))
         self.assertFalse(any(
@@ -1383,7 +1382,7 @@ class AbliterationPlanTests(unittest.TestCase):
             and "variants checkpoint-audit" in command.get("command", "")
             for command in candidates["abliterix_response_opening_v26"]["commands"]
         ))
-        self.assertIn("Search-only candidate jobs are planned", plan["candidate_gate_command"])
+        self.assertIn("No executable candidate eval directories are planned", plan["candidate_gate_command"])
 
     def test_optimal_transport_sota_run_uses_guarded_native_runner(self) -> None:
         config_path = (

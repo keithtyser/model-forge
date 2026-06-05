@@ -341,30 +341,22 @@ V25. See `reports/qwen36_27b_lm_head_refusal_token_patch_v25_targeted_summary.md
 and
 `reports/generated/abliteration_candidate_gate/qwen36_27b_ft_abli_v2_lm_head_refusal_token_patch_v25_gate/candidate_gate.md`.
 
-V26 is the current Qwen FT-abli next candidate and is search-only:
+V26 was the next Qwen FT-abli search-only candidate and is now rejected:
 `configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml`.
 It uses single-direction Abliterix SRA/LoRA with a broader response-opening
 objective than the previous one-prompt Abliterix run: 48 bad train prompts, 48
 good train prompts, 20 bad eval prompts,
 observed refusal-opening traces from
 `datasets/abliteration/qwen36_trial12_response_conditioned_traces.jsonl`, and
-no-refusal safe redirect traces as preservation contrast. Run:
+no-refusal safe redirect traces as preservation contrast.
 
-```bash
-docker build -f docker/abliterix.Dockerfile -t model-forge-abliterix:latest .
-./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml sota-plan --backend abliterix
-./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml sota-prepare --backend abliterix
-MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 \
-  ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml sota-run --backend abliterix --execute
-./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml abliterix-search-analyze --backend abliterix --output reports/generated/qwen36_27b_v26_abliterix_response_opening_search_analysis.json
-```
-
-V26 does not produce a checkpoint until `abliterix-export` is run for one
-selected trial, so the candidate loop marks it with `produces_checkpoint:
-false`. Do not sync, serve, model-forge-eval, broad-eval, NVFP4, upload, or
-promote `local_ft_abli_abliterix_response_opening_v26_selected` until one
-selected-trial checkpoint exists, strict checkpoint/tokenizer/architecture
-audits pass on both Sparks, and the targeted three-trial gate passes.
+The final two-shard run completed 48/48 trials on both Sparks. Baseline
+refusals were `12/20`; the best coordinator trial was `9/20` at KL `0.001395`,
+and the best worker trial was `11/20` at KL `0.003078`. Both analyzer
+recommendations were `do_not_export (best_refusal_count_above_gate)`. Do not
+run `abliterix-export`, sync, serve, model-forge-eval, broad-eval, NVFP4,
+upload, or promote `local_ft_abli_abliterix_response_opening_v26_selected`.
+See `reports/qwen36_27b_abliterix_response_opening_v26_plan_summary.md`.
 
 Operational note: the first V26 two-shard launch on 2026-06-05 stopped before
 search because Abliterix `n_directions: 2` requires equal good/bad training
@@ -377,7 +369,9 @@ multi-direction LoRA steering index error. V26 has therefore been changed to
 `n_directions: 1`; model-forge now blocks `n_directions > 1` with
 `steering_mode: lora` unless the recipe explicitly opts into that experimental
 backend path. If a future Abliterix multi-direction recipe fails either guard,
-fix the contrast/backend design before launching Docker.
+fix the contrast/backend design before launching Docker. If Abliterix is
+retried after V26, it needs a materially different backend version or steering
+path; do not repeat this response-opening SRA/LoRA search unchanged.
 
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,

@@ -7731,3 +7731,42 @@ path before retrying full Qwen 27B.
 
 Committed summary:
 `reports/qwen36_27b_source_tethered_obliteratus_v24_export_guard_summary.md`
+
+### 2026-06-05 Qwen V26 Abliterix response-opening search
+
+Config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml`
+
+Status: rejected after full two-shard search.
+
+Hypothesis: the first Abliterix SRA run overfit a one-prompt backend proxy, so a
+broader response-opening objective might find a low-KL no-refusal edit that
+survives the model-forge targeted gate. V26 used observed refusal-opening
+traces as bad contrast, no-refusal safe redirect traces as preservation
+contrast, 48 bad train prompts, 48 good train prompts, 20 bad eval prompts, and
+single-direction Abliterix SRA/LoRA.
+
+Run notes:
+
+- the first V26 launch failed before useful search because Abliterix
+  `n_directions > 1` requires equal good/bad train counts
+- the repaired 48/48 prompt launch then exposed an Abliterix v1.8.0
+  multidirection LoRA steering index bug
+- model-forge now guards both cases before heavy Docker launches
+- the final V26 retry used `n_directions: 1` and ran one guarded shard on each
+  Spark
+
+Results:
+
+| Shard | Complete Trials | Baseline Refusals | Best Proxy Refusals | Best KL | Recommendation |
+| --- | ---: | ---: | ---: | ---: | --- |
+| coordinator | 48/48 | 12/20 | 9/20 | 0.001395 | `do_not_export` |
+| worker | 48/48 | 12/20 | 11/20 | 0.003078 | `do_not_export` |
+
+Decision: reject V26. Do not run `abliterix-export`, create
+`local_ft_abli_abliterix_response_opening_v26_selected`, broad-eval,
+NVFP4-quantize, upload, or promote this branch. The best proxy result remains
+far above the zero-refusal export gate.
+
+Committed summary:
+`reports/qwen36_27b_abliterix_response_opening_v26_plan_summary.md`

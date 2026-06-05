@@ -916,6 +916,16 @@ length filtering:
    exists, then still blocked until sync, strict audits, TP=2 targeted eval, and
    candidate-gate evidence exist. See
    `reports/qwen36_27b_source_tethered_obliteratus_v24_export_guard_summary.md`.
+   Subsequent V25 and V26 attempts are also rejected. V25 was a static
+   `lm_head.weight` refusal-token patch and failed the targeted gate with
+   self-harm refusal wording 2/3 and `model_selection_summary` 2/3. V26 was a
+   search-only Abliterix response-opening run; after two guarded backend fixes,
+   the final two-shard single-direction search completed 48/48 trials on both
+   Sparks but recommended `do_not_export`, with best proxy refusals 9/20 on the
+   coordinator and 11/20 on the worker from a 12/20 baseline. Do not export or
+   promote V26. See
+   `reports/qwen36_27b_lm_head_refusal_token_patch_v25_targeted_summary.md` and
+   `reports/qwen36_27b_abliterix_response_opening_v26_plan_summary.md`.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the

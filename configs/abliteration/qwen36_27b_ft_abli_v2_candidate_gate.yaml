@@ -164,7 +164,7 @@ candidate_selection:
           - keep the exported checkpoint only as a negative control unless storage pressure requires deleting it
           - next candidate should optimize sampled response openings or use a safer streamed OBLITERATUS/source-tether path rather than static token-logit edits
       - name: abliterix_response_opening_v26
-        status: ready
+        status: rejected
         method_family: abliterix_response_opening_search
         backend: abliterix
         variant: local_ft_abli_abliterix_response_opening_v26_selected
@@ -183,10 +183,10 @@ candidate_selection:
           `abliterix-search-analyze` selects a trial and `abliterix-export`
           creates a checkpoint.
         implementation_next:
-          - run sota-plan and sota-prepare first; inspect materialized bad/good prompt counts
-          - run the guarded Abliterix search through scripts/run_abliterix_search_container.sh with the host watchdog enabled
-          - analyze the journal and export exactly one selected trial only if proxy refusals are zero and KL is within the gate
-          - register/sync/audit/serve/eval only after the selected-trial checkpoint exists
+          - do not run abliterix-export; the completed two-shard search recommended do_not_export
+          - coordinator completed 48/48 trials with best proxy refusals 9/20 at KL 0.001395 from a 12/20 baseline
+          - worker completed 48/48 trials with best proxy refusals 11/20 at KL 0.003078 from a 12/20 baseline
+          - next Abliterix attempt needs a materially different backend version or steering path; otherwise move to source-tethered OBLITERATUS, selective projection, or SAE-feature intervention
   gate:
     trials: 3
     temperature: 1

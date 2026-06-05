@@ -209,6 +209,11 @@ with size `n_directions`, then indexed it by transformer layer during
 `apply_steering`. The guarded runner blocks that combination by default. Use
 `n_directions: 1` unless a newer backend version has been validated or the
 recipe explicitly opts into the experimental path.
+The completed Qwen V26 single-direction Abliterix response-opening search is
+also rejected: two shards completed 48/48 trials, but the best proxy refusal
+counts were only `9/20` and `11/20` from a `12/20` baseline. Both analyzers
+recommended `do_not_export`. Do not use V26 as a template for export unless the
+backend or steering objective changes materially.
 OBLITERATUS, Apostate, native optimal transport, native norm-preserving/SOM/
 selective projection, and `qwen_scope_sae` write baked checkpoints directly, so
 their backend reports must be followed by source-vs-candidate model-forge

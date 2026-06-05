@@ -1,8 +1,9 @@
 # Qwen 3.6 27B Abliterix Response-Opening V26 Plan
 
-Status: prepared after config repair; first two launch attempts exposed
-Abliterix multi-direction backend constraints before any useful trial completed.
-The current V26 retry uses `n_directions: 1`.
+Status: rejected after full two-shard search. First two launch attempts exposed
+Abliterix multi-direction backend constraints before any useful trial completed;
+the final guarded retry used `n_directions: 1` and finished 48/48 trials on
+both Sparks, but neither shard found an exportable trial.
 
 ## Objective
 
@@ -93,30 +94,74 @@ only had size `n_directions=2`. Model-forge now blocks `n_directions > 1` with
 path. V26 has been changed to `n_directions: 1`; the broader prompt objective
 and 48-trial budget remain the actual hypothesis under test.
 
+## Completed Search
+
+The guarded single-direction retry was launched on both Sparks after syncing the
+repo at commit `4a034a4`.
+
+Coordinator:
+
+```bash
+MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 \
+MODEL_FORGE_ABLITERIX_DOCKER_MEMORY_GB=100 \
+MODEL_FORGE_ABLITERIX_CONTAINER_NAME=model-forge-abliterix-v26-coordinator \
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml \
+  sota-run --backend abliterix --execute
+```
+
+Worker:
+
+```bash
+ssh 169.254.173.164 'cd ~/projects/model-forge && \
+MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 \
+MODEL_FORGE_ABLITERIX_DOCKER_MEMORY_GB=100 \
+MODEL_FORGE_ABLITERIX_CONTAINER_NAME=model-forge-abliterix-v26-worker \
+scripts/run_abliterix_search_container.sh \
+artifacts/abliteration/qwen36_27b_ft_abli_v2_abliterix_response_opening_v26/sota_abliterix_response_opening/run_abliterix_search.py'
+```
+
+Both shards loaded the model, measured baseline refusals at `12/20`, selected
+batch size `16`, and completed all `48` trials without tripping host guards.
+
+Analyzer outputs:
+
+| Shard | Complete Trials | Best Proxy Refusals | Best KL | Recommendation |
+| --- | ---: | ---: | ---: | --- |
+| coordinator | 48/48 | 9/20 | 0.001395 | `do_not_export` |
+| worker | 48/48 | 11/20 | 0.003078 | `do_not_export` |
+
+Tracked summary paths:
+
+- coordinator analyzer: `reports/generated/qwen36_27b_v26_abliterix_response_opening_search_analysis_coordinator.json`
+- worker analyzer: `reports/generated/qwen36_27b_v26_abliterix_response_opening_search_analysis_worker.json`
+
+Those JSON files are generated artifacts and ignored by git; this report is the
+tracked result record.
+
 ## Resource State
 
-Cluster hardware probed successfully, but cluster health failed consistency
-before commit because the coordinator worktree had the V26 changes and the
-worker was still at commit `76f3d8f`. Do not run cluster-dependent serving/eval
-until the changes are committed, pushed, and synced.
+Cluster hardware probed successfully. The worker was synced before the final
+search, and both shards completed cleanly with stable host RAM and no scheduler
+starvation.
 
 The Abliterix and Apostate Docker wrappers now have the same host
 `MemAvailable` watchdog pattern as OBLITERATUS, so future runs can stop
 themselves with exit `137` when host RAM falls below
 `MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION`.
 
-## Next Commands
+## Decision
 
-After commit/push/sync and confirming no other large model process is active:
+Reject V26 as a search family for this Qwen FT-abli blocker. Do not run
+`abliterix-export`, do not create
+`local_ft_abli_abliterix_response_opening_v26_selected`, and do not serve,
+broad-eval, quantize, upload, or promote this branch.
 
-```bash
-docker build -f docker/abliterix.Dockerfile -t model-forge-abliterix:latest .
-MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 \
-  ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml sota-run --backend abliterix --execute
-./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml abliterix-search-analyze --backend abliterix --output reports/generated/qwen36_27b_v26_abliterix_response_opening_search_analysis.json
-```
+Reason: the best proxy candidate reduced refusals only from the observed
+baseline `12/20` to `9/20`; the export gate requires zero proxy refusals before
+spending time on checkpoint export and model-forge targeted eval.
 
-Only export one selected trial if the journal analysis recommends it. The
-selected-trial checkpoint still must pass strict audits on both Sparks and the
-targeted model-forge three-trial candidate gate before broad eval, NVFP4 export,
-HF upload, or promotion.
+Next useful method work should avoid repeating this exact Abliterix
+response-opening SRA/LoRA surface. If Abliterix is revisited, use a materially
+different backend version or steering path. Otherwise prefer a safer
+memory-streamed/source-tethered OBLITERATUS retry, a selective projection pass,
+or an SAE-feature intervention candidate.
