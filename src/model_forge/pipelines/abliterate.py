@@ -5591,6 +5591,7 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
         variant = str(candidate.get("variant") or name)
         status = str(candidate.get("status") or "ready")
         blocked = status in {"runner_missing", "plan_only", "blocked", "rejected", "failed"}
+        produces_checkpoint = bool(candidate.get("produces_checkpoint", True))
         candidate_config = candidate.get("config")
         backend = candidate.get("backend")
         output_dir = candidate.get("output_dir")
@@ -5636,7 +5637,7 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
                 ),
             ])
         candidate_commands.extend(custom_commands)
-        if cluster_config and output_dir and not blocked:
+        if cluster_config and output_dir and not blocked and produces_checkpoint:
             model_sync_parts = [
                 "./forge cluster model-sync",
                 f"--config {cluster_config}",
@@ -5656,7 +5657,7 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
                 starts_heavy_job=True,
                 requires_execute=True,
             ))
-        if not blocked:
+        if not blocked and produces_checkpoint:
             candidate_commands.extend([
                 command_entry(
                     f"./forge variants checkpoint-audit {family} --variant {variant} --strict --json",
@@ -5696,7 +5697,7 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
                 purpose="Run the exact targeted multi-trial gate for this candidate.",
                 requires_execute=True,
             ))
-        if not blockers:
+        if not blockers and produces_checkpoint:
             gate_entries.append(f"name={name},variant={variant},eval={eval_dir}")
         commands.extend(candidate_commands)
         candidate_reports.append({
@@ -5707,6 +5708,7 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
             "backend": backend,
             "config": candidate_config,
             "output_dir": output_dir,
+            "produces_checkpoint": produces_checkpoint,
             "eval_suffix": eval_suffix,
             "expected_eval_dir": eval_dir,
             "blockers": blockers,
@@ -5722,7 +5724,16 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
             f"--run-id {run_id}_gate",
         ])
     else:
-        gate_command = "No executable candidate eval directories are planned yet; implement or unblock a candidate first."
+        has_enabled_candidate_job = any(
+            bool(command.get("enabled", True))
+            and str(command.get("phase", "")).startswith("candidate_")
+            and command.get("phase") != "candidate_gate"
+            for command in commands
+        )
+        if has_enabled_candidate_job:
+            gate_command = "Search-only candidate jobs are planned; export a selected checkpoint before candidate-gate."
+        else:
+            gate_command = "No executable candidate eval directories are planned yet; implement or unblock a candidate first."
     commands.append(command_entry(
         gate_command,
         phase="candidate_gate",
@@ -5751,6 +5762,11 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
         "eval": eval_spec,
         "candidate_count": len(candidate_reports),
         "executable_candidate_count": len(gate_entries),
+        "planned_candidate_job_count": sum(
+            1
+            for candidate in candidate_reports
+            if any(command.get("enabled", True) for command in candidate["commands"])
+        ),
         "candidates": candidate_reports,
         "commands": commands,
         "candidate_gate_command": gate_command,

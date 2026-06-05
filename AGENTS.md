@@ -341,6 +341,30 @@ V25. See `reports/qwen36_27b_lm_head_refusal_token_patch_v25_targeted_summary.md
 and
 `reports/generated/abliteration_candidate_gate/qwen36_27b_ft_abli_v2_lm_head_refusal_token_patch_v25_gate/candidate_gate.md`.
 
+V26 is the current Qwen FT-abli next candidate and is search-only:
+`configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml`.
+It uses Abliterix SRA/LoRA with a broader response-opening objective than the
+previous one-prompt Abliterix run: 48 bad train prompts, 20 bad eval prompts,
+observed refusal-opening traces from
+`datasets/abliteration/qwen36_trial12_response_conditioned_traces.jsonl`, and
+no-refusal safe redirect traces as preservation contrast. Run:
+
+```bash
+docker build -f docker/abliterix.Dockerfile -t model-forge-abliterix:latest .
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml sota-plan --backend abliterix
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml sota-prepare --backend abliterix
+MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 \
+  ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml sota-run --backend abliterix --execute
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml abliterix-search-analyze --backend abliterix --output reports/generated/qwen36_27b_v26_abliterix_response_opening_search_analysis.json
+```
+
+V26 does not produce a checkpoint until `abliterix-export` is run for one
+selected trial, so the candidate loop marks it with `produces_checkpoint:
+false`. Do not sync, serve, model-forge-eval, broad-eval, NVFP4, upload, or
+promote `local_ft_abli_abliterix_response_opening_v26_selected` until one
+selected-trial checkpoint exists, strict checkpoint/tokenizer/architecture
+audits pass on both Sparks, and the targeted three-trial gate passes.
+
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,
 `hf_upload`, and `promotion` when the ledger says they should not become release
@@ -2027,10 +2051,12 @@ attempt hit the host RAM floor and was stopped before producing a checkpoint.
 Treat V24 as operationally blocked until the export path is made safer; it still
 must pass strict checkpoint/tokenizer/architecture audits and the exact
 three-trial candidate gate before broad eval, NVFP4, upload, or promotion. V25
-lm-head token-row patching is also rejected, so the next Qwen method shift
-should move to a sampled response-opening objective that directly optimizes the
-three-trial no-refusal gate, or make OBLITERATUS export streamed/sharded enough
-to complete safely.
+lm-head token-row patching is also rejected. V26 now implements the sampled
+response-opening direction in Abliterix search-only form; run/analyze/export one
+selected trial before returning to model-forge candidate-gate. If V26 fails,
+make OBLITERATUS export streamed/sharded enough to complete safely or implement
+a native sampled-response-opening optimizer rather than repeating static
+projection/token-logit tweaks.
 
 ## Publishing
 

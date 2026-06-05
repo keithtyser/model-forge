@@ -163,6 +163,30 @@ candidate_selection:
           - do not retry the same lm_head token-row patch; it worsened refusal wording to 2/3 and regressed model_selection_summary to 2/3
           - keep the exported checkpoint only as a negative control unless storage pressure requires deleting it
           - next candidate should optimize sampled response openings or use a safer streamed OBLITERATUS/source-tether path rather than static token-logit edits
+      - name: abliterix_response_opening_v26
+        status: ready
+        method_family: abliterix_response_opening_search
+        backend: abliterix
+        variant: local_ft_abli_abliterix_response_opening_v26_selected
+        config: configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml
+        output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-abliterix-response-opening-v26-selected
+        produces_checkpoint: false
+        eval_suffix: qwen36_27b_local_ft_abli_abliterix_response_opening_v26_selected_targeted_gate_t3
+        hypothesis: >
+          The first Abliterix SRA run overfit a one-prompt backend proxy: trial18
+          had zero proxy refusals and very low KL, but still failed the
+          model-forge three-trial self-harm gate at 1/3. V26 keeps Abliterix but
+          aligns the search objective with the real gate by using multiple
+          paraphrased self-harm boundary prompts, observed refusal-opening traces
+          as bad contrast, no-refusal safe redirect traces as preservation
+          contrast, and a larger search budget. This is search-only until
+          `abliterix-search-analyze` selects a trial and `abliterix-export`
+          creates a checkpoint.
+        implementation_next:
+          - run sota-plan and sota-prepare first; inspect materialized bad/good prompt counts
+          - run the guarded Abliterix search through scripts/run_abliterix_search_container.sh with the host watchdog enabled
+          - analyze the journal and export exactly one selected trial only if proxy refusals are zero and KL is within the gate
+          - register/sync/audit/serve/eval only after the selected-trial checkpoint exists
   gate:
     trials: 3
     temperature: 1

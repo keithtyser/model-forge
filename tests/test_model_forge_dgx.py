@@ -220,6 +220,28 @@ class ModelForgeDgxServeTests(unittest.TestCase):
         self.assertIn("docker\", \"stop\", \"--time\", \"10\", container_name", script)
         self.assertIn("exit 137", script)
 
+    def test_external_ablation_container_runners_have_host_memory_watchdogs(self) -> None:
+        expected = {
+            "run_abliterix_search_container.sh": (
+                "model-forge-abliterix:latest",
+                "MODEL_FORGE_ABLITERIX_HOST_WATCHDOG_INTERVAL_SECONDS",
+            ),
+            "run_apostate_container.sh": (
+                "model-forge-apostate:latest",
+                "MODEL_FORGE_APOSTATE_HOST_WATCHDOG_INTERVAL_SECONDS",
+            ),
+        }
+        for filename, (image, watchdog_env) in expected.items():
+            with self.subTest(filename=filename):
+                script = (REPO_DIR / "scripts" / filename).read_text(encoding="utf-8")
+                self.assertIn(image, script)
+                self.assertIn("--gpus all", script)
+                self.assertIn("--name \"$CONTAINER_NAME\"", script)
+                self.assertIn(watchdog_env, script)
+                self.assertIn("MemAvailable", script)
+                self.assertIn("docker\", \"stop\", \"--time\", \"10\", container_name", script)
+                self.assertIn("exit 137", script)
+
     def test_generic_vllm_launcher_uses_model_family_env(self) -> None:
         script = (REPO_DIR / "scripts" / "serve_vllm_dgx_spark.sh").read_text(encoding="utf-8")
         self.assertIn("MODEL=${1:-${MODEL_FORGE_MODEL:-Qwen/Qwen3.5-9B}}", script)

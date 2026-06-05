@@ -331,6 +331,9 @@ toward the base checkpoint.
 For Abliterix recipes with `container_image` set, `sota-run --backend abliterix
 --execute` launches the generated non-interactive search runner through
 `scripts/run_abliterix_search_container.sh`. The runner does not export a model.
+The wrapper uses Docker CPU/RAM/swap/PID caps plus a host `MemAvailable`
+watchdog; a watchdog stop exits as `137` and should be treated as a resource
+guard, not as a model result.
 After it finishes, run:
 
 ```bash
@@ -355,6 +358,13 @@ refusals and KL but not the baseline refusal count; in that case
 `abliterix-search-analyze` can still recommend preparing an export runner, but
 the required next gate must compare the source checkpoint against the exported
 checkpoint with model-forge targeted internal evals.
+
+Search-only candidates in `candidate_selection.loop` should set
+`produces_checkpoint: false`. The loop will plan `sota-plan`, `sota-prepare`,
+and the guarded search job, but it will not add model sync, checkpoint audits,
+serving, targeted eval, or candidate-gate entries until a selected-trial
+checkpoint is exported and registered as a normal checkpoint-producing
+candidate. This avoids treating search journals as if they were served models.
 
 For native optimal-transport recipes, `sota-prepare --backend
 optimal_transport` writes three artifacts under the backend work directory:

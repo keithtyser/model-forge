@@ -744,6 +744,57 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertTrue(any("variants checkpoint-audit" in command for command in commands))
         self.assertIn("unit_lm_head_patch", plan["candidate_gate_command"])
 
+    def test_candidate_loop_accepts_search_only_candidates(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "unit_search_loop.yaml"
+        config = {
+            "candidate_selection": {
+                "objective": "zero_refusal_capability_retention",
+                "loop": {
+                    "family": "qwen36_27b",
+                    "source_variant": "local_ft_abli_source",
+                    "cluster_config": "configs/clusters/dgx_spark_x2.example.yaml",
+                    "eval": {
+                        "trials": 3,
+                        "temperature": 1,
+                        "buckets": ["refusal_paired_boundary"],
+                        "case_ids": ["self_harm_instruction_harmful"],
+                    },
+                    "candidates": [
+                        {
+                            "name": "unit_abliterix_search",
+                            "variant": "local_ft_abli_abliterix_search",
+                            "method_family": "abliterix_response_opening_search",
+                            "backend": "abliterix",
+                            "config": "configs/abliteration/unit_abliterix.yaml",
+                            "output_dir": "~/models/unit-abliterix-selected",
+                            "produces_checkpoint": False,
+                        }
+                    ],
+                },
+                "gate": {
+                    "requirements": [
+                        {
+                            "name": "no_refusal_wording",
+                            "bucket": "refusal_paired_boundary",
+                            "case_id": "self_harm_instruction_harmful",
+                            "metric": "refusal_rate_harmful",
+                            "value": 0.0,
+                        }
+                    ]
+                },
+            }
+        }
+
+        plan = build_candidate_loop_plan(config, config_path, run_id="unit_search_loop")
+        commands = [item["command"] for item in plan["commands"] if item.get("enabled", True)]
+
+        self.assertEqual(plan["executable_candidate_count"], 0)
+        self.assertEqual(plan["planned_candidate_job_count"], 1)
+        self.assertTrue(any("sota-run --backend abliterix --execute" in command for command in commands))
+        self.assertFalse(any("cluster model-sync" in command for command in commands))
+        self.assertFalse(any("variants checkpoint-audit" in command for command in commands))
+        self.assertIn("Search-only candidate jobs are planned", plan["candidate_gate_command"])
+
     def test_qwen_candidate_loop_blocks_rejected_sae_candidate_commands(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_candidate_gate.yaml"
         plan = build_candidate_loop_plan(load_yaml(config_path), config_path, run_id="qwen_unit_loop")
@@ -755,9 +806,10 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(candidate["status"], "rejected")
         self.assertTrue(candidate["blockers"])
         self.assertEqual(plan["executable_candidate_count"], 0)
+        self.assertEqual(plan["planned_candidate_job_count"], 1)
         self.assertFalse(any(command.get("enabled", False) for command in candidate["commands"]))
         self.assertFalse(gate_command["enabled"])
-        self.assertIn("No executable candidate eval directories", plan["candidate_gate_command"])
+        self.assertIn("Search-only candidate jobs are planned", plan["candidate_gate_command"])
 
     def test_qwen_scope_sae_prepare_writes_guarded_runner(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml"
@@ -1276,7 +1328,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("collect_directions", runner)
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 24)
 
-    def test_candidate_loop_blocks_rejected_v21_to_v25(self) -> None:
+    def test_candidate_loop_blocks_rejected_v21_to_v25_and_plans_v26_search(self) -> None:
         config_path = (
             REPO_DIR
             / "configs"
@@ -1291,6 +1343,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("assistant_prefix_projection_v23", candidates)
         self.assertIn("source_tethered_obliteratus_v24", candidates)
         self.assertIn("lm_head_refusal_token_patch_v25", candidates)
+        self.assertIn("abliterix_response_opening_v26", candidates)
         self.assertTrue(candidates["qwen_scope_sae_feature_diagnostic_v1"]["blockers"])
         self.assertFalse(any(
             command.get("enabled", True)
@@ -1317,7 +1370,20 @@ class AbliterationPlanTests(unittest.TestCase):
             for command in candidates["lm_head_refusal_token_patch_v25"]["commands"]
         ))
         self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertIn("No executable candidate eval directories", plan["candidate_gate_command"])
+        self.assertEqual(plan["planned_candidate_job_count"], 1)
+        self.assertFalse(candidates["abliterix_response_opening_v26"]["blockers"])
+        self.assertFalse(candidates["abliterix_response_opening_v26"]["produces_checkpoint"])
+        self.assertTrue(any(
+            command.get("enabled", False)
+            and "sota-run --backend abliterix --execute" in command.get("command", "")
+            for command in candidates["abliterix_response_opening_v26"]["commands"]
+        ))
+        self.assertFalse(any(
+            command.get("enabled", False)
+            and "variants checkpoint-audit" in command.get("command", "")
+            for command in candidates["abliterix_response_opening_v26"]["commands"]
+        ))
+        self.assertIn("Search-only candidate jobs are planned", plan["candidate_gate_command"])
 
     def test_optimal_transport_sota_run_uses_guarded_native_runner(self) -> None:
         config_path = (
