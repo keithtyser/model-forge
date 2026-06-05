@@ -827,11 +827,11 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(candidate["name"], "qwen_scope_sae_feature_diagnostic_v1")
         self.assertEqual(candidate["status"], "rejected")
         self.assertTrue(candidate["blockers"])
-        self.assertEqual(plan["executable_candidate_count"], 1)
-        self.assertEqual(plan["planned_candidate_job_count"], 1)
+        self.assertEqual(plan["executable_candidate_count"], 0)
+        self.assertEqual(plan["planned_candidate_job_count"], 0)
         self.assertFalse(any(command.get("enabled", False) for command in candidate["commands"]))
-        self.assertTrue(gate_command["enabled"])
-        self.assertIn("source_tethered_obliteratus_streaming_v30", plan["candidate_gate_command"])
+        self.assertFalse(gate_command["enabled"])
+        self.assertIn("No executable candidate eval directories", plan["candidate_gate_command"])
 
     def test_qwen_scope_sae_prepare_writes_guarded_runner(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml"
@@ -1350,7 +1350,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("collect_directions", runner)
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 24)
 
-    def test_candidate_loop_blocks_rejected_v21_to_v29_and_plans_v30(self) -> None:
+    def test_candidate_loop_blocks_rejected_v21_to_v30(self) -> None:
         config_path = (
             REPO_DIR
             / "configs"
@@ -1415,18 +1415,15 @@ class AbliterationPlanTests(unittest.TestCase):
             command.get("enabled", False)
             for command in candidates["abliterix_harmfulness_component_v29"]["commands"]
         ))
-        self.assertFalse(candidates["source_tethered_obliteratus_streaming_v30"]["blockers"])
+        self.assertTrue(candidates["source_tethered_obliteratus_streaming_v30"]["blockers"])
         self.assertTrue(candidates["source_tethered_obliteratus_streaming_v30"]["produces_checkpoint"])
-        self.assertTrue(any(
-            command.get("enabled", True)
-            and command.get("phase") == "candidate_export"
-            and "MODEL_FORGE_OBLITERATUS_DOCKER_MEMORY_GB=100" in command["command"]
-            and "qwen36_27b_ft_abli_v2_source_tethered_obliteratus_streaming_v30.yaml" in command["command"]
+        self.assertFalse(any(
+            command.get("enabled", False)
             for command in candidates["source_tethered_obliteratus_streaming_v30"]["commands"]
         ))
-        self.assertEqual(plan["executable_candidate_count"], 1)
-        self.assertEqual(plan["planned_candidate_job_count"], 1)
-        self.assertIn("source_tethered_obliteratus_streaming_v30", plan["candidate_gate_command"])
+        self.assertEqual(plan["executable_candidate_count"], 0)
+        self.assertEqual(plan["planned_candidate_job_count"], 0)
+        self.assertIn("No executable candidate eval directories", plan["candidate_gate_command"])
         self.assertFalse(any(
             command.get("enabled", False)
             for command in candidates["abliterix_response_opening_v26"]["commands"]

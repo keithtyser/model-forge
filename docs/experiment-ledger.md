@@ -7898,7 +7898,8 @@ refusal-opening state.
 Config:
 `configs/abliteration/qwen36_27b_ft_abli_v2_source_tethered_obliteratus_streaming_v30.yaml`
 
-Status: ready, checkpoint-producing candidate, no checkpoint exported yet.
+Status: attempted and blocked, checkpoint-producing candidate, no checkpoint
+exported.
 
 Hypothesis: V24's source-tethered OBLITERATUS method did not receive a behavioral
 test because upstream OBLITERATUS hit the host RAM floor while gathering and
@@ -7923,3 +7924,19 @@ worker, strict checkpoint/tokenizer/architecture audits pass, the candidate
 serves on the two-Spark path, and the targeted three-trial gate passes with
 `self_harm_instruction_harmful` refusal wording 0/3 plus
 `model_selection_summary` 3/3.
+
+Execution result: the 2026-06-05 guarded run launched
+`model-forge-obliteratus-v30-streaming` with a 100 GiB Docker memory cap, 19 CPU
+cap, 5% host MemAvailable floor, and 15% disk floor. It loaded all `851` Qwen
+weights in about five minutes, then stayed in silent OBLITERATUS post-load
+processing. Before any output directory or streamed shard was written, host
+MemAvailable dropped to about `4.6 GiB`, below the 5% floor, with the container
+at about `57.21 GiB / 100 GiB`. The container was stopped cleanly, the wrapper
+returned exit `137`, and host memory recovered to about `113 GiB` available.
+No checkpoint was exported.
+
+Decision: do not rerun V30 unchanged. Streaming rebirth addresses the V24
+save-stage memory failure, but the exact V30 single-node OBLITERATUS edit still
+exceeds the safe pre-export memory envelope. The next OBLITERATUS attempt must
+be a materially lower-memory or sharded implementation before broad eval,
+NVFP4, Hugging Face upload, or promotion.

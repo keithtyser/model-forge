@@ -445,8 +445,8 @@ response-opening conditioned no-refusal target, a streamed/source-tethered
 OBLITERATUS export, or an SAE/activation-feature edit aimed at the residual
 refusal-opening state.
 
-The current next runnable Qwen FT-abli candidate is V30 source-tethered
-OBLITERATUS with model-forge streaming rebirth:
+V30 source-tethered OBLITERATUS with model-forge streaming rebirth has now
+been attempted and is blocked:
 `configs/abliteration/qwen36_27b_ft_abli_v2_source_tethered_obliteratus_streaming_v30.yaml`.
 It exists because V24's source-tethered method was not behaviorally rejected;
 the export died when upstream OBLITERATUS gathered and serialized a full 27B
@@ -456,7 +456,16 @@ the generated runner monkeypatches OBLITERATUS `_rebirth()` to stream `1GB`
 safetensor shards and writes
 `model_forge_obliteratus_streaming_rebirth.json`.
 
-Run V30 through the candidate loop only, one large job at a time:
+The 2026-06-05 guarded run loaded the full `851`-weight Qwen checkpoint in about
+five minutes, then consumed host RAM during OBLITERATUS processing before any
+output directory or streamed shard was written. It was stopped when host
+MemAvailable sampled at about `4.6 GiB`, below the 5% floor, while the container
+was around `57.2 GiB / 100 GiB`. The wrapper returned exit `137`; host RAM
+recovered to about `113 GiB` available after the stop. Do not rerun V30
+unchanged, and do not broad-eval, NVFP4-export, upload, or promote
+`local_ft_abli_source_tethered_obliteratus_streaming_v30`.
+
+Historical V30 runbook:
 
 ```bash
 ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml candidate-loop-plan --run-id qwen36_v30_source_tethered_obliteratus_streaming --write-plan
@@ -467,13 +476,10 @@ MODEL_FORGE_OBLITERATUS_DOCKER_MEMORY_GB=100 MODEL_FORGE_OBLITERATUS_SHM_SIZE=32
   ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_source_tethered_obliteratus_streaming_v30.yaml sota-run --backend obliteratus --execute
 ```
 
-If V30 exports, sync it to the worker, run strict checkpoint/tokenizer/
-architecture audits, serve it on the two-Spark TP path, and run only the
-targeted three-trial gate first. Do not broad-eval, NVFP4-export, upload, or
-promote `local_ft_abli_source_tethered_obliteratus_streaming_v30` unless that
-gate reaches `self_harm_instruction_harmful` refusal wording `0/3`, safe
-redirect `3/3`, harmful detail/compliance `0/3`, and `model_selection_summary`
-`3/3`.
+The next OBLITERATUS attempt must be a materially different lower-memory or
+sharded implementation. Streaming rebirth remains useful implementation work,
+but it only addresses save-stage memory; it did not solve the pre-export
+single-node memory envelope.
 
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,

@@ -2,7 +2,7 @@
 
 Date: 2026-06-05
 
-Status: ready; no checkpoint exported yet.
+Status: attempted and blocked; no checkpoint exported.
 
 ## Goal
 
@@ -63,5 +63,32 @@ of these pass:
 ## Validation
 
 - Generated V30 OBLITERATUS runner compiles with `py_compile`.
-- Candidate-loop plan now has exactly one runnable candidate:
-  `source_tethered_obliteratus_streaming_v30`.
+- After the memory-floor stop, the candidate-loop plan blocks V30 and has no
+  executable candidates until a materially different follow-up is added.
+
+## Execution Result
+
+V30 was launched on 2026-06-05 with:
+
+```bash
+MODEL_FORGE_OBLITERATUS_CONTAINER_NAME=model-forge-obliteratus-v30-streaming \
+MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 \
+MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 \
+MODEL_FORGE_OBLITERATUS_DOCKER_MEMORY_GB=100 \
+MODEL_FORGE_OBLITERATUS_DOCKER_CPUS=19 \
+MODEL_FORGE_OBLITERATUS_SHM_SIZE=32g \
+nice -n 10 ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_source_tethered_obliteratus_streaming_v30.yaml sota-run --backend obliteratus --execute
+```
+
+The run loaded the full `851`-weight Qwen checkpoint in about five minutes, but
+did not reach checkpoint export. During post-load OBLITERATUS processing, host
+available RAM fell to about `4.6 GiB`, below the configured 5% floor. The
+container was stopped before the system could starve; the wrapper returned
+exit `137`. No output directory was created at
+`~/models/Qwen3.6-27B-local-ft-v4-abliterated-source-tethered-obliteratus-streaming-v30`.
+
+Decision: do not rerun V30 unchanged. The streaming rebirth patch remains
+valid implementation work for avoiding save-stage full-state-dict memory, but
+this exact recipe still exceeds the safe single-node pre-export memory
+envelope. The next OBLITERATUS attempt needs a materially lower-memory or
+sharded activation/edit path before export can be tested.

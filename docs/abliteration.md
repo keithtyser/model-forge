@@ -241,15 +241,18 @@ rejected: the analyzer inferred a 12/20 proxy baseline, best coordinator result
 was 8/20, best worker result was 9/20, and both analyses recommend
 `do_not_export`. Do not export, broad-eval, quantize, upload, promote, or rerun
 V29 unchanged.
-The next runnable checkpoint candidate is V30 source-tethered OBLITERATUS with
-streaming rebirth:
+V30 source-tethered OBLITERATUS with streaming rebirth has now been attempted
+and is blocked:
 `configs/abliteration/qwen36_27b_ft_abli_v2_source_tethered_obliteratus_streaming_v30.yaml`.
 It keeps the V24 source-tethered ASPA hypothesis, but the generated runner
 monkeypatches OBLITERATUS `_rebirth()` to write 1GB safetensor shards
 incrementally before model-forge remaps Qwen wrapper keys and source-tethers
-toward the local FT v4 checkpoint. Treat V30 as unpromoted until export,
-cluster sync, strict audits, serving, and the targeted three-trial model-forge
-gate all pass.
+toward the local FT v4 checkpoint. The guarded run loaded the full Qwen
+checkpoint, then exceeded the 5% host MemAvailable floor before any output
+directory or streamed shard was written. Do not rerun V30 unchanged. The next
+OBLITERATUS attempt needs a materially lower-memory or sharded pre-export path
+before export, cluster sync, strict audits, serving, and the targeted
+three-trial model-forge gate can be tested.
 OBLITERATUS, Apostate, native optimal transport, native norm-preserving/SOM/
 selective projection, and `qwen_scope_sae` write baked checkpoints directly, so
 their backend reports must be followed by source-vs-candidate model-forge
