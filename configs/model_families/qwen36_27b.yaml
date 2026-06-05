@@ -711,14 +711,31 @@ variants:
     preserve_variant: local_ft_v4
     downloadable: false
     promotion:
-      decision: inconclusive
+      decision: rejected
       blocked_actions: [quantization_export, hf_upload, promotion]
-      reason: "V27 is a search-only Abliterix component-policy candidate based on public Qwen3.6 recipes. No selected checkpoint has been exported or model-forge-gated yet. Do not broad-eval, quantize, upload, or promote this placeholder until a selected export passes strict audits and the targeted three-trial gate."
+      reason: "V27 was a search-only Abliterix component-policy candidate based on public Qwen3.6 recipes. The guarded two-shard early search proved disabled Q/K/V component targeting works, but every completed trial on both Sparks worsened the 12/20 baseline proxy refusal count to 14-16/20. No selected checkpoint was exported. Do not broad-eval, quantize, upload, or promote this branch."
       evidence:
         - configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml
         - configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml
         - scripts/run_abliterix_search_container.sh
         - reports/qwen36_27b_abliterix_aeon_component_v27_plan_summary.md
+  local_ft_abli_abliterix_harmfulness_component_v28_selected:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-ft-v4-abliterated-abliterix-harmfulness-component-v28-selected
+    served_model_name: local/qwen36-27b-local-ft-v4-abliterated-abliterix-harmfulness-component-v28-selected
+    transform_type: behavior_edit
+    base_variant: local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2
+    preserve_variant: local_ft_v4
+    downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "V28 is a search-only Abliterix harmfulness-direction component-policy candidate. No selected checkpoint has been exported or model-forge-gated yet. Do not broad-eval, quantize, upload, or promote this placeholder until a selected export passes strict audits and the targeted three-trial gate."
+      evidence:
+        - configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml
+        - configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml
+        - scripts/run_abliterix_search_container.sh
+        - reports/qwen36_27b_abliterix_harmfulness_component_v28_plan_summary.md
   local_ft_abli_checkpoint_blend_v2_v12_alpha1p25:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-checkpoint-blend-v2-v12-alpha1p25

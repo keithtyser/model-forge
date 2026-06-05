@@ -373,7 +373,8 @@ fix the contrast/backend design before launching Docker. If Abliterix is
 retried after V26, it needs a materially different backend version or steering
 path; do not repeat this response-opening SRA/LoRA search unchanged.
 
-V27 is the next ready Qwen FT-abli Abliterix search-only candidate:
+V27 was the next Qwen FT-abli Abliterix search-only candidate and is now
+rejected:
 `configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml`.
 It keeps the V26 response-opening prompt objective but changes the steering
 policy to the public Qwen3.6 component-policy shape: `vector_method: mean`,
@@ -385,19 +386,31 @@ The external starting points are
 `https://huggingface.co/cryptocyberai/Qwen3.6-27B-abliterated`; treat their
 constants as search priors, not promotion evidence.
 
-Run V27 as search-only first:
+The guarded two-shard early search on 2026-06-05 proved the generated
+component policy is operational: Abliterix exposed only `attn.o_proj` and
+`mlp.down_proj` as steerable components. Behavior was wrong-way: all completed
+trials worsened the 12/20 baseline proxy refusals. Coordinator trials were
+16/20, 14/20, and 15/20 refusals; worker trials were 16/20, 15/20, and 15/20.
+Do not continue V27 or run `abliterix-export`.
+
+V28 is now the next ready Qwen FT-abli Abliterix search-only candidate:
+`configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml`.
+It keeps V27's component policy and prompt objective but turns on
+`ablate_harmfulness_direction: true` with `harmfulness_layer_band: [0.3, 0.7]`.
+Run V28 as a guarded short search first, and stop early again if completed
+trials worsen the 12/20 baseline.
 
 ```bash
-./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml sota-plan --backend abliterix
-./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml sota-prepare --backend abliterix
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml sota-plan --backend abliterix
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml sota-prepare --backend abliterix
 MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 \
-  ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml sota-run --backend abliterix --execute
-./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml \
+  ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml sota-run --backend abliterix --execute
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml \
   abliterix-search-analyze --backend abliterix \
-  --output reports/generated/qwen36_27b_v27_abliterix_aeon_component_search_analysis.json
+  --output reports/generated/qwen36_27b_v28_abliterix_harmfulness_component_search_analysis.json
 ```
 
-`local_ft_abli_abliterix_aeon_component_v27_selected` is only a placeholder in
+`local_ft_abli_abliterix_harmfulness_component_v28_selected` is only a placeholder in
 `configs/model_families/qwen36_27b.yaml` and is blocked from NVFP4, upload, and
 promotion. Export only if journal analysis finds a zero-refusal low-KL selected
 trial. After export, register the selected checkpoint as a normal

@@ -188,7 +188,7 @@ candidate_selection:
           - worker completed 48/48 trials with best proxy refusals 11/20 at KL 0.003078 from a 12/20 baseline
           - next Abliterix attempt needs a materially different backend version or steering path; otherwise move to source-tethered OBLITERATUS, selective projection, or SAE-feature intervention
       - name: abliterix_aeon_component_v27
-        status: ready
+        status: rejected
         method_family: abliterix_qwen36_component_policy
         backend: abliterix
         variant: local_ft_abli_abliterix_aeon_component_v27_selected
@@ -196,6 +196,7 @@ candidate_selection:
         output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-abliterix-aeon-component-v27-selected
         produces_checkpoint: false
         eval_suffix: qwen36_27b_local_ft_abli_abliterix_aeon_component_v27_selected_targeted_gate_t3
+        blocker: early stopped after three completed trials per node because every completed trial worsened the 12/20 baseline refusal count to 14-16/20
         hypothesis: >
           V26 kept Abliterix but searched the wrong component policy for Qwen3.6:
           SRA/full-normalized LoRA over the default component set could not move
@@ -207,9 +208,30 @@ candidate_selection:
           smaller MLP down-projection band. Treat the public constants as
           starting ranges, not promotion evidence.
         implementation_next:
-          - run sota-plan and sota-prepare locally before any Docker launch
-          - run guarded search-only shards on the Sparks, one large model process per node
-          - analyze the journal and export only if the selected trial reaches zero proxy refusals within KL gate
+          - do not continue V27 or run abliterix-export; the first three completed trials on both Sparks all worsened the proxy refusal count
+          - keep the useful implementation signal: disabled Q/K/V worked and Abliterix exposed only attn.o_proj plus mlp.down_proj as steerable components
+          - next attempt should change refusal/harmfulness sign handling instead of repeating ablate_harmfulness_direction=false
+      - name: abliterix_harmfulness_component_v28
+        status: ready
+        method_family: abliterix_qwen36_harmfulness_component_policy
+        backend: abliterix
+        variant: local_ft_abli_abliterix_harmfulness_component_v28_selected
+        config: configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml
+        output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-abliterix-harmfulness-component-v28-selected
+        produces_checkpoint: false
+        eval_suffix: qwen36_27b_local_ft_abli_abliterix_harmfulness_component_v28_selected_targeted_gate_t3
+        hypothesis: >
+          V27 proved the public Qwen3.6 component policy is operational in
+          model-forge but moved the refusal proxy in the wrong direction. V28
+          keeps the same prompt objective and component targeting, then turns
+          on Abliterix's harmfulness-direction ablation path so the search can
+          separately remove the residual "this is harmful" signal that appears
+          as denial-style self-harm refusal openings in the near-miss FT-abli
+          source.
+        implementation_next:
+          - run sota-plan and sota-prepare locally before Docker launch
+          - run a guarded short search first; stop early if the first completed trials again worsen the 12/20 baseline
+          - analyze the journal and export only if a selected trial reaches zero proxy refusals within KL gate
           - after export, register the selected checkpoint as a normal checkpoint-producing candidate and run the targeted three-trial model-forge gate before broad eval, NVFP4, upload, or promotion
   gate:
     trials: 3

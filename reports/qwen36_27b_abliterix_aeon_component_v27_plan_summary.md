@@ -1,6 +1,6 @@
 # Qwen3.6 27B V27 Abliterix Component-Policy Search Plan
 
-Status: ready, search-only, no checkpoint exported.
+Status: rejected after early two-shard search stop, no checkpoint exported.
 
 Config:
 `configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml`
@@ -45,6 +45,29 @@ steering-policy change.
 
 These are starting priors, not promotion evidence. Constants must be
 recalibrated per model family and source checkpoint.
+
+## Early Search Result
+
+V27 was launched as guarded search-only on both Sparks on 2026-06-05 and then
+stopped manually after three completed trials per node because every completed
+trial worsened the proxy refusal count from the shared `12/20` baseline.
+
+| Shard | Completed Trials | Baseline Refusals | Trial Refusals | Trial KLs | Decision |
+| --- | ---: | ---: | --- | --- | --- |
+| coordinator | 3 | 12/20 | 16/20, 14/20, 15/20 | 0.0589, 0.0161, 0.0522 | stop |
+| worker | 3 | 12/20 | 16/20, 15/20, 15/20 | 0.0447, 0.0092, 0.0289 | stop |
+
+The useful implementation signal is that Abliterix accepted the component
+policy and exposed only `attn.o_proj` plus `mlp.down_proj` as steerable
+components, so `disabled_components` worked. The bad behavioral signal is that
+this policy with `ablate_harmfulness_direction=false` moved refusal behavior in
+the wrong direction for the held Qwen FT-abli source.
+
+Decision: reject V27. Do not run `abliterix-export`, broad eval, NVFP4,
+Hugging Face upload, or promotion from this branch. The next candidate should
+keep the component-targeting support but turn on Abliterix's harmfulness
+direction ablation path or otherwise change the refusal/harmfulness sign
+handling.
 
 ## Gate Contract
 

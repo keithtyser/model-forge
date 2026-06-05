@@ -1328,7 +1328,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("collect_directions", runner)
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 24)
 
-    def test_candidate_loop_blocks_rejected_v21_to_v26_and_plans_v27_search(self) -> None:
+    def test_candidate_loop_blocks_rejected_v21_to_v27_and_plans_v28_search(self) -> None:
         config_path = (
             REPO_DIR
             / "configs"
@@ -1345,6 +1345,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("lm_head_refusal_token_patch_v25", candidates)
         self.assertIn("abliterix_response_opening_v26", candidates)
         self.assertIn("abliterix_aeon_component_v27", candidates)
+        self.assertIn("abliterix_harmfulness_component_v28", candidates)
         self.assertTrue(candidates["qwen_scope_sae_feature_diagnostic_v1"]["blockers"])
         self.assertFalse(any(
             command.get("enabled", True)
@@ -1372,13 +1373,19 @@ class AbliterationPlanTests(unittest.TestCase):
         ))
         self.assertTrue(candidates["abliterix_response_opening_v26"]["blockers"])
         self.assertFalse(candidates["abliterix_response_opening_v26"]["produces_checkpoint"])
-        self.assertFalse(candidates["abliterix_aeon_component_v27"]["blockers"])
+        self.assertTrue(candidates["abliterix_aeon_component_v27"]["blockers"])
         self.assertFalse(candidates["abliterix_aeon_component_v27"]["produces_checkpoint"])
+        self.assertFalse(any(
+            command.get("enabled", False)
+            for command in candidates["abliterix_aeon_component_v27"]["commands"]
+        ))
+        self.assertFalse(candidates["abliterix_harmfulness_component_v28"]["blockers"])
+        self.assertFalse(candidates["abliterix_harmfulness_component_v28"]["produces_checkpoint"])
         self.assertTrue(any(
             command.get("enabled", True)
             and command.get("phase") == "candidate_export"
-            and "qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml" in command["command"]
-            for command in candidates["abliterix_aeon_component_v27"]["commands"]
+            and "qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml" in command["command"]
+            for command in candidates["abliterix_harmfulness_component_v28"]["commands"]
         ))
         self.assertEqual(plan["executable_candidate_count"], 0)
         self.assertEqual(plan["planned_candidate_job_count"], 1)
@@ -1581,6 +1588,32 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(manifest["sections"]["bad_prompts"]["count"], 48)
         self.assertEqual(manifest["sections"]["good_prompts"]["count"], 48)
         self.assertEqual(manifest["sections"]["bad_evaluation_prompts"]["count"], 20)
+
+    def test_qwen_v28_abliterix_harmfulness_component_policy_writes_controls(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+            }
+            plan = build_sota_plan(config, config_path, "abliterix")
+            config_toml = write_abliterix_config(plan).read_text(encoding="utf-8")
+            manifest_path = Path(tmp) / "model_forge_prompt_datasets" / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        self.assertIn("ablate_harmfulness_direction = true", config_toml)
+        self.assertIn("harmfulness_layer_band = [0.3, 0.7]", config_toml)
+        self.assertIn('disabled_components = ["attn.q_proj", "attn.k_proj", "attn.v_proj"]', config_toml)
+        self.assertIn('"attn.o_proj" = [2.8, 5.8]', config_toml)
+        self.assertIn('"mlp.down_proj" = [0.3, 1.4]', config_toml)
+        self.assertEqual(manifest["sections"]["bad_prompts"]["count"], 48)
+        self.assertEqual(manifest["sections"]["good_prompts"]["count"], 48)
 
     def test_abliterix_multidirection_prepare_rejects_unpaired_training_counts(self) -> None:
         config_path = (

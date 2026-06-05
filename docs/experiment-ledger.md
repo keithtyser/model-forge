@@ -7771,12 +7771,12 @@ far above the zero-refusal export gate.
 Committed summary:
 `reports/qwen36_27b_abliterix_response_opening_v26_plan_summary.md`
 
-### 2026-06-05 Qwen V27 Abliterix component-policy search plan
+### 2026-06-05 Qwen V27 Abliterix component-policy search
 
 Config:
 `configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml`
 
-Status: ready, search-only, no checkpoint exported.
+Status: rejected after early two-shard search stop, no checkpoint exported.
 
 Hypothesis: V26 failed because it kept Abliterix in an SRA/full-normalized LoRA
 search over the default component set. Public Qwen3.6 recipes point at a
@@ -7798,14 +7798,44 @@ Initial steering policy:
 - `component_strength_ranges.mlp.down_proj: [0.3, 1.4]`
 - `kl_target: 0.005`, `max_kl: 0.03`, `n_trials: 50`
 
-This is not promotion evidence. Run guarded Abliterix search, analyze the
-journal, and export only if the selected trial reaches zero proxy refusals
-within the KL gate. After export, register the selected checkpoint as a normal
-candidate, sync to both Sparks, run strict checkpoint/tokenizer/architecture
-audits, serve it, and run the targeted three-trial model-forge gate before
-broad eval, NVFP4, Hugging Face upload, or promotion.
+Run result:
+
+| Shard | Completed Trials | Baseline Refusals | Trial Refusals | Trial KLs | Decision |
+| --- | ---: | ---: | --- | --- | --- |
+| coordinator | 3 | 12/20 | 16/20, 14/20, 15/20 | 0.0589, 0.0161, 0.0522 | stop |
+| worker | 3 | 12/20 | 16/20, 15/20, 15/20 | 0.0447, 0.0092, 0.0289 | stop |
+
+Implementation signal: the generated Abliterix TOML worked and the backend
+exposed only `attn.o_proj` plus `mlp.down_proj` as steerable components, so the
+new `disabled_components` and `component_strength_ranges` pass-throughs are
+functional. Behavior signal: with `ablate_harmfulness_direction=false`, every
+completed trial worsened the 12/20 baseline. Decision: reject V27. Do not run
+`abliterix-export`, broad eval, NVFP4, Hugging Face upload, or promotion.
 
 External starting points:
 
 - https://github.com/AEON-7/Qwen3.6-27B-AEON-Ultimate-Uncensored-DFlash
 - https://huggingface.co/cryptocyberai/Qwen3.6-27B-abliterated
+
+Committed summary:
+`reports/qwen36_27b_abliterix_aeon_component_v27_plan_summary.md`
+
+### 2026-06-05 Qwen V28 Abliterix harmfulness component-policy search plan
+
+Config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml`
+
+Status: ready, search-only, no checkpoint exported.
+
+Hypothesis: V27 moved refusal behavior in the wrong direction while proving
+component targeting works. Abliterix v1.8.0 includes an opt-in harmfulness
+direction path for cases where the model complies or redirects but still flags
+the request as harmful. V28 keeps the V27 component policy and prompt objective,
+then turns on `ablate_harmfulness_direction: true` with
+`harmfulness_layer_band: [0.3, 0.7]`.
+
+Stop early if the first completed trials again worsen the 12/20 baseline on
+both Sparks. Export only if journal analysis finds a selected trial with zero
+proxy refusals inside the KL gate, then register the selected checkpoint as a
+normal candidate and run the model-forge targeted gate before broad eval, NVFP4,
+Hugging Face upload, or promotion.

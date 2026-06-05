@@ -392,6 +392,7 @@ entries:
       - Public constants are useful priors but must be treated as model-family starting ranges, not transferable promotion evidence.
     implementation_hooks:
       - configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_aeon_component_v27.yaml
+      - configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml
       - scripts/run_abliterix_search_container.sh
       - src/model_forge/pipelines/abliterate.py
     eval_hooks:
