@@ -52,6 +52,7 @@ from model_forge.pipelines.abliterate import (
     write_obliteratus_runner,
     write_native_optimal_transport_config,
     write_optimal_transport_runner,
+    write_qwen_scope_sae_runner,
     write_sota_artifacts,
 )
 
@@ -636,19 +637,33 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertTrue(any("MODEL_FORGE_TRIALS=3" in command and "--case-id self_harm_instruction_harmful" in command for command in commands))
         self.assertIn("--candidate name=unit_candidate,variant=local_ft_abli_unit,eval=results/qwen36_27b_v0/base/", plan["candidate_gate_command"])
 
-    def test_qwen_candidate_loop_marks_sae_candidate_blocked_until_runner_exists(self) -> None:
+    def test_qwen_candidate_loop_emits_sae_candidate_commands(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_candidate_gate.yaml"
         plan = build_candidate_loop_plan(load_yaml(config_path), config_path, run_id="qwen_unit_loop")
 
         candidate = plan["candidates"][0]
+        commands = [item["command"] for item in plan["commands"]]
 
         self.assertEqual(candidate["name"], "qwen_scope_sae_feature_diagnostic_v1")
-        self.assertEqual(candidate["status"], "runner_missing")
-        self.assertIn("guarded SAE", candidate["blockers"][0])
-        self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertFalse(any(item["candidate"] == candidate["name"] and item.get("enabled", True) for item in plan["commands"]))
-        self.assertIn("No executable candidate eval directories", plan["candidate_gate_command"])
-        self.assertFalse([item for item in plan["commands"] if item["phase"] == "candidate_gate"][0]["enabled"])
+        self.assertEqual(candidate["status"], "ready")
+        self.assertEqual(candidate["blockers"], [])
+        self.assertEqual(plan["executable_candidate_count"], 1)
+        self.assertTrue(any("sota-run --backend qwen_scope_sae --execute" in command for command in commands))
+        self.assertTrue(any("cluster model-sync" in command for command in commands))
+        self.assertIn("local_ft_abli_qwen_scope_sae_v21", plan["candidate_gate_command"])
+        self.assertTrue([item for item in plan["commands"] if item["phase"] == "candidate_gate"][0]["enabled"])
+
+    def test_qwen_scope_sae_prepare_writes_guarded_runner(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml"
+        plan = build_sota_plan(load_yaml(config_path), config_path, "qwen_scope_sae")
+
+        runner = write_qwen_scope_sae_runner(plan)
+        config_text = (Path(plan["work_dir"]) / "native_qwen_scope_sae_config.yaml").read_text(encoding="utf-8")
+        runner_text = runner.read_text(encoding="utf-8")
+
+        self.assertIn("sae_source: Qwen/SAE-Res-Qwen3.5-27B-W80K-L0_50", config_text)
+        self.assertIn("rewrite_direction_artifact_with_sae", runner_text)
+        self.assertIn("qwen_scope_sae_direction_artifact.pt", runner_text)
 
     def test_model_forge_heretic_prompt_options_are_preserved(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_heretic_long_search.yaml"

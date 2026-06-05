@@ -309,14 +309,15 @@ entries:
       - Sparse autoencoders can expose Qwen-family feature directions that may be more targeted than raw harmful-minus-benign refusal vectors.
       - SAE feature intervention is a plausible next method family when direction projection, SRA, OBLITERATUS, and SOM-style projection stall on residual refusals.
     implementation_hooks:
-      - future:src/model_forge/behavior_editing/sae_features.py
-      - future:configs/abliteration/*sae*.yaml
+      - src/model_forge/behavior_editing/sae_features.py
+      - configs/abliteration/*qwen_scope_sae*.yaml
+      - src/model_forge/pipelines/abliterate.py
     eval_hooks:
       - evals/prompts/refusal_paired_boundary.yaml
       - evals/prompts/unsafe_ablation_redirect.yaml
       - evals/prompts/capability_preservation_challenge.yaml
     limitations:
-      - Model Forge does not yet have a guarded SAE export runner.
+      - The current runner is a dictionary-constrained projection path, not a general activation-patching SAE server.
       - SAE features still need baked-checkpoint validation and cannot replace source-relative model-forge evals.
 
   apostate_preservation_ablation_2026:

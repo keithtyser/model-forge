@@ -35,6 +35,7 @@ SOTA_BACKEND_CHOICES = (
     "optimal_transport",
     "norm_preserving_projection",
     "som_projection",
+    "qwen_scope_sae",
 )
 CANDIDATE_GATE_OPERATORS = {"<=", ">=", "==", "!=", "<", ">"}
 
@@ -54,6 +55,13 @@ NATIVE_PROJECTED_ABLATION_EXECUTIONS = {
     "checkpoint_export",
     "guarded_checkpoint",
     "baked_checkpoint",
+}
+
+QWEN_SCOPE_SAE_EXECUTIONS = {
+    "checkpoint_export",
+    "guarded_checkpoint",
+    "baked_checkpoint",
+    "sae_dictionary_projection",
 }
 
 APOSTATE_CONFIG_FIELDS = {
@@ -1014,6 +1022,16 @@ def sota_config(config: dict[str, Any]) -> dict[str, Any]:
                     "learns bounded refusal-residual centroids, combines them with "
                     "the global mean direction, and exports only through the normal "
                     "source-relative checkpoint/eval gate."
+                ),
+            },
+            "qwen_scope_sae": {
+                "install": "native model-forge checkpoint runner plus a compatible SAE dictionary",
+                "method_family": "qwen_scope_sae_dictionary_projection",
+                "execution": "plan_only",
+                "notes": (
+                    "SAE dictionary-constrained projection: collect the same source-relative "
+                    "refusal residual signal, project it onto aligned SAE decoder features, "
+                    "then bake a normal checkpoint through the standard projection exporter."
                 ),
             },
         },
@@ -2504,6 +2522,8 @@ def native_checkpoint_method_name(plan: dict[str, Any]) -> str:
         return "native_norm_preserving_projected_abliteration"
     if plan["backend"] == "som_projection":
         return "native_som_multidirectional_projection"
+    if plan["backend"] == "qwen_scope_sae":
+        return "qwen_scope_sae_dictionary_projection"
     return "native_optimal_transport_activation_projection"
 
 
@@ -2601,6 +2621,11 @@ def write_native_optimal_transport_config(plan: dict[str, Any]) -> Path:
             "source_config": plan["config_path"],
             "source_model": plan["source_model"],
             "output_dir": plan["output_dir"],
+            "sae": {
+                key: backend.get(key)
+                for key in ("sae_source", "sae_file", "sae_file_pattern", "sae_top_k", "sae_min_abs_cosine")
+                if backend.get(key) is not None
+            } if plan["backend"] == "qwen_scope_sae" else None,
             "next_gate": "Run model-forge source-vs-candidate targeted eval before broader evals, quantization, promotion, or upload.",
         },
     }
@@ -2707,6 +2732,170 @@ def main() -> None:
         "source_model": {plan["source_model"]!r},
         "output_dir": str(output_dir),
         "directions": str(directions_dir / "direction_artifact.pt"),
+        "overwrite": overwrite,
+        "post_export_health_findings": post_export_health_findings,
+        "next_step": "Run model-forge source-vs-candidate targeted eval before broader evals, quantization, promotion, or upload.",
+    }}
+    summary_path.write_text(json.dumps(payload, indent=2) + "\\n")
+    try:
+        (output_dir / {summary_path.name!r}).write_text(json.dumps(payload, indent=2) + "\\n")
+    except OSError:
+        pass
+    print(f"Wrote {{summary_path}}")
+
+
+if __name__ == "__main__":
+    main()
+'''
+    runner.write_text(script)
+    return runner
+
+
+def write_qwen_scope_sae_runner(plan: dict[str, Any]) -> Path:
+    backend = plan["backend_config"]
+    if not backend.get("sae_source"):
+        raise SystemExit("qwen_scope_sae backend requires sae_source")
+    work_dir = Path(plan["work_dir"])
+    work_dir.mkdir(parents=True, exist_ok=True)
+    config_path = write_native_optimal_transport_config(plan)
+    runner = work_dir / "run_qwen_scope_sae.py"
+    summary_path = work_dir / "model_forge_sota_qwen_scope_sae.json"
+    overwrite = bool(backend.get("overwrite_checkpoint", False))
+    sae_source = str(backend["sae_source"])
+    sae_file = backend.get("sae_file")
+    sae_file_pattern = backend.get("sae_file_pattern")
+    top_k = int(backend.get("sae_top_k", 8))
+    min_abs_cosine = float(backend.get("sae_min_abs_cosine", 0.0))
+    local_files_only = bool(backend.get("sae_local_files_only", False))
+    hidden_size = backend.get("hidden_size")
+    script = f'''from __future__ import annotations
+
+import json
+import os
+import shutil
+from pathlib import Path
+
+from model_forge.behavior_editing.sae_features import rewrite_direction_artifact_with_sae
+from model_forge.pipelines.abliterate import (
+    build_plan,
+    collect_directions,
+    export_projection,
+    guard_execute,
+    guard_source_checkpoint,
+    load_yaml,
+)
+
+config_path = Path({str(config_path)!r})
+work_dir = Path({str(work_dir)!r})
+output_dir = Path({str(plan["output_dir"])!r})
+summary_path = Path({str(summary_path)!r})
+sae_source = {sae_source!r}
+sae_file = {sae_file!r}
+sae_file_pattern = {sae_file_pattern!r}
+top_k = {top_k!r}
+min_abs_cosine = {min_abs_cosine!r}
+local_files_only = {local_files_only!r}
+configured_hidden_size = {hidden_size!r}
+overwrite = {overwrite!r}
+
+
+def available_ram_fraction() -> float:
+    try:
+        values = {{}}
+        with open("/proc/meminfo", "r", encoding="utf-8") as handle:
+            for line in handle:
+                key, _, raw = line.partition(":")
+                fields = raw.strip().split()
+                if fields:
+                    values[key] = float(fields[0])
+        available = values.get("MemAvailable")
+        total = values.get("MemTotal")
+        if available is None or total in (None, 0):
+            return 1.0
+        return available / total
+    except OSError:
+        return 1.0
+
+
+def guard_system_health(*, fatal: bool = True) -> list[str]:
+    findings = []
+    min_ram = float(os.environ.get("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", "0.05"))
+    ram_fraction = available_ram_fraction()
+    if ram_fraction < min_ram:
+        findings.append(f"available RAM fraction {{ram_fraction:.3f}} is below guard {{min_ram:.3f}}")
+    min_disk = float(os.environ.get("MODEL_FORGE_MIN_FREE_DISK_FRACTION", "0.15"))
+    usage = shutil.disk_usage(output_dir.parent if output_dir.parent.exists() else work_dir)
+    free_fraction = usage.free / usage.total
+    if free_fraction < min_disk:
+        findings.append(f"free disk fraction {{free_fraction:.3f}} is below guard {{min_disk:.3f}}")
+    if findings and fatal:
+        raise SystemExit("; ".join(findings))
+    return findings
+
+
+def reserve_cpu_headroom() -> None:
+    usable_cores = max(1, (os.cpu_count() or 2) - 1)
+    os.environ.setdefault("OMP_NUM_THREADS", str(usable_cores))
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+
+def infer_hidden_size(source_model: str) -> int:
+    if configured_hidden_size is not None:
+        return int(configured_hidden_size)
+    config_path = Path(source_model) / "config.json"
+    if not config_path.exists():
+        raise SystemExit("qwen_scope_sae requires hidden_size when source config.json is unavailable")
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    text_config = config.get("text_config") if isinstance(config.get("text_config"), dict) else {{}}
+    hidden = text_config.get("hidden_size") or config.get("hidden_size")
+    if hidden is None:
+        raise SystemExit("could not infer hidden_size from source config.json")
+    return int(hidden)
+
+
+def main() -> None:
+    reserve_cpu_headroom()
+    guard_system_health()
+    config = load_yaml(config_path)
+    plan = build_plan(config, config_path)
+    guard_execute(plan, True)
+    guard_source_checkpoint(plan)
+    directions_dir = Path(config["artifacts_dir"])
+    collect_directions(config, config_path, directions_dir)
+    guard_system_health()
+    raw_artifact = directions_dir / "direction_artifact.pt"
+    constrained_artifact = directions_dir / "qwen_scope_sae_direction_artifact.pt"
+    hidden_size = infer_hidden_size({plan["source_model"]!r})
+    sae_report = rewrite_direction_artifact_with_sae(
+        input_path=raw_artifact,
+        output_path=constrained_artifact,
+        sae_source=sae_source,
+        hidden_size=hidden_size,
+        top_k=top_k,
+        min_abs_cosine=min_abs_cosine,
+        sae_file=sae_file,
+        sae_file_pattern=sae_file_pattern,
+        local_files_only=local_files_only,
+    )
+    guard_system_health()
+    export_projection(
+        config,
+        config_path,
+        directions_path=constrained_artifact,
+        overwrite=overwrite,
+    )
+    post_export_health_findings = guard_system_health(fatal=False)
+    for finding in post_export_health_findings:
+        print(f"[model-forge] post-export health warning: {{finding}}")
+    payload = {{
+        "backend": "qwen_scope_sae",
+        "implementation": "qwen_scope_sae_dictionary_projection",
+        "config": str(config_path),
+        "source_model": {plan["source_model"]!r},
+        "output_dir": str(output_dir),
+        "raw_directions": str(raw_artifact),
+        "sae_constrained_directions": str(constrained_artifact),
+        "sae_report": sae_report,
         "overwrite": overwrite,
         "post_export_health_findings": post_export_health_findings,
         "next_step": "Run model-forge source-vs-candidate targeted eval before broader evals, quantization, promotion, or upload.",
@@ -3149,7 +3338,7 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
     work_dir = Path(selected_plan["work_dir"])
     work_dir.mkdir(parents=True, exist_ok=True)
     paths: dict[str, str] = {}
-    for name in selected_plan["all_backends"]:
+    for name in [selected_plan["backend"]]:
         plan = build_sota_plan(config, config_path, name)
         if name == "obliteratus":
             paths["obliteratus_runner"] = str(write_obliteratus_runner(plan))
@@ -3174,6 +3363,9 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
         elif name == "som_projection" and plan["backend_config"].get("execution") in NATIVE_PROJECTED_ABLATION_EXECUTIONS:
             paths["som_projection_config"] = str(write_native_optimal_transport_config(plan))
             paths["som_projection_runner"] = str(write_optimal_transport_runner(plan))
+        elif name == "qwen_scope_sae" and plan["backend_config"].get("execution") in QWEN_SCOPE_SAE_EXECUTIONS:
+            paths["qwen_scope_sae_config"] = str(write_native_optimal_transport_config(plan))
+            paths["qwen_scope_sae_runner"] = str(write_qwen_scope_sae_runner(plan))
         elif plan["backend_config"].get("execution") == "plan_only":
             paths[f"{name}_plan"] = str(write_external_backend_plan(plan))
     readme = work_dir / "README.md"
@@ -3278,6 +3470,23 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
             "The native SOM projection path materializes source-relative model-forge prompts, learns a bounded multi-centroid refusal residual basis, and writes a normal Transformers checkpoint with row-norm preservation. Treat it as a candidate only after the targeted model-forge gate passes.",
             "",
         ])
+    if paths.get("qwen_scope_sae_runner"):
+        sae_plan = build_sota_plan(config, config_path, "qwen_scope_sae")
+        sae_command = (
+            f"scripts/run_native_checkpoint_container.sh {paths['qwen_scope_sae_runner']}"
+            if sae_plan["backend_config"].get("container_image")
+            else f"scripts/run_native_checkpoint_scope.sh {paths['qwen_scope_sae_runner']}"
+        )
+        run_sections.extend([
+            "Run Qwen-Scope SAE dictionary-constrained checkpoint export:",
+            "",
+            "```bash",
+            sae_command,
+            "```",
+            "",
+            "The Qwen-Scope SAE path collects source-relative refusal residual directions, constrains them to aligned SAE decoder features, and writes a normal Transformers checkpoint through the existing projection exporter. Treat it as a candidate only after the targeted model-forge gate passes.",
+            "",
+        ])
     plan_only_paths = {key: value for key, value in paths.items() if key.endswith("_plan")}
     if plan_only_paths:
         run_sections.extend([
@@ -3300,7 +3509,7 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
             "Install commands:",
             "",
             "```bash",
-            *(backend_cfg.get("install", "") for backend_cfg in selected_plan["all_backends"].values()),
+            selected_plan["install"] or "",
             "```",
             "",
             *run_sections,
@@ -4059,6 +4268,18 @@ def command_sota_run(args: argparse.Namespace) -> None:
             raise SystemExit("missing generated SOM projection runner")
         execution = optimal_transport_execution_spec(plan, runner)
         console.print(f"[bold]SOM projection execution mode[/bold]: {execution['mode']}")
+        subprocess.run(
+            execution["command"],
+            cwd=execution["cwd"],
+            env=execution["env"],
+            check=True,
+        )
+    elif plan["backend"] == "qwen_scope_sae" and plan["backend_config"].get("execution") in QWEN_SCOPE_SAE_EXECUTIONS:
+        runner = result["paths"].get("qwen_scope_sae_runner")
+        if runner is None:
+            raise SystemExit("missing generated Qwen-Scope SAE runner")
+        execution = optimal_transport_execution_spec(plan, runner)
+        console.print(f"[bold]Qwen-Scope SAE execution mode[/bold]: {execution['mode']}")
         subprocess.run(
             execution["command"],
             cwd=execution["cwd"],

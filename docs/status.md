@@ -883,8 +883,11 @@ length filtering:
    refusal-wording trials; V18 also regressed capability.
    The same config now supports `candidate-loop-plan`. Its current Qwen loop
    records `qwen_scope_sae_feature_diagnostic_v1` as the next method-shift
-   candidate but marks it `runner_missing`, so no heavy commands are emitted and
-   the gate phase stays disabled until a guarded SAE feature runner exists.
+   candidate, backed by
+   `configs/abliteration/qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml`.
+   The loop emits the sequential plan/prepare/export/sync/audit/serve/eval
+   commands, but V21 is not promotable or quantizable until its targeted
+   three-trial candidate gate passes.
 
 ## Operational Guardrails
 

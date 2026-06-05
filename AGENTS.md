@@ -1949,15 +1949,19 @@ wording, and V18 also loses capability.
 The same config now has a `candidate_selection.loop` runbook. Run
 `./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml candidate-loop-plan --write-plan`
 before launching the next ablation branch. The current loop has one next method
-candidate, `qwen_scope_sae_feature_diagnostic_v1`, and it is intentionally
-`runner_missing`: the guarded SAE feature-intervention runner does not exist
-yet. The generated plan disables the gate/cleanup phases until an executable
-candidate produces an eval directory, which prevents agents from trying to rank
-missing results.
+candidate, `qwen_scope_sae_feature_diagnostic_v1`, implemented as
+`configs/abliteration/qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml` and
+registered as `local_ft_abli_qwen_scope_sae_v21`. It uses the native
+`qwen_scope_sae` backend: collect source-relative residual refusal-opening
+directions, constrain each layer to the official
+`Qwen/SAE-Res-Qwen3.5-27B-W80K-L0_50` decoder features, then export through the
+normal norm-preserving projection path. Run plan/prepare first, then execute
+only when the two-Spark cluster is healthy. After export, sync, run strict
+checkpoint/tokenizer/architecture audits, serve exactly one candidate, and run
+the targeted three-trial gate before broad eval, NVFP4, HF upload, or promotion.
 
 The next Qwen method shift should use this candidate gate as the selection
-objective for a bounded search loop, or move to the tracked `qwen_scope_sae_2026`
-feature-level path once a guarded SAE runner exists. Do not keep repeating
+objective for the bounded V21 SAE loop. Do not keep repeating
 V18/V19/V20 SOM prompt-weight, strength, contrast, or output-projection tweaks
 outside a gate-driven loop.
 

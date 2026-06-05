@@ -7606,15 +7606,14 @@ Command:
 Generated plan:
 `reports/generated/abliteration_candidate_loop/qwen36_27b_ft_abli_v2_candidate_gate_candidate_loop/candidate_loop_plan.json`
 
-Result: the loop planner works and records the correct next method-shift
-candidate, but there are zero executable candidates today. The planned next
-candidate is `qwen_scope_sae_feature_diagnostic_v1`, marked `runner_missing`
-because the repo does not yet have a guarded SAE feature-intervention backend.
-The generated runbook disables the final gate and cleanup phases until an
-executable candidate produces an eval directory. This prevents a future agent
-from trying to score nonexistent outputs while preserving the exact gate command
-shape for completed candidates.
+Original result: the first loop planner recorded the correct next method-shift
+candidate but had zero executable candidates because the guarded SAE backend was
+missing.
 
-Next implementation target: add a guarded SAE feature runner connected to the
-tracked `qwen_scope_sae_2026` research basis, then re-run this loop and the
-candidate gate before any broad eval or NVFP4 work.
+Follow-up: the repo now has a native `qwen_scope_sae` backend and
+`configs/abliteration/qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml`.
+Re-running the loop emits one executable V21 candidate:
+plan, prepare, guarded checkpoint export, cluster sync, strict
+checkpoint/tokenizer/architecture audits, one-server targeted eval, then
+candidate-gate. V21 remains blocked for broad eval, NVFP4, upload, and promotion
+until that targeted gate produces an eval directory and passes.
