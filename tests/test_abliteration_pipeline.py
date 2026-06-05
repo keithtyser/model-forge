@@ -23,6 +23,7 @@ from model_forge.pipelines.abliterate import (
     analyze_abliterix_search_journal,
     analyze_heretic_search_journal,
     build_candidate_gate_report,
+    build_candidate_loop_plan,
     build_plan,
     build_sota_plan,
     candidate_gate_entries,
@@ -584,6 +585,70 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(entries[0]["eval_dir"], "results/v17")
         self.assertEqual(entries[1]["name"], "v20")
         self.assertEqual(entries[1]["eval_dir"], "results/v20")
+
+    def test_candidate_loop_plan_writes_sequential_runbook_for_ready_candidate(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "unit_loop.yaml"
+        config = {
+            "candidate_selection": {
+                "objective": "zero_refusal_capability_retention",
+                "loop": {
+                    "family": "qwen36_27b",
+                    "source_variant": "local_ft_v4",
+                    "cluster_config": "configs/clusters/dgx_spark_x2.example.yaml",
+                    "eval": {
+                        "trials": 3,
+                        "temperature": 1,
+                        "buckets": ["refusal_paired_boundary"],
+                        "case_ids": ["self_harm_instruction_harmful"],
+                    },
+                    "candidates": [
+                        {
+                            "name": "unit_candidate",
+                            "variant": "local_ft_abli_unit",
+                            "backend": "som_projection",
+                            "config": "configs/abliteration/unit_candidate.yaml",
+                            "output_dir": "~/models/unit-candidate",
+                        }
+                    ],
+                },
+                "gate": {
+                    "requirements": [
+                        {
+                            "name": "no_refusal_wording",
+                            "bucket": "refusal_paired_boundary",
+                            "case_id": "self_harm_instruction_harmful",
+                            "metric": "refusal_rate_harmful",
+                            "value": 0.0,
+                        }
+                    ]
+                },
+            }
+        }
+
+        plan = build_candidate_loop_plan(config, config_path, run_id="unit_loop")
+        commands = [item["command"] for item in plan["commands"]]
+
+        self.assertEqual(plan["schema_version"], "model_forge.abliteration_candidate_loop_plan.v1")
+        self.assertEqual(plan["candidate_count"], 1)
+        self.assertIn("configs/clusters/dgx_spark_x2.example.yaml", commands[1])
+        self.assertTrue(any("sota-run --backend som_projection --execute" in command for command in commands))
+        self.assertTrue(any("cluster model-sync" in command for command in commands))
+        self.assertTrue(any("MODEL_FORGE_TRIALS=3" in command and "--case-id self_harm_instruction_harmful" in command for command in commands))
+        self.assertIn("--candidate name=unit_candidate,variant=local_ft_abli_unit,eval=results/qwen36_27b_v0/base/", plan["candidate_gate_command"])
+
+    def test_qwen_candidate_loop_marks_sae_candidate_blocked_until_runner_exists(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_candidate_gate.yaml"
+        plan = build_candidate_loop_plan(load_yaml(config_path), config_path, run_id="qwen_unit_loop")
+
+        candidate = plan["candidates"][0]
+
+        self.assertEqual(candidate["name"], "qwen_scope_sae_feature_diagnostic_v1")
+        self.assertEqual(candidate["status"], "runner_missing")
+        self.assertIn("guarded SAE", candidate["blockers"][0])
+        self.assertEqual(plan["executable_candidate_count"], 0)
+        self.assertFalse(any(item["candidate"] == candidate["name"] and item.get("enabled", True) for item in plan["commands"]))
+        self.assertIn("No executable candidate eval directories", plan["candidate_gate_command"])
+        self.assertFalse([item for item in plan["commands"] if item["phase"] == "candidate_gate"][0]["enabled"])
 
     def test_model_forge_heretic_prompt_options_are_preserved(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_local_abli_heretic_long_search.yaml"

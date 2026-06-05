@@ -159,6 +159,35 @@ class AgentExperimentTests(unittest.TestCase):
         self.assertTrue(plan["evidence_plan"]["manifest_required"])
         self.assertTrue(plan["resource_policy"]["use_cluster_when_heavy"])
 
+    def test_optimize_behavior_edit_plan_includes_candidate_loop_when_configured(self) -> None:
+        plan = optimize_behavior_edit_plan(
+            Namespace(
+                family="qwen36_27b",
+                config=Path("configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml"),
+                source_variant="local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2",
+                target_variant="local_ft_abli_qwen_scope_sae_feature_diagnostic_v1",
+                backend=None,
+                objective_profile="zero_refusal_capability_retention",
+                experiment_id="unit_qwen_candidate_loop",
+                title=None,
+                hypothesis=None,
+                owner_agent="unit",
+                start_memory_fraction=0.05,
+                stop_memory_fraction=0.05,
+                disk_free_fraction=0.15,
+                output=None,
+                json=False,
+            )
+        )
+        findings = validate_agent_experiment(plan)
+        commands = [item["command"] for item in plan["planned_commands"]]
+
+        self.assertEqual(findings, [])
+        self.assertTrue(any("candidate-loop-plan --write-plan" in command for command in commands))
+        self.assertTrue(any("candidate-gate --write-report" in command for command in commands))
+        self.assertIn("candidate_loop_plan.json", plan["evidence_plan"]["expected_reports"])
+        self.assertIn("candidate_gate.json", plan["evidence_plan"]["expected_reports"])
+
     def test_agent_run_card_summarizes_plan_and_writes_outputs(self) -> None:
         plan = load_yaml(Path("recipes/agents/agent_experiment_template.yaml"))
         card = build_agent_run_card(plan, plan_path=Path("recipes/agents/agent_experiment_template.yaml"), status="planned")

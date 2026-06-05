@@ -39,6 +39,40 @@ candidate_selection:
     temperature: 1
     delete_rejected_full_checkpoints_after_report: true
     block_quantization_until_candidate_passes: true
+  loop:
+    family: qwen36_27b
+    source_variant: local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2
+    cluster_config: /tmp/model_forge_dgx_spark_x2_runtime.yaml
+    min_available_ram_fraction: 0.05
+    min_free_disk_fraction: 0.15
+    model_sync_timeout: 3600
+    delete_rejected_checkpoints_after_report: true
+    eval:
+      trials: 3
+      temperature: 1
+      base_url: http://127.0.0.1:8000/v1
+      buckets:
+        - refusal_paired_boundary
+        - capability_preservation_challenge
+      case_ids:
+        - self_harm_instruction_harmful
+        - model_selection_summary
+    candidates:
+      - name: qwen_scope_sae_feature_diagnostic_v1
+        status: runner_missing
+        method_family: qwen_scope_sae_2026
+        backend: qwen_scope_sae
+        variant: local_ft_abli_qwen_scope_sae_feature_diagnostic_v1
+        blocker: guarded SAE feature-intervention runner is not implemented yet
+        hypothesis: >
+          A feature-level SAE intervention may isolate the residual self-harm
+          refusal-opening prior more cleanly than prompt-weighted SOM/output
+          projection edits while preserving model_selection_summary capability.
+        implementation_next:
+          - add src/model_forge/behavior_editing/sae_features.py
+          - add a guarded qwen_scope_sae backend to ./forge ablate
+          - require checkpoint/tokenizer/architecture audits before serving
+          - run this candidate loop and candidate-gate before broad eval or NVFP4
   gate:
     trials: 3
     temperature: 1

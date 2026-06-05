@@ -607,6 +607,10 @@ def optimize_behavior_edit_plan(args: argparse.Namespace) -> dict[str, Any]:
     backend_arg = f" --backend {args.backend}" if args.backend else ""
     experiment_id = sanitize_run_id(args.experiment_id or f"{family}_{source_variant}_behavior_edit_optimization")
     config_display = display_path(config_path)
+    candidate_selection = config.get("candidate_selection") or {}
+    has_candidate_loop = bool((candidate_selection.get("loop") or {}).get("candidates"))
+    has_candidate_gate = bool((candidate_selection.get("gate") or {}).get("requirements"))
+    has_sota_backend = bool(config.get("sota"))
     planned_commands: list[dict[str, Any]] = [
         {
             "command": f"./forge ablate --config {config_display} plan",
@@ -615,57 +619,115 @@ def optimize_behavior_edit_plan(args: argparse.Namespace) -> dict[str, Any]:
             "requires_execute": False,
             "expected_artifacts": ["terminal_output"],
         },
-        {
-            "command": f"./forge ablate --config {config_display} sota-plan{backend_arg}",
-            "purpose": "Inspect the configured SOTA behavior-edit backend and selected recipe before writing runner artifacts.",
-            "starts_heavy_job": False,
-            "requires_execute": False,
-            "expected_artifacts": ["terminal_output"],
-        },
-        {
-            "command": f"./forge ablate --config {config_display} sota-prepare{backend_arg}",
-            "purpose": "Write backend-specific behavior-edit runner/config artifacts without executing the edit.",
-            "starts_heavy_job": False,
-            "requires_execute": False,
-            "expected_artifacts": ["sota_runner", "sota_config", "README.md"],
-        },
-        {
-            "command": f"./forge ablate --config {config_display} sota-run{backend_arg} --execute",
-            "purpose": f"Run the guarded behavior-edit backend for {family}/{source_variant} -> {target_variant}.",
-            "starts_heavy_job": True,
-            "requires_execute": True,
-            "expected_artifacts": ["edited_checkpoint", "model_forge_sota_summary.json"],
-        },
-        {
-            "command": f"./forge serve {family} {target_variant}",
-            "purpose": f"Serve the edited candidate {target_variant} for loader and sampled quality validation.",
-            "starts_heavy_job": True,
-            "requires_execute": True,
-            "expected_artifacts": ["running_openai_compatible_endpoint"],
-        },
-        {
-            "command": f"./forge eval {family} {target_variant} --internal",
-            "purpose": f"Run internal refusal, capability, paired-quality, artifact, and regression evals for {target_variant}.",
-            "starts_heavy_job": False,
-            "requires_execute": True,
-            "expected_artifacts": ["manifest.json", "scores.csv", "eval_provenance_card.json"],
-        },
-        {
-            "command": f"./forge compare {family}",
-            "purpose": "Refresh saved comparisons against the unedited source and downloaded references.",
-            "starts_heavy_job": False,
-            "requires_execute": True,
-            "expected_artifacts": ["comparison.json", "comparison.md"],
-        },
-        {
-            "command": f"./forge promote {family}",
-            "purpose": "Apply objective-profile promotion gates before publishing or calling the behavior edit successful.",
-            "starts_heavy_job": False,
-            "requires_execute": True,
-            "expected_artifacts": ["promotion_report.json", "promotion_report.md"],
-        },
     ]
+    if has_sota_backend:
+        planned_commands.extend([
+            {
+                "command": f"./forge ablate --config {config_display} sota-plan{backend_arg}",
+                "purpose": "Inspect the configured SOTA behavior-edit backend and selected recipe before writing runner artifacts.",
+                "starts_heavy_job": False,
+                "requires_execute": False,
+                "expected_artifacts": ["terminal_output"],
+            },
+            {
+                "command": f"./forge ablate --config {config_display} sota-prepare{backend_arg}",
+                "purpose": "Write backend-specific behavior-edit runner/config artifacts without executing the edit.",
+                "starts_heavy_job": False,
+                "requires_execute": False,
+                "expected_artifacts": ["sota_runner", "sota_config", "README.md"],
+            },
+        ])
+    if has_candidate_loop:
+        planned_commands.append(
+            {
+                "command": f"./forge ablate --config {config_display} candidate-loop-plan --write-plan",
+                "purpose": "Write the bounded candidate runbook, expected eval dirs, final candidate gate command, and blocked-runner status before launching heavy work.",
+                "starts_heavy_job": False,
+                "requires_execute": False,
+                "expected_artifacts": ["candidate_loop_plan.json", "candidate_loop_plan.md"],
+            }
+        )
+    if has_sota_backend:
+        planned_commands.extend([
+            {
+                "command": f"./forge ablate --config {config_display} sota-run{backend_arg} --execute",
+                "purpose": f"Run the guarded behavior-edit backend for {family}/{source_variant} -> {target_variant}.",
+                "starts_heavy_job": True,
+                "requires_execute": True,
+                "expected_artifacts": ["edited_checkpoint", "model_forge_sota_summary.json"],
+            },
+            {
+                "command": f"./forge serve {family} {target_variant}",
+                "purpose": f"Serve the edited candidate {target_variant} for loader and sampled quality validation.",
+                "starts_heavy_job": True,
+                "requires_execute": True,
+                "expected_artifacts": ["running_openai_compatible_endpoint"],
+            },
+            {
+                "command": f"./forge eval {family} {target_variant} --internal",
+                "purpose": f"Run internal refusal, capability, paired-quality, artifact, and regression evals for {target_variant}.",
+                "starts_heavy_job": False,
+                "requires_execute": True,
+                "expected_artifacts": ["manifest.json", "scores.csv", "eval_provenance_card.json"],
+            },
+        ])
+    if has_candidate_gate:
+        planned_commands.append(
+            {
+                "command": f"./forge ablate --config {config_display} candidate-gate --write-report",
+                "purpose": "Rank completed candidate eval outputs by explicit case-level requirements before broad eval, quantization, upload, or promotion.",
+                "starts_heavy_job": False,
+                "requires_execute": True,
+                "expected_artifacts": ["candidate_gate.json", "candidate_gate.md"],
+            }
+        )
+    if has_sota_backend:
+        planned_commands.extend([
+            {
+                "command": f"./forge compare {family}",
+                "purpose": "Refresh saved comparisons against the unedited source and downloaded references.",
+                "starts_heavy_job": False,
+                "requires_execute": True,
+                "expected_artifacts": ["comparison.json", "comparison.md"],
+            },
+            {
+                "command": f"./forge promote {family}",
+                "purpose": "Apply objective-profile promotion gates before publishing or calling the behavior edit successful.",
+                "starts_heavy_job": False,
+                "requires_execute": True,
+                "expected_artifacts": ["promotion_report.json", "promotion_report.md"],
+            },
+        ])
     safety = plan.get("safety") or {}
+    expected_reports = ["manifest.json"]
+    if has_sota_backend:
+        expected_reports = [
+            "sota_runner",
+            "model_forge_sota_summary.json",
+            "eval_provenance_card.json",
+            "comparison.json",
+            "promotion_report.md",
+            "manifest.json",
+        ]
+    if has_candidate_loop:
+        expected_reports.insert(2, "candidate_loop_plan.json")
+    if has_candidate_gate:
+        expected_reports.insert(3 if has_candidate_loop else 2, "candidate_gate.json")
+    required_validation_commands = [
+        f"./forge ablate --config {config_display} plan",
+        f"./forge variants tokenizer-audit {family} --variant {source_variant} --json",
+        "./forge doctor --json",
+    ]
+    if has_sota_backend:
+        required_validation_commands.insert(
+            2,
+            f"./forge variants tokenizer-audit {family} --variant {target_variant} --json",
+        )
+    if has_candidate_loop:
+        required_validation_commands.insert(
+            1,
+            f"./forge ablate --config {config_display} candidate-loop-plan --json",
+        )
     return {
         "schema_version": AGENT_EXPERIMENT_VERSION,
         "experiment_id": experiment_id,
@@ -693,20 +755,8 @@ def optimize_behavior_edit_plan(args: argparse.Namespace) -> dict[str, Any]:
         "evidence_plan": {
             "manifest_required": True,
             "ledger_update_required": True,
-            "expected_reports": [
-                "sota_runner",
-                "model_forge_sota_summary.json",
-                "eval_provenance_card.json",
-                "comparison.json",
-                "promotion_report.md",
-                "manifest.json",
-            ],
-            "required_validation_commands": [
-                f"./forge ablate --config {config_display} plan",
-                f"./forge variants tokenizer-audit {family} --variant {source_variant} --json",
-                f"./forge variants tokenizer-audit {family} --variant {target_variant} --json",
-                "./forge doctor --json",
-            ],
+            "expected_reports": expected_reports,
+            "required_validation_commands": required_validation_commands,
         },
         "success_criteria": [
             "Invalid refusal and target noncompliance metrics improve versus the unedited source checkpoint.",

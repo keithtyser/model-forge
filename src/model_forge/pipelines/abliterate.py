@@ -25,6 +25,7 @@ console = Console()
 
 REPO_DIR = Path(__file__).resolve().parents[3]
 CANDIDATE_GATE_SCHEMA_VERSION = "model_forge.abliteration_candidate_gate.v1"
+CANDIDATE_LOOP_SCHEMA_VERSION = "model_forge.abliteration_candidate_loop_plan.v1"
 SOTA_BACKEND_CHOICES = (
     "obliteratus",
     "heretic",
@@ -4778,6 +4779,408 @@ def write_candidate_gate_report(report: dict[str, Any], output_dir: Path | None 
     return json_path
 
 
+def family_eval_output_root(family: str) -> Path:
+    family_path = REPO_DIR / "configs" / "model_families" / f"{family}.yaml"
+    if not family_path.exists():
+        raise SystemExit(f"candidate-loop-plan cannot find family config: {family_path}")
+    family_config = load_yaml(family_path)
+    eval_config = family_config.get("eval") or {}
+    output_root = eval_config.get("output_root")
+    if not output_root:
+        raise SystemExit(f"family {family!r} has no eval.output_root")
+    return resolve_repo_path(output_root)
+
+
+def shell_assignment(key: str, value: str | int | float | bool | None) -> str:
+    if value is None:
+        return ""
+    text = str(value)
+    if re.fullmatch(r"[A-Za-z0-9_./:=@+-]+", text):
+        return f"{key}={text}"
+    return f"{key}={json.dumps(text)}"
+
+
+def command_entry(
+    command: str,
+    *,
+    phase: str,
+    purpose: str,
+    starts_heavy_job: bool = False,
+    requires_execute: bool = False,
+    candidate: str | None = None,
+    enabled: bool = True,
+) -> dict[str, Any]:
+    return {
+        "phase": phase,
+        "candidate": candidate,
+        "command": command,
+        "purpose": purpose,
+        "starts_heavy_job": starts_heavy_job,
+        "requires_execute": requires_execute,
+        "enabled": enabled,
+    }
+
+
+def candidate_loop_config(config: dict[str, Any]) -> dict[str, Any]:
+    selection = config.get("candidate_selection") or {}
+    loop = selection.get("loop") or {}
+    if not isinstance(loop, dict) or not loop:
+        raise SystemExit("candidate-loop-plan requires candidate_selection.loop in the config")
+    family = loop.get("family") or selection.get("family")
+    source_variant = loop.get("source_variant") or selection.get("source_variant")
+    candidates = loop.get("candidates") or []
+    if not family:
+        raise SystemExit("candidate_selection.loop.family is required")
+    if not source_variant:
+        raise SystemExit("candidate_selection.loop.source_variant is required")
+    if not isinstance(candidates, list) or not candidates:
+        raise SystemExit("candidate_selection.loop.candidates must be a non-empty list")
+    return {
+        **loop,
+        "family": str(family),
+        "source_variant": str(source_variant),
+        "candidates": candidates,
+    }
+
+
+def normalize_loop_candidate(raw: dict[str, Any], *, index: int) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        raise SystemExit(f"candidate loop entry {index} must be a mapping")
+    candidate = dict(raw)
+    candidate.setdefault("name", candidate.get("variant") or f"candidate_{index}")
+    candidate.setdefault("status", "ready")
+    candidate.setdefault("execution", "checkpoint_export")
+    return candidate
+
+
+def candidate_loop_eval_suffix(family: str, candidate: dict[str, Any], trials: int) -> str:
+    if candidate.get("eval_suffix"):
+        return str(candidate["eval_suffix"])
+    variant = str(candidate.get("variant") or candidate["name"])
+    name = sanitize_report_id(str(candidate["name"]))
+    return f"{family}_{variant}_{name}_targeted_gate_t{trials}"
+
+
+def candidate_loop_eval_command(
+    *,
+    family: str,
+    variant: str,
+    eval_spec: dict[str, Any],
+    output_suffix: str,
+) -> str:
+    trials = int(eval_spec.get("trials") or 3)
+    temperature = eval_spec.get("temperature", 1)
+    parts = [
+        shell_assignment("MODEL_FORGE_TRIALS", trials),
+        shell_assignment("MODEL_FORGE_TEMPERATURE", temperature),
+        shell_assignment("MODEL_FORGE_BASE_URL", eval_spec.get("base_url", "http://127.0.0.1:8000/v1")),
+        "./forge",
+        "eval",
+        family,
+        variant,
+        "--internal",
+    ]
+    for bucket in eval_spec.get("buckets") or []:
+        parts.extend(["--bucket", str(bucket)])
+    for case_id in eval_spec.get("case_ids") or []:
+        parts.extend(["--case-id", str(case_id)])
+    parts.extend(["--output-suffix", output_suffix])
+    return " ".join(item for item in parts if item)
+
+
+def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_id: str | None = None) -> dict[str, Any]:
+    loop = candidate_loop_config(config)
+    family = loop["family"]
+    source_variant = loop["source_variant"]
+    cluster_config = loop.get("cluster_config")
+    models_dir = loop.get("models_dir")
+    eval_spec = {
+        "trials": int((loop.get("eval") or {}).get("trials") or (config.get("candidate_selection") or {}).get("trials") or 3),
+        "temperature": (loop.get("eval") or {}).get("temperature", (config.get("candidate_selection") or {}).get("temperature", 1)),
+        "base_url": (loop.get("eval") or {}).get("base_url", "http://127.0.0.1:8000/v1"),
+        "buckets": (loop.get("eval") or {}).get("buckets") or ["refusal_paired_boundary", "capability_preservation_challenge"],
+        "case_ids": (loop.get("eval") or {}).get("case_ids") or ["self_harm_instruction_harmful", "model_selection_summary"],
+    }
+    output_root = family_eval_output_root(family)
+    run_id = run_id or sanitize_report_id(f"{Path(config_path).stem}_candidate_loop")
+    commands: list[dict[str, Any]] = [
+        command_entry("./forge doctor", phase="preflight", purpose="Verify repo hygiene, secrets, and local configuration before launching candidates."),
+    ]
+    if cluster_config:
+        commands.append(command_entry(
+            f"./forge cluster health --config {cluster_config}",
+            phase="preflight",
+            purpose="Verify all configured cluster nodes are reachable before any heavy job.",
+        ))
+
+    candidate_reports: list[dict[str, Any]] = []
+    gate_entries: list[str] = []
+    for index, raw_candidate in enumerate(loop["candidates"], start=1):
+        candidate = normalize_loop_candidate(raw_candidate, index=index)
+        name = str(candidate["name"])
+        variant = str(candidate.get("variant") or name)
+        status = str(candidate.get("status") or "ready")
+        blocked = status in {"runner_missing", "plan_only", "blocked"}
+        candidate_config = candidate.get("config")
+        backend = candidate.get("backend")
+        output_dir = candidate.get("output_dir")
+        eval_suffix = candidate_loop_eval_suffix(family, candidate, int(eval_spec["trials"]))
+        eval_dir = display_path(output_root / eval_suffix)
+        candidate_commands: list[dict[str, Any]] = []
+        blockers: list[str] = []
+        if blocked:
+            blockers.append(str(candidate.get("blocker") or f"candidate status is {status}"))
+        if not candidate_config and not blocked:
+            blockers.append("candidate config is missing")
+        if not backend and not blocked:
+            blockers.append("candidate backend is missing")
+        if candidate_config and backend:
+            candidate_commands.extend([
+                command_entry(
+                    f"./forge ablate --config {candidate_config} sota-plan --backend {backend}",
+                    phase="candidate_plan",
+                    candidate=name,
+                    purpose="Inspect the backend plan without loading model weights.",
+                    enabled=not blocked,
+                ),
+                command_entry(
+                    f"./forge ablate --config {candidate_config} sota-prepare --backend {backend}",
+                    phase="candidate_prepare",
+                    candidate=name,
+                    purpose="Write backend-specific runner/config artifacts for this candidate.",
+                    enabled=not blocked,
+                ),
+                command_entry(
+                    " ".join([
+                        shell_assignment("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", loop.get("min_available_ram_fraction", 0.05)),
+                        shell_assignment("MODEL_FORGE_MIN_FREE_DISK_FRACTION", loop.get("min_free_disk_fraction", 0.15)),
+                        f"./forge ablate --config {candidate_config} sota-run --backend {backend} --execute",
+                    ]),
+                    phase="candidate_export",
+                    candidate=name,
+                    purpose="Run the guarded backend export for this candidate.",
+                    starts_heavy_job=True,
+                    requires_execute=True,
+                    enabled=not blocked,
+                ),
+            ])
+        if cluster_config and output_dir and not blocked:
+            model_sync_parts = [
+                "./forge cluster model-sync",
+                f"--config {cluster_config}",
+                f"--source {output_dir}",
+                f"--family {family}",
+                f"--variant {variant}",
+                "--execute",
+                f"--timeout {int(loop.get('model_sync_timeout', 3600))}",
+            ]
+            if models_dir:
+                model_sync_parts.extend(["--models-dir", str(models_dir)])
+            candidate_commands.append(command_entry(
+                " ".join(model_sync_parts),
+                phase="candidate_sync",
+                candidate=name,
+                purpose="Sync the exported checkpoint to all cluster nodes before TP serving.",
+                starts_heavy_job=True,
+                requires_execute=True,
+            ))
+        if not blocked:
+            candidate_commands.extend([
+                command_entry(
+                    f"./forge variants checkpoint-audit {family} --variant {variant} --strict --json",
+                    phase="candidate_audit",
+                    candidate=name,
+                    purpose="Verify the candidate checkpoint is complete and tensor-safe before serving.",
+                ),
+                command_entry(
+                    f"./forge variants tokenizer-audit {family} --variant {variant} --strict --json",
+                    phase="candidate_audit",
+                    candidate=name,
+                    purpose="Verify tokenizer/chat-template compatibility before serving.",
+                ),
+                command_entry(
+                    f"./forge variants architecture-audit {family} --variant {variant} --strict --json",
+                    phase="candidate_audit",
+                    candidate=name,
+                    purpose="Verify architecture metadata matches the source family before serving.",
+                ),
+            ])
+            serve_env = [
+                shell_assignment("MODEL_FORGE_CLUSTER_CONFIG", cluster_config) if cluster_config else "",
+                shell_assignment("MODEL_FORGE_SERVE_REQUIRE_CLUSTER", 1 if cluster_config else None),
+            ]
+            candidate_commands.append(command_entry(
+                " ".join([item for item in serve_env if item] + ["./forge", "serve", family, variant]),
+                phase="candidate_serve",
+                candidate=name,
+                purpose="Start exactly one server for this candidate; stop it after the targeted eval finishes.",
+                starts_heavy_job=True,
+                requires_execute=True,
+            ))
+            candidate_commands.append(command_entry(
+                candidate_loop_eval_command(family=family, variant=variant, eval_spec=eval_spec, output_suffix=eval_suffix),
+                phase="candidate_eval",
+                candidate=name,
+                purpose="Run the exact targeted multi-trial gate for this candidate.",
+                requires_execute=True,
+            ))
+        if not blockers:
+            gate_entries.append(f"name={name},variant={variant},eval={eval_dir}")
+        commands.extend(candidate_commands)
+        candidate_reports.append({
+            "name": name,
+            "variant": variant,
+            "status": status,
+            "method_family": candidate.get("method_family"),
+            "backend": backend,
+            "config": candidate_config,
+            "output_dir": output_dir,
+            "eval_suffix": eval_suffix,
+            "expected_eval_dir": eval_dir,
+            "blockers": blockers,
+            "commands": candidate_commands,
+            "hypothesis": candidate.get("hypothesis"),
+        })
+
+    if gate_entries:
+        gate_command = " ".join([
+            f"./forge ablate --config {display_path(config_path)} candidate-gate",
+            *(f"--candidate {entry}" for entry in gate_entries),
+            "--write-report",
+            f"--run-id {run_id}_gate",
+        ])
+    else:
+        gate_command = "No executable candidate eval directories are planned yet; implement or unblock a candidate first."
+    commands.append(command_entry(
+        gate_command,
+        phase="candidate_gate",
+        purpose="Rank completed candidates by the explicit model-forge gate requirements.",
+        requires_execute=bool(gate_entries),
+        enabled=bool(gate_entries),
+    ))
+    if loop.get("delete_rejected_checkpoints_after_report", False):
+        commands.append(command_entry(
+            "Review the candidate gate report, then delete only rejected full checkpoints that have committed summaries and no active server.",
+            phase="cleanup",
+            purpose="Restore disk headroom while preserving reports, configs, and reusable artifacts.",
+            requires_execute=bool(gate_entries),
+            enabled=bool(gate_entries),
+        ))
+
+    return {
+        "schema_version": CANDIDATE_LOOP_SCHEMA_VERSION,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "run_id": run_id,
+        "config": display_path(config_path),
+        "family": family,
+        "source_variant": source_variant,
+        "objective": (config.get("candidate_selection") or {}).get("objective") or "zero_refusal_capability_retention",
+        "cluster_config": cluster_config,
+        "eval": eval_spec,
+        "candidate_count": len(candidate_reports),
+        "executable_candidate_count": len(gate_entries),
+        "candidates": candidate_reports,
+        "commands": commands,
+        "candidate_gate_command": gate_command,
+        "resource_contract": {
+            "max_concurrent_large_jobs": 1,
+            "min_available_ram_fraction": loop.get("min_available_ram_fraction", 0.05),
+            "min_free_disk_fraction": loop.get("min_free_disk_fraction", 0.15),
+            "serve_one_candidate_at_a_time": True,
+            "quantization_blocked_until_gate_passes": True,
+        },
+        "notes": [
+            "This is a runbook only; it does not execute exports, servers, evals, or cleanup.",
+            "Every loop candidate must pass candidate-gate before broad eval, NVFP4 export, upload, or promotion.",
+        ],
+    }
+
+
+def write_candidate_loop_plan(plan: dict[str, Any], output_dir: Path | None = None) -> Path:
+    root = resolve_repo_path(output_dir or Path("reports/generated/abliteration_candidate_loop") / plan["run_id"])
+    root.mkdir(parents=True, exist_ok=True)
+    json_path = root / "candidate_loop_plan.json"
+    json_path.write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
+    lines = [
+        f"# Abliteration Candidate Loop Plan: {plan['run_id']}",
+        "",
+        f"- Family: `{plan['family']}`",
+        f"- Source variant: `{plan['source_variant']}`",
+        f"- Objective: `{plan['objective']}`",
+        f"- Candidate count: `{plan['candidate_count']}`",
+        "",
+        "## Candidates",
+        "",
+        "| Candidate | Status | Backend | Expected eval dir | Blockers |",
+        "|---|---|---|---|---|",
+    ]
+    for candidate in plan["candidates"]:
+        blockers = ", ".join(candidate.get("blockers") or []) or "none"
+        lines.append(
+            f"| `{candidate['name']}` | `{candidate['status']}` | "
+            f"`{candidate.get('backend') or '<none>'}` | `{candidate['expected_eval_dir']}` | {blockers} |"
+        )
+    lines.extend([
+        "",
+        "## Command Runbook",
+        "",
+    ])
+    for index, command in enumerate(plan["commands"], start=1):
+        enabled = "" if command.get("enabled", True) else " (disabled)"
+        lines.extend([
+            f"{index}. `{command['phase']}`{enabled}",
+            "",
+            "```bash" if command.get("enabled", True) else "```text",
+            command["command"],
+            "```",
+            "",
+            command["purpose"],
+            "",
+        ])
+    lines.extend([
+        "## Gate",
+        "",
+        "```bash" if plan["candidate_gate_command"].startswith("./forge ") else "```text",
+        plan["candidate_gate_command"],
+        "```",
+        "",
+        "## Notes",
+        "",
+        *[f"- {note}" for note in plan["notes"]],
+        "",
+    ])
+    (root / "candidate_loop_plan.md").write_text("\n".join(lines), encoding="utf-8")
+    return json_path
+
+
+def command_candidate_loop_plan(args: argparse.Namespace) -> None:
+    config_path = resolve_repo_path(args.config)
+    config = load_yaml(config_path)
+    plan = build_candidate_loop_plan(config, config_path, run_id=args.run_id)
+    if args.write_plan:
+        path = write_candidate_loop_plan(plan, args.output_dir)
+        if not args.json:
+            console.print(f"[bold green]Wrote candidate loop plan[/bold green]: {path}")
+    if args.json:
+        print(json.dumps(plan, indent=2) + "\n")
+        return
+    table = Table(title="Abliteration Candidate Loop")
+    table.add_column("candidate")
+    table.add_column("status")
+    table.add_column("backend")
+    table.add_column("eval_dir")
+    table.add_column("blockers")
+    for candidate in plan["candidates"]:
+        table.add_row(
+            candidate["name"],
+            candidate["status"],
+            str(candidate.get("backend") or ""),
+            candidate["expected_eval_dir"],
+            ", ".join(candidate.get("blockers") or []) or "none",
+        )
+    console.print(table)
+
+
 def command_candidate_gate(args: argparse.Namespace) -> None:
     config_path = resolve_repo_path(args.config)
     config = load_yaml(config_path)
@@ -4872,6 +5275,16 @@ def build_parser() -> argparse.ArgumentParser:
     candidate_gate.add_argument("--write-report", action="store_true")
     candidate_gate.add_argument("--json", action="store_true")
     candidate_gate.set_defaults(func=command_candidate_gate)
+
+    candidate_loop = sub.add_parser(
+        "candidate-loop-plan",
+        help="Write a bounded sequential candidate runbook that ends in candidate-gate",
+    )
+    candidate_loop.add_argument("--run-id", default=None)
+    candidate_loop.add_argument("--output-dir", type=Path, default=None)
+    candidate_loop.add_argument("--write-plan", action="store_true")
+    candidate_loop.add_argument("--json", action="store_true")
+    candidate_loop.set_defaults(func=command_candidate_loop_plan)
 
     sota_plan = sub.add_parser("sota-plan", help="Inspect SOTA external backend plan")
     sota_plan.add_argument("--backend", choices=SOTA_BACKEND_CHOICES, default=None)

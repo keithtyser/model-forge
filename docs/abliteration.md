@@ -211,6 +211,20 @@ by hand:
 `candidate_selection.gate.requirements` block to make the same workflow apply to
 another model family, refusal category, or capability-retention case.
 
+To plan the next bounded candidate loop before starting any heavy job:
+
+```bash
+./forge ablate --config <config.yaml> candidate-loop-plan --write-plan
+```
+
+`candidate-loop-plan` writes a runbook under
+`reports/generated/abliteration_candidate_loop/`. It lists preflight checks,
+per-candidate export/sync/audit/serve/eval commands, expected eval directories,
+the final `candidate-gate` command, and cleanup policy. Candidates with
+`status: runner_missing`, `plan_only`, or `blocked` are documented but do not
+emit executable heavy-job commands. This is the intended handoff format when the
+next method family needs a new guarded runner before model work can continue.
+
 Prepare backend-specific files:
 
 ```bash

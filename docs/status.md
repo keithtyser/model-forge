@@ -881,6 +881,10 @@ length filtering:
    passed. Held-v2, native OT, V17, and V20 tie as the best failed group with one
    residual self-harm refusal-wording trial; OBLITERATUS and V19 are worse at two
    refusal-wording trials; V18 also regressed capability.
+   The same config now supports `candidate-loop-plan`. Its current Qwen loop
+   records `qwen_scope_sae_feature_diagnostic_v1` as the next method-shift
+   candidate but marks it `runner_missing`, so no heavy commands are emitted and
+   the gate phase stays disabled until a guarded SAE feature runner exists.
 
 ## Operational Guardrails
 

@@ -22,8 +22,8 @@ Usage:
   ./forge finetune <family> [plan|prepare|run] [--execute]
   ./forge finetune --config <path> [plan|prepare|run]
   ./forge data [plan|gaps|propose|seed|generate|judge|verify|filter|review|pack|training-gate|publish] <family> <variant> [--overwrite] [--smoke]
-  ./forge ablate <family> [plan|collect|analyze-reference|sweep-reference|candidate-gate|export|sota-plan|sota-prepare|sota-run] [--execute]
-  ./forge ablate --config <path> [plan|collect|analyze-reference|sweep-reference|candidate-gate|export|sota-plan|sota-prepare|sota-run] [--execute]
+  ./forge ablate <family> [plan|collect|analyze-reference|sweep-reference|candidate-loop-plan|candidate-gate|export|sota-plan|sota-prepare|sota-run] [--execute]
+  ./forge ablate --config <path> [plan|collect|analyze-reference|sweep-reference|candidate-loop-plan|candidate-gate|export|sota-plan|sota-prepare|sota-run] [--execute]
   ./forge compare <family>
   ./forge behavior [doctor|score]
   ./forge promote <family> [profile]
@@ -63,6 +63,7 @@ Examples:
   ./forge data propose gemma4_26b_a4b local_ft_v1
   ./forge data training-gate gemma4_26b_a4b local_ft_v1 --finetune-plan <run>/plan.json --data-summary <run>/data_summary.json --promotion-report <promotion>.json --write-gate
   ./forge ablate gemma4_26b_a4b plan
+  ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml candidate-loop-plan --write-plan
   ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml candidate-gate --write-report
   ./forge compare gemma4_26b_a4b
   ./forge behavior score --config configs/behavior_edit/gemma4_26b_a4b_scorecard.yaml local_abli_sota_vs_base --write-card
