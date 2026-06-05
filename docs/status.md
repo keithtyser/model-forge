@@ -964,6 +964,13 @@ length filtering:
    floor before export. No checkpoint or output directory was produced. Do not
    rerun V30 unchanged; the next OBLITERATUS attempt needs a materially
    lower-memory or sharded pre-export path.
+   V31 is now the next ready candidate:
+   `configs/abliteration/qwen36_27b_ft_abli_v2_generated_token_selective_projection_v31.yaml`.
+   It uses the Huihui/Nous-style generated first-token measurement with native
+   selective sharded projection, benign-orthogonalized directions, and row-norm
+   preservation. It is blocked from broad eval, NVFP4, upload, and promotion
+   until export, cluster sync, strict audits, TP=2 serving, and the targeted
+   three-trial gate pass.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the

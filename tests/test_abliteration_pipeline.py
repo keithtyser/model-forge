@@ -16,6 +16,7 @@ from model_forge.hardware import (
 )
 from model_forge.integrations.abliterix_compat import reduce_harmfulness_pair
 from model_forge.pipelines.abliterate import (
+    GENERATED_TOKEN_POSITIONS,
     REPO_DIR,
     _projection_delta,
     _progress_every,
@@ -817,21 +818,27 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertFalse(any("variants checkpoint-audit" in command for command in commands))
         self.assertIn("Search-only candidate jobs are planned", plan["candidate_gate_command"])
 
-    def test_qwen_candidate_loop_blocks_rejected_sae_candidate_commands(self) -> None:
+    def test_qwen_candidate_loop_blocks_rejected_sae_candidate_commands_and_plans_v31(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_candidate_gate.yaml"
         plan = build_candidate_loop_plan(load_yaml(config_path), config_path, run_id="qwen_unit_loop")
 
         candidate = plan["candidates"][0]
         gate_command = [item for item in plan["commands"] if item["phase"] == "candidate_gate"][0]
+        candidates = {item["name"]: item for item in plan["candidates"]}
+        ready = candidates["generated_token_selective_projection_v31"]
 
         self.assertEqual(candidate["name"], "qwen_scope_sae_feature_diagnostic_v1")
         self.assertEqual(candidate["status"], "rejected")
         self.assertTrue(candidate["blockers"])
-        self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertEqual(plan["planned_candidate_job_count"], 0)
+        self.assertEqual(plan["executable_candidate_count"], 1)
+        self.assertEqual(plan["planned_candidate_job_count"], 1)
         self.assertFalse(any(command.get("enabled", False) for command in candidate["commands"]))
-        self.assertFalse(gate_command["enabled"])
-        self.assertIn("No executable candidate eval directories", plan["candidate_gate_command"])
+        self.assertEqual(ready["status"], "ready")
+        self.assertFalse(ready["blockers"])
+        self.assertTrue(ready["produces_checkpoint"])
+        self.assertTrue(any(command.get("enabled", False) for command in ready["commands"]))
+        self.assertTrue(gate_command["enabled"])
+        self.assertIn("generated_token_selective_projection_v31", plan["candidate_gate_command"])
 
     def test_qwen_scope_sae_prepare_writes_guarded_runner(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml"
@@ -1350,7 +1357,46 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("collect_directions", runner)
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 24)
 
-    def test_candidate_loop_blocks_rejected_v21_to_v30(self) -> None:
+    def test_qwen_v31_generated_token_selective_projection_writes_guarded_runner(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_generated_token_selective_projection_v31.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+                "output_dir": f"{tmp}/exported",
+            }
+            result = write_sota_artifacts(config, config_path, "selective_projection")
+            native_config = load_yaml(Path(result["paths"]["selective_projection_config"]))
+            runner = Path(result["paths"]["selective_projection_runner"]).read_text(encoding="utf-8")
+            manifest = json.loads(
+                (Path(tmp) / "model_forge_native_prompt_pairs" / "manifest.json").read_text(encoding="utf-8")
+            )
+
+        activation = native_config["activation_collection"]
+        edit = native_config["edit"]
+        self.assertEqual(native_config["native_backend"]["backend"], "selective_projection")
+        self.assertEqual(native_config["method"], "native_selective_layer_projection")
+        self.assertEqual(activation["token_position"], "generated_first_token")
+        self.assertIn("generated_first_token", GENERATED_TOKEN_POSITIONS)
+        self.assertTrue(activation["use_chat_template"])
+        self.assertEqual(activation["direction_extraction"], "mean_difference")
+        self.assertEqual(native_config["native_backend"]["layer_selection"]["top_k"], 10)
+        self.assertEqual(edit["direction_transform"], "biprojection")
+        self.assertTrue(edit["norm_preserve"])
+        self.assertFalse(edit["require_all_target_directions"])
+        self.assertIn("self_attn.o_proj.weight", edit["target_weight_suffixes"])
+        self.assertIn("linear_attn.out_proj.weight", edit["target_weight_suffixes"])
+        self.assertIn("mlp.down_proj.weight", edit["target_weight_suffixes"])
+        self.assertIn("write_selective_direction_artifact", runner)
+        self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 24)
+
+    def test_candidate_loop_blocks_rejected_v21_to_v30_and_plans_v31(self) -> None:
         config_path = (
             REPO_DIR
             / "configs"
@@ -1370,6 +1416,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("abliterix_harmfulness_component_v28", candidates)
         self.assertIn("abliterix_harmfulness_component_v29", candidates)
         self.assertIn("source_tethered_obliteratus_streaming_v30", candidates)
+        self.assertIn("generated_token_selective_projection_v31", candidates)
         self.assertTrue(candidates["qwen_scope_sae_feature_diagnostic_v1"]["blockers"])
         self.assertFalse(any(
             command.get("enabled", True)
@@ -1421,9 +1468,21 @@ class AbliterationPlanTests(unittest.TestCase):
             command.get("enabled", False)
             for command in candidates["source_tethered_obliteratus_streaming_v30"]["commands"]
         ))
-        self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertEqual(plan["planned_candidate_job_count"], 0)
-        self.assertIn("No executable candidate eval directories", plan["candidate_gate_command"])
+        self.assertFalse(candidates["generated_token_selective_projection_v31"]["blockers"])
+        self.assertTrue(candidates["generated_token_selective_projection_v31"]["produces_checkpoint"])
+        self.assertTrue(any(
+            command.get("enabled", False)
+            for command in candidates["generated_token_selective_projection_v31"]["commands"]
+            if command["phase"] == "candidate_export"
+        ))
+        self.assertEqual(plan["executable_candidate_count"], 1)
+        self.assertEqual(plan["planned_candidate_job_count"], 1)
+        self.assertIn("generated_token_selective_projection_v31", plan["candidate_gate_command"])
+        self.assertTrue(any(
+            command.get("enabled", False)
+            for command in plan["commands"]
+            if command["phase"] == "candidate_gate"
+        ))
         self.assertFalse(any(
             command.get("enabled", False)
             for command in candidates["abliterix_response_opening_v26"]["commands"]

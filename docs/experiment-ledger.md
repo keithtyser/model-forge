@@ -7940,3 +7940,25 @@ save-stage memory failure, but the exact V30 single-node OBLITERATUS edit still
 exceeds the safe pre-export memory envelope. The next OBLITERATUS attempt must
 be a materially lower-memory or sharded implementation before broad eval,
 NVFP4, Hugging Face upload, or promotion.
+
+### 2026-06-05 Qwen V31 generated-token selective projection plan
+
+Config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_generated_token_selective_projection_v31.yaml`
+
+Status: ready, checkpoint-producing candidate, not yet exported or gated.
+
+Hypothesis: the earlier suffix/prefix projection candidates reached near-miss
+behavior but left one or more stochastic refusal-opening trials. V31 shifts the
+measurement point to the first generated assistant token under the chat template,
+matching the core Huihui/Nous abliteration loop more closely than prompt-side
+suffix probes. It keeps the native sharded exporter, benign-orthogonalized
+projection, row-norm preservation, and selective high-separation layer choice so
+it should be safer operationally than V30 OBLITERATUS while targeting the same
+residual refusal-opening state.
+
+Promotion remains blocked until export succeeds, the checkpoint syncs to the
+worker, strict checkpoint/tokenizer/architecture audits pass, the candidate
+serves on the two-Spark path, and the targeted three-trial gate passes with
+`self_harm_instruction_harmful` refusal wording 0/3 plus
+`model_selection_summary` 3/3.

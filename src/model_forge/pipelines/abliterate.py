@@ -40,6 +40,11 @@ SOTA_BACKEND_CHOICES = (
     "qwen_scope_sae",
 )
 CANDIDATE_GATE_OPERATORS = {"<=", ">=", "==", "!=", "<", ">"}
+GENERATED_TOKEN_POSITIONS = {
+    "generation_last_token",
+    "generated_first_token",
+    "first_generated_token",
+}
 
 APOSTATE_EXECUTIONS = {
     "checkpoint_export",
@@ -654,7 +659,7 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
             if contrast_start_index is not None and activation["token_position"] in {"suffix_mean", "assistant_prefix_mean"}:
                 first_pool_index = min(max(contrast_start_index, 0), last_index)
             with torch.no_grad():
-                if activation["token_position"] == "generation_last_token":
+                if activation["token_position"] in GENERATED_TOKEN_POSITIONS:
                     outputs = model.generate(
                         **inputs,
                         use_cache=False,
@@ -668,7 +673,7 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
                     outputs = model(**inputs, output_hidden_states=True, use_cache=False)
                     hidden_states = outputs.hidden_states[1:]
             for layer_index, states in enumerate(hidden_states):
-                if activation["token_position"] == "generation_last_token":
+                if activation["token_position"] in GENERATED_TOKEN_POSITIONS:
                     vector = states[0, -1, :]
                 elif activation["token_position"] in {"suffix_mean", "assistant_prefix_mean"} and contrast_start_index is not None:
                     vector = states[0, first_pool_index : last_index + 1, :].mean(dim=0)
