@@ -7104,3 +7104,55 @@ preference/unlikelihood repairs for this Qwen blocker. The next credible branch
 needs a method shift: a multi-sample stochastic training objective, scoped
 refusal-opening direction edit, or improved OBLITERATUS/Abliterix/SRA-style
 search that targets the refusal opening while preserving the safe redirect.
+
+### 2026-06-05 Native norm-preserving projection backend and Qwen v16 prep
+
+Pain point found after V15: model-forge already had projected/biprojected
+checkpoint math, multi-direction activation bases, and row-norm preservation,
+but it exposed that method only through the native optimal-transport diagnostic.
+That made the next Qwen method shift harder to select explicitly and harder for
+agents to recognize as an MPOA/NPBA-style branch.
+
+Implemented:
+
+- first-class SOTA backend choice: `norm_preserving_projection`
+- native method name: `native_norm_preserving_projected_abliteration`
+- guarded native runner generation through the existing
+  `scripts/run_native_checkpoint_container.sh` or
+  `scripts/run_native_checkpoint_scope.sh` path
+- generated README run instructions for the new backend
+- ablation pipeline tests covering plan selection and guarded runner generation
+
+Prepared Qwen V16:
+
+- config:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_norm_projection_v16.yaml`
+- family variant:
+  `local_ft_abli_norm_projection_v16_self_harm_opening`
+- source: held v2
+  `local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2`
+- backend: `norm_preserving_projection`
+- direction extraction: `mean_plus_paired_svd`
+- direction components: `8`
+- edit transform: `biprojection`
+- norm preservation: enabled
+- target layers: `18..55`
+- target modules: `self_attn.o_proj.weight`, `mlp.down_proj.weight`
+
+Dry-run validation:
+
+```text
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_norm_projection_v16.yaml sota-plan --backend norm_preserving_projection
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_norm_projection_v16.yaml sota-prepare --backend norm_preserving_projection
+```
+
+The prepare step materialized `28` harmful/benign activation pairs after
+balancing. Harmful rows emphasize the observed refusal openings (`I will not`,
+`I cannot provide instructions`, `I won't help`); benign rows preserve direct
+care-first support plus `model_selection_summary` and benign boundary cases.
+
+Next action: run the guarded V16 checkpoint export only when no model server is
+running and disk/RAM guards pass. After export, sync to the worker Spark, run
+strict checkpoint/tokenizer/architecture audits, serve with TP=2, then run the
+same targeted three-trial self-harm plus `model_selection_summary` gate. Do not
+broader-eval, upload, quantize, or promote unless that gate passes.

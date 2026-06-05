@@ -31,6 +31,7 @@ SOTA_BACKEND_CHOICES = (
     "apostate",
     "sra",
     "optimal_transport",
+    "norm_preserving_projection",
 )
 
 APOSTATE_EXECUTIONS = {
@@ -40,6 +41,12 @@ APOSTATE_EXECUTIONS = {
 }
 
 NATIVE_OPTIMAL_TRANSPORT_EXECUTIONS = {
+    "checkpoint_export",
+    "guarded_checkpoint",
+    "baked_checkpoint",
+}
+
+NATIVE_PROJECTED_ABLATION_EXECUTIONS = {
     "checkpoint_export",
     "guarded_checkpoint",
     "baked_checkpoint",
@@ -925,6 +932,17 @@ def sota_config(config: dict[str, Any]) -> dict[str, Any]:
                     "toward harmless activations instead of deleting one direction. "
                     "Use checkpoint_export only with a narrow, source-relative "
                     "prompt materialization and a targeted gate."
+                ),
+            },
+            "norm_preserving_projection": {
+                "install": "native model-forge checkpoint runner",
+                "method_family": "norm_preserving_projected_abliteration",
+                "execution": "plan_only",
+                "notes": (
+                    "Native projected/biprojected checkpoint edit with optional "
+                    "row-norm preservation. Use this for MPOA/NPBA-style "
+                    "method-shift recipes when an activation-direction edit should "
+                    "preserve row norms and avoid capability-heavy benign subspaces."
                 ),
             },
         },
@@ -2406,6 +2424,12 @@ def materialize_native_prompt_pair_files(plan: dict[str, Any], backend: dict[str
     }
 
 
+def native_checkpoint_method_name(plan: dict[str, Any]) -> str:
+    if plan["backend"] == "norm_preserving_projection":
+        return "native_norm_preserving_projected_abliteration"
+    return "native_optimal_transport_activation_projection"
+
+
 def write_native_optimal_transport_config(plan: dict[str, Any]) -> Path:
     backend = plan["backend_config"]
     work_dir = Path(plan["work_dir"])
@@ -2467,9 +2491,10 @@ def write_native_optimal_transport_config(plan: dict[str, Any]) -> Path:
         data["harmful_prompts"] = prompt_files["harmful_prompts"]
         data["benign_prompts"] = prompt_files["benign_prompts"]
 
+    method_name = native_checkpoint_method_name(plan)
     payload = {
-        "name": f"{plan['name']}_native_optimal_transport",
-        "method": "native_optimal_transport_activation_projection",
+        "name": f"{plan['name']}_{plan['backend']}",
+        "method": method_name,
         "model": {
             "source": base_plan["model"]["source"],
             "local_dir": plan["source_model"],
@@ -2488,7 +2513,7 @@ def write_native_optimal_transport_config(plan: dict[str, Any]) -> Path:
         },
         "artifacts_dir": str(work_dir / "native_optimal_transport"),
         "native_backend": {
-            "backend": "optimal_transport",
+            "backend": plan["backend"],
             "method_family": backend.get("method_family", "optimal_transport_refusal_ablation"),
             "execution": backend.get("execution"),
             "prompt_manifest": prompt_files["manifest"] if prompt_files else None,
@@ -2498,7 +2523,7 @@ def write_native_optimal_transport_config(plan: dict[str, Any]) -> Path:
             "next_gate": "Run model-forge source-vs-candidate targeted eval before broader evals, quantization, promotion, or upload.",
         },
     }
-    config_path = work_dir / "native_optimal_transport_config.yaml"
+    config_path = work_dir / f"native_{plan['backend']}_config.yaml"
     config_path.write_text(yaml.safe_dump(payload, sort_keys=False))
     return config_path
 
@@ -2508,9 +2533,10 @@ def write_optimal_transport_runner(plan: dict[str, Any]) -> Path:
     work_dir = Path(plan["work_dir"])
     work_dir.mkdir(parents=True, exist_ok=True)
     config_path = write_native_optimal_transport_config(plan)
-    runner = work_dir / "run_native_optimal_transport.py"
-    summary_path = work_dir / "model_forge_sota_optimal_transport.json"
+    runner = work_dir / f"run_native_{plan['backend']}.py"
+    summary_path = work_dir / f"model_forge_sota_{plan['backend']}.json"
     overwrite = bool(backend.get("overwrite_checkpoint", False))
+    method_name = native_checkpoint_method_name(plan)
     script = f'''from __future__ import annotations
 
 import json
@@ -2588,8 +2614,8 @@ def main() -> None:
     )
     guard_system_health()
     payload = {{
-        "backend": "optimal_transport",
-        "implementation": "native_optimal_transport_activation_projection",
+        "backend": {plan["backend"]!r},
+        "implementation": {method_name!r},
         "config": str(config_path),
         "source_model": {plan["source_model"]!r},
         "output_dir": str(output_dir),
@@ -2599,7 +2625,7 @@ def main() -> None:
     }}
     summary_path.write_text(json.dumps(payload, indent=2) + "\\n")
     try:
-        (output_dir / "model_forge_sota_optimal_transport.json").write_text(json.dumps(payload, indent=2) + "\\n")
+        (output_dir / {summary_path.name!r}).write_text(json.dumps(payload, indent=2) + "\\n")
     except OSError:
         pass
     print(f"Wrote {{summary_path}}")
@@ -3054,6 +3080,9 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
         elif name == "optimal_transport" and plan["backend_config"].get("execution") in NATIVE_OPTIMAL_TRANSPORT_EXECUTIONS:
             paths["optimal_transport_config"] = str(write_native_optimal_transport_config(plan))
             paths["optimal_transport_runner"] = str(write_optimal_transport_runner(plan))
+        elif name == "norm_preserving_projection" and plan["backend_config"].get("execution") in NATIVE_PROJECTED_ABLATION_EXECUTIONS:
+            paths["norm_preserving_projection_config"] = str(write_native_optimal_transport_config(plan))
+            paths["norm_preserving_projection_runner"] = str(write_optimal_transport_runner(plan))
         elif plan["backend_config"].get("execution") == "plan_only":
             paths[f"{name}_plan"] = str(write_external_backend_plan(plan))
     readme = work_dir / "README.md"
@@ -3122,6 +3151,23 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
             "```",
             "",
             "The native optimal-transport path materializes source-relative model-forge prompts, collects multi-component activation directions, and writes a normal Transformers checkpoint. Treat it as a candidate only after the targeted model-forge gate passes.",
+            "",
+        ])
+    if paths.get("norm_preserving_projection_runner"):
+        projection_plan = build_sota_plan(config, config_path, "norm_preserving_projection")
+        projection_command = (
+            f"scripts/run_native_checkpoint_container.sh {paths['norm_preserving_projection_runner']}"
+            if projection_plan["backend_config"].get("container_image")
+            else f"scripts/run_native_checkpoint_scope.sh {paths['norm_preserving_projection_runner']}"
+        )
+        run_sections.extend([
+            "Run native norm-preserving projection checkpoint export:",
+            "",
+            "```bash",
+            projection_command,
+            "```",
+            "",
+            "The native norm-preserving projection path materializes source-relative model-forge prompts, collects projected activation directions, and writes a normal Transformers checkpoint with row-norm preservation. Treat it as a candidate only after the targeted model-forge gate passes.",
             "",
         ])
     plan_only_paths = {key: value for key, value in paths.items() if key.endswith("_plan")}
@@ -3881,6 +3927,18 @@ def command_sota_run(args: argparse.Namespace) -> None:
             raise SystemExit("missing generated optimal-transport runner")
         execution = optimal_transport_execution_spec(plan, runner)
         console.print(f"[bold]Optimal-transport execution mode[/bold]: {execution['mode']}")
+        subprocess.run(
+            execution["command"],
+            cwd=execution["cwd"],
+            env=execution["env"],
+            check=True,
+        )
+    elif plan["backend"] == "norm_preserving_projection" and plan["backend_config"].get("execution") in NATIVE_PROJECTED_ABLATION_EXECUTIONS:
+        runner = result["paths"].get("norm_preserving_projection_runner")
+        if runner is None:
+            raise SystemExit("missing generated norm-preserving projection runner")
+        execution = optimal_transport_execution_spec(plan, runner)
+        console.print(f"[bold]Norm-preserving projection execution mode[/bold]: {execution['mode']}")
         subprocess.run(
             execution["command"],
             cwd=execution["cwd"],

@@ -169,18 +169,22 @@ method-shift backends:
 - `sra`: surgical refusal ablation / concept-preserving direction cleanup
 - `optimal_transport`: native guarded diagnostic for distributional activation
   transport-style checkpoint edits
+- `norm_preserving_projection`: native guarded projected/biprojected checkpoint
+  edit with optional row-norm preservation for MPOA/NPBA-style method shifts
 
 Standalone `sra` remains plan-only until a guarded model-forge runner exists.
-OBLITERATUS, Apostate, Abliterix, and the native optimal-transport diagnostic
-now have guarded execution paths. Abliterix first runs in non-interactive
-search-only mode; it writes an Optuna journal and exits without exporting a checkpoint. Use
+OBLITERATUS, Apostate, Abliterix, native optimal transport, and native
+norm-preserving projection now have guarded execution paths. Abliterix first
+runs in non-interactive search-only mode; it writes an Optuna journal and exits
+without exporting a checkpoint. Use
 `abliterix-search-analyze` before `abliterix-export` for a selected trial.
-OBLITERATUS, Apostate, and native optimal-transport write baked checkpoints
-directly, so their backend reports must be followed by source-vs-candidate
-model-forge targeted evals before any broader eval, quantization, promotion, or
-upload. The contract is the same for every backend: one large model job at a
-time, source checkpoint audit, CPU/RAM/disk caps, targeted internal eval before broader eval, and
-source-relative promotion gates.
+OBLITERATUS, Apostate, native optimal transport, and native norm-preserving
+projection write baked checkpoints directly, so their backend reports must be
+followed by source-vs-candidate model-forge targeted evals before any broader
+eval, quantization, promotion, or upload. The contract is the same for every
+backend: one large model job at a time, source checkpoint audit, CPU/RAM/disk
+caps, targeted internal eval before broader eval, and source-relative promotion
+gates.
 
 Prepare backend-specific files:
 

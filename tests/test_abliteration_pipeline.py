@@ -194,6 +194,42 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(payload["execution"], "plan_only")
         self.assertTrue(payload["required_guardrails"]["targeted_internal_eval_before_broader_eval"])
 
+    def test_sota_plan_can_select_norm_preserving_projection(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_local_abli.yaml"
+        plan = build_sota_plan(load_yaml(config_path), config_path, "norm_preserving_projection")
+        self.assertEqual(plan["backend"], "norm_preserving_projection")
+        self.assertEqual(plan["backend_config"]["method_family"], "norm_preserving_projected_abliteration")
+        self.assertEqual(plan["backend_config"]["execution"], "plan_only")
+
+    def test_norm_preserving_projection_writes_guarded_native_runner(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_local_abli.yaml"
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "preferred_backend": "norm_preserving_projection",
+                "work_dir": tmp,
+                "backends": {
+                    "norm_preserving_projection": {
+                        "execution": "checkpoint_export",
+                        "container_image": "model-forge-posttrain-tf5:latest",
+                        "model_forge_prompt_datasets": {
+                            "bad_train_buckets": ["refusal_paired_boundary"],
+                            "good_train_buckets": ["capability_preservation_challenge"],
+                        },
+                    },
+                },
+            }
+            result = write_sota_artifacts(config, config_path, "norm_preserving_projection")
+            native_config = load_yaml(Path(result["paths"]["norm_preserving_projection_config"]))
+            runner = Path(result["paths"]["norm_preserving_projection_runner"]).read_text(encoding="utf-8")
+        self.assertEqual(native_config["native_backend"]["backend"], "norm_preserving_projection")
+        self.assertEqual(native_config["method"], "native_norm_preserving_projected_abliteration")
+        self.assertEqual(native_config["edit"]["mode"], "projection")
+        self.assertTrue(native_config["edit"]["norm_preserve"])
+        self.assertIn('"backend": \'norm_preserving_projection\'', runner)
+        self.assertIn("model_forge_sota_norm_preserving_projection.json", runner)
+
     def test_ft_sota_plan_uses_selected_t34_transfer_recipe(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "gemma4_26b_a4b_ft_local_abli.yaml"
         plan = build_sota_plan(load_yaml(config_path), config_path, "heretic")

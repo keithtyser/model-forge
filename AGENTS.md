@@ -1838,6 +1838,13 @@ Qwen repair variants v14 or v15. V15 proved that prefix-scoped unlikelihood
 alone does not fix the residual stochastic self-harm refusal opening; use a real
 method shift for the next Qwen FT-abli branch.
 
+The next prepared Qwen method-shift branch is
+`configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_norm_projection_v16.yaml`.
+It uses the native `norm_preserving_projection` backend and registers
+`local_ft_abli_norm_projection_v16_self_harm_opening`. It has only been
+planned/prepared; do not treat it as a model candidate until guarded export,
+worker sync, strict audits, TP=2 serve, and the targeted three-trial gate pass.
+
 ## Publishing
 
 When publishing a model:

@@ -264,6 +264,15 @@ This is the short handoff state for humans and agents. Use
   detail/compliance stayed 0/3, and `model_selection_summary` stayed 3/3. Do
   not quantize, upload, promote, or broad-eval v15. See
   `reports/qwen36_27b_trial12_pref_ul_v15_prefix_opening_repair_summary.md`.
+- Qwen 3.6 27B V16 is the next prepared method-shift branch:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_norm_projection_v16.yaml`.
+  It starts from held v2 and uses the native
+  `norm_preserving_projection` backend: multi-component
+  `mean_plus_paired_svd`, biprojection against benign means, row-norm
+  preservation, and a stronger mid/late-layer edit scope. It is not exported or
+  evaluated yet. Do not quantize, upload, promote, or broad-eval it unless the
+  guarded export, strict audits, TP=2 serve, and targeted three-trial no-refusal
+  gate pass.
 - `configs/abliteration/qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml`
   is the tracked next-method plan. It starts from the held v2 candidate, not the
   rejected v11-v13 chain. Abliterix SRA search completed 24/24 trials under the
