@@ -1955,8 +1955,11 @@ registered as `local_ft_abli_qwen_scope_sae_v21`. It uses the native
 `qwen_scope_sae` backend: collect source-relative residual refusal-opening
 directions, constrain each layer to the official
 `Qwen/SAE-Res-Qwen3.5-27B-W80K-L0_50` decoder features, then export through the
-normal norm-preserving projection path. Run plan/prepare first, then execute
-only when the two-Spark cluster is healthy. After export, sync, run strict
+normal norm-preserving projection path. V21 is intentionally narrowed to edit
+layers 20-23 for the first probe: an attempted 20-47 run was stopped after the
+first SAE layer download took 17 minutes, making the full window too slow for an
+initial signal. Run plan/prepare first, then execute only when the two-Spark
+cluster is healthy. After export, sync, run strict
 checkpoint/tokenizer/architecture audits, serve exactly one candidate, and run
 the targeted three-trial gate before broad eval, NVFP4, HF upload, or promotion.
 

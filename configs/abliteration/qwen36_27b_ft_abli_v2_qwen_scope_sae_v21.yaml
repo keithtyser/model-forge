@@ -68,7 +68,7 @@ sota:
         module_strengths:
           self_attn.o_proj.weight: 1.0
         layer_start: 20
-        layer_end: 47
+        layer_end: 23
         target_weight_suffixes:
           - self_attn.o_proj.weight
         leave_embeddings_untouched: true
@@ -125,6 +125,10 @@ sota:
         same source-relative residual refusal-opening direction, constrains each
         layer's basis to the aligned SAE decoder features for that layer, then
         exports through the existing norm-preserving checkpoint projection path.
+        The first runnable diagnostic is intentionally narrowed to layers 20-23
+        after the full 20-47 window was observed to spend many hours downloading
+        per-layer SAE files before any gate signal. Expand only if this narrow
+        probe moves the targeted gate without capability loss.
         Promote only if the targeted model-forge gate reaches zero explicit
         refusal wording while preserving safe redirect and model_selection_summary.
       plan:

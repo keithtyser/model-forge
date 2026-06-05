@@ -7617,3 +7617,13 @@ plan, prepare, guarded checkpoint export, cluster sync, strict
 checkpoint/tokenizer/architecture audits, one-server targeted eval, then
 candidate-gate. V21 remains blocked for broad eval, NVFP4, upload, and promotion
 until that targeted gate produces an eval directory and passes.
+
+Execution note: the first V21 export attempt used the full 20-47 edit window.
+It loaded the source model, collected 16 harmful and 16 benign activations,
+extracted directions for 58 layers, then began downloading
+`Qwen/SAE-Res-Qwen3.5-27B-W80K-L0_50` per-layer SAE files. The first layer file
+took 17 minutes to download, so the run was stopped with Ctrl-C during the next
+SAE download before checkpoint export. No container was left running, RAM
+returned to normal, and no model artifact was produced. The V21 config is now
+narrowed to layers 20-23 for a practical first gate signal. Expand the layer
+window only after the narrow probe shows movement without capability loss.

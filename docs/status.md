@@ -887,7 +887,10 @@ length filtering:
    `configs/abliteration/qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml`.
    The loop emits the sequential plan/prepare/export/sync/audit/serve/eval
    commands, but V21 is not promotable or quantizable until its targeted
-   three-trial candidate gate passes.
+   three-trial candidate gate passes. The first V21 execution attempt used the
+   original 20-47 layer window and was stopped during SAE download after the
+   first layer took 17 minutes; the runnable diagnostic is narrowed to layers
+   20-23 for a faster gate signal.
 
 ## Operational Guardrails
 
