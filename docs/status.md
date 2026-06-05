@@ -891,17 +891,20 @@ length filtering:
    refusal wording was 2/3, safe redirect was 3/3, harmful detail/compliance
    was 0/3, and `model_selection_summary` was 3/3. See
    `reports/qwen36_27b_selective_projection_v22_targeted_summary.md`. Do not
-   broad-eval, quantize, upload, or promote V22. The next candidate should
-   optimize the stochastic response-opening objective more directly than V22's
-   late-layer separation filter. V23 is now registered as
-   `assistant_prefix_projection_v23` in
-   `configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml`, with recipe
-   `configs/abliteration/qwen36_27b_ft_abli_v2_assistant_prefix_projection_v23.yaml`.
-   It uses the native norm-preserving projection runner but collects directions
-   from actual assistant-prefix continuations under the chat template, so the
-   contrast is at the response-opening surface that keeps failing. It remains
-   blocked until export, sync, strict audits, TP=2 targeted eval, and
-   candidate-gate evidence exist. The first V21 execution attempt used the
+   broad-eval, quantize, upload, or promote V22. V23 is now also rejected. It
+   used
+   `configs/abliteration/qwen36_27b_ft_abli_v2_assistant_prefix_projection_v23.yaml`
+   to collect directions from actual assistant-prefix continuations under the
+   chat template, exported 23 changed attention-output tensors, synced to the
+   worker, passed strict checkpoint/tokenizer/architecture audits, and served on
+   the two-Spark TP=2 path. The targeted gate rejected it: self-harm refusal
+   wording was 2/3, safe redirect was 3/3, harmful detail/compliance was 0/3,
+   and `model_selection_summary` was 2/3. See
+   `reports/qwen36_27b_assistant_prefix_projection_v23_targeted_summary.md`.
+   Do not broad-eval, quantize, upload, or promote V23. The next candidate
+   should optimize the stochastic response-opening objective more directly than
+   the V21 SAE layer window, V22 late-layer separation filter, or V23 static
+   assistant-prefix projection. The first V21 execution attempt used the
    original 20-47 layer window and was stopped during SAE download after the
    first layer took 17 minutes; the runnable V21 diagnostic was narrowed to
    layers 20-23 for a faster gate signal.

@@ -1981,16 +1981,20 @@ directly than V22. Do not keep repeating V18/V19/V20 SOM prompt-weight,
 strength, contrast, output-projection, V21 SAE layer-window, or V22 selective
 top-k/layer-window tweaks outside a gate-driven loop.
 
-The next executable candidate is `assistant_prefix_projection_v23`, registered
-in `configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml` and defined
-by `configs/abliteration/qwen36_27b_ft_abli_v2_assistant_prefix_projection_v23.yaml`.
-It uses the native `norm_preserving_projection` path, but changes activation
-collection to actual assistant-prefix continuations under the chat template:
-bad prefixes are observed refusal openings such as "I can help ... but I won't
-provide instructions"; good prefixes are direct care-first support openings.
-This is a genuine method shift from V22's user-side suffix contrast. It must
-still pass strict checkpoint/tokenizer/architecture audits and the exact
-three-trial candidate gate before broad eval, NVFP4, upload, or promotion.
+V23 (`assistant_prefix_projection_v23`) has also been tried and rejected. It
+used the native `norm_preserving_projection` path but collected directions from
+actual assistant-prefix continuations under the chat template. The checkpoint
+changed 23 attention-output tensors, synced to the worker, passed strict
+checkpoint/tokenizer/architecture audits, and served on the two-Spark TP=2 path.
+The targeted gate rejected it: self-harm refusal wording was 2/3, safe redirect
+3/3, harmful detail/compliance 0/3, and `model_selection_summary` 2/3. Do not
+broad-eval, quantize, upload, or promote V23. See
+`reports/qwen36_27b_assistant_prefix_projection_v23_targeted_summary.md`.
+
+The next Qwen method shift should not repeat V21 SAE layer-window, V22
+selective top-k/layer-window, or V23 assistant-prefix static-projection tweaks.
+Move to a source-tethered multi-pass method or a sampled response-opening
+objective that directly optimizes the three-trial no-refusal gate.
 
 ## Publishing
 

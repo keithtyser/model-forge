@@ -1192,7 +1192,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("collect_directions", runner)
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 24)
 
-    def test_candidate_loop_skips_rejected_v21_v22_and_emits_v23(self) -> None:
+    def test_candidate_loop_skips_rejected_v21_v22_v23(self) -> None:
         config_path = (
             REPO_DIR
             / "configs"
@@ -1215,13 +1215,16 @@ class AbliterationPlanTests(unittest.TestCase):
             command.get("enabled", True)
             for command in candidates["selective_projection_v22_circuit_gate"]["commands"]
         ))
-        self.assertFalse(candidates["assistant_prefix_projection_v23"]["blockers"])
-        self.assertTrue(any(
-            command.get("enabled", False)
+        self.assertTrue(candidates["assistant_prefix_projection_v23"]["blockers"])
+        self.assertFalse(any(
+            command.get("enabled", True)
             for command in candidates["assistant_prefix_projection_v23"]["commands"]
         ))
-        self.assertEqual(plan["executable_candidate_count"], 1)
-        self.assertIn("assistant_prefix_projection_v23", plan["candidate_gate_command"])
+        self.assertEqual(plan["executable_candidate_count"], 0)
+        self.assertEqual(
+            plan["candidate_gate_command"],
+            "No executable candidate eval directories are planned yet; implement or unblock a candidate first.",
+        )
 
     def test_optimal_transport_sota_run_uses_guarded_native_runner(self) -> None:
         config_path = (
