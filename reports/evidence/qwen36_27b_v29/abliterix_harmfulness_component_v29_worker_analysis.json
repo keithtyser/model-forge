@@ -1,8 +1,8 @@
 {
   "created_at": "2026-06-05T21:15:35.218121+00:00",
-  "source_model": "/home/ktyser/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2",
-  "work_dir": "/home/ktyser/projects/model-forge/artifacts/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v29/sota_abliterix_harmfulness_component_patched",
-  "journal": "/home/ktyser/projects/model-forge/reports/generated/qwen36_27b_v29/worker_v29_abliterix_journal.jsonl",
+  "source_model": "~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2",
+  "work_dir": "artifacts/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v29/sota_abliterix_harmfulness_component_patched",
+  "journal": "reports/evidence/qwen36_27b_v29/worker_v29_abliterix_journal.jsonl",
   "backend": "abliterix",
   "gates": {
     "max_kl": 0.03,

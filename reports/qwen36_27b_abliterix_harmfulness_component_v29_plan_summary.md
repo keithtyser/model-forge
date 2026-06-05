@@ -67,7 +67,7 @@ the source checkpoint, measured the expected `12/20` proxy-refusal baseline,
 applied steering, and completed `50` trials.
 
 Coordinator analysis:
-`reports/generated/qwen36_27b_v29/abliterix_harmfulness_component_v29_coordinator_analysis.json`
+`reports/evidence/qwen36_27b_v29/abliterix_harmfulness_component_v29_coordinator_analysis.json`
 
 - completed trials: `50/50`
 - inferred baseline: `12` refusals from Abliterix objective ratios
@@ -77,7 +77,7 @@ Coordinator analysis:
 - recommendation: `do_not_export`
 
 Worker analysis:
-`reports/generated/qwen36_27b_v29/abliterix_harmfulness_component_v29_worker_analysis.json`
+`reports/evidence/qwen36_27b_v29/abliterix_harmfulness_component_v29_worker_analysis.json`
 
 - completed trials: `50/50`
 - inferred baseline: `12` refusals from Abliterix objective ratios

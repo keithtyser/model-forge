@@ -953,6 +953,16 @@ length filtering:
    it. Next work needs a stronger no-refusal objective or a different method
    family such as response-opening conditioned vectors, streamed/source-tethered
    OBLITERATUS, or SAE/activation-feature editing.
+   V30 is now the next runnable checkpoint-producing candidate:
+   `configs/abliteration/qwen36_27b_ft_abli_v2_source_tethered_obliteratus_streaming_v30.yaml`.
+   It returns to the V24 source-tethered OBLITERATUS method because V24 was
+   resource-blocked, not behaviorally rejected. The new runner monkeypatches
+   upstream OBLITERATUS rebirth to stream 1GB safetensor shards instead of
+   gathering a full 27B state dict during save, then runs the same Qwen wrapper
+   remap and alpha 0.895/top-43 source tether toward local FT v4. V30 is blocked
+   from broad eval, NVFP4, upload, and promotion until it exports, syncs to the
+   worker, passes strict checkpoint/tokenizer/architecture audits, serves on the
+   two-Spark path, and passes the targeted three-trial gate.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the

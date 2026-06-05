@@ -339,6 +339,7 @@ entries:
       - scripts/run_obliteratus_container.sh
       - scripts/source_tether_safetensors_checkpoint.py
       - scripts/remap_safetensors_checkpoint.py
+      - src/model_forge/pipelines/abliterate.py#write_obliteratus_runner
       - configs/abliteration/*source_tethered_obliteratus*.yaml
     eval_hooks:
       - evals/prompts/refusal_paired_boundary.yaml
@@ -346,6 +347,7 @@ entries:
     limitations:
       - Public OBLITERATUS metrics are local harness evidence, not model-forge promotion evidence.
       - Alpha and reset-count constants are starting points only; every model family still needs source-relative targeted and broad eval gates.
+      - For large checkpoints, prefer model-forge streaming rebirth so OBLITERATUS writes bounded safetensor shards instead of gathering a full model state dict during save.
 
   apostate_preservation_ablation_2026:
     title: "Apostate preservation-direction baked refusal ablation"

@@ -1450,6 +1450,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 model_name = {plan["source_model"]!r}
@@ -1463,6 +1464,7 @@ pipeline_kwargs = {json.dumps(pipeline_kwargs, indent=4)!r}
 preserve_source_tokenizer = {preserve_source_tokenizer!r}
 key_remap_config = {json.dumps(key_remap_config, indent=4)!r}
 source_tether_config = {json.dumps(source_tether_config, indent=4)!r}
+streaming_rebirth_config = {json.dumps(backend.get("streaming_rebirth") or {}, indent=4)!r}
 
 if {not bool(backend.get("telemetry", False))!r}:
     os.environ.setdefault("OBLITERATUS_TELEMETRY", "0")
@@ -1620,6 +1622,203 @@ def run_source_tether() -> dict | None:
     return {{"command": command, "source_dir": source_dir}}
 
 
+def _size_gb_to_bytes(value, default_gb: float = 1.0) -> int:
+    try:
+        gb = float(value)
+    except (TypeError, ValueError):
+        gb = default_gb
+    return max(1, int(gb * 1_000_000_000))
+
+
+def _guard_streaming_rebirth(output_path: Path, transient_bytes: int) -> dict:
+    cfg = dict(json.loads(streaming_rebirth_config or "{{}}"))
+    min_ram = float(cfg.get(
+        "min_available_ram_fraction",
+        os.environ.get("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", "0.05"),
+    ))
+    ram_fraction = available_ram_fraction()
+    if ram_fraction < min_ram:
+        raise SystemExit(f"available RAM fraction {{ram_fraction:.3f}} is below streaming rebirth guard {{min_ram:.3f}}")
+    min_disk = float(cfg.get(
+        "min_free_disk_fraction",
+        os.environ.get("MODEL_FORGE_MIN_FREE_DISK_FRACTION", "0.10"),
+    ))
+    output_path.mkdir(parents=True, exist_ok=True)
+    usage = shutil.disk_usage(output_path)
+    projected = (usage.free - transient_bytes) / usage.total
+    if projected < min_disk:
+        raise SystemExit(
+            "free disk fraction would breach guard during streaming rebirth: "
+            f"{{projected:.3f}} < {{min_disk:.3f}}"
+        )
+    return {{
+        "available_ram_fraction": round(ram_fraction, 4),
+        "free_disk_fraction_before": round(usage.free / usage.total, 4),
+        "projected_free_disk_fraction_after": round(projected, 4),
+        "transient_bytes": int(transient_bytes),
+    }}
+
+
+def _load_offloaded_tensor(key: str, placeholder):
+    offload_dir = getattr(model_forge_streaming_rebirth_pipeline.handle, "_offload_dir", None)
+    if not offload_dir:
+        raise RuntimeError(f"cannot stream-save meta tensor {{key!r}} without an offload directory")
+    from safetensors.torch import load_file
+
+    base = Path(offload_dir)
+    safetensors_file = base / f"{{key}}.safetensors"
+    if safetensors_file.exists():
+        payload = load_file(str(safetensors_file))
+        return payload[key] if key in payload else next(iter(payload.values()))
+    dat_file = base / f"{{key}}.dat"
+    if dat_file.exists():
+        import numpy as np
+        import torch
+
+        dtype = placeholder.dtype
+        shape = placeholder.shape
+        arr = np.fromfile(str(dat_file), dtype=torch.tensor([], dtype=dtype).numpy().dtype)
+        return torch.from_numpy(arr).reshape(shape)
+    raise RuntimeError(f"cannot find offloaded tensor data for {{key!r}} under {{offload_dir!r}}")
+
+
+model_forge_streaming_rebirth_pipeline = None
+
+
+def install_streaming_rebirth(AbliterationPipeline) -> bool:
+    cfg = dict(json.loads(streaming_rebirth_config or "{{}}"))
+    enabled = cfg.get("enabled")
+    if enabled is None:
+        enabled = False
+    if not enabled:
+        return False
+
+    def model_forge_streaming_rebirth(self):
+        global model_forge_streaming_rebirth_pipeline
+        model_forge_streaming_rebirth_pipeline = self
+        if getattr(self, "push_to_hub", None):
+            raise RuntimeError("model-forge streaming OBLITERATUS rebirth does not push to Hub; upload after local audits pass")
+        from safetensors.torch import save_file
+
+        dest = str(self.output_dir)
+        self._emit("rebirth", "running", f"Streaming save to {{dest}}...")
+        start = time.time()
+        output_path = Path(self.output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        shard_limit = _size_gb_to_bytes(cfg.get("max_shard_size_gb"), default_gb=1.0)
+        state_dict = self.handle.model.state_dict()
+        total_bytes = sum(int(t.numel()) * int(t.element_size()) for t in state_dict.values())
+        self.log(
+            f"Streaming state dict: {{len(state_dict)}} tensors, "
+            f"{{total_bytes / 1e9:.1f}} GB, shard_limit={{shard_limit / 1e9:.1f}} GB"
+        )
+        _guard_streaming_rebirth(output_path, min(shard_limit, max(total_bytes, 1)))
+        weight_map = {{}}
+        shard_records = []
+        shard_tensors = {{}}
+        shard_bytes = 0
+        shard_index = 0
+        metadata = {{"format": "pt"}}
+
+        def flush_shard():
+            nonlocal shard_tensors, shard_bytes, shard_index
+            if not shard_tensors:
+                return
+            shard_index += 1
+            shard_name = f"model-{{shard_index:05d}}.safetensors"
+            tmp_path = output_path / f".{{shard_name}}.tmp"
+            _guard_streaming_rebirth(output_path, shard_bytes)
+            self.log(
+                f"  writing shard {{shard_index}}: {{len(shard_tensors)}} tensors, "
+                f"{{shard_bytes / 1e9:.2f}} GB"
+            )
+            save_file(shard_tensors, str(tmp_path), metadata=metadata)
+            final_path = output_path / shard_name
+            tmp_path.replace(final_path)
+            for tensor_name in shard_tensors:
+                weight_map[tensor_name] = shard_name
+            shard_records.append({{"name": shard_name, "tensor_count": len(shard_tensors), "bytes": shard_bytes}})
+            shard_tensors = {{}}
+            shard_bytes = 0
+            try:
+                import torch
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
+
+        for name, tensor in state_dict.items():
+            if getattr(tensor, "device", None) is not None and tensor.device.type == "meta":
+                tensor = _load_offloaded_tensor(name, tensor)
+            tensor_bytes = int(tensor.numel()) * int(tensor.element_size())
+            if shard_tensors and shard_bytes + tensor_bytes > shard_limit:
+                flush_shard()
+            cpu_tensor = tensor.detach().to("cpu").contiguous().clone()
+            shard_tensors[name] = cpu_tensor
+            shard_bytes += tensor_bytes
+            if shard_bytes >= shard_limit:
+                flush_shard()
+        flush_shard()
+        if not shard_records:
+            raise RuntimeError("streaming rebirth produced no safetensors shards")
+
+        shard_count = len(shard_records)
+        rename_map = {{}}
+        for index, record in enumerate(shard_records, start=1):
+            old_name = record["name"]
+            new_name = f"model-{{index:05d}}-of-{{shard_count:05d}}.safetensors"
+            if old_name != new_name:
+                (output_path / old_name).replace(output_path / new_name)
+            rename_map[old_name] = new_name
+            record["name"] = new_name
+        weight_map = {{name: rename_map[shard] for name, shard in weight_map.items()}}
+        index_payload = {{
+            "metadata": {{"total_size": total_bytes}},
+            "weight_map": weight_map,
+        }}
+        (output_path / "model.safetensors.index.json").write_text(
+            json.dumps(index_payload, indent=2, sort_keys=True) + "\\n",
+            encoding="utf-8",
+        )
+
+        if hasattr(self.handle.model, "config"):
+            self.handle.model.config.save_pretrained(output_path)
+        if getattr(self.handle.model, "generation_config", None) is not None:
+            try:
+                self.handle.model.generation_config.save_pretrained(output_path)
+            except Exception:
+                pass
+        self.handle.tokenizer.save_pretrained(output_path)
+        metadata_payload = self._build_metadata()
+        (output_path / "abliteration_metadata.json").write_text(
+            json.dumps(metadata_payload, indent=2, default=str) + "\\n",
+            encoding="utf-8",
+        )
+        streaming_manifest = {{
+            "schema_version": "model_forge.obliteratus_streaming_rebirth.v1",
+            "output_dir": str(output_path),
+            "tensor_count": len(weight_map),
+            "total_size": total_bytes,
+            "max_shard_size_gb": float(cfg.get("max_shard_size_gb", 1.0)),
+            "shard_count": shard_count,
+            "shards": shard_records,
+            "duration_seconds": round(time.time() - start, 3),
+        }}
+        (output_path / "model_forge_obliteratus_streaming_rebirth.json").write_text(
+            json.dumps(streaming_manifest, indent=2, sort_keys=True) + "\\n",
+            encoding="utf-8",
+        )
+        cleanup = getattr(self, "_cleanup_offload_dir", None)
+        if callable(cleanup):
+            cleanup()
+        self._emit("rebirth", "done", f"Stream-saved to {{output_path}}", duration=time.time() - start)
+        return output_path
+
+    AbliterationPipeline._rebirth = model_forge_streaming_rebirth
+    return True
+
+
 def main() -> None:
     guard_system_health()
     try:
@@ -1629,6 +1828,7 @@ def main() -> None:
             "OBLITERATUS is not installed. Build/use docker/obliteratus.Dockerfile "
             "or install https://github.com/elder-plinius/OBLITERATUS."
         ) from exc
+    streaming_rebirth_enabled = install_streaming_rebirth(AbliterationPipeline)
 
     kwargs = dict(json.loads(pipeline_kwargs))
     kwargs.update(load_model_forge_prompts())
@@ -1655,6 +1855,7 @@ def main() -> None:
         "work_dir": str(work_dir),
         "prompt_payload": prompt_payload_path,
         "pipeline_kwargs": sorted(kwargs),
+        "streaming_rebirth_enabled": streaming_rebirth_enabled,
         "result": serializable_result(result),
         "post_export_key_remap": key_remap_result,
         "source_tether": source_tether_result,
@@ -5722,6 +5923,11 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
         custom_commands = candidate_custom_command_entries(candidate, blocked=blocked)
         eval_suffix = candidate_loop_eval_suffix(family, candidate, int(eval_spec["trials"]))
         eval_dir = display_path(output_root / eval_suffix)
+        candidate_export_env = {
+            str(key): value
+            for key, value in (candidate.get("export_env") or {}).items()
+            if value is not None
+        }
         candidate_commands: list[dict[str, Any]] = []
         blockers: list[str] = []
         if blocked:
@@ -5750,6 +5956,7 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
                     " ".join([
                         shell_assignment("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", loop.get("min_available_ram_fraction", 0.05)),
                         shell_assignment("MODEL_FORGE_MIN_FREE_DISK_FRACTION", loop.get("min_free_disk_fraction", 0.15)),
+                        *(shell_assignment(key, value) for key, value in candidate_export_env.items()),
                         f"./forge ablate --config {candidate_config} sota-run --backend {backend} --execute",
                     ]),
                     phase="candidate_export",

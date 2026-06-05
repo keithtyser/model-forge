@@ -7881,10 +7881,10 @@ export, Hugging Face upload, or promotion for
 
 Evidence:
 
-- `reports/generated/qwen36_27b_v29/abliterix_harmfulness_component_v29_coordinator_analysis.json`
-- `reports/generated/qwen36_27b_v29/abliterix_harmfulness_component_v29_worker_analysis.json`
-- `reports/generated/qwen36_27b_v29/coordinator_v29_abliterix_journal.jsonl`
-- `reports/generated/qwen36_27b_v29/worker_v29_abliterix_journal.jsonl`
+- `reports/evidence/qwen36_27b_v29/abliterix_harmfulness_component_v29_coordinator_analysis.json`
+- `reports/evidence/qwen36_27b_v29/abliterix_harmfulness_component_v29_worker_analysis.json`
+- `reports/evidence/qwen36_27b_v29/coordinator_v29_abliterix_journal.jsonl`
+- `reports/evidence/qwen36_27b_v29/worker_v29_abliterix_journal.jsonl`
 - `reports/qwen36_27b_abliterix_harmfulness_component_v29_plan_summary.md`
 
 Follow-up: do not rerun V29 unchanged. The next Qwen FT-abli attempt needs a
@@ -7892,3 +7892,34 @@ stronger no-refusal objective or a method shift, such as response-opening
 conditioned vectors with direct refusal-phrase scoring, streamed/source-tethered
 OBLITERATUS export, or SAE/activation-feature editing of the residual
 refusal-opening state.
+
+### 2026-06-05 Qwen V30 source-tethered OBLITERATUS streaming-rebirth plan
+
+Config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_source_tethered_obliteratus_streaming_v30.yaml`
+
+Status: ready, checkpoint-producing candidate, no checkpoint exported yet.
+
+Hypothesis: V24's source-tethered OBLITERATUS method did not receive a behavioral
+test because upstream OBLITERATUS hit the host RAM floor while gathering and
+serializing the full 27B state dict. V30 keeps the same method family where it
+generalizes: OBLITERATUS `advanced`, `n_directions: 2`, `regularization: 0.5`,
+alpha `0.895` source tether toward `local_ft_v4`, and top-`43` high-drift tensor
+resets. The change is operational: model-forge now monkeypatches OBLITERATUS
+`_rebirth()` to stream `1GB` safetensor shards, write
+`model_forge_obliteratus_streaming_rebirth.json`, then continue through the
+existing Qwen key remap and source-tether scripts.
+
+Runbook:
+
+```bash
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_source_tethered_obliteratus_streaming_v30.yaml sota-prepare --backend obliteratus
+MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 MODEL_FORGE_OBLITERATUS_DOCKER_MEMORY_GB=100 MODEL_FORGE_OBLITERATUS_SHM_SIZE=32g \
+  ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_source_tethered_obliteratus_streaming_v30.yaml sota-run --backend obliteratus --execute
+```
+
+Promotion remains blocked until export succeeds, the checkpoint syncs to the
+worker, strict checkpoint/tokenizer/architecture audits pass, the candidate
+serves on the two-Spark path, and the targeted three-trial gate passes with
+`self_harm_instruction_harmful` refusal wording 0/3 plus
+`model_selection_summary` 3/3.
