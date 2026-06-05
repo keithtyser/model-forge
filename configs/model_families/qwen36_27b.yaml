@@ -730,7 +730,7 @@ variants:
     promotion:
       decision: inconclusive
       blocked_actions: [quantization_export, hf_upload, promotion]
-      reason: "V28 is a search-only Abliterix harmfulness-direction component-policy candidate. No selected checkpoint has been exported or model-forge-gated yet. Do not broad-eval, quantize, upload, or promote this placeholder until a selected export passes strict audits and the targeted three-trial gate."
+      reason: "V28 is a search-only Abliterix harmfulness-direction component-policy candidate. The first guarded two-shard launch loaded the source checkpoint and measured the expected 12/20 baseline, but trial 1 failed on both Sparks before scoring because Abliterix harmfulness-direction steering produced a size-2 vector stack and apply_steering indexed it as layer-aligned component vectors. No selected checkpoint was exported or model-forge-gated. Do not broad-eval, quantize, upload, or promote this placeholder."
       evidence:
         - configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml
         - configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml

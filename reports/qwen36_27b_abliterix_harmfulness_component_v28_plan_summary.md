@@ -1,6 +1,6 @@
 # Qwen3.6 27B V28 Abliterix Harmfulness Component-Policy Search Plan
 
-Status: ready, search-only, no checkpoint exported.
+Status: blocked, search-only, no checkpoint exported.
 
 Config:
 `configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml`
@@ -55,3 +55,45 @@ selected checkpoint as a normal checkpoint-producing candidate, sync to both
 Sparks, run strict checkpoint/tokenizer/architecture audits, serve it, and pass
 the targeted three-trial model-forge gate before broad eval, NVFP4, Hugging Face
 upload, or promotion.
+
+## Two-Shard Attempt
+
+Date: 2026-06-05.
+
+V28 was launched as a guarded short search on both DGX Spark nodes after
+`sota-plan` and `sota-prepare` passed and the generated TOML preserved the
+component policy:
+
+- `ablate_harmfulness_direction = true`
+- `harmfulness_layer_band = [0.3, 0.7]`
+- `disabled_components = ["attn.q_proj", "attn.k_proj", "attn.v_proj"]`
+- `component_strength_ranges = { "attn.o_proj" = [2.8, 5.8], "mlp.down_proj" = [0.3, 1.4] }`
+
+Both nodes loaded the 851-shard source checkpoint, selected generation batch
+size `8`, found no common response prefix, loaded the `3` benign and `20`
+target evaluation prompts, and measured the same baseline refusal count:
+`12/20`.
+
+The first trial failed before any proxy score was produced on both nodes:
+
+| Node | Trial vector scope | Failure |
+| --- | --- | --- |
+| coordinator | global | `IndexError: index 19 is out of bounds for dimension 0 with size 2` |
+| worker | per layer | `IndexError: index 39 is out of bounds for dimension 0 with size 2` |
+
+Both failures occurred in Abliterix `apply_steering`, at
+`sv_by_device[device][layer_idx + 1]`. This confirms the V28 config is
+operational through direction extraction, but the current Abliterix
+harmfulness-direction tensor shape is incompatible with the normal per-layer
+component steering path for this Qwen 3.6 27B run.
+
+## Decision
+
+Block V28 operationally. It is not behaviorally rejected because no completed
+trial reached refusal scoring, but it must not be rerun unchanged, exported,
+broad-evaluated, quantized, uploaded, or promoted.
+
+Next work should either patch/fork Abliterix so harmfulness-direction steering
+returns layer-aligned vectors for component LoRA application, or move back to a
+safer streamed/source-tethered OBLITERATUS path that can complete checkpoint
+export under the Spark resource contract.

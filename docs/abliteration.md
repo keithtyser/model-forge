@@ -223,14 +223,16 @@ disabled Q/K/V components, output-projection emphasis, and a smaller
 `mlp.down_proj` band. The early two-shard run proved the component targeting
 worked, but all completed trials worsened the 12/20 baseline refusal count to
 14-16/20, so V27 must not be exported or promoted. The next ready search-only
-candidate is V28:
+candidate was V28:
 `configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml`.
 It keeps V27's component policy but turns on
 `ablate_harmfulness_direction: true` with `harmfulness_layer_band: [0.3, 0.7]`.
-Run `sota-plan`, `sota-prepare`, and guarded search first; only export if
-`abliterix-search-analyze` finds a zero-refusal low-KL selected trial, then
-register the exported checkpoint as a normal candidate and run the model-forge
-targeted gate before broad evals, NVFP4, upload, or promotion.
+The guarded two-shard run reached the expected 12/20 baseline on both Sparks,
+then failed on trial 1 before scoring because Abliterix harmfulness-direction
+steering produced a size-2 vector stack and `apply_steering` indexed it as
+layer-aligned component vectors. Do not rerun V28 unchanged. A future retry
+needs an Abliterix patch/fork for layer-aligned harmfulness vectors, or a return
+to a safer streamed/source-tethered OBLITERATUS export path.
 OBLITERATUS, Apostate, native optimal transport, native norm-preserving/SOM/
 selective projection, and `qwen_scope_sae` write baked checkpoints directly, so
 their backend reports must be followed by source-vs-candidate model-forge

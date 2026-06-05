@@ -806,10 +806,10 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(candidate["status"], "rejected")
         self.assertTrue(candidate["blockers"])
         self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertEqual(plan["planned_candidate_job_count"], 1)
+        self.assertEqual(plan["planned_candidate_job_count"], 0)
         self.assertFalse(any(command.get("enabled", False) for command in candidate["commands"]))
         self.assertFalse(gate_command["enabled"])
-        self.assertIn("Search-only candidate jobs are planned", plan["candidate_gate_command"])
+        self.assertIn("No executable candidate eval directories are planned", plan["candidate_gate_command"])
 
     def test_qwen_scope_sae_prepare_writes_guarded_runner(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml"
@@ -1379,17 +1379,15 @@ class AbliterationPlanTests(unittest.TestCase):
             command.get("enabled", False)
             for command in candidates["abliterix_aeon_component_v27"]["commands"]
         ))
-        self.assertFalse(candidates["abliterix_harmfulness_component_v28"]["blockers"])
+        self.assertTrue(candidates["abliterix_harmfulness_component_v28"]["blockers"])
         self.assertFalse(candidates["abliterix_harmfulness_component_v28"]["produces_checkpoint"])
-        self.assertTrue(any(
-            command.get("enabled", True)
-            and command.get("phase") == "candidate_export"
-            and "qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml" in command["command"]
+        self.assertFalse(any(
+            command.get("enabled", False)
             for command in candidates["abliterix_harmfulness_component_v28"]["commands"]
         ))
         self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertEqual(plan["planned_candidate_job_count"], 1)
-        self.assertIn("Search-only candidate jobs are planned", plan["candidate_gate_command"])
+        self.assertEqual(plan["planned_candidate_job_count"], 0)
+        self.assertIn("No executable candidate eval directories are planned", plan["candidate_gate_command"])
         self.assertFalse(any(
             command.get("enabled", False)
             for command in candidates["abliterix_response_opening_v26"]["commands"]

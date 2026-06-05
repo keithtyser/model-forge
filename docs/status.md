@@ -934,12 +934,13 @@ length filtering:
    MLP down-projection range. The early two-shard run proved the component
    policy is operational but worsened every completed proxy trial from the
    12/20 baseline to 14-16/20 refusals, so V27 is rejected and must not be
-   exported or promoted. V28 is now the next ready search-only candidate:
+   exported or promoted. V28 was the next search-only candidate:
    `configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml`.
    It keeps V27's component policy and turns on Abliterix harmfulness-direction
-   ablation. It remains blocked from broad eval, NVFP4, upload, and promotion
-   until a selected export passes strict audits and the targeted three-trial
-   model-forge gate.
+   ablation. The guarded two-shard run reached the 12/20 baseline on both
+   Sparks, then failed on trial 1 before scoring because Abliterix
+   harmfulness-direction vectors were not layer-aligned for component steering.
+   It remains blocked from broad eval, NVFP4, upload, and promotion.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the

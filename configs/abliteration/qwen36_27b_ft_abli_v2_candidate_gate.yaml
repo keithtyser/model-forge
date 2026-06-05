@@ -212,7 +212,7 @@ candidate_selection:
           - keep the useful implementation signal: disabled Q/K/V worked and Abliterix exposed only attn.o_proj plus mlp.down_proj as steerable components
           - next attempt should change refusal/harmfulness sign handling instead of repeating ablate_harmfulness_direction=false
       - name: abliterix_harmfulness_component_v28
-        status: ready
+        status: blocked
         method_family: abliterix_qwen36_harmfulness_component_policy
         backend: abliterix
         variant: local_ft_abli_abliterix_harmfulness_component_v28_selected
@@ -220,6 +220,7 @@ candidate_selection:
         output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-abliterix-harmfulness-component-v28-selected
         produces_checkpoint: false
         eval_suffix: qwen36_27b_local_ft_abli_abliterix_harmfulness_component_v28_selected_targeted_gate_t3
+        blocker: first two-shard V28 launch failed before any completed trial because Abliterix harmfulness-direction steering produced a size-2 vector stack and apply_steering indexed it as layer-aligned component vectors
         hypothesis: >
           V27 proved the public Qwen3.6 component policy is operational in
           model-forge but moved the refusal proxy in the wrong direction. V28
@@ -229,10 +230,10 @@ candidate_selection:
           as denial-style self-harm refusal openings in the near-miss FT-abli
           source.
         implementation_next:
-          - run sota-plan and sota-prepare locally before Docker launch
-          - run a guarded short search first; stop early if the first completed trials again worsen the 12/20 baseline
-          - analyze the journal and export only if a selected trial reaches zero proxy refusals within KL gate
-          - after export, register the selected checkpoint as a normal checkpoint-producing candidate and run the targeted three-trial model-forge gate before broad eval, NVFP4, upload, or promotion
+          - do not rerun V28 unchanged; both Sparks reproduced the Abliterix apply_steering IndexError on trial 1 after measuring the 12/20 baseline
+          - keep the useful signal that component config and harmfulness-direction extraction reached the steering stage
+          - next attempt must patch/fork Abliterix harmfulness-direction tensor shaping for layer-aligned component steering, or switch back to a safer streamed/source-tethered OBLITERATUS export path
+          - export only after a future search produces zero proxy refusals inside the KL gate, then register the selected checkpoint as a normal candidate and run the targeted three-trial model-forge gate before broad eval, NVFP4, upload, or promotion
   gate:
     trials: 3
     temperature: 1

@@ -393,31 +393,23 @@ trials worsened the 12/20 baseline proxy refusals. Coordinator trials were
 16/20, 14/20, and 15/20 refusals; worker trials were 16/20, 15/20, and 15/20.
 Do not continue V27 or run `abliterix-export`.
 
-V28 is now the next ready Qwen FT-abli Abliterix search-only candidate:
+V28 has now been attempted and is operationally blocked:
 `configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml`.
 It keeps V27's component policy and prompt objective but turns on
 `ablate_harmfulness_direction: true` with `harmfulness_layer_band: [0.3, 0.7]`.
-Run V28 as a guarded short search first, and stop early again if completed
-trials worsen the 12/20 baseline.
-
-```bash
-./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml sota-plan --backend abliterix
-./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml sota-prepare --backend abliterix
-MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 \
-  ./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml sota-run --backend abliterix --execute
-./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml \
-  abliterix-search-analyze --backend abliterix \
-  --output reports/generated/qwen36_27b_v28_abliterix_harmfulness_component_search_analysis.json
-```
+The guarded two-shard run reached baseline scoring on both Sparks (`12/20`
+proxy refusals), then failed on trial 1 before any completed proxy score because
+Abliterix `apply_steering` indexed the harmfulness-direction vector stack as
+layer-aligned component vectors. Coordinator failed with
+`IndexError: index 19 is out of bounds for dimension 0 with size 2`; worker
+failed with `IndexError: index 39 is out of bounds for dimension 0 with size 2`.
+Do not rerun V28 unchanged or run `abliterix-export`.
 
 `local_ft_abli_abliterix_harmfulness_component_v28_selected` is only a placeholder in
 `configs/model_families/qwen36_27b.yaml` and is blocked from NVFP4, upload, and
-promotion. Export only if journal analysis finds a zero-refusal low-KL selected
-trial. After export, register the selected checkpoint as a normal
-checkpoint-producing candidate, sync to both Sparks, run strict
-checkpoint/tokenizer/architecture audits, serve it, and pass the three-trial
-model-forge targeted gate before broad eval, NVFP4, Hugging Face upload, or
-promotion.
+promotion. Next work should patch/fork Abliterix so harmfulness-direction
+steering returns layer-aligned vectors for component LoRA application, or return
+to a safer streamed/source-tethered OBLITERATUS export path.
 
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,

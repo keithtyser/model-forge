@@ -402,6 +402,7 @@ entries:
     limitations:
       - Backend search refusals and KL are only export triage, not model-forge promotion evidence.
       - Component names such as `attn.o_proj` rely on backend family mappings; every new architecture must be inspected before copying this policy.
+      - The Qwen V28 harmfulness-direction attempt reached baseline scoring but failed in Abliterix apply_steering because the harmfulness vector stack was not layer-aligned for component LoRA steering; do not rerun that config unchanged.
 
   sra_2026_surgical_refusal_ablation:
     title: "Surgical Refusal Ablation"

@@ -7820,12 +7820,12 @@ External starting points:
 Committed summary:
 `reports/qwen36_27b_abliterix_aeon_component_v27_plan_summary.md`
 
-### 2026-06-05 Qwen V28 Abliterix harmfulness component-policy search plan
+### 2026-06-05 Qwen V28 Abliterix harmfulness component-policy search
 
 Config:
 `configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v28.yaml`
 
-Status: ready, search-only, no checkpoint exported.
+Status: blocked, search-only, no checkpoint exported.
 
 Hypothesis: V27 moved refusal behavior in the wrong direction while proving
 component targeting works. Abliterix v1.8.0 includes an opt-in harmfulness
@@ -7834,8 +7834,13 @@ the request as harmful. V28 keeps the V27 component policy and prompt objective,
 then turns on `ablate_harmfulness_direction: true` with
 `harmfulness_layer_band: [0.3, 0.7]`.
 
-Stop early if the first completed trials again worsen the 12/20 baseline on
-both Sparks. Export only if journal analysis finds a selected trial with zero
-proxy refusals inside the KL gate, then register the selected checkpoint as a
-normal candidate and run the model-forge targeted gate before broad eval, NVFP4,
-Hugging Face upload, or promotion.
+Result: the guarded two-shard run loaded the 851-shard source checkpoint on both
+Sparks, chose batch size `8`, and measured the expected `12/20` baseline proxy
+refusals. Trial 1 then failed before any proxy score was produced because
+Abliterix `apply_steering` indexed a size-2 harmfulness-direction vector stack
+as layer-aligned component vectors. Coordinator failed with
+`IndexError: index 19 is out of bounds for dimension 0 with size 2`; worker
+failed with `IndexError: index 39 is out of bounds for dimension 0 with size 2`.
+Do not rerun V28 unchanged or export it. Next work should patch/fork Abliterix's
+harmfulness-direction tensor shaping for component steering, or switch back to a
+safer streamed/source-tethered OBLITERATUS export path.
