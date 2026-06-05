@@ -409,8 +409,7 @@ Do not rerun V28 unchanged or run `abliterix-export`.
 `configs/model_families/qwen36_27b.yaml` and is blocked from NVFP4, upload, and
 promotion.
 
-V29 is the patched retry and is the next ready search-only Qwen FT-abli
-candidate:
+V29 was the patched retry and is now rejected:
 `configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v29.yaml`.
 It keeps V28's component policy and prompt objective, but the generated
 Abliterix runner calls
@@ -430,11 +429,21 @@ MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 MODEL_FORGE_MIN_FREE_DISK_FRACTION=0
   --output reports/generated/qwen36_27b_v29_abliterix_harmfulness_component_search_analysis.json
 ```
 
-Run V29 as a guarded short two-Spark search. Stop early if completed trials
-worsen the 12/20 proxy baseline on both nodes. Export only if journal analysis
-finds a zero-refusal low-KL selected trial; after export, register it as a
-normal checkpoint-producing candidate and run strict audits plus the three-trial
-model-forge targeted gate before broad eval, NVFP4, upload, or promotion.
+The guarded two-Spark search completed `50` trials per node. The analyzer now
+infers the `12/20` baseline from Abliterix's refusal-ratio objective values. The
+best coordinator trial reached only `8/20` proxy refusals and the best worker
+trial reached only `9/20`; both reports recommend `do_not_export`:
+
+- `reports/generated/qwen36_27b_v29/abliterix_harmfulness_component_v29_coordinator_analysis.json`
+- `reports/generated/qwen36_27b_v29/abliterix_harmfulness_component_v29_worker_analysis.json`
+
+Do not rerun V29 unchanged, run `abliterix-export`, broad-eval, NVFP4-export,
+upload, or promote
+`local_ft_abli_abliterix_harmfulness_component_v29_selected`. Next Qwen
+FT-abli ablation work should change method or objective: use a stronger
+response-opening conditioned no-refusal target, a streamed/source-tethered
+OBLITERATUS export, or an SAE/activation-feature edit aimed at the residual
+refusal-opening state.
 
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,

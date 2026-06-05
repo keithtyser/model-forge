@@ -941,11 +941,18 @@ length filtering:
    Sparks, then failed on trial 1 before scoring because Abliterix
    harmfulness-direction vectors were not layer-aligned for component steering.
    It remains blocked from broad eval, NVFP4, upload, and promotion.
-   V29 is now the next ready search-only candidate:
+   V29 was the patched retry:
    `configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v29.yaml`.
    It keeps V28's policy but applies model-forge's Abliterix compatibility
    patch, reducing the refusal/harmfulness pair with `normalized_sum` before
-   LoRA steering.
+   LoRA steering. The patch fixed the vector-shape failure and completed 50
+   guarded trials on each Spark, but V29 is rejected: analyzer-inferred
+   baseline was 12/20 proxy refusals, best coordinator result was 8/20, best
+   worker result was 9/20, and both analyses recommend `do_not_export`.
+   Do not rerun V29 unchanged, export, broad-eval, quantize, upload, or promote
+   it. Next work needs a stronger no-refusal objective or a different method
+   family such as response-opening conditioned vectors, streamed/source-tethered
+   OBLITERATUS, or SAE/activation-feature editing.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the

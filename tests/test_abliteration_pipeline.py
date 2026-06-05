@@ -807,10 +807,10 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(candidate["status"], "rejected")
         self.assertTrue(candidate["blockers"])
         self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertEqual(plan["planned_candidate_job_count"], 1)
+        self.assertEqual(plan["planned_candidate_job_count"], 0)
         self.assertFalse(any(command.get("enabled", False) for command in candidate["commands"]))
         self.assertFalse(gate_command["enabled"])
-        self.assertIn("Search-only candidate jobs are planned", plan["candidate_gate_command"])
+        self.assertIn("implement or unblock a candidate first", plan["candidate_gate_command"])
 
     def test_qwen_scope_sae_prepare_writes_guarded_runner(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml"
@@ -1329,7 +1329,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("collect_directions", runner)
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 24)
 
-    def test_candidate_loop_blocks_rejected_v21_to_v28_and_plans_v29_search(self) -> None:
+    def test_candidate_loop_blocks_rejected_v21_to_v29_until_new_method(self) -> None:
         config_path = (
             REPO_DIR
             / "configs"
@@ -1387,17 +1387,15 @@ class AbliterationPlanTests(unittest.TestCase):
             command.get("enabled", False)
             for command in candidates["abliterix_harmfulness_component_v28"]["commands"]
         ))
-        self.assertFalse(candidates["abliterix_harmfulness_component_v29"]["blockers"])
+        self.assertTrue(candidates["abliterix_harmfulness_component_v29"]["blockers"])
         self.assertFalse(candidates["abliterix_harmfulness_component_v29"]["produces_checkpoint"])
-        self.assertTrue(any(
-            command.get("enabled", True)
-            and command.get("phase") == "candidate_export"
-            and "qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v29.yaml" in command["command"]
+        self.assertFalse(any(
+            command.get("enabled", False)
             for command in candidates["abliterix_harmfulness_component_v29"]["commands"]
         ))
         self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertEqual(plan["planned_candidate_job_count"], 1)
-        self.assertIn("Search-only candidate jobs are planned", plan["candidate_gate_command"])
+        self.assertEqual(plan["planned_candidate_job_count"], 0)
+        self.assertIn("implement or unblock a candidate first", plan["candidate_gate_command"])
         self.assertFalse(any(
             command.get("enabled", False)
             for command in candidates["abliterix_response_opening_v26"]["commands"]
@@ -1807,6 +1805,39 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertTrue(summary["frontier"][0]["candidate_passes"])
         self.assertFalse(summary["frontier"][0]["eligible"])
         self.assertEqual(summary["frontier"][0]["n_bad_prompts_source"], "manifest")
+
+    def test_abliterix_search_analyze_infers_baseline_from_ratio_objective(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_self_harm_method_shift_plan.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+            }
+            plan = build_sota_plan(config, config_path, "abliterix")
+            write_abliterix_config(plan)
+            journal = Path(tmp) / "abliterix.jsonl"
+            records = [
+                {"trial_id": 17, "user_attr": {"index": 18, "refusals": 0}},
+                {"trial_id": 17, "values": [0.0018, 0.0], "state": 1},
+                {"trial_id": 18, "user_attr": {"index": 19, "refusals": 1}},
+                {"trial_id": 18, "values": [0.0010, 0.5], "state": 1},
+            ]
+            journal.write_text("\n".join(json.dumps(record) for record in records) + "\n", encoding="utf-8")
+            summary = analyze_abliterix_search_journal(plan, journal)
+
+        self.assertEqual(summary["base_refusals"], 2)
+        self.assertFalse(summary["baseline_recorded"])
+        self.assertTrue(summary["baseline_available"])
+        self.assertEqual(summary["base_refusals_source"], "objective_ratio")
+        self.assertEqual(summary["frontier"][0]["refusal_reduction"], 2)
+        self.assertTrue(summary["frontier"][0]["eligible"])
+        self.assertEqual(summary["recommendation"]["action"], "prepare_guarded_export_runner")
 
     def test_qwen_v2_self_harm_stochastic_search_uses_weighted_variants(self) -> None:
         config_path = (

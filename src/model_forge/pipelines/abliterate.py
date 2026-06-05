@@ -8,9 +8,10 @@ import pprint
 import shutil
 import subprocess
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 import yaml
 from rich.console import Console
@@ -4136,14 +4137,18 @@ def parse_heretic_journal(path: Path) -> dict[str, Any]:
     for trial in trials.values():
         values = trial.get("values")
         inferred_kl = None
+        inferred_refusal_ratio = None
         if isinstance(values, list) and values:
             inferred_kl = _as_float(values[0])
+            if len(values) > 1:
+                inferred_refusal_ratio = _as_float(values[1])
         kl = _as_float(trial.get("kl_divergence"))
         normalized_trials.append({
             **trial,
             "index": _as_int(trial.get("index")),
             "trial_id": _as_int(trial.get("trial_id")),
             "kl_divergence": kl if kl is not None else inferred_kl,
+            "refusal_ratio_objective": inferred_refusal_ratio,
             "refusals": _as_int(trial.get("refusals")),
             "base_refusals": _as_int(trial.get("base_refusals")),
             "n_bad_prompts": _as_int(trial.get("n_bad_prompts")),
@@ -4195,6 +4200,23 @@ def abliterix_manifest_bad_eval_count(plan: dict[str, Any]) -> int | None:
         .get("count")
     )
     return _as_int(count)
+
+
+def infer_base_refusals_from_ratio_objective(trials: Iterable[dict[str, Any]]) -> int | None:
+    inferred: list[int] = []
+    for trial in trials:
+        refusals = _as_int(trial.get("refusals"))
+        ratio = _as_float(trial.get("refusal_ratio_objective"))
+        if refusals is None or ratio is None or ratio <= 0:
+            continue
+        estimate = float(refusals) / ratio
+        rounded = int(round(estimate))
+        if rounded > 0 and abs(estimate - rounded) <= 1e-3:
+            inferred.append(rounded)
+    if not inferred:
+        return None
+    counts = Counter(inferred)
+    return counts.most_common(1)[0][0]
 
 
 def analyze_heretic_search_journal(
@@ -4383,11 +4405,19 @@ def analyze_abliterix_search_journal(
             "frontier": [],
         }
 
-    base_refusals = max(
+    recorded_base_refusals = max(
         (trial["base_refusals"] for trial in complete_trials if trial["base_refusals"] is not None),
         default=None,
     )
-    baseline_recorded = base_refusals is not None
+    inferred_base_refusals = infer_base_refusals_from_ratio_objective(complete_trials)
+    base_refusals = recorded_base_refusals if recorded_base_refusals is not None else inferred_base_refusals
+    baseline_recorded = recorded_base_refusals is not None
+    baseline_available = base_refusals is not None
+    base_refusals_source = (
+        "journal"
+        if recorded_base_refusals is not None
+        else "objective_ratio" if inferred_base_refusals is not None else None
+    )
     manifest_bad_eval_count = abliterix_manifest_bad_eval_count(plan)
     enriched = []
     for trial in complete_trials:
@@ -4399,7 +4429,7 @@ def analyze_abliterix_search_journal(
             and int(trial["refusals"]) <= effective_max_refusals
         )
         baseline_gate_passes = (
-            baseline_recorded
+            baseline_available
             and int(base_refusals) >= effective_min_base_refusals
             and refusal_reduction is not None
             and refusal_reduction >= effective_min_reduction
@@ -4417,6 +4447,8 @@ def analyze_abliterix_search_journal(
             "kl_divergence": trial["kl_divergence"],
             "candidate_passes": candidate_passes,
             "baseline_recorded": baseline_recorded,
+            "baseline_available": baseline_available,
+            "base_refusals_source": base_refusals_source,
             "eligible": eligible,
             "parameters": trial.get("parameters"),
         })
@@ -4498,6 +4530,8 @@ def analyze_abliterix_search_journal(
         "complete_trial_count": len(complete_trials),
         "base_refusals": base_refusals,
         "baseline_recorded": baseline_recorded,
+        "baseline_available": baseline_available,
+        "base_refusals_source": base_refusals_source,
         "manifest_bad_evaluation_prompt_count": manifest_bad_eval_count,
         "best_trial": best,
         "recommendation": recommendation,
@@ -4542,9 +4576,9 @@ def print_abliterix_search_analysis(summary: dict[str, Any]) -> None:
     gates = summary["gates"]
     recommendation = summary["recommendation"]
     baseline_status = (
-        str(summary.get("base_refusals"))
-        if summary.get("baseline_recorded")
-        else "not recorded in Abliterix journal"
+        f"{summary.get('base_refusals')} ({summary.get('base_refusals_source')})"
+        if summary.get("base_refusals") is not None
+        else "not recorded in Abliterix journal and not inferable"
     )
     console.print(Panel.fit(
         "\n".join([

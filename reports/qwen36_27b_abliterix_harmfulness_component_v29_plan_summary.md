@@ -1,6 +1,6 @@
-# Qwen3.6 27B V29 Patched Abliterix Harmfulness Component Search Plan
+# Qwen3.6 27B V29 Patched Abliterix Harmfulness Component Search
 
-Status: ready, search-only, no checkpoint exported.
+Status: executed and rejected, search-only, no checkpoint exported.
 
 Config:
 `configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v29.yaml`
@@ -59,12 +59,59 @@ Sparks, run strict checkpoint/tokenizer/architecture audits, serve it, and pass
 the targeted three-trial model-forge gate before broad eval, NVFP4, Hugging Face
 upload, or promotion.
 
+## Result
+
+V29 ran to completion on both Sparks through the guarded Abliterix container.
+The compatibility patch fixed the V28 vector-shape failure: both nodes loaded
+the source checkpoint, measured the expected `12/20` proxy-refusal baseline,
+applied steering, and completed `50` trials.
+
+Coordinator analysis:
+`reports/generated/qwen36_27b_v29/abliterix_harmfulness_component_v29_coordinator_analysis.json`
+
+- completed trials: `50/50`
+- inferred baseline: `12` refusals from Abliterix objective ratios
+- best trial: index `44`, trial id `43`
+- best proxy refusals: `8/20`
+- best KL: `0.008346500806510448`
+- recommendation: `do_not_export`
+
+Worker analysis:
+`reports/generated/qwen36_27b_v29/abliterix_harmfulness_component_v29_worker_analysis.json`
+
+- completed trials: `50/50`
+- inferred baseline: `12` refusals from Abliterix objective ratios
+- best trial: index `14`, trial id `13`
+- best proxy refusals: `9/20`
+- best KL: `0.05595417320728302`
+- recommendation: `do_not_export`
+
+Decision: reject V29. It proves the patched Abliterix harmfulness-pair steering
+path is operational, but this search space does not remove enough refusals to
+justify export. Do not run `abliterix-export`, broad eval, NVFP4 export, Hugging
+Face upload, or promotion for
+`local_ft_abli_abliterix_harmfulness_component_v29_selected`.
+
+## Follow-Up
+
+The run exposed and fixed a model-forge analyzer gap: Abliterix journals do not
+persist baseline refusals directly, but completed trials record objective values
+where the second value is `refusals / baseline_refusals`. The analyzer now
+infers `base_refusals` from that ratio and reports reduction columns instead of
+leaving the baseline ambiguous.
+
+The next ablation attempt should change method or objective, not rerun V29
+unchanged. Use a stronger no-refusal target such as response-opening conditioned
+vectors with direct refusal-phrase scoring, a streamed/source-tethered
+OBLITERATUS export, or an SAE/activation-feature edit aimed at the residual
+refusal-opening state.
+
 ## Validation
 
 - `.venv/bin/python -m unittest tests.test_abliteration_pipeline -v`
+- `.venv/bin/python -m unittest tests.test_abliteration_pipeline.AbliterationPlanTests.test_abliterix_search_analyze_recommends_export_runner_only_after_journal_gates tests.test_abliteration_pipeline.AbliterationPlanTests.test_abliterix_search_analyze_marks_missing_baseline_before_export_gate tests.test_abliteration_pipeline.AbliterationPlanTests.test_abliterix_search_analyze_infers_baseline_from_ratio_objective -v`
 - Docker smoke inside `model-forge-abliterix:latest` confirmed
   `model_forge.integrations.abliterix_compat.apply_abliterix_compat_patches`
   makes both `abliterix.cli.compute_steering_vectors` and
   `abliterix.vectors.compute_steering_vectors` return `(layers, hidden)` tensors
   for `ablate_harmfulness_direction=true` on tiny residual fixtures.
-

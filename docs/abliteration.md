@@ -230,12 +230,17 @@ It keeps V27's component policy but turns on
 The guarded two-shard run reached the expected 12/20 baseline on both Sparks,
 then failed on trial 1 before scoring because Abliterix harmfulness-direction
 steering produced a size-2 vector stack and `apply_steering` indexed it as
-layer-aligned component vectors. Do not rerun V28 unchanged. V29 is the patched
+layer-aligned component vectors. Do not rerun V28 unchanged. V29 was the patched
 retry:
 `configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v29.yaml`.
 It keeps V28's component policy and uses
 `model_forge.integrations.abliterix_compat` to reduce the refusal/harmfulness
-pair with `normalized_sum` before LoRA steering.
+pair with `normalized_sum` before LoRA steering. The guarded two-Spark V29
+search completed 50 trials per node and proved the patch operational, but it is
+rejected: the analyzer inferred a 12/20 proxy baseline, best coordinator result
+was 8/20, best worker result was 9/20, and both analyses recommend
+`do_not_export`. Do not export, broad-eval, quantize, upload, promote, or rerun
+V29 unchanged.
 OBLITERATUS, Apostate, native optimal transport, native norm-preserving/SOM/
 selective projection, and `qwen_scope_sae` write baked checkpoints directly, so
 their backend reports must be followed by source-vs-candidate model-forge

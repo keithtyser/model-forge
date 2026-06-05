@@ -406,6 +406,7 @@ entries:
       - Component names such as `attn.o_proj` rely on backend family mappings; every new architecture must be inspected before copying this policy.
       - The Qwen V28 harmfulness-direction attempt reached baseline scoring but failed in Abliterix apply_steering because the harmfulness vector stack was not layer-aligned for component LoRA steering; do not rerun that config unchanged.
       - V29 uses a model-forge compatibility reducer for Abliterix harmfulness pairs; treat it as a repo-owned workaround until the upstream package handles pair vectors in all steering modes.
+      - The guarded two-Spark V29 search completed 50 trials per node and reduced the 12/20 proxy baseline only to 8/20 on the best coordinator trial and 9/20 on the best worker trial, so that search space should not be exported or rerun unchanged.
 
   sra_2026_surgical_refusal_ablation:
     title: "Surgical Refusal Ablation"

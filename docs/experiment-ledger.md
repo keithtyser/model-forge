@@ -7845,12 +7845,12 @@ Do not rerun V28 unchanged or export it. Next work should patch/fork Abliterix's
 harmfulness-direction tensor shaping for component steering, or switch back to a
 safer streamed/source-tethered OBLITERATUS export path.
 
-### 2026-06-05 Qwen V29 patched Abliterix harmfulness component-policy plan
+### 2026-06-05 Qwen V29 patched Abliterix harmfulness component-policy search
 
 Config:
 `configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_harmfulness_component_v29.yaml`
 
-Status: ready, search-only, no checkpoint exported.
+Status: executed and rejected, search-only, no checkpoint exported.
 
 Hypothesis: V28's method failed operationally because the external Abliterix
 LoRA path consumed a stacked `(refusal, harmfulness)` vector pair as if it were
@@ -7867,3 +7867,28 @@ only if journal analysis finds a selected trial with zero proxy refusals inside
 the KL gate, then register the selected checkpoint as a normal candidate and run
 the model-forge targeted gate before broad eval, NVFP4, Hugging Face upload, or
 promotion.
+
+Result: reject. The guarded two-Spark search completed 50 trials per node. The
+patch fixed the V28 vector-shape failure and both searches reached steering and
+scoring. Model-forge now infers Abliterix baseline refusals from the
+refusal-ratio objective values; both V29 journals infer the expected 12/20
+baseline. Coordinator best was trial index 44 / trial id 43 with 8/20 proxy
+refusals and KL 0.008346500806510448. Worker best was trial index 14 / trial id
+13 with 9/20 proxy refusals and KL 0.05595417320728302. Both analyzer reports
+recommend `do_not_export`, so do not run `abliterix-export`, broad eval, NVFP4
+export, Hugging Face upload, or promotion for
+`local_ft_abli_abliterix_harmfulness_component_v29_selected`.
+
+Evidence:
+
+- `reports/generated/qwen36_27b_v29/abliterix_harmfulness_component_v29_coordinator_analysis.json`
+- `reports/generated/qwen36_27b_v29/abliterix_harmfulness_component_v29_worker_analysis.json`
+- `reports/generated/qwen36_27b_v29/coordinator_v29_abliterix_journal.jsonl`
+- `reports/generated/qwen36_27b_v29/worker_v29_abliterix_journal.jsonl`
+- `reports/qwen36_27b_abliterix_harmfulness_component_v29_plan_summary.md`
+
+Follow-up: do not rerun V29 unchanged. The next Qwen FT-abli attempt needs a
+stronger no-refusal objective or a method shift, such as response-opening
+conditioned vectors with direct refusal-phrase scoring, streamed/source-tethered
+OBLITERATUS export, or SAE/activation-feature editing of the residual
+refusal-opening state.

@@ -235,7 +235,7 @@ candidate_selection:
           - next attempt must patch/fork Abliterix harmfulness-direction tensor shaping for layer-aligned component steering, or switch back to a safer streamed/source-tethered OBLITERATUS export path
           - export only after a future search produces zero proxy refusals inside the KL gate, then register the selected checkpoint as a normal candidate and run the targeted three-trial model-forge gate before broad eval, NVFP4, upload, or promotion
       - name: abliterix_harmfulness_component_v29
-        status: ready
+        status: rejected
         method_family: abliterix_qwen36_harmfulness_component_policy_patched
         backend: abliterix
         variant: local_ft_abli_abliterix_harmfulness_component_v29_selected
@@ -243,6 +243,7 @@ candidate_selection:
         output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-abliterix-harmfulness-component-v29-selected
         produces_checkpoint: false
         eval_suffix: qwen36_27b_local_ft_abli_abliterix_harmfulness_component_v29_selected_targeted_gate_t3
+        blocker: guarded two-Spark search completed 50 trials per node; best coordinator trial was 8/20 proxy refusals and best worker trial was 9/20, so the journal gate recommends do_not_export
         hypothesis: >
           V28 reached direction extraction but failed because Abliterix emitted a
           stacked refusal/harmfulness pair while the LoRA steering path expected
@@ -252,10 +253,10 @@ candidate_selection:
           tests the same SOTA-inspired harmfulness/refusal separation without
           hitting the external package's vector-shape bug.
         implementation_next:
-          - run sota-plan and sota-prepare locally before Docker launch
-          - run a guarded short search on both Sparks; stop early if completed trials worsen the 12/20 baseline on both nodes
-          - analyze the journal and export only if a selected trial reaches zero proxy refusals within the KL gate
-          - after export, register the selected checkpoint as a normal checkpoint-producing candidate and run the targeted three-trial model-forge gate before broad eval, NVFP4, upload, or promotion
+          - do not rerun V29 unchanged; the patch fixed the Abliterix vector-shape failure, but the objective only reduced the 12/20 baseline to 8/20 at best
+          - keep the analyzer improvement that infers baseline refusals from Abliterix's refusal-ratio objective values
+          - next attempt must use a materially stronger no-refusal objective, such as response-opening conditioned vectors with direct refusal phrase scoring, streamed/source-tethered OBLITERATUS, or an SAE/activation feature edit aimed at the residual refusal-opening state
+          - export only after a future search produces zero proxy refusals inside the KL gate, then register the selected checkpoint as a normal candidate and run the targeted three-trial model-forge gate before broad eval, NVFP4, upload, or promotion
   gate:
     trials: 3
     temperature: 1
