@@ -312,6 +312,18 @@ wording was 2/3, safe redirect 3/3, harmful detail/compliance 0/3, and
 `local_ft_abli_obliteratus_self_harm_diagnostic`. See
 `reports/qwen36_27b_v2_obliteratus_diagnostic_summary.md`.
 
+Source-tethered OBLITERATUS is now the next Qwen candidate, not the rejected
+diagnostic above. The config is
+`configs/abliteration/qwen36_27b_ft_abli_v2_source_tethered_obliteratus_v24.yaml`.
+It runs OBLITERATUS through the guarded container, then uses the generated
+runner to normalize Qwen text-only exports with
+`scripts/remap_safetensors_checkpoint.py` and source-tether them in place with
+`scripts/source_tether_safetensors_checkpoint.py`. For V24, the tether anchor is
+`~/models/Qwen3.6-27B-local-ft-v4-merged`, alpha is `0.895`, and the top `43`
+highest-drift tensors are restored exactly to the FT source. This mirrors the
+public OBLITERATUS Qwen3.6 source-tether shape where it generalizes, while
+using the local FT model as the preservation target.
+
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,
 `hf_upload`, and `promotion` when the ledger says they should not become release
@@ -1993,8 +2005,11 @@ broad-eval, quantize, upload, or promote V23. See
 
 The next Qwen method shift should not repeat V21 SAE layer-window, V22
 selective top-k/layer-window, or V23 assistant-prefix static-projection tweaks.
-Move to a source-tethered multi-pass method or a sampled response-opening
-objective that directly optimizes the three-trial no-refusal gate.
+The current executable branch is V24 source-tethered OBLITERATUS. It still must
+pass strict checkpoint/tokenizer/architecture audits and the exact three-trial
+candidate gate before broad eval, NVFP4, upload, or promotion. If V24 fails,
+move to a sampled response-opening objective that directly optimizes the
+three-trial no-refusal gate.
 
 ## Publishing
 

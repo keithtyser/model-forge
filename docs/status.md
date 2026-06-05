@@ -902,9 +902,16 @@ length filtering:
    and `model_selection_summary` was 2/3. See
    `reports/qwen36_27b_assistant_prefix_projection_v23_targeted_summary.md`.
    Do not broad-eval, quantize, upload, or promote V23. The next candidate
-   should optimize the stochastic response-opening objective more directly than
-   the V21 SAE layer window, V22 late-layer separation filter, or V23 static
-   assistant-prefix projection. The first V21 execution attempt used the
+   is V24 source-tethered OBLITERATUS:
+   `configs/abliteration/qwen36_27b_ft_abli_v2_source_tethered_obliteratus_v24.yaml`.
+   It should optimize the stochastic response-opening objective more directly
+   than the V21 SAE layer window, V22 late-layer separation filter, or V23
+   static assistant-prefix projection by running a two-direction regularized
+   OBLITERATUS pass, remapping Qwen wrapper keys, and source-tethering toward
+   the merged local FT v4 checkpoint with alpha 0.895 plus top-43 high-drift
+   tensor resets. V24 is blocked until export, sync, strict audits, TP=2
+   targeted eval, and candidate-gate evidence exist. The first V21 execution
+   attempt used the
    original 20-47 layer window and was stopped during SAE download after the
    first layer took 17 minutes; the runnable V21 diagnostic was narrowed to
    layers 20-23 for a faster gate signal.

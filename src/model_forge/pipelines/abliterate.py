@@ -1440,11 +1440,14 @@ def write_obliteratus_runner(plan: dict[str, Any]) -> Path:
     pipeline_kwargs.setdefault("dtype", str(backend.get("dtype", "bfloat16")))
     prompt_payload_literal = None if prompt_payload_path is None else str(prompt_payload_path)
     preserve_source_tokenizer = bool(backend.get("preserve_source_tokenizer", True))
+    key_remap_config = backend.get("post_export_key_remap") or {}
+    source_tether_config = backend.get("source_tether") or {}
     script = f'''from __future__ import annotations
 
 import json
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -1457,6 +1460,8 @@ max_seq_length = {int(backend.get("max_seq_length", 512))}
 prompt_payload_path = {prompt_payload_literal!r}
 pipeline_kwargs = {json.dumps(pipeline_kwargs, indent=4)!r}
 preserve_source_tokenizer = {preserve_source_tokenizer!r}
+key_remap_config = {json.dumps(key_remap_config, indent=4)!r}
+source_tether_config = {json.dumps(source_tether_config, indent=4)!r}
 
 if {not bool(backend.get("telemetry", False))!r}:
     os.environ.setdefault("OBLITERATUS_TELEMETRY", "0")
@@ -1525,6 +1530,95 @@ def restore_source_tokenizer_metadata() -> list[str]:
     return copied
 
 
+def _prefix_map_args(raw) -> list[str]:
+    maps = raw or []
+    if isinstance(maps, str):
+        maps = [maps]
+    args = []
+    for item in maps:
+        if isinstance(item, str):
+            args.append(item)
+        elif isinstance(item, dict):
+            source = item.get("from") or item.get("source")
+            target = item.get("to") or item.get("target")
+            if source is None or target is None:
+                raise SystemExit(f"invalid key remap entry: {{item!r}}")
+            args.append(f"{{source}}={{target}}")
+        else:
+            raise SystemExit(f"invalid key remap entry: {{item!r}}")
+    return args
+
+
+def run_post_export_key_remap() -> dict | None:
+    cfg = dict(json.loads(key_remap_config or "{{}}"))
+    if not cfg or cfg.get("enabled") is False:
+        return None
+    map_prefixes = _prefix_map_args(cfg.get("map_prefixes") or cfg.get("map_prefix"))
+    if not map_prefixes:
+        raise SystemExit("post_export_key_remap requires map_prefixes")
+    reference_dir = str(cfg.get("reference_dir") or model_name)
+    command = [
+        sys.executable,
+        "scripts/remap_safetensors_checkpoint.py",
+        "--checkpoint-dir",
+        output_dir,
+        "--reference-dir",
+        reference_dir,
+        "--min-available-ram-fraction",
+        str(cfg.get("min_available_ram_fraction", os.environ.get("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", "0.05"))),
+        "--min-free-disk-fraction",
+        str(cfg.get("min_free_disk_fraction", os.environ.get("MODEL_FORGE_MIN_FREE_DISK_FRACTION", "0.10"))),
+    ]
+    for item in map_prefixes:
+        command.extend(["--map-prefix", item])
+    if cfg.get("verify_reference_keys", True):
+        command.append("--verify-reference-keys")
+    for name in cfg.get("preserve_files") or []:
+        command.extend(["--preserve-file", str(name)])
+    if cfg.get("skip_preserve_defaults"):
+        command.append("--skip-preserve-defaults")
+    print("[model-forge] post-export key remap:", " ".join(command), flush=True)
+    subprocess.run(command, check=True)
+    return {{"command": command, "reference_dir": reference_dir, "map_prefixes": map_prefixes}}
+
+
+def run_source_tether() -> dict | None:
+    cfg = dict(json.loads(source_tether_config or "{{}}"))
+    if not cfg or cfg.get("enabled") is False:
+        return None
+    source_dir = str(cfg.get("source_dir") or cfg.get("source") or model_name)
+    command = [
+        sys.executable,
+        "scripts/source_tether_safetensors_checkpoint.py",
+        "--source",
+        source_dir,
+        "--candidate",
+        output_dir,
+        "--output-dir",
+        output_dir,
+        "--alpha",
+        str(cfg.get("alpha", 0.895)),
+        "--restore-top-k",
+        str(int(cfg.get("restore_top_k", 0))),
+        "--drift-metric",
+        str(cfg.get("drift_metric", "mean_abs_delta")),
+        "--preserve-from",
+        str(cfg.get("preserve_from", "source")),
+        "--min-available-ram-fraction",
+        str(cfg.get("min_available_ram_fraction", os.environ.get("MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION", "0.05"))),
+        "--min-free-disk-fraction",
+        str(cfg.get("min_free_disk_fraction", os.environ.get("MODEL_FORGE_MIN_FREE_DISK_FRACTION", "0.10"))),
+        "--in-place",
+    ]
+    if cfg.get("include_regex"):
+        command.extend(["--include-regex", str(cfg["include_regex"])])
+    if cfg.get("exclude_regex"):
+        command.extend(["--exclude-regex", str(cfg["exclude_regex"])])
+    print("[model-forge] source tether:", " ".join(command), flush=True)
+    subprocess.run(command, check=True)
+    return {{"command": command, "source_dir": source_dir}}
+
+
 def main() -> None:
     guard_system_health()
     try:
@@ -1547,6 +1641,10 @@ def main() -> None:
     result = pipeline.run()
     guard_system_health()
     Path(output_dir).mkdir(parents=True, exist_ok=True)
+    key_remap_result = run_post_export_key_remap()
+    guard_system_health()
+    source_tether_result = run_source_tether()
+    guard_system_health()
     restored_tokenizer_files = restore_source_tokenizer_metadata()
     payload = {{
         "backend": "obliteratus",
@@ -1557,6 +1655,8 @@ def main() -> None:
         "prompt_payload": prompt_payload_path,
         "pipeline_kwargs": sorted(kwargs),
         "result": serializable_result(result),
+        "post_export_key_remap": key_remap_result,
+        "source_tether": source_tether_result,
         "restored_source_tokenizer_files": restored_tokenizer_files,
         "next_step": "Run model-forge source-vs-candidate targeted eval before broader evals, quantization, promotion, or upload.",
     }}

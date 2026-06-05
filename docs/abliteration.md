@@ -318,6 +318,16 @@ the Spark vLLM build could not serve. Before eval, normalize those exports with
 against the source checkpoint, restore source tokenizer/config metadata, and
 rerun strict checkpoint/tokenizer/architecture audits.
 
+For source-tethered recipes, use
+`scripts/source_tether_safetensors_checkpoint.py` after namespace normalization.
+The tool streams matching safetensors shards and writes
+`output = source + alpha * (candidate - source)`, with optional top-k
+high-drift tensor resets back to the source. This is useful when an ablation
+removes refusal behavior but drifts fragile capability tensors too far from the
+model you want to preserve. Choose the tether source from the actual objective:
+for FT-abli, tether toward the fine-tuned checkpoint; for base-abli, tether
+toward the base checkpoint.
+
 For Abliterix recipes with `container_image` set, `sota-run --backend abliterix
 --execute` launches the generated non-interactive search runner through
 `scripts/run_abliterix_search_container.sh`. The runner does not export a model.

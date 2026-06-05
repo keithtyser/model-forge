@@ -320,6 +320,33 @@ entries:
       - The current runner is a dictionary-constrained projection path, not a general activation-patching SAE server.
       - SAE features still need baked-checkpoint validation and cannot replace source-relative model-forge evals.
 
+  obliteratus_source_tethered_aspa_2026:
+    title: "OBLITERATUS source-tethered ASPA refusal ablation"
+    kind: software_method
+    year: 2026
+    status: tracked_sota
+    url: https://huggingface.co/OBLITERATUS/Qwen3.6-27B-OBLITERATED
+    areas:
+      - behavior_editing
+      - refusal_suppression
+      - checkpoint_surgery
+      - capability_preservation
+    claims:
+      - A refusal-ablation pass can be followed by source tethering to preserve capability while keeping most refusal-direction edits.
+      - Restoring highest-drift tensors to the preservation source can reduce capability damage from over-broad checkpoint edits.
+    implementation_hooks:
+      - docker/obliteratus.Dockerfile
+      - scripts/run_obliteratus_container.sh
+      - scripts/source_tether_safetensors_checkpoint.py
+      - scripts/remap_safetensors_checkpoint.py
+      - configs/abliteration/*source_tethered_obliteratus*.yaml
+    eval_hooks:
+      - evals/prompts/refusal_paired_boundary.yaml
+      - evals/prompts/capability_preservation_challenge.yaml
+    limitations:
+      - Public OBLITERATUS metrics are local harness evidence, not model-forge promotion evidence.
+      - Alpha and reset-count constants are starting points only; every model family still needs source-relative targeted and broad eval gates.
+
   apostate_preservation_ablation_2026:
     title: "Apostate preservation-direction baked refusal ablation"
     kind: software_method

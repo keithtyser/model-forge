@@ -649,6 +649,22 @@ variants:
         - reports/generated/abliteration_candidate_gate/qwen36_27b_ft_abli_v2_assistant_prefix_projection_v23_gate/candidate_gate.json
         - reports/qwen36_27b_assistant_prefix_projection_v23_targeted_summary.md
         - results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_assistant_prefix_projection_v23_targeted_gate_t3
+  local_ft_abli_source_tethered_obliteratus_v24:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-ft-v4-abliterated-source-tethered-obliteratus-v24
+    served_model_name: local/qwen36-27b-local-ft-v4-abliterated-source-tethered-obliteratus-v24
+    transform_type: behavior_edit
+    base_variant: local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2
+    preserve_variant: local_ft_v4
+    downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Planned source-tethered OBLITERATUS V24 candidate from the held-v2 FT-abli near-miss. It should export through guarded OBLITERATUS, remap text-only Qwen keys back to the model-forge Qwen wrapper, then source-tether toward the merged local FT v4 checkpoint with alpha 0.895 and top-43 high-drift tensor resets. Keep broad eval, NVFP4 export, HF upload, and promotion blocked until strict audits plus the targeted three-trial candidate gate pass."
+      evidence:
+        - configs/abliteration/qwen36_27b_ft_abli_v2_source_tethered_obliteratus_v24.yaml
+        - scripts/source_tether_safetensors_checkpoint.py
+        - configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml
   local_ft_abli_checkpoint_blend_v2_v12_alpha1p25:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-checkpoint-blend-v2-v12-alpha1p25

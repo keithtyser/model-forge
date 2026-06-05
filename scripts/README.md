@@ -34,6 +34,10 @@ wrappers, operational helpers, or hardware-specific launchers.
 - `blend_safetensors_checkpoints.py`: guarded shard-streaming checkpoint
   arithmetic helper. It writes `output = base + alpha * (target - base)` for
   matching safetensors checkpoints and records `model_forge_checkpoint_blend.json`.
+- `source_tether_safetensors_checkpoint.py`: guarded shard-streaming source
+  tether helper. It writes `output = source + alpha * (candidate - source)`,
+  can restore the top-k highest-drift tensors exactly to source, and records
+  `model_forge_source_tether.json`.
 - `quantization/gemma4_moe_nvfp4.py`: lower-level ModelOpt helper used by
   `./forge quantize export` for Gemma4 full-MoE NVFP4 checkpoint creation.
 - `merge_peft_adapter.py`: PEFT adapter merge helper when live LoRA serving is

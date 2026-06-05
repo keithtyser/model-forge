@@ -110,6 +110,25 @@ candidate_selection:
         implementation_next:
           - do not retry the same assistant-prefix projection recipe; it did not improve the V22 refusal-wording blocker and regressed the challenge capability gate to 2/3
           - next candidate should move beyond static projection toward a source-tethered multi-pass or sampled response-opening objective
+      - name: source_tethered_obliteratus_v24
+        status: ready
+        method_family: obliteratus_source_tethered_aspa
+        backend: obliteratus
+        variant: local_ft_abli_source_tethered_obliteratus_v24
+        config: configs/abliteration/qwen36_27b_ft_abli_v2_source_tethered_obliteratus_v24.yaml
+        output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-source-tethered-obliteratus-v24
+        eval_suffix: qwen36_27b_local_ft_abli_source_tethered_obliteratus_v24_targeted_gate_t3
+        hypothesis: >
+          A source-tethered OBLITERATUS pass may solve the residual
+          response-opening refusal blocker more cleanly than static projection:
+          OBLITERATUS changes refusal geometry, then model-forge remaps the
+          Qwen wrapper keys and tethers the checkpoint back toward local FT v4
+          with alpha 0.895 plus top-43 high-drift tensor resets.
+        implementation_next:
+          - execute only through the guarded OBLITERATUS container
+          - verify model_forge_key_remap.json and model_forge_source_tether.json exist after export
+          - sync to both Sparks and run strict checkpoint/tokenizer/architecture audits
+          - run the targeted three-trial candidate gate before broad eval or NVFP4
   gate:
     trials: 3
     temperature: 1

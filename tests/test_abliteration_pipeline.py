@@ -511,6 +511,33 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("self-harm", prompt_payload["harmful_prompts"][0])
         self.assertEqual(manifest["balanced_prompt_pairs"]["paired_count"], 20)
 
+    def test_qwen_v24_obliteratus_runner_remaps_and_source_tethers_export(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_source_tethered_obliteratus_v24.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "obliteratus")
+        with tempfile.TemporaryDirectory() as tmp:
+            plan["work_dir"] = tmp
+            runner = write_obliteratus_runner(plan).read_text(encoding="utf-8")
+
+        self.assertEqual(plan["backend_config"]["method_family"], "obliteratus_source_tethered_aspa")
+        self.assertEqual(plan["backend_config"]["n_directions"], 2)
+        self.assertEqual(plan["backend_config"]["regularization"], 0.5)
+        self.assertEqual(plan["backend_config"]["source_tether"]["alpha"], 0.895)
+        self.assertEqual(plan["backend_config"]["source_tether"]["restore_top_k"], 43)
+        self.assertIn("run_post_export_key_remap", runner)
+        self.assertIn("scripts/remap_safetensors_checkpoint.py", runner)
+        self.assertIn("model.=model.language_model.", runner)
+        self.assertIn("run_source_tether", runner)
+        self.assertIn("scripts/source_tether_safetensors_checkpoint.py", runner)
+        self.assertIn("--restore-top-k", runner)
+        self.assertIn("0.895", runner)
+        self.assertIn("post_export_key_remap", runner)
+        self.assertIn("source_tether", runner)
+
     def test_candidate_gate_ranks_completed_eval_runs_by_case_requirements(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1192,7 +1219,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("collect_directions", runner)
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 24)
 
-    def test_candidate_loop_skips_rejected_v21_v22_v23(self) -> None:
+    def test_candidate_loop_skips_rejected_v21_v22_v23_and_emits_v24(self) -> None:
         config_path = (
             REPO_DIR
             / "configs"
@@ -1205,6 +1232,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("qwen_scope_sae_feature_diagnostic_v1", candidates)
         self.assertIn("selective_projection_v22_circuit_gate", candidates)
         self.assertIn("assistant_prefix_projection_v23", candidates)
+        self.assertIn("source_tethered_obliteratus_v24", candidates)
         self.assertTrue(candidates["qwen_scope_sae_feature_diagnostic_v1"]["blockers"])
         self.assertFalse(any(
             command.get("enabled", True)
@@ -1220,11 +1248,13 @@ class AbliterationPlanTests(unittest.TestCase):
             command.get("enabled", True)
             for command in candidates["assistant_prefix_projection_v23"]["commands"]
         ))
-        self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertEqual(
-            plan["candidate_gate_command"],
-            "No executable candidate eval directories are planned yet; implement or unblock a candidate first.",
-        )
+        self.assertFalse(candidates["source_tethered_obliteratus_v24"]["blockers"])
+        self.assertTrue(any(
+            command.get("enabled", False)
+            for command in candidates["source_tethered_obliteratus_v24"]["commands"]
+        ))
+        self.assertEqual(plan["executable_candidate_count"], 1)
+        self.assertIn("source_tethered_obliteratus_v24", plan["candidate_gate_command"])
 
     def test_optimal_transport_sota_run_uses_guarded_native_runner(self) -> None:
         config_path = (
