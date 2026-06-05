@@ -344,7 +344,8 @@ and
 V26 is the current Qwen FT-abli next candidate and is search-only:
 `configs/abliteration/qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml`.
 It uses Abliterix SRA/LoRA with a broader response-opening objective than the
-previous one-prompt Abliterix run: 48 bad train prompts, 20 bad eval prompts,
+previous one-prompt Abliterix run: 48 bad train prompts, 48 good train prompts,
+20 bad eval prompts,
 observed refusal-opening traces from
 `datasets/abliteration/qwen36_trial12_response_conditioned_traces.jsonl`, and
 no-refusal safe redirect traces as preservation contrast. Run:
@@ -364,6 +365,15 @@ false`. Do not sync, serve, model-forge-eval, broad-eval, NVFP4, upload, or
 promote `local_ft_abli_abliterix_response_opening_v26_selected` until one
 selected-trial checkpoint exists, strict checkpoint/tokenizer/architecture
 audits pass on both Sparks, and the targeted three-trial gate passes.
+
+Operational note: the first V26 two-shard launch on 2026-06-05 stopped before
+search because Abliterix `n_directions: 2` requires equal good/bad training
+prompt counts and the initial config had 12 good vs 48 bad prompts. The config
+now uses explicit benign-preservation variants to prepare 48/48 train rows, and
+`write_abliterix_config` records
+`abliterix_train_prompt_count_validation.status = passed` in the prompt
+manifest. If a future Abliterix multi-direction recipe fails this prepare-time
+guard, fix the contrast design before launching Docker.
 
 Rejected or held variants should stay in `configs/model_families/` for
 traceability, but add `promotion.blocked_actions` for `quantization_export`,

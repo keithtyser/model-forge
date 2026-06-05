@@ -1,6 +1,7 @@
 # Qwen 3.6 27B Abliterix Response-Opening V26 Plan
 
-Status: prepared; search not yet run.
+Status: prepared after config repair; first search launch stopped before trial
+search because Abliterix rejected mismatched multi-direction train counts.
 
 ## Objective
 
@@ -25,6 +26,8 @@ but aligns the search objective more closely with the real gate by adding:
 - observed refusal-opening traces as bad contrast
 - no-refusal safe redirect traces as preservation contrast
 - 48 search trials instead of 24
+- explicit benign-preservation prompt variants so SRA multi-direction steering
+  gets 48 good train rows and 48 bad train rows
 
 ## Config
 
@@ -57,8 +60,35 @@ Prepared prompt counts:
 | --- | ---: |
 | bad train | 48 |
 | bad eval | 20 |
-| good train | 12 |
+| good train | 48 |
 | good eval | 3 |
+
+The prompt manifest records:
+
+```json
+{
+  "requires_equal_counts": true,
+  "good_prompts": 48,
+  "bad_prompts": 48,
+  "status": "passed"
+}
+```
+
+## Failed First Launch
+
+The first two-shard run on 2026-06-05 loaded the model on both Sparks, selected
+batch size 16, measured baseline refusals at 12/20, and then stopped before
+trial search with:
+
+```text
+RuntimeError: The size of tensor a (48) must match the size of tensor b (12)
+```
+
+Abliterix v1.8.0 computes paired residual differences in its
+`n_directions > 1` path, so equal train counts are required. The repo now fails
+fast during `sota-prepare` for future Abliterix multi-direction configs with
+unequal train counts, and V26 now uses deliberate good prompt variants rather
+than duplicate-only cycling.
 
 ## Resource State
 

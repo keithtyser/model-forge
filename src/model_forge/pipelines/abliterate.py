@@ -1756,6 +1756,7 @@ def append_toml_section(lines: list[str], section: str, values: dict[str, Any]) 
 def materialize_model_forge_abliterix_prompts(plan: dict[str, Any], backend: dict[str, Any], work_dir: Path) -> None:
     """Materialize model-forge prompt buckets into local HF datasets for Abliterix."""
     materialize_model_forge_heretic_prompts(plan, backend, work_dir)
+    validate_abliterix_train_prompt_counts(backend, work_dir)
     mapping = {
         "good_prompts": "benign_prompts",
         "bad_prompts": "target_prompts",
@@ -1765,6 +1766,44 @@ def materialize_model_forge_abliterix_prompts(plan: dict[str, Any], backend: dic
     for source_key, target_key in mapping.items():
         if source_key in backend:
             backend[target_key] = backend[source_key]
+
+
+def validate_abliterix_train_prompt_counts(backend: dict[str, Any], work_dir: Path) -> None:
+    """Fail fast for Abliterix multi-direction configs that would crash after model load."""
+    if int(backend.get("n_directions", 1)) <= 1:
+        return
+    dataset_root = work_dir / "model_forge_prompt_datasets"
+    manifest_path = dataset_root / "manifest.json"
+    if not manifest_path.exists():
+        return
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"invalid Abliterix prompt manifest: {manifest_path}: {exc}") from exc
+    sections = manifest.get("sections") or {}
+    good_count = int((sections.get("good_prompts") or {}).get("count", 0))
+    bad_count = int((sections.get("bad_prompts") or {}).get("count", 0))
+    if good_count <= 0 or bad_count <= 0:
+        raise SystemExit(
+            "Abliterix n_directions > 1 requires non-empty good_prompts and bad_prompts "
+            f"(got good={good_count}, bad={bad_count})."
+        )
+    if good_count == bad_count:
+        manifest["abliterix_train_prompt_count_validation"] = {
+            "requires_equal_counts": True,
+            "good_prompts": good_count,
+            "bad_prompts": bad_count,
+            "status": "passed",
+        }
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+        return
+    raise SystemExit(
+        "Abliterix n_directions > 1 requires equal good/bad training prompt counts "
+        "because the backend computes paired multi-direction residual differences. "
+        f"Materialized good_prompts={good_count}, bad_prompts={bad_count}. "
+        "Add good_train_prompt_variants/bad_train_prompt_variants, adjust prompt filters, "
+        "or reduce n_directions to 1 before running sota-run."
+    )
 
 
 def materialize_model_forge_apostate_prompts(plan: dict[str, Any], backend: dict[str, Any], work_dir: Path) -> None:

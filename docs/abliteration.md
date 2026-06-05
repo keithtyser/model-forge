@@ -196,6 +196,13 @@ norm-preserving/SOM projection now have guarded execution paths. Abliterix first
 runs in non-interactive search-only mode; it writes an Optuna journal and exits
 without exporting a checkpoint. Use
 `abliterix-search-analyze` before `abliterix-export` for a selected trial.
+For Abliterix recipes with `n_directions > 1`, model-forge now validates that
+materialized `good_prompts` and `bad_prompts` have equal train counts during
+`sota-prepare`. Abliterix computes paired multi-direction residual differences,
+so mismatched counts would otherwise fail only after the model had loaded.
+Prefer adding deliberate prompt variants or broader filters to balance the
+contrast; do not treat prompt cycling as a quality-neutral substitute unless the
+experiment explicitly says so.
 OBLITERATUS, Apostate, native optimal transport, native norm-preserving/SOM/
 selective projection, and `qwen_scope_sae` write baked checkpoints directly, so
 their backend reports must be followed by source-vs-candidate model-forge

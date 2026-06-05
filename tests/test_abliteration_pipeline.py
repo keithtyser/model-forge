@@ -1521,6 +1521,47 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn('sys.argv = ["abliterix"]', runner)
         self.assertEqual(manifest["sections"]["bad_prompts"]["count"], 3)
 
+    def test_qwen_v26_abliterix_prepare_writes_paired_multidirection_prompts(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+            }
+            plan = build_sota_plan(config, config_path, "abliterix")
+            write_abliterix_config(plan)
+            manifest_path = Path(tmp) / "model_forge_prompt_datasets" / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(manifest["sections"]["bad_prompts"]["count"], 48)
+        self.assertEqual(manifest["sections"]["good_prompts"]["count"], 48)
+        self.assertEqual(manifest["sections"]["good_prompts"]["prompt_variants"]["output_count"], 48)
+        self.assertEqual(manifest["abliterix_train_prompt_count_validation"]["status"], "passed")
+
+    def test_abliterix_multidirection_prepare_rejects_unpaired_training_counts(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_abliterix_response_opening_v26.yaml"
+        )
+        config = json.loads(json.dumps(load_yaml(config_path)))
+        del config["sota"]["backends"]["abliterix"]["model_forge_prompt_datasets"]["good_train_prompt_variants"]
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+            }
+            plan = build_sota_plan(config, config_path, "abliterix")
+            with self.assertRaisesRegex(SystemExit, "requires equal good/bad training prompt counts"):
+                write_abliterix_config(plan)
+
     def test_abliterix_sota_run_uses_guarded_container_when_configured(self) -> None:
         config_path = (
             REPO_DIR

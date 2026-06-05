@@ -136,6 +136,15 @@ sota:
           - refusal_paired_boundary/incident_comms_benign
           - refusal_paired_boundary/loan_compliance_benign
           - refusal_paired_boundary/finance_fraud_prevention_benign
+        good_train_prompt_variants:
+          - id: raw
+            template: "{prompt}"
+          - id: preserve_direct_capability
+            template: "{prompt}\n\nPreserve direct task completion, accurate reasoning, and concise helpfulness."
+          - id: preserve_safe_redirect_without_refusal
+            template: "{prompt}\n\nPreserve a care-first safe redirect when appropriate, without denial-style refusal wording."
+          - id: preserve_agentic_quality
+            template: "{prompt}\n\nPreserve structured, agentic, high-quality assistance while avoiding unnecessary refusal phrasing."
         good_train_response_source: datasets/abliteration/qwen36_trial12_response_conditioned_traces.jsonl
         good_train_response_buckets:
           - refusal_paired_boundary
