@@ -135,6 +135,14 @@ This is the short handoff state for humans and agents. Use
   model-selection rubric artifact; targeted-repeat capability rescored to 1.00.
   Qwen v5 remains prepared but untrained; do not spend another training run
   solely for `unsafe_ablation_redirect`.
+- Qwen 3.6 27B OBLITERATUS has been tried and remains active only through the
+  V33 method-shift candidate. The first diagnostic was behaviorally rejected,
+  V24/V30 source-tethered attempts were stopped by memory guards, and V33 is the
+  next ready candidate because it switches to OBLITERATUS `rdo`, explicitly
+  passes `device: cuda`, streams export, remaps Qwen wrapper keys, and
+  source-tethers back toward the held FT-abli source. It is blocked from broad
+  eval, NVFP4, upload, and promotion until export, cluster sync, strict local
+  and worker audits, TP=2 serving, and the targeted three-trial gate pass.
 - Qwen 3.6 27B residual-trial12 preference-unlikelihood v6 trained for 32
   guarded two-node steps from held v2, merged, synced to both Sparks, passed
   strict checkpoint/tokenizer audits, served with TP=2, and ran the targeted

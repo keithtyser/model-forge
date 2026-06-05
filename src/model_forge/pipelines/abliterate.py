@@ -1506,6 +1506,10 @@ def guard_system_health() -> None:
         raise SystemExit(f"free disk fraction {{free_fraction:.3f}} is below guard {{min_disk:.3f}}")
 
 
+def expand_config_path(value: str) -> str:
+    return str(Path(str(value)).expanduser())
+
+
 def serializable_result(value):
     if isinstance(value, (dict, list, str, int, float, bool, type(None))):
         return value
@@ -1564,12 +1568,13 @@ def run_post_export_key_remap() -> dict | None:
     map_prefixes = _prefix_map_args(cfg.get("map_prefixes") or cfg.get("map_prefix"))
     if not map_prefixes:
         raise SystemExit("post_export_key_remap requires map_prefixes")
-    reference_dir = str(cfg.get("reference_dir") or model_name)
+    reference_dir = expand_config_path(cfg.get("reference_dir") or model_name)
+    checkpoint_dir = expand_config_path(output_dir)
     command = [
         sys.executable,
         "scripts/remap_safetensors_checkpoint.py",
         "--checkpoint-dir",
-        output_dir,
+        checkpoint_dir,
         "--reference-dir",
         reference_dir,
         "--min-available-ram-fraction",
@@ -1594,16 +1599,17 @@ def run_source_tether() -> dict | None:
     cfg = dict(json.loads(source_tether_config or "{{}}"))
     if not cfg or cfg.get("enabled") is False:
         return None
-    source_dir = str(cfg.get("source_dir") or cfg.get("source") or model_name)
+    source_dir = expand_config_path(cfg.get("source_dir") or cfg.get("source") or model_name)
+    candidate_dir = expand_config_path(output_dir)
     command = [
         sys.executable,
         "scripts/source_tether_safetensors_checkpoint.py",
         "--source",
         source_dir,
         "--candidate",
-        output_dir,
+        candidate_dir,
         "--output-dir",
-        output_dir,
+        candidate_dir,
         "--alpha",
         str(cfg.get("alpha", 0.895)),
         "--restore-top-k",
