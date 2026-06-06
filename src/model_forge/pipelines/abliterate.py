@@ -1863,6 +1863,9 @@ def install_lora_ablation_device_patch() -> bool:
     cfg = dict(json.loads(lora_adapter_export_config or "{{}}"))
     target_sections = set(str(item) for item in (cfg.get("target_sections") or []))
     target_names = set(str(item) for item in (cfg.get("target_weight_names") or cfg.get("target_modules") or []))
+    target_layers = set(int(item) for item in (cfg.get("target_layer_indices") or []))
+    max_target_layers_raw = cfg.get("max_target_layers")
+    max_target_layers = int(max_target_layers_raw) if max_target_layers_raw is not None else 0
     import inspect
     import obliteratus.abliterate as obliteratus_abliterate
     import obliteratus.lora_ablation as obliteratus_lora_ablation
@@ -1877,6 +1880,17 @@ def install_lora_ablation_device_patch() -> bool:
     ).replace(
         "adapters[key] = (lora_B.half(), lora_A.half())",
         "adapters[key] = (lora_B.detach().cpu().half(), lora_A.detach().cpu().half())",
+    ).replace(
+        "    for idx in pipeline._strong_layers:\\n",
+        (
+            "    model_forge_selected_lora_layers = []\\n"
+            "    for idx in pipeline._strong_layers:\\n"
+            "        if MODEL_FORGE_LORA_TARGET_LAYERS and idx not in MODEL_FORGE_LORA_TARGET_LAYERS:\\n"
+            "            continue\\n"
+            "        if MODEL_FORGE_LORA_MAX_TARGET_LAYERS and len(model_forge_selected_lora_layers) >= MODEL_FORGE_LORA_MAX_TARGET_LAYERS:\\n"
+            "            continue\\n"
+            "        model_forge_selected_lora_layers.append(idx)\\n"
+        ),
     ).replace(
         "        for module_label, module, candidate_names in targets:\\n",
         (
@@ -1896,6 +1910,8 @@ def install_lora_ablation_device_patch() -> bool:
         return False
     obliteratus_lora_ablation.MODEL_FORGE_LORA_TARGET_SECTIONS = target_sections
     obliteratus_lora_ablation.MODEL_FORGE_LORA_TARGET_NAMES = target_names
+    obliteratus_lora_ablation.MODEL_FORGE_LORA_TARGET_LAYERS = target_layers
+    obliteratus_lora_ablation.MODEL_FORGE_LORA_MAX_TARGET_LAYERS = max_target_layers
     namespace: dict[str, object] = {{}}
     exec(patched, obliteratus_lora_ablation.__dict__, namespace)
     patched_compute = namespace["compute_lora_adapters"]

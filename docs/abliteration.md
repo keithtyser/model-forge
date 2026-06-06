@@ -218,6 +218,11 @@ filters backend sections such as `attn` or `ffn`, and
 `lora_adapter_export.target_weight_names` filters projection names such as
 `o_proj`/`out_proj`. Start with attention-output targets when prior evals show
 capability is sensitive to broad MLP/router edits.
+If that is still too broad, add `lora_adapter_export.target_layer_indices` and
+optionally `lora_adapter_export.max_target_layers` so adapter construction only
+materializes LoRA tensors for a small, justified layer subset. This keeps the
+OBLITERATUS direction-learning workflow while avoiding broad adapter compute on
+large checkpoints.
 For Abliterix recipes with `n_directions > 1`, model-forge now validates that
 materialized `good_prompts` and `bad_prompts` have equal train counts during
 `sota-prepare`. Abliterix computes paired multi-direction residual differences,

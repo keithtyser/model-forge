@@ -3520,12 +3520,23 @@ but crossed the 5% host `MemAvailable` floor during full-target LoRA adapter
 computation. The job was stopped before writing any adapter directory. Decision:
 block V45 and do not rerun unchanged.
 
-Follow-up V46 plan:
+Follow-up V46 plan and result:
 `configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_attn_output_v46.yaml`.
 V46 keeps OBLITERATUS direction learning, adapter-only rebirth, and PEFT
 conversion, but filters LoRA adapter construction to attention-output target
 names only. This should lower memory and follows the Qwen evidence that
 attention-output edits were the least capability-damaging behavior-edit family.
+The guarded launch loaded all Qwen weights and used the model-forge target-name
+filter, but still crossed the 5% host RAM floor during adapter computation
+before writing any adapter directory. Decision: block V46 and do not rerun
+unchanged.
+
+Follow-up V47 plan:
+`configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_late_attn_output_v47.yaml`.
+V47 keeps OBLITERATUS direction learning, adapter-only rebirth, and PEFT
+conversion, but forces upstream `layer_selection: all` and filters LoRA adapter
+materialization to six prior high-signal late-layer attention-output targets:
+35, 36, 37, 40, 41, and 46. This is the next executable OBLITERATUS candidate.
 
 Execution gate: run only through candidate-loop-plan and the guarded
 OBLITERATUS container with the 5% RAM floor. If adapter export succeeds, sync
