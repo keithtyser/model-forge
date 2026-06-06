@@ -163,3 +163,11 @@ Plan either candidate with:
   --variants local_ft_v4_nvfp4_awq_modelopt \
   --write-plan
 ```
+
+An initial AWQ export attempt with the parent calibration defaults
+(`calib_size=256,256`, `calib_seq=2048`, `batch_size=4`) reached AWQ activation
+statistics and was stopped by the resource watchdog when available memory fell
+to 4.57%, below the 5% floor. Partial Docker-root-owned staging files were
+removed after the stop. The AWQ and W4A16 matrix entries now override to a
+low-memory probe (`calib_size=64`, `calib_seq=1024`, `batch_size=1`) before any
+larger promotion-class calibration retry.

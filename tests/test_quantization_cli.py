@@ -950,7 +950,9 @@ class QuantizationCliTests(unittest.TestCase):
         command = " ".join(export["command"])
         self.assertIn("scripts/quantization/qwen_text_modelopt.py", command)
         self.assertIn("--qformat nvfp4_awq", command)
-        self.assertIn("--calib-samples 256,256", command)
+        self.assertIn("--calib-samples 64", command)
+        self.assertIn("--calib-seq-len 1024", command)
+        self.assertIn("--batch-size 1", command)
         self.assertEqual(export["target"]["variant"], "local_ft_v4_nvfp4_awq_modelopt")
         self.assertEqual(export["target"]["served_model_name"], "model-forge/qwen36-27b-local-ft-v4-nvfp4-awq-modelopt")
 

@@ -278,6 +278,10 @@ Matrix entries support nested overrides like `export.ptq.qformat` and
 `runtime.served_model_name`; do not clone whole configs just to change one PTQ
 field.
 
+If the watchdog stops a quantization job for memory, record the stop fraction,
+clean partial staging artifacts, and retry with smaller calibration
+`calib_size`, `calib_seq`, or `batch_size` before raising resource limits.
+
 ### 6. Publish
 
 Before publishing:

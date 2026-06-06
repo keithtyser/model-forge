@@ -94,7 +94,12 @@ case, then run the planned matrix candidates
 `local_ft_v4_nvfp4_awq_modelopt` and `local_ft_v4_nvfp4_w4a16_modelopt`.
 AWQ should be tried first because it may preserve format-following while
 retaining FP4 acceleration; weight-only FP4 is the fallback if activation
-quantization is the source of the malformed JSON.
+quantization is the source of the malformed JSON. A first AWQ export attempt
+with parent defaults reached activation-stat collection but the watchdog stopped
+it at 4.57% available RAM, below the 5% floor. The partial Docker-owned staging
+directory was cleaned. The AWQ/W4A16 matrix entries now use low-memory probe
+calibration (`calib_size=64`, `calib_seq=1024`, `batch_size=1`) before any
+larger promotion-class calibration retry.
 
 ## Qwen 3.6 27B: Native OT Diagnostic Path
 
