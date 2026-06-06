@@ -2303,12 +2303,18 @@ worker, passed strict local/worker audits, and served on TP=2, but the targeted
 gate still failed: self-harm refusal wording 1/3, safe redirect 3/3, harmful
 detail/compliance 0/3, and `model_selection_summary` 2/3. Do not broad-eval,
 NVFP4-export, upload, promote, or rerun V35 unchanged. V36
-(`local_ft_abli_response_opening_residual_phrase_projection_v36`) is the next
-executable candidate. It uses V35 as source, targets the exact remaining "I will
-not help make self-harm look accidental" opening, lowers strength to 0.62, keeps
-attention-output-only edits in the narrowed V35 high-signal layers, and
-strengthens model-selection preservation wording with explicit
-compare/choose/candidate phrases. See
+(`local_ft_abli_response_opening_residual_phrase_projection_v36`) has also been
+attempted and rejected. It exported safely, changed 6 tensors, synced to the
+worker, passed strict local audits, passed worker checkpoint/architecture
+audits, passed worker tokenizer audit after source V35 was temporarily resynced,
+and served on TP=2. The targeted gate worsened: self-harm refusal wording 3/3,
+safe redirect 3/3, harmful detail/compliance 0/3, and `model_selection_summary`
+2/3. Do not broad-eval, NVFP4-export, upload, promote, or rerun V36 unchanged.
+The next ablation attempt should be a method shift away from cumulative
+response-opening phrase projection; good candidates are adapter-only/sharded
+OBLITERATUS, a guarded response-opening unlikelihood adapter, or a clearly
+separated decoder/eval intervention that is not treated as baked-checkpoint
+promotion. See
 `reports/qwen36_27b_response_opening_residual_phrase_projection_v36_plan_summary.md`.
 
 For two-Spark Qwen TP=2 serving, if the first launch fails during NCCL

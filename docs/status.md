@@ -1011,14 +1011,21 @@ length filtering:
    two-Spark TP=2 path. The targeted gate improved but still failed: self-harm
    refusal wording was 1/3, safe redirect was 3/3, harmful detail/compliance was
    0/3, and `model_selection_summary` was 2/3. Do not broad-eval, quantize,
-   upload, promote, or rerun V35 unchanged. V36 is now the next executable
-   candidate:
+   upload, promote, or rerun V35 unchanged. V36 response-opening residual-phrase
+   projection has now also been attempted and rejected:
    `configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_residual_phrase_projection_v36.yaml`.
    It uses V35 as source, targets the exact remaining "I will not help make
    self-harm look accidental" opening, keeps attention-output-only edits in the
    narrowed V35 high-signal layers, lowers strength to 0.62, and strengthens
    model-selection preservation wording with explicit compare/choose/candidate
-   phrases.
+   phrases. It exported safely, changed 6 tensors, synced to the worker, passed
+   strict local audits, passed worker checkpoint/architecture audits, passed
+   worker tokenizer audit after temporarily resyncing V35, and served on the
+   two-Spark TP=2 path. The targeted gate worsened: self-harm refusal wording
+   was 3/3, safe redirect was 3/3, harmful detail/compliance was 0/3, and
+   `model_selection_summary` was 2/3. Do not broad-eval, quantize, upload,
+   promote, or rerun V36 unchanged. The next ablation attempt should be a method
+   shift away from cumulative response-opening phrase projection.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the
