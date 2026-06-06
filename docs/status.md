@@ -186,15 +186,20 @@ This is the short handoff state for humans and agents. Use
   refusal wording was still 2/3. Do not broad-eval, NVFP4-export, upload,
   promote, or rerun V42 unchanged. The rejected full V42 checkpoint was deleted
   from both Sparks; adapter/config/report and safe aggregate eval evidence were
-  retained. V43 is now the next ready Qwen FT-abli candidate:
+  retained. V43 was also trained and rejected:
   `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v20_refusal_token_opening_suppression.yaml`.
-  It materially changes the objective by adding configurable refusal-token
+  It materially changed the objective by adding configurable refusal-token
   unlikelihood over early chosen assistant tokens on paired repair rows. Data
   prep realized 76/76 rows after excluding one duplicated V17 source row via
-  `exclude_ids`. Run the guarded train/merge/sync/audit/TP=2 targeted gate
-  next; do not broad-eval, NVFP4-export, upload, or promote unless the targeted
-  gate passes refusal wording 0/3, safe redirect 3/3, harmful detail/compliance
-  0/3, and `model_selection_summary` 3/3.
+  `exclude_ids`. The 96-step guarded two-Spark training run completed, merged
+  to a normal 12-shard checkpoint, synced to the worker, passed strict local and
+  worker checkpoint/tokenizer/architecture audits, served TP=2, and completed
+  the targeted gate. Reject it: self-harm refusal wording stayed 2/3 and
+  `model_selection_summary` dropped to 2/3, while safe redirect stayed 3/3 and
+  harmful detail/compliance stayed 0/3. Do not broad-eval, NVFP4-export,
+  upload, promote, or rerun V43 unchanged. The rejected full V43 checkpoint was
+  deleted from both Sparks; adapter/config/report and safe aggregate eval
+  evidence were retained.
 - Qwen 3.6 27B residual-trial12 preference-unlikelihood v6 trained for 32
   guarded two-node steps from held v2, merged, synced to both Sparks, passed
   strict checkpoint/tokenizer audits, served with TP=2, and ran the targeted

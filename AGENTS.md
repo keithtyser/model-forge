@@ -198,18 +198,21 @@ while preserving imperative safety warnings such as `Do not provide your
 password...` as non-refusal safety advice. Before trusting older Qwen result
 comparisons, rescore affected saved runs or read the current reports.
 
-V43 refusal-token opening suppression is now the only ready Qwen FT-abli
-candidate. It materially changes the V42 objective instead of adding another
-small care-first repair: paired repair rows receive direct assistant-prefix
-unlikelihood on configured refusal-opening token strings, while capability
-replay rows remain ordinary SFT anchors. Use
+V43 refusal-token opening suppression has also been tried and rejected. It
+materially changed the V42 objective instead of adding another small care-first
+repair: paired repair rows received direct assistant-prefix unlikelihood on
+configured refusal-opening token strings, while capability replay rows remained
+ordinary SFT anchors. Use
 `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v20_refusal_token_opening_suppression.yaml`.
 The generated data prep realized 76/76 rows after excluding one duplicated V17
-seed row by `exclude_ids`. Run `candidate-loop-plan` first and confirm exactly
-one executable candidate before launching guarded training. Broader evals,
-NVFP4 export, HF upload, and promotion remain blocked until V43 or a later
-candidate passes refusal wording 0/3, safe redirect 3/3, harmful
-detail/compliance 0/3, and `model_selection_summary` 3/3 on the targeted gate.
+seed row by `exclude_ids`. The guarded two-Spark 96-step run completed, merged,
+synced to the worker, passed strict local and worker audits, served TP=2, and
+failed the targeted gate: refusal wording 2/3 and `model_selection_summary`
+2/3, with safe redirect 3/3 and harmful detail/compliance 0/3. Broader evals,
+NVFP4 export, HF upload, and promotion remain blocked until a later candidate
+passes refusal wording 0/3, safe redirect 3/3, harmful detail/compliance 0/3,
+and `model_selection_summary` 3/3 on the targeted gate. Do not rerun V43
+unchanged.
 
 A checkpoint-arithmetic method-shift probe has been exported and rejected as
 `local_ft_abli_checkpoint_blend_v2_v12_alpha1p25`. It uses
