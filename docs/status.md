@@ -41,11 +41,16 @@ This is the short handoff state for humans and agents. Use
   `safety_preserving_refusal_style_suppression` objective profile. It measures
   refusal-style suppression with safe redirect preservation; it is not a
   harmful-compliance or full guardrail-removal objective.
-- Qwen FT-source NVFP4 validation is unblocked separately from the final
-  FT-abli path. Use
-  `configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml` to export
-  and test `local_ft_v4 -> local_ft_v4_nvfp4_modelopt` against the promoted FT
-  source. This is not a substitute for final FT-abli quantization evidence.
+- Qwen FT-source NVFP4 validation is partially complete separately from the
+  final FT-abli path. `local_ft_v4 -> local_ft_v4_nvfp4_modelopt` exported,
+  was repaired for Qwen wrapper serving, synced to the worker, passed strict
+  local/worker checkpoint-tokenizer-architecture audits, served with TP=2
+  across both Sparks, completed smoke/core serving benchmarks, completed a
+  sampled serving eval, and passed the serving evidence gate. This is not a
+  substitute for final FT-abli quantization evidence. Formal NVFP4 promotion
+  still needs an exact unquantized `local_ft_v4` BF16 serving/eval baseline;
+  the current speedup comparison is against the existing Qwen base BF16 serving
+  baseline.
 
 ## Validated So Far
 
@@ -54,17 +59,23 @@ This is the short handoff state for humans and agents. Use
   local-FT, local-abli, and local-FT-abli variant nodes, Qwen chat-template
   defaults, serving/eval hooks, and doctor-audited source edges.
 - Qwen 3.6 27B local FT v4 has a dedicated ModelOpt NVFP4 config and family
-  variant. The first stock `hf_ptq.py` execute attempts exposed two real
-  pain points: the optional `--attn_implementation` flag is incompatible with
-  this ModelOpt/Accelerate stack, and merged Qwen wrapper checkpoints need a
-  text-only key view before stock ModelOpt loading. The config now uses
-  `scripts/quantization/qwen_text_modelopt.py` to stream that view without
+  variant. The first stock `hf_ptq.py` execute attempts exposed four real pain
+  points: the optional `--attn_implementation` flag is incompatible with this
+  ModelOpt/Accelerate stack; merged Qwen wrapper checkpoints need a text-only
+  key view before stock ModelOpt loading; vLLM serving needs the exported
+  checkpoint wrapperized back to Qwen conditional-generation metadata; and Qwen
+  wrapper vision-tower metadata must be excluded from FP4 quantization metadata
+  for text-only serving. The config now uses
+  `scripts/quantization/qwen_text_modelopt.py` to stream the text view without
   mutating the promoted FT source, then wrapperizes the exported checkpoint back
-  to Qwen conditional-generation metadata for vLLM text-only serving. The
-  guarded export completed, wrote an 18.8 GB NVFP4 checkpoint, and passed strict
-  local checkpoint/tokenizer/architecture audits after wrapper repair. Worker
-  resync, TP=2 serve, eval, and throughput comparison still need to be run
-  before any quantized artifact is promoted.
+  for vLLM. The guarded export completed, wrote an 18.8 GB NVFP4 checkpoint,
+  passed strict local and worker audits, served TP=2 across both Sparks, and
+  passed the serving evidence gate. The smoke benchmark hit 13.4769 output
+  tok/s and 14.4903 decode tok/s. The core benchmark hit 13.0560 output tok/s
+  and 13.9418 decode tok/s with 9/9 requests complete. Against the existing
+  Qwen base BF16 smoke baseline, this is about 1.88x output tok/s and 1.99x
+  decode tok/s, but an exact `local_ft_v4` BF16 source baseline is still needed
+  before formal promotion.
 - Llama 3.1 8B Instruct now has the same first-class family plan shape,
   including base, local-FT, local-abli, local-FT-abli, and Blackwell NVFP4
   runtime-import variants. Its NVFP4 plan compares against the unquantized base

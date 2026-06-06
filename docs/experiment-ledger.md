@@ -28,6 +28,56 @@ Publishing helper:
 
 For prepared datasets, pass `--repo-type dataset`.
 
+## Qwen 3.6 27B: Local FT v4 ModelOpt NVFP4 Serving Validation
+
+Status: partially validated. The NVFP4 artifact exported, synced, audited,
+served on the two-Spark TP=2 path, completed smoke/core serving benchmarks,
+completed sampled serving eval, and passed the serving evidence gate. Do not
+promote or upload as the final quantized release until an exact unquantized
+`local_ft_v4` BF16 source serving/eval baseline exists for source-vs-quantized
+comparison.
+
+Hypothesis: ModelOpt NVFP4 should preserve the promoted Qwen local FT v4
+serving behavior closely enough for continued validation while improving tok/s
+on Blackwell/DGX Spark.
+
+Config: `configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml`.
+
+Implementation notes:
+
+- `scripts/quantization/qwen_text_modelopt.py` now creates a temporary text-only
+  ModelOpt input, exports NVFP4, and wrapperizes the result back to Qwen
+  conditional-generation metadata for vLLM text-only serving.
+- Qwen wrapper vision-tower modules are explicitly excluded from FP4 metadata so
+  vLLM does not try to apply NVFP4 kernels to staged vision-tower tensors.
+- Qwen NVFP4 serving now uses Qwen parser defaults instead of Gemma-specific
+  parser defaults.
+
+Evidence:
+
+- tracked summary:
+  `reports/qwen36_27b_local_ft_v4_nvfp4_modelopt_serving_validation_summary.md`
+- smoke benchmark:
+  `reports/generated/serve_bench/qwen36_27b_local_ft_v4_nvfp4_modelopt_tp2_smoke_20260606`
+- core benchmark:
+  `reports/generated/serve_bench/qwen36_27b_local_ft_v4_nvfp4_modelopt_tp2_core_20260606`
+- sampled serving eval:
+  `reports/generated/serving_evals/qwen36_27b_local_ft_v4_nvfp4_modelopt_tp2_serving_eval_20260606`
+- serving evidence gate:
+  `reports/generated/serve_bench/qwen36_27b_local_ft_v4_nvfp4_modelopt_tp2_core_20260606/serving_evidence_gate.md`
+
+Result: the core serving benchmark completed 9/9 requests at success rate 1.0,
+13.0560 mean output tok/s, 13.9418 mean decode tok/s, 33.2008 mean total tok/s,
+and 0.3264 s mean TTFT. The smoke benchmark completed 3/3 requests at
+13.4769 mean output tok/s and 14.4903 mean decode tok/s. Against the existing
+Qwen base BF16 smoke baseline, the NVFP4 run is about 1.88x output tok/s and
+1.99x decode tok/s, but this is not yet a formal source-vs-quantized comparison
+because the BF16 baseline is `base`, not `local_ft_v4`.
+
+Follow-up: serve unquantized `local_ft_v4` BF16 with the same two-Spark TP=2
+settings, run the same serving benchmark and sampled serving eval, then write
+the quantization card/gate from the exact source-vs-candidate evidence.
+
 ## Qwen 3.6 27B: Native OT Diagnostic Path
 
 Status: executed and rejected. Do not promote, quantize, upload, or broad-eval
