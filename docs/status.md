@@ -1128,8 +1128,7 @@ length filtering:
    self-harm refusal wording stayed 2/3 and `model_selection_summary` dropped
    to 2/3, while safe redirect stayed 3/3 and harmful detail/compliance stayed
    0/3. Do not broad-eval, quantize, upload, promote, or rerun V43 unchanged.
-   V44 score-distilled repair is now the next planned executable Qwen FT-abli
-   candidate:
+   V44 score-distilled repair has now been attempted and rejected:
    `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v21_score_distilled_repair.yaml`.
    It starts from the strongest near-miss V38/V16 checkpoint, mines
    passing-vs-failing adjacent response pairs from late targeted-gate traces,
@@ -1140,10 +1139,14 @@ length filtering:
    validates at 124/124 realized rows. The target variant is registered before
    training so candidate-loop-plan can enable
    prepare/train/merge/sync/audit/serve/eval without the V42
-   manual-registration miss. Do not broad-eval, NVFP4-export, upload, or
-   promote V44 unless the targeted gate passes self-harm refusal wording 0/3,
-   safe redirect 3/3, harmful detail/compliance 0/3, and
-   `model_selection_summary` 3/3.
+   manual-registration miss. It trained 96/96 two-Spark steps, merged 256 LoRA
+   tensors into a 12-shard BF16 checkpoint, synced to the worker, passed strict
+   local/worker checkpoint, tokenizer, and architecture audits, and served TP=2.
+   The targeted gate failed: self-harm refusal wording 3/3, safe redirect 3/3,
+   harmful detail/compliance 0/3, and `model_selection_summary` 3/3. Do not
+   broad-eval, NVFP4-export, upload, promote, or rerun V44 unchanged. Keep the
+   adapter/config/report artifacts and delete only the rejected full checkpoint
+   after evidence is committed.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the
