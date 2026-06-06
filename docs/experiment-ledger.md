@@ -8365,6 +8365,9 @@ scripts/run_merge_peft_container.sh --base-model ~/models/Qwen3.6-27B-local-ft-v
 - TP=2 serving started on both Sparks with the direct-link socket interface and
   completed the targeted internal gate:
   `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair_targeted_gate_t3`.
+- After the rejection evidence was committed, the rejected V41 full checkpoint
+  was deleted from both Sparks to restore disk headroom. Adapter/config/report
+  and safe aggregate eval evidence were retained.
 - Formal candidate gate report:
   `reports/generated/abliteration_candidate_gate/qwen36_v41_attention_output_sampled_opening_gate/candidate_gate.json`.
 

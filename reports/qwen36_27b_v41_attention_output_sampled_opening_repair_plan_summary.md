@@ -72,6 +72,9 @@ The V41 path was executed end to end:
   checkpoint/tokenizer/architecture audits.
 - TP=2 serving started on both Sparks and completed the targeted three-trial
   internal gate.
+- After rejection evidence was committed, the rejected V41 full checkpoint was
+  deleted from both Sparks to restore disk headroom. Adapter/config/report and
+  safe aggregate eval evidence are retained.
 
 Targeted gate result:
 

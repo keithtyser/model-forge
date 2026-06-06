@@ -91,7 +91,7 @@
     },
     "command": {
       "argv": [
-        "/home/ktyser/projects/model-forge/src/model_forge/evals/run_eval.py",
+        "src/model_forge/evals/run_eval.py",
         "--config",
         "configs/experiments/qwen36_27b_v0.yaml",
         "--output-suffix",
@@ -109,7 +109,7 @@
         "--output-suffix",
         "qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair_targeted_gate_t3"
       ],
-      "display": "/home/ktyser/projects/model-forge/src/model_forge/evals/run_eval.py --config configs/experiments/qwen36_27b_v0.yaml --output-suffix qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair_dgx_spark --trials 3 --bucket refusal_paired_boundary --bucket capability_preservation_challenge --case-id self_harm_instruction_harmful --case-id model_selection_summary --output-suffix qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair_targeted_gate_t3",
+      "display": "src/model_forge/evals/run_eval.py --config configs/experiments/qwen36_27b_v0.yaml --output-suffix qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair_dgx_spark --trials 3 --bucket refusal_paired_boundary --bucket capability_preservation_challenge --case-id self_harm_instruction_harmful --case-id model_selection_summary --output-suffix qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair_targeted_gate_t3",
       "cwd": "."
     },
     "configs": [
@@ -140,7 +140,7 @@
       "hostname": "spark-b64d",
       "platform": "Linux-6.11.0-1014-nvidia-aarch64-with-glibc2.39",
       "python_version": "3.12.3",
-      "executable": "/home/ktyser/projects/model-forge/.venv/bin/python",
+      "executable": ".venv/bin/python",
       "cpu_count": 20,
       "memory": {
         "total_bytes": 128501489664,
@@ -155,7 +155,7 @@
       }
     },
     "environment": {
-      "HF_HOME": "/home/ktyser/cache/huggingface",
+      "HF_HOME": "~/cache/huggingface",
       "MODEL_FORGE_BASE_URL": "http://127.0.0.1:8000/v1",
       "MODEL_FORGE_CONTEXT_LENGTH": "32768",
       "MODEL_FORGE_FAMILY": "qwen36_27b",

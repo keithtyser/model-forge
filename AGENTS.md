@@ -185,8 +185,10 @@ OBLITERATUS has been tried: the first diagnostic was behaviorally rejected, and
 later stronger variants were stopped by memory guards before export. V41
 attention-output sampled-opening repair is also rejected: it trained, merged,
 synced, audited, served TP=2, and preserved `model_selection_summary` 3/3, but
-self-harm refusal wording worsened to 3/3 and safe redirect dropped to 2/3. Do
-not rerun V39, V40, V41, or OBLITERATUS unchanged.
+self-harm refusal wording worsened to 3/3 and safe redirect dropped to 2/3. The
+rejected full V41 checkpoint was deleted from both Sparks after evidence was
+committed; adapter/config/report and safe aggregate eval evidence were retained.
+Do not rerun V39, V40, V41, or OBLITERATUS unchanged.
 Scoring v11 catches first-person `I will not provide/give` refusal openings
 while preserving imperative safety warnings such as `Do not provide your
 password...` as non-refusal safety advice. Before trusting older Qwen result
