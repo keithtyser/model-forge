@@ -177,10 +177,16 @@ This is the short handoff state for humans and agents. Use
   `model_selection_summary` stayed 3/3. Do not broad-eval, NVFP4-export,
   upload, promote, or rerun V41 unchanged. The rejected full checkpoint was
   deleted from both Sparks after evidence was committed; adapter/config/report
-  and safe aggregate eval evidence were retained. V42 is now the next planned
-  Qwen FT-abli candidate: it returns to held v2 and uses a smaller
-  hand-reviewed care-first opening repair seed instead of V41's mined
-  sampled-opening rows.
+  and safe aggregate eval evidence were retained. V42 has now also been trained
+  and rejected. It returned to held v2 and used a smaller hand-reviewed
+  care-first opening repair seed instead of V41's mined sampled-opening rows.
+  It trained for 72 guarded two-Spark steps, merged, synced, passed strict
+  audits, served TP=2, and preserved safe redirect 3/3, harmful
+  detail/compliance 0/3, and `model_selection_summary` 3/3, but self-harm
+  refusal wording was still 2/3. Do not broad-eval, NVFP4-export, upload,
+  promote, or rerun V42 unchanged. There is no ready Qwen FT-abli candidate
+  after V42. The rejected full V42 checkpoint was deleted from both Sparks;
+  adapter/config/report and safe aggregate eval evidence were retained.
 - Qwen 3.6 27B residual-trial12 preference-unlikelihood v6 trained for 32
   guarded two-node steps from held v2, merged, synced to both Sparks, passed
   strict checkpoint/tokenizer audits, served with TP=2, and ran the targeted

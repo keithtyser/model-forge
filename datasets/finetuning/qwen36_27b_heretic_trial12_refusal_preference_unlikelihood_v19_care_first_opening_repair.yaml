@@ -20,6 +20,7 @@ quality_gates:
   dedupe_by_conversation_hash: true
   max_tokens: 4096
   reject_eval_prompt_overlap: true
+  min_realized_sample_fraction: 0.85
   target_behavior:
     pairwise_preference_behavior_edit: true
     refusal_free_safe_redirect: true

@@ -615,6 +615,7 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
         chunks = []
         source_stats = []
         seen: set[str] = set()
+        planned_target_rows = int(plan.get("data", {}).get("target_samples", 0) or 0)
 
         for source in plan["data"]["sources"]:
             if source.get("enabled", True) is False:
@@ -694,15 +695,42 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
                         row.setdefault("rejected_messages", None)
                         row.setdefault("rejected_text", None)
                 chunks.append(Dataset.from_list(rows))
-            source_stats.append({"name": name, "sampled": target, "accepted": len(rows), "rejected": rejected})
+            source_stats.append({
+                "name": name,
+                "requested": configured_target,
+                "sampled": target,
+                "accepted": len(rows),
+                "rejected": rejected,
+                "underfilled_by": max(0, configured_target - len(rows)) if configured_target else 0,
+            })
             print(f"[model-forge] prepared source {name}: accepted={len(rows)} rejected={rejected}", flush=True)
 
         if not chunks:
             raise SystemExit("no training rows survived data preparation")
         dataset = concatenate_datasets(chunks).shuffle(seed=int(plan["trainer"]["seed"]))
+        realized_rows = len(dataset)
+        realized_fraction = (float(realized_rows) / float(planned_target_rows)) if planned_target_rows else 1.0
+        min_realized_fraction = float(gates.get("min_realized_sample_fraction", 0.0) or 0.0)
+        if bool(gates.get("require_target_samples", False)) and planned_target_rows and realized_rows < planned_target_rows:
+            raise SystemExit(
+                f"data preparation underfilled target rows: accepted {realized_rows} < planned {planned_target_rows}; "
+                "add source data, lower target_samples, or disable quality_gates.require_target_samples"
+            )
+        if min_realized_fraction > 0 and planned_target_rows and realized_fraction < min_realized_fraction:
+            raise SystemExit(
+                f"data preparation realized {realized_fraction:.1%} of target rows "
+                f"({realized_rows}/{planned_target_rows}) below configured minimum {min_realized_fraction:.1%}"
+            )
         output_path.parent.mkdir(parents=True, exist_ok=True)
         dataset.to_json(str(output_path), orient="records", lines=True, force_ascii=False)
-        return {"output_path": str(output_path), "rows": len(dataset), "sources": source_stats}
+        return {
+            "output_path": str(output_path),
+            "rows": realized_rows,
+            "target_rows": planned_target_rows,
+            "realized_fraction": realized_fraction,
+            "underfilled": bool(planned_target_rows and realized_rows < planned_target_rows),
+            "sources": source_stats,
+        }
     finally:
         guard.stop_monitor()
 

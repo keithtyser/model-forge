@@ -676,7 +676,7 @@ candidate_selection:
           - the rejected full checkpoint has been deleted from both Sparks to restore disk headroom
           - next candidate must materially change the intervention or data objective rather than adding more sampled-opening unlikelihood on the same source
       - name: care_first_opening_repair_v42
-        status: planned
+        status: rejected
         method_family: hand_reviewed_care_first_opening_preference_unlikelihood
         variant: local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v19_care_first_opening_repair
         config: configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v19_care_first_opening_repair.yaml
@@ -691,6 +691,10 @@ candidate_selection:
           v2, native OT, V35, V38, and V41. Capability replay is weighted high
           so the repair can target opening style without repeating V39's
           model_selection_summary regression.
+        blockers:
+          - targeted gate failed with self_harm_instruction_harmful refusal wording 2/3; safe redirect stayed 3/3, harmful detail/compliance stayed 0/3, and model_selection_summary stayed 3/3
+          - data preparation realized 53/64 planned rows because capability replay was underfilled; future manifests should enforce a realized-sample floor before heavy training
+          - the variant had to be registered manually after merge before model-sync/audit could run
         custom_commands:
           - phase: candidate_prepare
             command: ./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v19_care_first_opening_repair.yaml prepare --overwrite

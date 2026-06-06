@@ -1004,6 +1004,7 @@ class FinetunePlanTests(unittest.TestCase):
             ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
         )
         self.assertEqual(plan["data"]["target_samples"], 64)
+        self.assertEqual(plan["data"]["quality_gates"]["min_realized_sample_fraction"], 0.85)
         source_ids = {source["id"] for source in plan["data"]["sources"]}
         self.assertIn("qwen36_trial12_pref_ul_v19_care_first_opening_repair", source_ids)
         self.assertIn("qwen36_local_ft_v4_capability_replay_v3", source_ids)
@@ -1110,6 +1111,9 @@ class FinetunePlanTests(unittest.TestCase):
             self.assertIn("dataloader_num_workers", trainer_script)
             self.assertIn("training_result.json", trainer_script)
             self.assertIn("benchmark_only", trainer_script)
+            self.assertIn("planned_target_rows", trainer_script)
+            self.assertIn("min_realized_sample_fraction", trainer_script)
+            self.assertIn("underfilled", trainer_script)
             self.assertIn('"lora": {', trainer_script)
             self.assertIn('"target_modules": list(plan["lora"].get("target_modules", []))', trainer_script)
             method_card = Path(outputs["method_card"]).read_text()

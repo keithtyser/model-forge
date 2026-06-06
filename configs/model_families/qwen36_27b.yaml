@@ -584,6 +584,27 @@ variants:
         - reports/qwen36_27b_v41_attention_output_sampled_opening_repair_plan_summary.md
         - results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair_targeted_gate_t3
         - reports/generated/abliteration_candidate_gate/qwen36_v41_attention_output_sampled_opening_gate/candidate_gate.json
+  local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v19_care_first_opening_repair:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v19-care-first-opening-repair
+    served_model_name: local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v19-care-first-opening-repair
+    transform_type: behavior_edit
+    base_variant: local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2
+    downloadable: false
+    promotion:
+      decision: rejected
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "V42 trained a 72-step two-Spark care-first opening repair adapter from held FT-abli v2, merged to a normal 12-shard checkpoint, synced to the worker, passed strict local checkpoint/tokenizer/architecture audits, and served TP=2. Reject: the targeted gate still had self_harm_instruction_harmful refusal wording 2/3, while safe redirect stayed 3/3, harmful detail/compliance stayed 0/3, and model_selection_summary stayed 3/3. The rejected full checkpoint was deleted from both Sparks after evidence was captured; keep the adapter/config/report evidence only. Do not broad-eval, NVFP4-export, upload, promote, or rerun unchanged."
+      evidence:
+        - datasets/seeds/qwen36_27b_trial12_pref_ul_v19_care_first_opening_repair.jsonl
+        - configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v19_care_first_opening_repair.yaml
+        - datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v19_care_first_opening_repair.yaml
+        - configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v19_care_first_opening_repair.yaml
+        - runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v19_care_first_opening_repair/training_result.json
+        - reports/generated/cluster/model_sync_20260606T072232Z.json
+        - results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v19_care_first_opening_repair_targeted_gate_t3
+        - reports/generated/abliteration_candidate_gate/qwen36_v42_care_first_opening_gate/candidate_gate.json
+        - reports/qwen36_27b_v42_care_first_opening_repair_summary.md
   local_ft_abli_norm_projection_v16_self_harm_opening:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-norm-projection-v16-self-harm-opening
