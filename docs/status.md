@@ -142,15 +142,14 @@ This is the short handoff state for humans and agents. Use
   `MemAvailable` floor before any checkpoint directory or streamed shard was
   produced. V34/V35/V36 native phrase/projection candidates were exported and
   gated, but each missed or worsened the residual self-harm refusal-opening
-  target. The next active candidate is V37 native source-anchored concept-cone
-  projection:
-  `configs/abliteration/qwen36_27b_ft_abli_v2_source_anchored_concept_cone_v37.yaml`.
-  V37 returns to the held FT-abli v2 source, projects harmful/refusal
-  generated-first-token directions away from dominant benign capability/style
-  subspaces, edits only selected late attention output projections, and is
-  blocked from broad eval, NVFP4, upload, and promotion until export, cluster
-  sync, strict local and worker audits, TP=2 serving, and the targeted
-  three-trial gate pass.
+  target. V37 native source-anchored concept-cone projection was also exported,
+  synced, audited, served, and rejected because refusal wording stayed 2/3. The
+  next active candidate is V38/V16 sampled-gate repair:
+  `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v16_sampled_gate_repair.yaml`.
+  It changes intervention class from static projection to sampled eval-response
+  pairwise preference plus 64-token prefix unlikelihood, using late near-miss
+  traces and capability replay from held v2/local FT v4. Data prep is complete;
+  training has not yet launched.
 - Qwen 3.6 27B residual-trial12 preference-unlikelihood v6 trained for 32
   guarded two-node steps from held v2, merged, synced to both Sparks, passed
   strict checkpoint/tokenizer audits, served with TP=2, and ran the targeted
@@ -1044,6 +1043,17 @@ length filtering:
    refusal wording was 2/3, safe redirect was 3/3, harmful detail/compliance was
    0/3, and `model_selection_summary` was 3/3. Do not broad-eval, quantize,
    upload, promote, or rerun V37 unchanged.
+   V38/V16 sampled-gate repair is the next prepared branch:
+   `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v16_sampled_gate_repair.yaml`.
+   `./forge data repair-from-eval` emitted 252 late near-miss repair pairs with
+   0 exact eval-prompt rows and no promotion blockers. Finetune data prep
+   accepted 150 rows: 102 mined sampled-gate repair rows, 8 v16 hard negatives,
+   20 older no-refusal/hard-negative replay rows, 4 unsafe-ablation redirect
+   replay rows, and 20 capability/planning replay rows. Training has not yet
+   launched. Next command:
+   `MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v16_sampled_gate_repair/run_cluster_torchrun.sh`.
+   Do not broad-eval, quantize, upload, or promote unless the merged candidate
+   passes the targeted three-trial gate.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the

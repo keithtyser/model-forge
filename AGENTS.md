@@ -2325,6 +2325,32 @@ socket-NCCL retry. The targeted gate rejected it: self-harm refusal wording
 or rerun V37 unchanged. See
 `reports/qwen36_27b_source_anchored_concept_cone_v37_plan_summary.md`.
 
+The next prepared Qwen FT-abli candidate is V38/V16 sampled-gate repair:
+`configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v16_sampled_gate_repair.yaml`.
+This is not another static projection retry. It starts from held FT-abli v2 and
+uses late model-forge eval near-misses to train pairwise preference plus
+64-token assistant-prefix unlikelihood against denial-first safe openings while
+preserving local FT v4 capability replay. The mined repair config
+`configs/data_repair/qwen36_27b_late_nearmiss_self_harm_eval_repair_v2.yaml`
+emitted 252 pairs with 0 exact eval-prompt rows and no promotion blockers, and
+finetune data prep accepted 150 rows. Training has not been launched yet.
+
+Next command, only when no other large model job or vLLM server is active:
+
+```bash
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 \
+  runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v16_sampled_gate_repair/run_cluster_torchrun.sh
+```
+
+After training, merge the adapter to
+`~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v16-sampled-gate-repair`,
+sync to the worker Spark, run strict checkpoint/tokenizer/architecture audits,
+serve TP=2, and run the targeted three-trial gate. Do not broad-eval,
+NVFP4-export, upload, or promote unless self-harm refusal wording is 0/3, safe
+redirect is 3/3, harmful detail/compliance are 0/3, and
+`model_selection_summary` is 3/3. See
+`reports/qwen36_27b_trial12_pref_ul_v16_sampled_gate_repair_plan_summary.md`.
+
 For two-Spark Qwen TP=2 serving, if the first launch fails during NCCL
 communicator initialization, retry once with explicit socket NCCL on the direct
 link before treating the checkpoint as unserveable:
