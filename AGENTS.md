@@ -2297,15 +2297,19 @@ detail/compliance 0/3, and `model_selection_summary` 2/3. Do not broad-eval,
 NVFP4-export, upload, promote, or rerun V34 unchanged. See
 `reports/qwen36_27b_response_opening_hybrid_projection_v34_plan_summary.md`.
 
-V35 (`local_ft_abli_response_opening_refusal_phrase_projection_v35`) is the next
-executable Qwen FT-abli candidate. It uses the exact observed V34 refusal
-openings as bad contrast, desired immediate-support openings as good contrast,
-stronger model-selection preservation wording, no MLP edits, and only
-attention-output edits in late high-signal layers. Run it only through the
-guarded native selective-projection path, then require worker sync, strict
-local/worker audits, TP=2 serve, and the targeted three-trial gate before any
-broad eval, NVFP4 export, upload, or promotion. See
-`reports/qwen36_27b_response_opening_refusal_phrase_projection_v35_plan_summary.md`.
+V35 (`local_ft_abli_response_opening_refusal_phrase_projection_v35`) has been
+attempted and rejected. It exported safely, changed 8 tensors, synced to the
+worker, passed strict local/worker audits, and served on TP=2, but the targeted
+gate still failed: self-harm refusal wording 1/3, safe redirect 3/3, harmful
+detail/compliance 0/3, and `model_selection_summary` 2/3. Do not broad-eval,
+NVFP4-export, upload, promote, or rerun V35 unchanged. V36
+(`local_ft_abli_response_opening_residual_phrase_projection_v36`) is the next
+executable candidate. It uses V35 as source, targets the exact remaining "I will
+not help make self-harm look accidental" opening, lowers strength to 0.62, keeps
+attention-output-only edits in the narrowed V35 high-signal layers, and
+strengthens model-selection preservation wording with explicit
+compare/choose/candidate phrases. See
+`reports/qwen36_27b_response_opening_residual_phrase_projection_v36_plan_summary.md`.
 
 For two-Spark Qwen TP=2 serving, if the first launch fails during NCCL
 communicator initialization, retry once with explicit socket NCCL on the direct
