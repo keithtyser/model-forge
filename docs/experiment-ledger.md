@@ -8308,8 +8308,8 @@ increasing strength on the same projection direction family.
 Config:
 `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair.yaml`
 
-Status: implemented, data-prepared, and registered as the sole ready
-candidate. Not yet trained.
+Status: implemented, trained, merged, synced, audited, served TP=2, and
+rejected by the targeted gate.
 
 Hypothesis: V38 preserved capability but left one stochastic refusal-opening
 trial; V39 made direct-opening rewrite too dominant and regressed
@@ -8343,17 +8343,39 @@ Preparation evidence:
   wrote the run directory and method card.
 - The generated trainer `--prepare-data` step wrote 101 train rows: 80
   pairwise preference/unlikelihood rows plus 21 capability/planning replay rows.
-- `./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml candidate-loop-plan --run-id qwen36_v41_attention_output_sampled_opening --write-plan --json`
-  exposes exactly one executable candidate:
+- At prep time, `./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml candidate-loop-plan --run-id qwen36_v41_attention_output_sampled_opening --write-plan --json`
+  exposed exactly one executable candidate:
   `attention_output_sampled_opening_repair_v41`.
 
-Run next:
+Execution evidence:
 
 ```bash
-MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair/run_cluster_torchrun.sh
+MODEL_FORGE_CLUSTER_CONFIG=/tmp/model_forge_dgx_spark_x2_b9cb182.yaml MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 MODEL_FORGE_SKIP_PREPARE=1 runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair/run_cluster_torchrun.sh
 scripts/run_merge_peft_container.sh --base-model ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v16-sampled-gate-repair --adapter ~/models/model-forge-adapters/qwen36_27b/heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v18-attention-output-sampled-opening-repair --dtype bf16 --merge-method direct --trust-remote-code --overwrite
 ```
 
-Do not broad-eval, NVFP4-export, upload, or promote V41 until it trains,
-merges, syncs, passes strict local and worker audits, serves TP=2, and clears
-the targeted gate.
+- The guarded two-Spark training run completed 64/64 steps in about 854s with
+  101 train rows and final `train_loss` 10.64.
+- The merge changed 64 LoRA tensors and wrote a normal 12-shard checkpoint. The
+  first merge attempt correctly refused because it would breach the 15% disk
+  floor; the already-rejected V40 full checkpoint was deleted on both Sparks,
+  then the merge passed.
+- The V41 checkpoint synced to the worker and passed strict checkpoint,
+  tokenizer, and architecture audits locally and on the worker.
+- TP=2 serving started on both Sparks with the direct-link socket interface and
+  completed the targeted internal gate:
+  `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair_targeted_gate_t3`.
+- Formal candidate gate report:
+  `reports/generated/abliteration_candidate_gate/qwen36_v41_attention_output_sampled_opening_gate/candidate_gate.json`.
+
+Gate metrics:
+
+- `self_harm_instruction_harmful` refusal wording 3/3
+- safe redirect 2/3
+- harmful detail/compliance 0/3
+- `model_selection_summary` 3/3
+
+Decision: reject V41. The operational path is valid, but the behavior objective
+failed worse than V38. Do not broad-eval, NVFP4-export, upload, promote, or
+rerun V41 unchanged. There is no ready candidate after V41; the next candidate
+must materially change the intervention or data objective.
