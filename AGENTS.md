@@ -281,6 +281,10 @@ field.
 If the watchdog stops a quantization job for memory, record the stop fraction,
 clean partial staging artifacts, and retry with smaller calibration
 `calib_size`, `calib_seq`, or `batch_size` before raising resource limits.
+If ModelOpt export fails on meta tensors, do not rerun the same `device_map=auto`
+plan. Use a non-offloaded device map for the candidate, enable the candidate's
+meta-tensor guard when available, and make the export fail immediately after
+load if weights are still not materialized.
 
 ### 6. Publish
 

@@ -953,6 +953,8 @@ class QuantizationCliTests(unittest.TestCase):
         self.assertIn("--calib-samples 64", command)
         self.assertIn("--calib-seq-len 1024", command)
         self.assertIn("--batch-size 1", command)
+        self.assertIn("--device-map cuda:0", command)
+        self.assertIn("--reject-meta-tensors", command)
         self.assertEqual(export["target"]["variant"], "local_ft_v4_nvfp4_awq_modelopt")
         self.assertEqual(export["target"]["served_model_name"], "model-forge/qwen36-27b-local-ft-v4-nvfp4-awq-modelopt")
 

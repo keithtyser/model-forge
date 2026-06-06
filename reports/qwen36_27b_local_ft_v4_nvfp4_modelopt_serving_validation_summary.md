@@ -171,3 +171,12 @@ to 4.57%, below the 5% floor. Partial Docker-root-owned staging files were
 removed after the stop. The AWQ and W4A16 matrix entries now override to a
 low-memory probe (`calib_size=64`, `calib_seq=1024`, `batch_size=1`) before any
 larger promotion-class calibration retry.
+
+The low-memory AWQ retry completed activation-stat collection and AWQ parameter
+search, then failed during ModelOpt HF export with `Cannot copy out of meta
+tensor; no data!`. This showed that `device_map=auto` can leave offloaded/meta
+tensors that AWQ export cannot serialize. The Qwen text ModelOpt script now
+supports a full-device map such as `cuda:0` and a `--reject-meta-tensors`
+guard; the AWQ/W4A16 matrix entries use both so the next retry either exports
+from materialized weights or fails immediately after load with actionable
+diagnostics.

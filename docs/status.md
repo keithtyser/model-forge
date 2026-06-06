@@ -87,7 +87,9 @@ This is the short handoff state for humans and agents. Use
   ModelOpt qformats before any upload or promotion. A full-default AWQ export
   attempt hit the memory watchdog at 4.57% available RAM during activation
   statistics; those candidates now use low-memory probe calibration settings
-  first.
+  first. The low-memory AWQ retry completed AWQ statistics/search but failed
+  ModelOpt export because `device_map=auto` left meta tensors; the next plans
+  use `device_map=cuda:0` plus a meta-tensor rejection guard.
 - Llama 3.1 8B Instruct now has the same first-class family plan shape,
   including base, local-FT, local-abli, local-FT-abli, and Blackwell NVFP4
   runtime-import variants. Its NVFP4 plan compares against the unquantized base

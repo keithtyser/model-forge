@@ -32,6 +32,25 @@ def positive_int(raw: str | int) -> int:
     return value
 
 
+def parse_device_map(raw: str) -> Any:
+    value = raw.strip()
+    if value.lower() in {"", "none", "null"}:
+        return None
+    if value in {"auto", "balanced", "balanced_low_0", "sequential"}:
+        return value
+    return {"": value}
+
+
+def meta_tensor_names(model: Any, limit: int = 20) -> list[str]:
+    names = []
+    for name, tensor in list(model.named_parameters()) + list(model.named_buffers()):
+        if getattr(getattr(tensor, "device", None), "type", None) == "meta":
+            names.append(name)
+            if len(names) >= limit:
+                break
+    return names
+
+
 def checkpoint_files(model_dir: Path) -> list[Path]:
     sharded = sorted(model_dir.glob("model-*.safetensors"))
     if sharded:
@@ -391,6 +410,7 @@ def main() -> None:
     parser.add_argument("--device-map", default="auto")
     parser.add_argument("--keep-text-input", action="store_true")
     parser.add_argument("--wrap-existing-output", action="store_true")
+    parser.add_argument("--reject-meta-tensors", action="store_true")
     parser.add_argument("--trust-remote-code", action="store_true")
     args = parser.parse_args()
 
@@ -432,9 +452,17 @@ def main() -> None:
     model = AutoModelForCausalLM.from_pretrained(
         str(text_input_dir),
         dtype=torch.bfloat16,
-        device_map=args.device_map,
+        device_map=parse_device_map(args.device_map),
         trust_remote_code=args.trust_remote_code,
     )
+    if args.reject_meta_tensors:
+        meta_names = meta_tensor_names(model)
+        if meta_names:
+            raise RuntimeError(
+                "loaded model contains meta tensors that ModelOpt cannot export; "
+                f"examples={meta_names}. Use a non-offloaded device_map such as cuda:0, "
+                "reduce calibration memory, or choose a smaller source/model shard policy."
+            )
 
     print(
         f"building calibration loop dataset={dataset_name} samples={args.calib_samples} seq_len={args.calib_seq_len} batch={args.batch_size}",

@@ -383,6 +383,8 @@ def build_modelopt_export_command(
             container_command.extend(["--max-shard-size-gb", str(ptq.get("max_shard_size_gb") or 8)])
         if strategy == "qwen_text_modelopt" and bool(ptq.get("keep_text_input", False)):
             container_command.append("--keep-text-input")
+        if strategy == "qwen_text_modelopt" and bool(ptq.get("reject_meta_tensors", False)):
+            container_command.append("--reject-meta-tensors")
         if bool(ptq.get("trust_remote_code", True)):
             container_command.append("--trust-remote-code")
     elif strategy == "hf_ptq":

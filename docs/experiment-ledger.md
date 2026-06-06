@@ -101,6 +101,14 @@ directory was cleaned. The AWQ/W4A16 matrix entries now use low-memory probe
 calibration (`calib_size=64`, `calib_seq=1024`, `batch_size=1`) before any
 larger promotion-class calibration retry.
 
+The low-memory AWQ retry completed activation statistics and parameter search,
+then failed during ModelOpt HF export with `Cannot copy out of meta tensor; no
+data!`. The Qwen text ModelOpt helper now accepts full-device maps such as
+`cuda:0` and can reject meta tensors immediately after load. The AWQ/W4A16
+matrix entries now use `device_map=cuda:0` plus `reject_meta_tensors=true` so
+the next retry does not spend another full AWQ search on an unexportable
+offloaded model.
+
 ## Qwen 3.6 27B: Native OT Diagnostic Path
 
 Status: executed and rejected. Do not promote, quantize, upload, or broad-eval
