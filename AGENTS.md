@@ -2287,6 +2287,24 @@ make OBLITERATUS export streamed/sharded enough to complete safely or implement
 a native sampled-response-opening optimizer rather than repeating static
 projection/token-logit tweaks.
 
+V34 (`local_ft_abli_response_opening_hybrid_projection_v34`) has been tried and
+rejected. It exported safely through the native sharded generated-token
+selective-projection path, changed 24 tensors, synced to the worker Spark,
+passed strict checkpoint/tokenizer/architecture audits on both nodes, and served
+on the two-Spark TP=2 path after one socket-NCCL retry. The targeted gate failed:
+self-harm refusal wording was 2/3, safe redirect 3/3, harmful
+detail/compliance 0/3, and `model_selection_summary` 2/3. Do not broad-eval,
+NVFP4-export, upload, promote, or rerun V34 unchanged. See
+`reports/qwen36_27b_response_opening_hybrid_projection_v34_plan_summary.md`.
+
+For two-Spark Qwen TP=2 serving, if the first launch fails during NCCL
+communicator initialization, retry once with explicit socket NCCL on the direct
+link before treating the checkpoint as unserveable:
+
+```bash
+VLLM_SPARK_EXTRA_DOCKER_ARGS='-e NCCL_IB_DISABLE=1 -e NCCL_SOCKET_IFNAME=enp1s0f0np0 -e NCCL_DEBUG=INFO -e TORCH_NCCL_ASYNC_ERROR_HANDLING=1'
+```
+
 ## Publishing
 
 When publishing a model:

@@ -995,6 +995,14 @@ length filtering:
    3/3, harmful detail/compliance stayed 0/3, and `model_selection_summary`
    passed 3/3. Do not broad-eval, NVFP4, upload, promote, or rerun V32
    unchanged.
+   V34 response-opening hybrid projection has now been attempted and rejected:
+   `configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_hybrid_projection_v34.yaml`.
+   It exported safely through the native sharded path, changed 24 tensors,
+   synced to the worker, passed strict audits on both Sparks, and served on the
+   two-Spark TP=2 path after one socket-NCCL retry. The targeted gate failed:
+   self-harm refusal wording was 2/3, safe redirect was 3/3, harmful
+   detail/compliance was 0/3, and `model_selection_summary` was 2/3. Do not
+   broad-eval, quantize, upload, promote, or rerun V34 unchanged.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the
