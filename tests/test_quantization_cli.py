@@ -985,9 +985,16 @@ class QuantizationCliTests(unittest.TestCase):
         config = load_quantization_config(Path("configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml"))
         by_target = filter_matrix_entries(matrix_entries(config), "local_ft_v4_nvfp4_awq_modelopt")
         by_name = filter_matrix_entries(matrix_entries(config), "local_ft_v4_nvfp4_w4a16")
+        by_sensitivity = filter_matrix_entries(matrix_entries(config), "local_ft_v4_nvfp4_attention_output_bf16")
 
+        self.assertEqual(matrix_workers(config, {}), ["local"])
+        self.assertEqual(matrix_workers(config, {"MODEL_FORGE_QUANT_WORKERS": "local,spark-b"}), ["local", "spark-b"])
         self.assertEqual([entry["target_variant"] for entry in by_target], ["local_ft_v4_nvfp4_awq_modelopt"])
         self.assertEqual([entry["target_variant"] for entry in by_name], ["local_ft_v4_nvfp4_w4a16_modelopt"])
+        self.assertEqual(
+            [entry["target_variant"] for entry in by_sensitivity],
+            ["local_ft_v4_nvfp4_attention_output_bf16_modelopt"],
+        )
 
     def test_deep_merge_preserves_nested_matrix_export_defaults(self) -> None:
         config = load_quantization_config(Path("configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml"))
@@ -1020,6 +1027,41 @@ class QuantizationCliTests(unittest.TestCase):
         self.assertIn("--reject-meta-tensors", command)
         self.assertEqual(export["target"]["variant"], "local_ft_v4_nvfp4_awq_modelopt")
         self.assertEqual(export["target"]["served_model_name"], "model-forge/qwen36-27b-local-ft-v4-nvfp4-awq-modelopt")
+
+    def test_qwen_component_sensitivity_matrix_passes_disable_patterns(self) -> None:
+        config = load_quantization_config(Path("configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml"))
+        source = resolve_source(config, "qwen36_27b", "local_ft_v4", {"MODEL_FORGE_MODELS_DIR": "/models-host"})
+        entry = filter_matrix_entries(matrix_entries(config), "local_ft_v4_nvfp4_attention_output_bf16_modelopt")[0]
+        variant_config = config.__class__(
+            **{
+                **config.__dict__,
+                "target_variant": entry["target_variant"],
+                "runtime": deep_merge_mappings(config.runtime, entry.get("runtime")),
+                "export": deep_merge_mappings(config.export, entry.get("export")),
+            }
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            export = build_modelopt_export_command(
+                variant_config,
+                source,
+                output_dir=Path(tmp),
+                run_id="unit_qwen_attn_output_bf16_matrix",
+                env={"MODEL_FORGE_MODELS_DIR": "/models-host", "HF_HOME": "/hf-cache"},
+            )
+
+        command = " ".join(export["command"])
+        self.assertIn("--qformat nvfp4", command)
+        self.assertIn("--disable-pattern '*self_attn.o_proj*'", export["command_display"])
+        self.assertIn("--disable-pattern '*linear_attn.out_proj*'", export["command_display"])
+        self.assertEqual(
+            export["calibration"]["disable_patterns"],
+            ["*self_attn.o_proj*", "*linear_attn.out_proj*"],
+        )
+        self.assertEqual(export["target"]["variant"], "local_ft_v4_nvfp4_attention_output_bf16_modelopt")
+        self.assertEqual(
+            export["target"]["served_model_name"],
+            "model-forge/qwen36-27b-local-ft-v4-nvfp4-attn-output-bf16-modelopt",
+        )
 
     def test_modelopt_export_allows_calibration_dataset_override(self) -> None:
         config = load_quantization_config(Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml"))

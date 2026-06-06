@@ -209,6 +209,22 @@ def comma_list(raw: str | None) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def string_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return comma_list(value)
+    if isinstance(value, list):
+        items: list[str] = []
+        for item in value:
+            if isinstance(item, str):
+                items.extend(comma_list(item))
+            elif item is not None:
+                items.append(str(item))
+        return items
+    return [str(value)]
+
+
 def truthy(value: Any, default: bool = False) -> bool:
     if value is None:
         return default
@@ -354,6 +370,7 @@ def build_modelopt_export_command(
     pipeline_parallel = int(ptq.get("pipeline_parallel") or 1)
     gpu_max_mem_percentage = float(ptq.get("gpu_max_mem_percentage") or 0.7)
     kv_cache_qformat = str(ptq.get("kv_cache_qformat") or "fp8_cast")
+    disable_patterns = string_list(ptq.get("disable_patterns") or ptq.get("keep_bf16_patterns"))
 
     repo_mount: list[str] = []
     if strategy in {"gemma4_moe_modelopt", "qwen_text_modelopt"}:
@@ -395,6 +412,9 @@ def build_modelopt_export_command(
             container_command.append("--keep-text-input")
         if strategy == "qwen_text_modelopt" and bool(ptq.get("reject_meta_tensors", False)):
             container_command.append("--reject-meta-tensors")
+        if strategy == "qwen_text_modelopt":
+            for pattern in disable_patterns:
+                container_command.extend(["--disable-pattern", pattern])
         if bool(ptq.get("trust_remote_code", True)):
             container_command.append("--trust-remote-code")
     elif strategy == "hf_ptq":
@@ -527,6 +547,7 @@ def build_modelopt_export_command(
             "kv_cache_qformat": kv_cache_qformat,
             "recipe": recipe or None,
             "moe_calib_experts_ratio": ptq.get("moe_calib_experts_ratio"),
+            "disable_patterns": disable_patterns,
         },
         "resource_policy": {
             "start_if_memory_available_above_fraction": float(export.get("start_if_memory_available_above_fraction", 0.05)),

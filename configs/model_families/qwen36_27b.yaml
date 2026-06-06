@@ -1389,6 +1389,34 @@ variants:
       evidence:
         - configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml
         - reports/qwen36_27b_local_ft_v4_nvfp4_modelopt_serving_validation_summary.md
+  local_ft_v4_nvfp4_mlp_only_modelopt:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_mlp_only_modelopt
+    served_model_name: model-forge/qwen36-27b-local-ft-v4-nvfp4-mlp-only-modelopt
+    base_variant: local_ft_v4
+    quantization: nvfp4_mlp_only
+    downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [hf_upload, promotion]
+      reason: "Planned component-sensitivity candidate after default NVFP4 broke JSON/tool behavior, AWQ was vLLM-incompatible, and W4A16 generated degenerate punctuation. This policy keeps attention modules in BF16 and quantizes MLPs to test a more behavior-preserving Blackwell speedup path. Do not upload or promote until export, compatibility, TP=2 serving, source-vs-candidate behavior, tokenizer, and NVFP4 gates pass."
+      evidence:
+        - configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml
+        - reports/qwen36_27b_local_ft_v4_nvfp4_modelopt_serving_validation_summary.md
+  local_ft_v4_nvfp4_attention_output_bf16_modelopt:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_attention_output_bf16_modelopt
+    served_model_name: model-forge/qwen36-27b-local-ft-v4-nvfp4-attn-output-bf16-modelopt
+    base_variant: local_ft_v4
+    quantization: nvfp4_attention_output_bf16
+    downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [hf_upload, promotion]
+      reason: "Planned component-sensitivity candidate after default NVFP4 broke JSON/tool behavior, AWQ was vLLM-incompatible, and W4A16 generated degenerate punctuation. This policy keeps attention output projections in BF16 while quantizing the rest of the supported linear stack, aiming for a better speed/quality tradeoff than MLP-only. Do not upload or promote until export, compatibility, TP=2 serving, source-vs-candidate behavior, tokenizer, and NVFP4 gates pass."
+      evidence:
+        - configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml
+        - reports/qwen36_27b_local_ft_v4_nvfp4_modelopt_serving_validation_summary.md
 
 serve:
   script: scripts/dgx_spark_serve_qwen.sh

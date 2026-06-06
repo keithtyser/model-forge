@@ -203,6 +203,10 @@ the two-Spark TP=2 path with FlashInfer NVFP4 kernels, and reached roughly
 `temperature=0` probes produced repeated `!` tokens instead of useful answers,
 so the behavior-preservation and NVFP4 evidence gates correctly fail.
 
-The next quantization attempt should be a component-sensitivity policy that
-keeps format-critical modules in BF16 rather than rerunning default NVFP4, AWQ,
-or W4A16 unchanged.
+The next quantization attempt should use the registered component-sensitivity
+matrix entries rather than rerunning default NVFP4, AWQ, or W4A16 unchanged.
+Start with `local_ft_v4_nvfp4_attention_output_bf16_modelopt`, which keeps
+attention output projections in BF16 and quantizes the rest of the supported
+linear stack. If that still fails behavior gates, compare
+`local_ft_v4_nvfp4_mlp_only_modelopt`, which keeps attention modules in BF16
+and quantizes MLPs.

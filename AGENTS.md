@@ -293,6 +293,12 @@ quantization matrix candidates by target variant or entry name:
 Matrix entries support nested overrides like `export.ptq.qformat` and
 `runtime.served_model_name`; do not clone whole configs just to change one PTQ
 field.
+For ModelOpt scripts that support component policies, use
+`export.ptq.disable_patterns` to keep sensitive modules in BF16. Good first
+cuts are attention-output projections, attention blocks, routers, embeddings,
+and LM heads. The exact patterns are model-family specific, so confirm them
+against the checkpoint index or architecture audit before launching a heavy
+export.
 
 If the watchdog stops a quantization job for memory, record the stop fraction,
 clean partial staging artifacts, and retry with smaller calibration

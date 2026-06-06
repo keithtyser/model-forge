@@ -145,11 +145,18 @@ about 2.46x output tok/s plus 2.50x decode-heavy source-relative speedup, but
 sampled serving eval and manual `temperature=0` probes degenerated into
 repeated `!` tokens. The NVFP4 behavior gate correctly rejects it.
 
-Next step: plan a component-sensitivity quantization policy instead of another
-whole-checkpoint qformat retry. Keep format-critical modules in BF16, compare
-each completed candidate against the exact BF16 `local_ft_v4` source, and
-promote only if the candidate passes ModelOpt compatibility, serving throughput,
-tokenizer preservation, and behavior preservation.
+Next step: run the registered component-sensitivity candidates instead of
+another whole-checkpoint qformat retry. The first candidate should be
+`local_ft_v4_nvfp4_attention_output_bf16_modelopt`, which keeps
+`*self_attn.o_proj*` and `*linear_attn.out_proj*` in BF16 while quantizing the
+rest of the supported linear stack. The second candidate is
+`local_ft_v4_nvfp4_mlp_only_modelopt`, which keeps `*self_attn*` and
+`*linear_attn*` in BF16 and quantizes MLPs. Compare each completed candidate
+against the exact BF16 `local_ft_v4` source, and promote only if it passes
+ModelOpt compatibility, serving throughput, tokenizer preservation, and
+behavior preservation. The Qwen matrix now defaults to `workers: local` for
+open-source portability; set `MODEL_FORGE_QUANT_WORKERS` on a specific cluster
+when distributing exports.
 
 ## Qwen 3.6 27B: Native OT Diagnostic Path
 

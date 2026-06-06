@@ -188,6 +188,8 @@ heavy process per assigned worker; serving and eval should use the two-node vLLM
 path when the quantized checkpoint loads. The matrix command is a planner: it
 assigns variants to workers and prints the local or SSH command for each worker
 without starting a heavy process.
+Keep `matrix.workers` portable in tracked configs. Use `local` as the default
+and set `MODEL_FORGE_QUANT_WORKERS=local,<ssh-host>` on a specific cluster.
 
 Use `--variants` when only a subset of source checkpoints is present on the
 assigned workers. The target variant for single exports can be set explicitly:
@@ -199,6 +201,13 @@ assigned workers. The target variant for single exports can be set explicitly:
   --run-id gemma4_local_ft_nvfp4_modelopt \
   --write-plan --execute
 ```
+
+For component-sensitivity runs, add `export.ptq.disable_patterns` under a
+matrix entry instead of forking the export script. The Qwen text ModelOpt helper
+passes these patterns through as `--disable-pattern`, keeping matching modules
+in BF16. Use this when whole-checkpoint NVFP4 is fast but behavior regresses:
+start with attention-output projections, then compare MLP-only and
+attention-only policies if the first candidate still fails behavior gates.
 
 Production calibration can use NVIDIA Nemotron post-training data when the HF
 account has access:

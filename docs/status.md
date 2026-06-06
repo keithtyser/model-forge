@@ -104,9 +104,12 @@ This is the short handoff state for humans and agents. Use
   and the ModelOpt/vLLM compatibility report, and served with TP=2 NVFP4
   kernels, but it is rejected because all sampled serving-eval answers and
   manual `temperature=0` probes degenerated into repeated `!` tokens. The next
-  credible quantization work is a sensitivity/component policy that leaves
-  format-critical modules in BF16 instead of rerunning these qformats
-  unchanged.
+  credible quantization work is now registered as component-sensitivity matrix
+  candidates: `local_ft_v4_nvfp4_attention_output_bf16_modelopt` keeps
+  attention output projections in BF16 while quantizing the rest of the
+  supported linear stack, and `local_ft_v4_nvfp4_mlp_only_modelopt` keeps
+  attention modules in BF16 while quantizing MLPs. The matrix default worker is
+  portable `local`; set `MODEL_FORGE_QUANT_WORKERS` for a specific cluster.
 - Llama 3.1 8B Instruct now has the same first-class family plan shape,
   including base, local-FT, local-abli, local-FT-abli, and Blackwell NVFP4
   runtime-import variants. Its NVFP4 plan compares against the unquantized base

@@ -357,7 +357,17 @@ def wrap_text_export_for_vllm(output_dir: Path, source_dir: Path) -> dict[str, A
     }
 
 
-def quant_config(name: str) -> dict[str, Any]:
+def split_patterns(raw_values: list[str] | tuple[str, ...]) -> list[str]:
+    patterns: list[str] = []
+    for raw in raw_values:
+        for item in str(raw).split(","):
+            pattern = item.strip()
+            if pattern:
+                patterns.append(pattern)
+    return patterns
+
+
+def quant_config(name: str, *, disable_patterns: list[str] | None = None) -> dict[str, Any]:
     import modelopt.torch.quantization as mtq
     from modelopt.torch.quantization.config import _nvfp4_selective_quant_cfg
 
@@ -369,7 +379,7 @@ def quant_config(name: str) -> dict[str, Any]:
     if name not in configs:
         raise ValueError(f"unsupported qformat {name!r}; expected one of {', '.join(sorted(configs))}")
     cfg = copy.deepcopy(configs[name])
-    for pattern in (
+    patterns = [
         "*lm_head*",
         "*embed_tokens*",
         "*router*",
@@ -379,7 +389,9 @@ def quant_config(name: str) -> dict[str, Any]:
         "*multi_modal_projector*",
         "*linear_attn.conv1d*",
         "*mixer.conv1d*",
-    ):
+    ]
+    patterns.extend(disable_patterns or [])
+    for pattern in dict.fromkeys(patterns):
         cfg["quant_cfg"][pattern] = {"enable": False}
     return cfg
 
@@ -411,6 +423,12 @@ def main() -> None:
     parser.add_argument("--keep-text-input", action="store_true")
     parser.add_argument("--wrap-existing-output", action="store_true")
     parser.add_argument("--reject-meta-tensors", action="store_true")
+    parser.add_argument(
+        "--disable-pattern",
+        action="append",
+        default=[],
+        help="Additional ModelOpt quant_cfg glob to keep in BF16; may be repeated or comma-separated.",
+    )
     parser.add_argument("--trust-remote-code", action="store_true")
     args = parser.parse_args()
 
@@ -478,8 +496,12 @@ def main() -> None:
         device=args.device,
     )
 
+    disable_patterns = split_patterns(args.disable_pattern)
+    if disable_patterns:
+        print(f"extra BF16 disable patterns={disable_patterns}", flush=True)
+
     print(f"quantizing qformat={args.qformat}", flush=True)
-    model = mtq.quantize(model, quant_config(args.qformat), forward_loop=forward_loop)
+    model = mtq.quantize(model, quant_config(args.qformat, disable_patterns=disable_patterns), forward_loop=forward_loop)
 
     print(f"exporting to {output_dir}", flush=True)
     from modelopt.torch.export import export_hf_checkpoint
@@ -500,6 +522,7 @@ def main() -> None:
         "calib_samples": args.calib_samples,
         "calib_seq_len": args.calib_seq_len,
         "batch_size": args.batch_size,
+        "disable_patterns": disable_patterns,
         "total_size_gb": round(total_bytes / 1_000_000_000, 4),
         "duration_seconds": round(time.time() - started_at, 3),
         "text_input_kept": args.keep_text_input,

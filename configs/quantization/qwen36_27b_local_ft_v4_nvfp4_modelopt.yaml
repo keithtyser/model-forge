@@ -118,7 +118,7 @@ gates:
 
 matrix:
   workers_env: MODEL_FORGE_QUANT_WORKERS
-  workers: dgx_spark_x2
+  workers: local
   variants:
     - name: local_ft_v4_nvfp4_default
       source_variant: local_ft_v4
@@ -161,6 +161,48 @@ matrix:
         port: 8021
         launch:
           container_name: model_forge_qwen36_local_ft_v4_nvfp4_w4a16
+    - name: local_ft_v4_nvfp4_mlp_only
+      source_variant: local_ft_v4
+      target_variant: local_ft_v4_nvfp4_mlp_only_modelopt
+      policy: component_sensitivity_mlp_only_nvfp4
+      baseline_eval: results/qwen36_27b_v0/base/qwen36_27b_local_ft_v4_dgx_spark
+      export:
+        ptq:
+          qformat: nvfp4
+          calib_size: 64
+          calib_seq: 1024
+          batch_size: 1
+          device_map: cuda:0
+          reject_meta_tensors: true
+          disable_patterns:
+            - "*self_attn*"
+            - "*linear_attn*"
+      runtime:
+        served_model_name: model-forge/qwen36-27b-local-ft-v4-nvfp4-mlp-only-modelopt
+        port: 8022
+        launch:
+          container_name: model_forge_qwen36_local_ft_v4_nvfp4_mlp_only
+    - name: local_ft_v4_nvfp4_attention_output_bf16
+      source_variant: local_ft_v4
+      target_variant: local_ft_v4_nvfp4_attention_output_bf16_modelopt
+      policy: component_sensitivity_attention_output_bf16_nvfp4
+      baseline_eval: results/qwen36_27b_v0/base/qwen36_27b_local_ft_v4_dgx_spark
+      export:
+        ptq:
+          qformat: nvfp4
+          calib_size: 64
+          calib_seq: 1024
+          batch_size: 1
+          device_map: cuda:0
+          reject_meta_tensors: true
+          disable_patterns:
+            - "*self_attn.o_proj*"
+            - "*linear_attn.out_proj*"
+      runtime:
+        served_model_name: model-forge/qwen36-27b-local-ft-v4-nvfp4-attn-output-bf16-modelopt
+        port: 8023
+        launch:
+          container_name: model_forge_qwen36_local_ft_v4_nvfp4_attn_output_bf16
 
 outputs:
   reports_dir: reports/generated/quantization
