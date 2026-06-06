@@ -1347,6 +1347,20 @@ variants:
       evidence:
         - configs/quantization/qwen36_27b_nvfp4_modelopt.yaml
         - docs/quantization.md
+  local_ft_v4_nvfp4_modelopt:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_modelopt
+    served_model_name: model-forge/qwen36-27b-local-ft-v4-nvfp4-modelopt
+    base_variant: local_ft_v4
+    quantization: nvfp4
+    downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [hf_upload, promotion]
+      reason: "Qwen local FT v4 NVFP4 target is for validating the Blackwell quantization and serving leg against the promoted FT source before a final FT-abli source is available. Promotion requires completed export, strict audits, source-vs-quantized behavior evidence, and serving throughput showing higher output tok/s than the unquantized FT source."
+      evidence:
+        - configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml
+        - docs/quantization.md
 
 serve:
   script: scripts/dgx_spark_serve_qwen.sh

@@ -290,6 +290,10 @@ class VariantGraphTests(unittest.TestCase):
             ancestry(qwen36, "local_ft_abli_nvfp4_modelopt"),
             ["base", "local_ft_v4", "local_ft_abli", "local_ft_abli_nvfp4_modelopt"],
         )
+        self.assertEqual(
+            ancestry(qwen36, "local_ft_v4_nvfp4_modelopt"),
+            ["base", "local_ft_v4", "local_ft_v4_nvfp4_modelopt"],
+        )
 
     def test_llama_family_config_is_graph_ready(self) -> None:
         graph = variant_graph("llama31_8b")

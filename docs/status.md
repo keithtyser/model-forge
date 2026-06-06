@@ -41,6 +41,11 @@ This is the short handoff state for humans and agents. Use
   `safety_preserving_refusal_style_suppression` objective profile. It measures
   refusal-style suppression with safe redirect preservation; it is not a
   harmful-compliance or full guardrail-removal objective.
+- Qwen FT-source NVFP4 validation is unblocked separately from the final
+  FT-abli path. Use
+  `configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml` to export
+  and test `local_ft_v4 -> local_ft_v4_nvfp4_modelopt` against the promoted FT
+  source. This is not a substitute for final FT-abli quantization evidence.
 
 ## Validated So Far
 
@@ -48,6 +53,10 @@ This is the short handoff state for humans and agents. Use
 - Qwen 3.5 9B and Qwen 3.6 27B now have model-family configs with base,
   local-FT, local-abli, and local-FT-abli variant nodes, Qwen chat-template
   defaults, serving/eval hooks, and doctor-audited source edges.
+- Qwen 3.6 27B local FT v4 has a dedicated ModelOpt NVFP4 config and family
+  variant. The export plan and calibration manifest have been validated against
+  the promoted FT source; full export, TP=2 serve, eval, and throughput
+  comparison still need to be run before any quantized artifact is promoted.
 - Llama 3.1 8B Instruct now has the same first-class family plan shape,
   including base, local-FT, local-abli, local-FT-abli, and Blackwell NVFP4
   runtime-import variants. Its NVFP4 plan compares against the unquantized base

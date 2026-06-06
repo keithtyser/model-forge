@@ -3375,6 +3375,55 @@ Validation:
 ./forge doctor
 ```
 
+### 2026-06-06 Qwen local FT v4 NVFP4 path prep
+
+Config:
+`configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml`
+
+Hypothesis: the Qwen Blackwell quantization leg can be tested against the
+promoted `local_ft_v4` source while the final FT-abli source remains blocked.
+This keeps progress moving on the FT -> NVFP4 path without exporting from the
+generic `local_ft_abli` placeholder.
+
+Prepared artifacts:
+
+- quantization config:
+  `configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml`
+- family variant:
+  `local_ft_v4_nvfp4_modelopt`
+- calibration manifest:
+  `reports/generated/quantization/qwen36_local_ft_v4_nvfp4_calibration/calibration_manifest.json`
+- calibration summary:
+  `reports/generated/quantization/qwen36_local_ft_v4_nvfp4_calibration/calibration_manifest.md`
+
+Validation:
+
+```bash
+./forge quantize calibration-manifest qwen36_27b local_ft_v4 \
+  --config configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml \
+  --run-id qwen36_local_ft_v4_nvfp4_calibration \
+  --write-manifest --json
+
+./forge quantize export qwen36_27b local_ft_v4 \
+  --config configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml \
+  --run-id qwen36_local_ft_v4_nvfp4_modelopt_plan \
+  --write-plan --json
+
+.venv/bin/python -m unittest tests.test_quantization_cli tests.test_variants
+./forge doctor
+./forge cluster health --config /tmp/model_forge_dgx_spark_x2_runtime.yaml
+```
+
+Observed plan: the export source resolves to
+`~/models/Qwen3.6-27B-local-ft-v4-merged`, the target resolves to
+`~/models/model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_modelopt`, and the
+served name is `model-forge/qwen36-27b-local-ft-v4-nvfp4-modelopt`.
+
+Decision: proceed to a guarded ModelOpt export when ready. Do not use this
+checkpoint as final FT-abli release evidence; it is a FT-source quantization
+validation candidate. ModelOpt export is still a single-node PTQ process, while
+serving/eval/benchmark should use the two-Spark TP=2 runtime.
+
 ### 2026-06-06 Qwen FT-abli objective-profile clarification
 
 Status: implemented as config/docs/tests only. No model server, training run,

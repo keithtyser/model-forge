@@ -792,6 +792,15 @@ while retaining local FT v4 quality. Do not run Qwen NVFP4 export from
 has that default source; promote a passing FT-abli variant first, then update
 the quantization source.
 
+To validate Qwen NVFP4 mechanics before a final FT-abli source exists, use
+`configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml`. That config
+targets the promoted FT source only:
+`local_ft_v4 -> local_ft_v4_nvfp4_modelopt`, served as
+`model-forge/qwen36-27b-local-ft-v4-nvfp4-modelopt`. Treat this as Blackwell
+quantization validation for the FT leg, not as final FT-abli release evidence.
+ModelOpt export is single-node today; serve and benchmark the exported
+checkpoint through the two-Spark TP=2 runtime before making throughput claims.
+
 The longer-response Heretic search
 `configs/abliteration/qwen36_27b_ft_local_abli_heretic_long_search.yaml`
 completed on the worker Spark. Trial 2 was selected from that journal and

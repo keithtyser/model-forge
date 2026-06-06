@@ -75,6 +75,32 @@ The Gemma matrix covers:
 - `local_abli_sota -> local_abli_sota_nvfp4_modelopt`
 - `ft_local_abli_sota_internal_r7_selected_t34_transfer -> ft_local_abli_sota_internal_r7_selected_t34_transfer_nvfp4_modelopt`
 
+Qwen 3.6 27B has two NVFP4 configs with different purposes. The generic
+`configs/quantization/qwen36_27b_nvfp4_modelopt.yaml` is reserved for the final
+FT-abli source and intentionally blocks export while `local_ft_abli` is not a
+promoted candidate. To validate the Blackwell quantization leg against the
+current promoted FT source, use:
+
+```bash
+./forge quantize calibration-manifest qwen36_27b local_ft_v4 \
+  --config configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml \
+  --run-id qwen36_local_ft_v4_nvfp4_calibration \
+  --write-manifest
+
+./forge quantize export qwen36_27b local_ft_v4 \
+  --config configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml \
+  --run-id qwen36_local_ft_v4_nvfp4_modelopt \
+  --write-plan
+```
+
+The Qwen FT-v4 config exports `local_ft_v4 -> local_ft_v4_nvfp4_modelopt` and
+serves as `model-forge/qwen36-27b-local-ft-v4-nvfp4-modelopt`. It is not release
+evidence for the final FT-abli model. After export succeeds, serve and benchmark
+the quantized checkpoint on the two-Spark TP=2 path, then compare it against the
+same unquantized `local_ft_v4` source with the quantization card and NVFP4 gate.
+ModelOpt PTQ export is currently single-node; serving, eval, and throughput
+benchmarks should use the cluster runtime.
+
 Gemma 4 A4B uses the repo-native `gemma4_moe_modelopt` strategy in
 `scripts/quantization/gemma4_moe_nvfp4.py`. Stock ModelOpt export can leave
 Gemma's fused 3D MoE expert tensors out of the NVFP4 path; that produces a

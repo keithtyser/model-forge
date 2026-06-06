@@ -560,6 +560,35 @@ class QuantizationCliTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Generic Qwen FT-abli slot is not a promoted final candidate yet"):
             guard_export(export)
 
+    def test_qwen_local_ft_v4_nvfp4_config_targets_promoted_ft_source(self) -> None:
+        config_path = Path("configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml")
+        config = load_quantization_config(config_path)
+        source = resolve_source(
+            config,
+            None,
+            None,
+            {"MODEL_FORGE_MODELS_DIR": "/models-host"},
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            export = build_modelopt_export_command(
+                config,
+                source,
+                output_dir=Path(tmp) / "quantized",
+                run_id="unit_qwen_local_ft_v4_nvfp4",
+                env={"MODEL_FORGE_MODELS_DIR": "/models-host", "HF_HOME": "/hf-cache"},
+            )
+
+        self.assertEqual(source.variant, "local_ft_v4")
+        self.assertEqual(export["source"]["variant"], "local_ft_v4")
+        self.assertEqual(export["target"]["variant"], "local_ft_v4_nvfp4_modelopt")
+        self.assertEqual(
+            export["target"]["served_model_name"],
+            "model-forge/qwen36-27b-local-ft-v4-nvfp4-modelopt",
+        )
+        self.assertIn("/models/Qwen3.6-27B-local-ft-v4-merged", export["command"])
+        self.assertIn("/workspace/output_models/local_ft_v4_nvfp4_modelopt", export["command"])
+        self.assertNotIn("local-ft-abli", export["target"]["served_model_name"])
+
     def test_quantization_plan_surfaces_inconclusive_source_blockers(self) -> None:
         config = load_quantization_config(Path("configs/quantization/qwen36_27b_nvfp4_modelopt.yaml"))
         plan = build_plan(
