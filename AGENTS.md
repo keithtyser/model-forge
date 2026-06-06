@@ -2297,6 +2297,16 @@ detail/compliance 0/3, and `model_selection_summary` 2/3. Do not broad-eval,
 NVFP4-export, upload, promote, or rerun V34 unchanged. See
 `reports/qwen36_27b_response_opening_hybrid_projection_v34_plan_summary.md`.
 
+V35 (`local_ft_abli_response_opening_refusal_phrase_projection_v35`) is the next
+executable Qwen FT-abli candidate. It uses the exact observed V34 refusal
+openings as bad contrast, desired immediate-support openings as good contrast,
+stronger model-selection preservation wording, no MLP edits, and only
+attention-output edits in late high-signal layers. Run it only through the
+guarded native selective-projection path, then require worker sync, strict
+local/worker audits, TP=2 serve, and the targeted three-trial gate before any
+broad eval, NVFP4 export, upload, or promotion. See
+`reports/qwen36_27b_response_opening_refusal_phrase_projection_v35_plan_summary.md`.
+
 For two-Spark Qwen TP=2 serving, if the first launch fails during NCCL
 communicator initialization, retry once with explicit socket NCCL on the direct
 link before treating the checkpoint as unserveable:

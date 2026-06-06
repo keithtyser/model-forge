@@ -1003,6 +1003,13 @@ length filtering:
    self-harm refusal wording was 2/3, safe redirect was 3/3, harmful
    detail/compliance was 0/3, and `model_selection_summary` was 2/3. Do not
    broad-eval, quantize, upload, promote, or rerun V34 unchanged.
+   V35 is now the next executable candidate:
+   `configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_refusal_phrase_projection_v35.yaml`.
+   It targets the exact V34 refusal-phrase openings, removes MLP edits, keeps
+   attention-output-only edits in late high-signal layers, and strengthens
+   model-selection preservation wording. Do not broad-eval, quantize, upload,
+   or promote it until export, worker sync, strict local/worker audits, TP=2
+   serve, and the targeted three-trial gate all pass.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the
