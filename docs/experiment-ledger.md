@@ -3418,6 +3418,10 @@ Observed plan: the export source resolves to
 `~/models/Qwen3.6-27B-local-ft-v4-merged`, the target resolves to
 `~/models/model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_modelopt`, and the
 served name is `model-forge/qwen36-27b-local-ft-v4-nvfp4-modelopt`.
+The first guarded execute attempt failed before calibration because ModelOpt's
+patched Accelerate loader rejected `--attn_implementation`; both Qwen ModelOpt
+configs now omit that optional flag and tests assert the FT-v4 command does not
+emit it.
 
 Decision: proceed to a guarded ModelOpt export when ready. Do not use this
 checkpoint as final FT-abli release evidence; it is a FT-source quantization

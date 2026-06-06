@@ -587,6 +587,7 @@ class QuantizationCliTests(unittest.TestCase):
         )
         self.assertIn("/models/Qwen3.6-27B-local-ft-v4-merged", export["command"])
         self.assertIn("/workspace/output_models/local_ft_v4_nvfp4_modelopt", export["command"])
+        self.assertNotIn("--attn_implementation", export["command"])
         self.assertNotIn("local-ft-abli", export["target"]["served_model_name"])
 
     def test_quantization_plan_surfaces_inconclusive_source_blockers(self) -> None:

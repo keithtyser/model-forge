@@ -77,7 +77,6 @@ export:
     use_seq_device_map: true
     trust_remote_code: true
     skip_generate: true
-    attn_implementation: sdpa
 
 runtime:
   served_model_name: model-forge/qwen36-27b-local-ft-abli-nvfp4-modelopt
