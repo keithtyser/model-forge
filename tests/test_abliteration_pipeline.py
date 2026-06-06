@@ -562,6 +562,28 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("run_post_export_key_remap", runner)
         self.assertIn("run_source_tether", runner)
 
+    def test_qwen_v45_obliteratus_lora_runner_uses_adapter_only_rebirth(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_obliteratus_lora_adapter_v45.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "obliteratus")
+        with tempfile.TemporaryDirectory() as tmp:
+            plan["work_dir"] = tmp
+            runner = write_obliteratus_runner(plan).read_text(encoding="utf-8")
+
+        self.assertEqual(plan["backend_config"]["method_family"], "obliteratus_reversible_lora_adapter_only")
+        self.assertTrue(plan["backend_config"]["use_lora_ablation"])
+        self.assertEqual(plan["backend_config"]["lora_rank"], 2)
+        self.assertTrue(plan["backend_config"]["lora_adapter_export"]["enabled"])
+        self.assertIn("install_adapter_only_rebirth", runner)
+        self.assertIn("model_forge_adapter_only_rebirth", runner)
+        self.assertIn("scripts/convert_obliteratus_lora_to_peft.py", runner)
+        self.assertIn("adapter_only_rebirth_enabled", runner)
+        self.assertIn("model_forge.obliteratus_adapter_only_rebirth.v1", runner)
+
     def test_candidate_gate_ranks_completed_eval_runs_by_case_requirements(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -869,7 +891,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertFalse(any("variants checkpoint-audit" in command for command in commands))
         self.assertIn("Search-only candidate jobs are planned", plan["candidate_gate_command"])
 
-    def test_qwen_candidate_loop_blocks_rejected_sae_through_v43_and_plans_v44(self) -> None:
+    def test_qwen_candidate_loop_blocks_rejected_sae_through_v44_and_plans_v45(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_candidate_gate.yaml"
         plan = build_candidate_loop_plan(load_yaml(config_path), config_path, run_id="qwen_unit_loop")
 
@@ -889,7 +911,8 @@ class AbliterationPlanTests(unittest.TestCase):
         rejected_v41 = candidates["attention_output_sampled_opening_repair_v41"]
         rejected_v42 = candidates["care_first_opening_repair_v42"]
         rejected_v43 = candidates["refusal_token_opening_suppression_v43"]
-        planned_v44 = candidates["score_distilled_repair_v44"]
+        rejected_v44 = candidates["score_distilled_repair_v44"]
+        planned_v45 = candidates["obliteratus_lora_adapter_v45"]
 
         self.assertEqual(candidate["name"], "qwen_scope_sae_feature_diagnostic_v1")
         self.assertEqual(candidate["status"], "rejected")
@@ -955,18 +978,24 @@ class AbliterationPlanTests(unittest.TestCase):
         )
         self.assertFalse(any(command.get("enabled", False) for command in rejected_v43["commands"]))
         self.assertTrue(any("v20_refusal_token_opening_suppression" in command["command"] for command in rejected_v43["commands"]))
-        self.assertEqual(planned_v44["status"], "planned")
-        self.assertFalse(planned_v44["blockers"])
-        self.assertTrue(planned_v44["produces_checkpoint"])
+        self.assertEqual(rejected_v44["status"], "rejected")
+        self.assertTrue(rejected_v44["blockers"])
+        self.assertTrue(rejected_v44["produces_checkpoint"])
         self.assertEqual(
-            planned_v44["variant"],
+            rejected_v44["variant"],
             "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v21_score_distilled_repair",
         )
-        self.assertTrue(any(command.get("enabled", False) for command in planned_v44["commands"]))
-        self.assertTrue(any("late_nearmiss_score_distilled_repair_v5" in command["command"] for command in planned_v44["commands"]))
-        self.assertTrue(any(command["phase"] == "candidate_train" and command.get("starts_heavy_job") for command in planned_v44["commands"]))
+        self.assertFalse(any(command.get("enabled", False) for command in rejected_v44["commands"]))
+        self.assertTrue(any("v21_score_distilled_repair" in command["command"] for command in rejected_v44["commands"]))
+        self.assertEqual(planned_v45["status"], "planned")
+        self.assertFalse(planned_v45["blockers"])
+        self.assertTrue(planned_v45["produces_checkpoint"])
+        self.assertEqual(planned_v45["variant"], "local_ft_abli_obliteratus_lora_adapter_v45")
+        self.assertTrue(any(command.get("enabled", False) for command in planned_v45["commands"]))
+        self.assertTrue(any("qwen36_27b_ft_abli_v2_obliteratus_lora_adapter_v45.yaml" in command["command"] for command in planned_v45["commands"]))
+        self.assertTrue(any(command["phase"] == "candidate_export" and command.get("starts_heavy_job") for command in planned_v45["commands"]))
         self.assertTrue(gate_command["enabled"])
-        self.assertIn("score_distilled_repair_v44", plan["candidate_gate_command"])
+        self.assertIn("obliteratus_lora_adapter_v45", plan["candidate_gate_command"])
 
     def test_qwen_scope_sae_prepare_writes_guarded_runner(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml"
@@ -1794,6 +1823,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("care_first_opening_repair_v42", candidates)
         self.assertIn("refusal_token_opening_suppression_v43", candidates)
         self.assertIn("score_distilled_repair_v44", candidates)
+        self.assertIn("obliteratus_lora_adapter_v45", candidates)
         self.assertTrue(candidates["qwen_scope_sae_feature_diagnostic_v1"]["blockers"])
         self.assertFalse(any(
             command.get("enabled", True)
@@ -1947,25 +1977,36 @@ class AbliterationPlanTests(unittest.TestCase):
             for command in v43["commands"]
         ))
         v44 = candidates["score_distilled_repair_v44"]
-        self.assertEqual(v44["status"], "planned")
-        self.assertFalse(v44["blockers"])
+        self.assertEqual(v44["status"], "rejected")
+        self.assertTrue(v44["blockers"])
         self.assertTrue(v44["produces_checkpoint"])
         self.assertEqual(
             v44["variant"],
             "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v21_score_distilled_repair",
         )
-        self.assertTrue(any(command.get("enabled", False) for command in v44["commands"]))
+        self.assertFalse(any(command.get("enabled", False) for command in v44["commands"]))
         self.assertTrue(any(
             "v21_score_distilled_repair" in command.get("command", "")
             for command in v44["commands"]
         ))
+        v45 = candidates["obliteratus_lora_adapter_v45"]
+        self.assertEqual(v45["status"], "planned")
+        self.assertFalse(v45["blockers"])
+        self.assertTrue(v45["produces_checkpoint"])
+        self.assertEqual(v45["backend"], "obliteratus")
+        self.assertEqual(v45["variant"], "local_ft_abli_obliteratus_lora_adapter_v45")
+        self.assertTrue(any(command.get("enabled", False) for command in v45["commands"]))
         self.assertTrue(any(
-            command.get("phase") == "candidate_train" and command.get("starts_heavy_job")
-            for command in v44["commands"]
+            "qwen36_27b_ft_abli_v2_obliteratus_lora_adapter_v45.yaml" in command.get("command", "")
+            for command in v45["commands"]
+        ))
+        self.assertTrue(any(
+            command.get("phase") == "candidate_export" and command.get("starts_heavy_job")
+            for command in v45["commands"]
         ))
         self.assertEqual(plan["executable_candidate_count"], 1)
         self.assertEqual(plan["planned_candidate_job_count"], 1)
-        self.assertIn("score_distilled_repair_v44", plan["candidate_gate_command"])
+        self.assertIn("obliteratus_lora_adapter_v45", plan["candidate_gate_command"])
         self.assertTrue(any(
             command.get("enabled", False)
             for command in plan["commands"]

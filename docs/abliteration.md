@@ -164,7 +164,9 @@ method-shift backends:
 
 - `abliterix`: guarded search-only practical toolkit backend with SRA/SOM/OT
   vector methods
-- `obliteratus`: guarded advanced baked checkpoint backend
+- `obliteratus`: guarded advanced baked checkpoint backend; configs can also
+  enable OBLITERATUS reversible LoRA with `lora_adapter_export.adapter_only`
+  when full-checkpoint export is too memory-heavy
 - `apostate`: guarded preservation-direction baked checkpoint backend
 - `sra`: surgical refusal ablation / concept-preserving direction cleanup
 - `optimal_transport`: native guarded diagnostic for distributional activation
@@ -202,6 +204,14 @@ norm-preserving/SOM projection now have guarded execution paths. Abliterix first
 runs in non-interactive search-only mode; it writes an Optuna journal and exits
 without exporting a checkpoint. Use
 `abliterix-search-analyze` before `abliterix-export` for a selected trial.
+For OBLITERATUS recipes that use reversible LoRA, prefer adapter-only rebirth
+first: set `use_lora_ablation: true` and
+`lora_adapter_export.enabled: true`, then point `peft_output_dir` at the adapter
+artifact directory and configure the model-family PEFT key template. This skips
+full-state-dict serialization, converts `abliteration_lora_adapters.pt` to a
+standard PEFT adapter with `scripts/convert_obliteratus_lora_to_peft.py`, and
+lets the normal model-forge sync/audit/live-LoRA eval path decide whether the
+edit is promotable before any full merge or quantization export.
 For Abliterix recipes with `n_directions > 1`, model-forge now validates that
 materialized `good_prompts` and `bad_prompts` have equal train counts during
 `sota-prepare`. Abliterix computes paired multi-direction residual differences,

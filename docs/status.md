@@ -135,12 +135,15 @@ This is the short handoff state for humans and agents. Use
   model-selection rubric artifact; targeted-repeat capability rescored to 1.00.
   Qwen v5 remains prepared but untrained; do not spend another training run
   solely for `unsafe_ablation_redirect`.
-- Qwen 3.6 27B OBLITERATUS has been tried and is no longer the active
-  executable path. The first diagnostic was behaviorally rejected, V24/V30
-  source-tethered attempts were stopped by memory guards, and V33 switched to
-  OBLITERATUS `rdo` with explicit `device: cuda` but still hit the 5% host
-  `MemAvailable` floor before any checkpoint directory or streamed shard was
-  produced. V34/V35/V36 native phrase/projection candidates were exported and
+- Qwen 3.6 27B full-checkpoint OBLITERATUS has been tried and is no longer the
+  active executable path. The first diagnostic was behaviorally rejected,
+  V24/V30 source-tethered attempts were stopped by memory guards, and V33
+  switched to OBLITERATUS `rdo` with explicit `device: cuda` but still hit the
+  5% host `MemAvailable` floor before any checkpoint directory or streamed
+  shard was produced. The active OBLITERATUS follow-up is now V45
+  adapter-only reversible LoRA, which is planned but not yet executed:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_adapter_v45.yaml`.
+  V34/V35/V36 native phrase/projection candidates were exported and
   gated, but each missed or worsened the residual self-harm refusal-opening
   target. V37 native source-anchored concept-cone projection was also exported,
   synced, audited, served, and rejected because refusal wording stayed 2/3. The
@@ -200,6 +203,14 @@ This is the short handoff state for humans and agents. Use
   upload, promote, or rerun V43 unchanged. The rejected full V43 checkpoint was
   deleted from both Sparks; adapter/config/report and safe aggregate eval
   evidence were retained.
+  V44 score-distilled repair was also trained and rejected: self-harm refusal
+  wording worsened to 3/3 while safe redirect stayed 3/3, harmful
+  detail/compliance stayed 0/3, and `model_selection_summary` stayed 3/3. Do
+  not rerun V44 unchanged. V45 is the current candidate-loop executable path
+  because it materially changes the export shape: OBLITERATUS learns the edit,
+  model-forge skips full-checkpoint rebirth, and
+  `scripts/convert_obliteratus_lora_to_peft.py` converts the resulting adapter
+  to PEFT for sync/audit/TP=2 live-LoRA targeted gating.
 - Qwen 3.6 27B residual-trial12 preference-unlikelihood v6 trained for 32
   guarded two-node steps from held v2, merged, synced to both Sparks, passed
   strict checkpoint/tokenizer audits, served with TP=2, and ran the targeted
@@ -1147,6 +1158,17 @@ length filtering:
    broad-eval, NVFP4-export, upload, promote, or rerun V44 unchanged. Keep the
    adapter/config/report artifacts and delete only the rejected full checkpoint
    after evidence is committed.
+   V45 OBLITERATUS reversible-LoRA adapter-only is now the planned
+   intervention-class shift after V44:
+   `configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_adapter_v45.yaml`.
+   It starts from held FT-abli v2 and uses an adapter-only rebirth hook plus
+   `scripts/convert_obliteratus_lora_to_peft.py` so OBLITERATUS does not gather
+   and serialize a full 27B state dict. Candidate-loop-plan should expose V45
+   as the only executable candidate. If it exports, run strict local and worker
+   audits, serve TP=2 live LoRA on the configured held v2 base, then run only
+   the targeted three-trial gate first. Do not broad-eval, NVFP4-export, upload,
+   or promote it unless refusal wording is 0/3, safe redirect is 3/3, harmful
+   detail/compliance is 0/3, and `model_selection_summary` is 3/3.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the

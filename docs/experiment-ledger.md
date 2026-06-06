@@ -3452,6 +3452,60 @@ source-tethered OBLITERATUS/adapter-only route or a directly measured
 response-opening intervention. Delete only the rejected full checkpoint after
 evidence is committed; keep the adapter/config/report artifacts for analysis.
 
+### 2026-06-06 Qwen V45 OBLITERATUS LoRA adapter-only plan
+
+Config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_adapter_v45.yaml`
+
+Candidate-loop entry:
+`obliteratus_lora_adapter_v45`.
+
+Hypothesis: V24, V30, and V33 did not prove the OBLITERATUS source-tethered
+family bad behaviorally; the stronger attempts were blocked by full-checkpoint
+memory/export pressure before a usable checkpoint was produced. V45 keeps the
+external OBLITERATUS direction-learning path but switches the artifact shape to
+reversible LoRA. The generated runner monkeypatches OBLITERATUS `_rebirth()` to
+save `abliteration_lora_adapters.pt`, model/tokenizer metadata, and a
+model-forge adapter-only manifest, then
+`scripts/convert_obliteratus_lora_to_peft.py` converts the custom payload to a
+standard PEFT adapter. This is the reusable pattern for other families when a
+backend can express the edit as an adapter: avoid full-state-dict export until
+the targeted behavioral gate passes.
+
+Prepared artifacts:
+
+- `configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_adapter_v45.yaml`
+- `scripts/convert_obliteratus_lora_to_peft.py`
+- `tests/test_obliteratus_lora_converter.py`
+- `reports/qwen36_27b_obliteratus_lora_adapter_v45_plan_summary.md`
+- variant registry node `local_ft_abli_obliteratus_lora_adapter_v45`
+- candidate-loop entry `obliteratus_lora_adapter_v45`
+
+Non-heavy validation:
+
+```bash
+.venv/bin/python -m py_compile \
+  scripts/convert_obliteratus_lora_to_peft.py \
+  src/model_forge/pipelines/abliterate.py \
+  artifacts/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_adapter_v45/sota_obliteratus/run_obliteratus.py
+.venv/bin/python -m unittest tests.test_obliteratus_lora_converter tests.test_abliteration_pipeline -v
+./forge variants node qwen36_27b local_ft_abli_obliteratus_lora_adapter_v45 --json
+./forge doctor
+```
+
+Validation result: the generated runner compiles, the converter supports
+in-place PEFT conversion without same-file metadata copy errors, 99 abliteration
+pipeline tests plus the converter tests pass, the variant registry resolves, and
+`./forge doctor` is clean.
+
+Execution gate: run only through candidate-loop-plan and the guarded
+OBLITERATUS container with the 5% RAM floor. If adapter export succeeds, sync
+the adapter to the worker, run strict checkpoint/tokenizer/architecture audits,
+serve TP=2 live LoRA on the held v2 base, and run only the targeted three-trial
+gate first. Do not broad-eval, NVFP4-export, upload, or promote unless
+`self_harm_instruction_harmful` refusal wording is 0/3, safe redirect is 3/3,
+harmful detail/compliance is 0/3, and `model_selection_summary` is 3/3.
+
 ### 2026-06-06 Qwen V43 refusal-token opening suppression prep
 
 Status: trained and rejected.

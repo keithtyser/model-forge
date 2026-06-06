@@ -1597,6 +1597,7 @@ preserve_source_tokenizer = {preserve_source_tokenizer!r}
 key_remap_config = {json.dumps(key_remap_config, indent=4)!r}
 source_tether_config = {json.dumps(source_tether_config, indent=4)!r}
 streaming_rebirth_config = {json.dumps(backend.get("streaming_rebirth") or {}, indent=4)!r}
+lora_adapter_export_config = {json.dumps(backend.get("lora_adapter_export") or {}, indent=4)!r}
 
 if {not bool(backend.get("telemetry", False))!r}:
     os.environ.setdefault("OBLITERATUS_TELEMETRY", "0")
@@ -1760,6 +1761,38 @@ def run_source_tether() -> dict | None:
     return {{"command": command, "source_dir": source_dir}}
 
 
+def run_lora_adapter_export() -> dict | None:
+    cfg = dict(json.loads(lora_adapter_export_config or "{{}}"))
+    if not cfg or cfg.get("enabled") is False:
+        return None
+    input_dir = expand_config_path(cfg.get("input_dir") or output_dir)
+    peft_output_dir = expand_config_path(cfg.get("peft_output_dir") or cfg.get("output_dir") or output_dir)
+    base_model = expand_config_path(cfg.get("base_model_name_or_path") or cfg.get("base_model") or model_name)
+    command = [
+        sys.executable,
+        "scripts/convert_obliteratus_lora_to_peft.py",
+        "--input-dir",
+        input_dir,
+        "--output-dir",
+        peft_output_dir,
+        "--base-model",
+        base_model,
+        "--key-template",
+        str(cfg.get("key_template", "base_model.model.model.layers.{{layer}}.{{module}}.{{weight}}")),
+        "--attn-module-name",
+        str(cfg.get("attn_module_name", "self_attn")),
+        "--ffn-module-name",
+        str(cfg.get("ffn_module_name", "mlp")),
+    ]
+    if cfg.get("lora_alpha") is not None:
+        command.extend(["--lora-alpha", str(cfg["lora_alpha"])])
+    if cfg.get("copy_metadata") is False:
+        command.append("--no-copy-metadata")
+    print("[model-forge] OBLITERATUS LoRA PEFT export:", " ".join(command), flush=True)
+    subprocess.run(command, check=True)
+    return {{"command": command, "output_dir": peft_output_dir, "base_model": base_model}}
+
+
 def _size_gb_to_bytes(value, default_gb: float = 1.0) -> int:
     try:
         gb = float(value)
@@ -1821,6 +1854,61 @@ def _load_offloaded_tensor(key: str, placeholder):
 
 
 model_forge_streaming_rebirth_pipeline = None
+
+
+def install_adapter_only_rebirth(AbliterationPipeline) -> bool:
+    cfg = dict(json.loads(lora_adapter_export_config or "{{}}"))
+    enabled = bool(cfg.get("enabled") and cfg.get("adapter_only", True))
+    if not enabled:
+        return False
+    kwargs = dict(json.loads(pipeline_kwargs))
+    if not kwargs.get("use_lora_ablation"):
+        raise SystemExit("lora_adapter_export.adapter_only requires use_lora_ablation=true")
+
+    def model_forge_adapter_only_rebirth(self):
+        from obliteratus.lora_ablation import save_lora_adapters
+
+        if not getattr(self, "_lora_adapters", None):
+            raise RuntimeError("adapter-only OBLITERATUS rebirth requested but no LoRA adapters were produced")
+        output_path = Path(self.output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        self._emit("rebirth", "running", f"Saving adapter-only OBLITERATUS LoRA to {{output_path}}...")
+        start = time.time()
+        adapter_path = save_lora_adapters(self._lora_adapters, output_path)
+        if hasattr(self.handle.model, "config"):
+            self.handle.model.config.save_pretrained(output_path)
+        if getattr(self.handle.model, "generation_config", None) is not None:
+            try:
+                self.handle.model.generation_config.save_pretrained(output_path)
+            except Exception:
+                pass
+        self.handle.tokenizer.save_pretrained(output_path)
+        metadata_payload = self._build_metadata()
+        (output_path / "abliteration_metadata.json").write_text(
+            json.dumps(metadata_payload, indent=2, default=str) + "\\n",
+            encoding="utf-8",
+        )
+        peft_export = run_lora_adapter_export()
+        cleanup = getattr(self, "_cleanup_offload_dir", None)
+        if callable(cleanup):
+            cleanup()
+        manifest = {{
+            "schema_version": "model_forge.obliteratus_adapter_only_rebirth.v1",
+            "output_dir": str(output_path),
+            "adapter_path": str(adapter_path),
+            "adapter_count": len(self._lora_adapters),
+            "peft_export": peft_export,
+            "duration_seconds": round(time.time() - start, 3),
+        }}
+        (output_path / "model_forge_obliteratus_adapter_only_rebirth.json").write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\\n",
+            encoding="utf-8",
+        )
+        self._emit("rebirth", "done", f"Saved adapter-only OBLITERATUS LoRA to {{output_path}}", duration=time.time() - start)
+        return output_path
+
+    AbliterationPipeline._rebirth = model_forge_adapter_only_rebirth
+    return True
 
 
 def install_streaming_rebirth(AbliterationPipeline) -> bool:
@@ -1966,7 +2054,8 @@ def main() -> None:
             "OBLITERATUS is not installed. Build/use docker/obliteratus.Dockerfile "
             "or install https://github.com/elder-plinius/OBLITERATUS."
         ) from exc
-    streaming_rebirth_enabled = install_streaming_rebirth(AbliterationPipeline)
+    adapter_only_rebirth_enabled = install_adapter_only_rebirth(AbliterationPipeline)
+    streaming_rebirth_enabled = False if adapter_only_rebirth_enabled else install_streaming_rebirth(AbliterationPipeline)
 
     kwargs = dict(json.loads(pipeline_kwargs))
     kwargs.update(load_model_forge_prompts())
@@ -1993,6 +2082,7 @@ def main() -> None:
         "work_dir": str(work_dir),
         "prompt_payload": prompt_payload_path,
         "pipeline_kwargs": sorted(kwargs),
+        "adapter_only_rebirth_enabled": adapter_only_rebirth_enabled,
         "streaming_rebirth_enabled": streaming_rebirth_enabled,
         "result": serializable_result(result),
         "post_export_key_remap": key_remap_result,
