@@ -807,9 +807,11 @@ under the quantization output root. The exported serving artifact must then be
 wrapperized back to Qwen conditional-generation metadata with
 `language_model.model.*` and `language_model.lm_head.*` tensor names; the
 current vLLM Qwen3.5 loader needs that wrapper shape even with
-`--language-model-only`. ModelOpt export is single-node today; serve and
-benchmark the exported checkpoint through the two-Spark TP=2 runtime before
-making throughput claims.
+`--language-model-only`. Keep the staged vision tower out of FP4 by preserving
+explicit `visual`, `vision`, `vision_tower`, and multimodal-projector exclusions
+in both `config.json` and `hf_quant_config.json`. ModelOpt export is single-node
+today; serve and benchmark the exported checkpoint through the two-Spark TP=2
+runtime before making throughput claims.
 If syncing this variant to worker nodes, pass
 `--target-name model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_modelopt`.
 The default model-sync target is only the source basename, which is wrong for

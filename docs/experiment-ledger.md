@@ -3467,7 +3467,13 @@ Repo/artifact fix: `qwen_text_modelopt` now keeps the text-only temporary input
 for ModelOpt, then wrapperizes the exported serving artifact back to
 Qwen conditional-generation shape with `language_model.model.*` and
 `language_model.lm_head.*` tensor names. It also stores prefixed ModelOpt
-quantization metadata on both the wrapper config and `text_config`. A
+quantization metadata on both the wrapper config and `text_config`. A second
+TP=2 serve attempt reached the NVFP4 kernel path, then failed while constructing
+the skipped Qwen vision tower because the wrapper artifact did not yet carry
+vision-tower ModelOpt exclusions. The strategy now adds explicit `visual`,
+`vision`, `vision_tower`, and `multi_modal_projector` exclusions to both
+`config.json` and `hf_quant_config.json` so `--language-model-only` can stage
+the tower without applying FP4 linear methods to it. A
 `--wrap-existing-output` mode repaired the already-exported 18.8 GB artifact in
 15.832s without rerunning calibration or quantization:
 
@@ -3475,6 +3481,8 @@ quantization metadata on both the wrapper config and `text_config`. A
 - wrapper-renamed tensor count: 2339
 - wrapper shape: `Qwen3_5ForConditionalGeneration`, `language_model_only: true`,
   `text_config.model_type: qwen3_5_text`, `vision_config` present
+- wrapper exclusions: `model.visual` and `*vision*` present in both
+  `config.json` and `hf_quant_config.json`
 - local strict checkpoint, tokenizer, and architecture audits passed after
   repair
 

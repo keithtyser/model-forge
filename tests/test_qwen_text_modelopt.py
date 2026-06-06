@@ -178,14 +178,18 @@ class QwenTextModelOptTests(unittest.TestCase):
             self.assertIn("vision_config", config)
             self.assertEqual(config["text_config"]["model_type"], "qwen3_5_text")
             self.assertEqual(
-                config["quantization_config"]["ignore"],
+                config["quantization_config"]["ignore"][:2],
                 ["language_model.lm_head", "language_model.model.layers.0.linear_attn.conv1d"],
             )
+            self.assertIn("model.visual", config["quantization_config"]["ignore"])
+            self.assertIn("*vision*", config["quantization_config"]["ignore"])
             self.assertEqual(config["text_config"]["quantization_config"], config["quantization_config"])
             self.assertEqual(
-                hf_quant_config["quantization"]["exclude_modules"],
+                hf_quant_config["quantization"]["exclude_modules"][:2],
                 ["language_model.lm_head", "language_model.model.layers.0.linear_attn.conv1d"],
             )
+            self.assertIn("model.visual", hf_quant_config["quantization"]["exclude_modules"])
+            self.assertIn("*vision*", hf_quant_config["quantization"]["exclude_modules"])
 
 
 if __name__ == "__main__":

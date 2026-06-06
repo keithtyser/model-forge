@@ -68,10 +68,51 @@ def prefix_wrapper_module_path(path: str) -> str:
     if path.startswith("language_model.") or path.startswith("*language_model."):
         return path
     if path.startswith("*"):
-        return "*language_model." + path[1:]
+        if path.startswith("*model.") or path.startswith("*lm_head"):
+            return "*language_model." + path[1:]
+        return path
     if path.startswith(("model.", "lm_head")):
         return "language_model." + path
     return path
+
+
+WRAPPER_TOWER_EXCLUSIONS = (
+    "visual",
+    "model.visual",
+    "*visual*",
+    "vision",
+    "model.vision",
+    "*vision*",
+    "vision_tower",
+    "model.vision_tower",
+    "*vision_tower*",
+    "multi_modal_projector",
+    "model.multi_modal_projector",
+    "*multi_modal_projector*",
+)
+
+
+def append_unique(items: list[Any], additions: tuple[str, ...]) -> list[Any]:
+    existing = {item for item in items if isinstance(item, str)}
+    result = list(items)
+    for item in additions:
+        if item not in existing:
+            result.append(item)
+            existing.add(item)
+    return result
+
+
+def add_wrapper_tower_exclusions(value: Any) -> Any:
+    if not isinstance(value, dict):
+        return value
+    updated = copy.deepcopy(value)
+    ignore = updated.get("ignore")
+    if isinstance(ignore, list):
+        updated["ignore"] = append_unique(ignore, WRAPPER_TOWER_EXCLUSIONS)
+    quantization = updated.get("quantization")
+    if isinstance(quantization, dict) and isinstance(quantization.get("exclude_modules"), list):
+        quantization["exclude_modules"] = append_unique(quantization["exclude_modules"], WRAPPER_TOWER_EXCLUSIONS)
+    return updated
 
 
 def prefix_quantization_paths(value: Any) -> Any:
@@ -89,7 +130,7 @@ def wrapper_config_for_vllm(source_dir: Path, export_config: dict[str, Any]) -> 
     text_config = exported_text_config(export_config)
     quant_config = text_config.get("quantization_config") or export_config.get("quantization_config")
     if isinstance(quant_config, dict):
-        prefixed_quant_config = prefix_quantization_paths(quant_config)
+        prefixed_quant_config = add_wrapper_tower_exclusions(prefix_quantization_paths(quant_config))
         text_config["quantization_config"] = copy.deepcopy(prefixed_quant_config)
     else:
         prefixed_quant_config = None
@@ -139,7 +180,7 @@ def rewrite_hf_quant_config_for_wrapper(output_dir: Path) -> bool:
     if not path.exists():
         return False
     data = json.loads(path.read_text(encoding="utf-8"))
-    rewritten = prefix_quantization_paths(data)
+    rewritten = add_wrapper_tower_exclusions(prefix_quantization_paths(data))
     path.write_text(json.dumps(rewritten, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return True
 
