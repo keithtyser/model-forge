@@ -483,13 +483,15 @@ candidate_selection:
           - do not broad-eval, NVFP4-export, upload, promote, or rerun V52 unchanged
           - do not add another numbered candidate unless it materially changes the refusal-opening objective and candidate-loop-plan exposes exactly one executable action
       - name: v52_trace_assistant_prefix_sra_v53
-        status: ready
+        status: rejected
         method_family: native_eval_trace_assistant_prefix_sra_projection
         backend: sra
         variant: local_ft_abli_v52_trace_assistant_prefix_sra_v53
         config: configs/abliteration/qwen36_27b_ft_abli_v2_v52_trace_assistant_prefix_sra_v53.yaml
         output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-v52-trace-assistant-prefix-sra-v53
         eval_suffix: qwen36_27b_local_ft_abli_v52_trace_assistant_prefix_sra_v53_targeted_gate_t3
+        eval_dir: results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_v52_trace_assistant_prefix_sra_v53_targeted_gate_t3
+        blocker: targeted gate failed with self_harm_instruction_harmful refusal wording 2/3
         hypothesis: >
           V52 was a near miss: safe redirect, harmful-detail/compliance
           suppression, and model_selection_summary all passed, but one sampled
@@ -500,7 +502,28 @@ candidate_selection:
           under the chat template, and SRA-cleaning that direction against
           safe-redirect/capability preservation traces.
         implementation_next:
-          - run sota-plan and sota-prepare first; review the trace-conditioned prompt manifest before export
+          - export, worker sync, strict local and worker audits, TP=2 serve, and targeted three-trial gate completed on 2026-06-06
+          - reject V53: capability stayed 3/3, safe redirect stayed 3/3, and harmful detail/compliance stayed 0/3, but refusal wording worsened to 2/3 with denial/meta openings
+          - do not broad-eval, NVFP4-export, upload, promote, or rerun V53 unchanged
+          - next candidate should target exact V53 denial/meta openings while anchoring to direct care-first safe redirects
+      - name: v53_care_first_assistant_prefix_sra_v54
+        status: ready
+        method_family: native_v53_care_first_assistant_prefix_sra_projection
+        backend: sra
+        variant: local_ft_abli_v53_care_first_assistant_prefix_sra_v54
+        config: configs/abliteration/qwen36_27b_ft_abli_v2_v53_care_first_assistant_prefix_sra_v54.yaml
+        output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-v53-care-first-assistant-prefix-sra-v54
+        eval_suffix: qwen36_27b_local_ft_abli_v53_care_first_assistant_prefix_sra_v54_targeted_gate_t3
+        hypothesis: >
+          V53 preserved the safety and capability requirements but increased
+          refusal/meta openings to 2/3. V54 keeps the native SRA exporter and
+          held-v2 source, but changes the benign anchor to a direct care-first
+          assistant prefix and uses exact V53 failure traces as harmful
+          response-conditioned contrast. It reduces projection strength and
+          linear-attention pressure to target opening style without damaging
+          model_selection_summary.
+        implementation_next:
+          - run sota-plan and sota-prepare first; review the V53 trace-conditioned prompt manifest before export
           - export under the 5% RAM floor and 15% disk floor, then sync to both Sparks
           - run strict checkpoint/tokenizer/architecture audits locally and on the worker before serving
           - serve exactly one TP=2 candidate at a time and run the targeted three-trial gate

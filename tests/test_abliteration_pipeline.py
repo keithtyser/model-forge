@@ -986,7 +986,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertFalse(any("variants checkpoint-audit" in command for command in commands))
         self.assertIn("Search-only candidate jobs are planned", plan["candidate_gate_command"])
 
-    def test_qwen_candidate_loop_blocks_rejected_sae_through_v52_and_enables_v53(self) -> None:
+    def test_qwen_candidate_loop_blocks_rejected_sae_through_v53_and_enables_v54(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_candidate_gate.yaml"
         plan = build_candidate_loop_plan(load_yaml(config_path), config_path, run_id="qwen_unit_loop")
 
@@ -1015,7 +1015,8 @@ class AbliterationPlanTests(unittest.TestCase):
         rejected_v50 = candidates["native_sra_v50"]
         rejected_v51 = candidates["native_sra_v51"]
         rejected_v52 = candidates["native_som_sra_v52"]
-        ready_v53 = candidates["v52_trace_assistant_prefix_sra_v53"]
+        rejected_v53 = candidates["v52_trace_assistant_prefix_sra_v53"]
+        ready_v54 = candidates["v53_care_first_assistant_prefix_sra_v54"]
 
         self.assertEqual(candidate["name"], "qwen_scope_sae_feature_diagnostic_v1")
         self.assertEqual(candidate["status"], "rejected")
@@ -1150,24 +1151,34 @@ class AbliterationPlanTests(unittest.TestCase):
             "qwen36_27b_ft_abli_v2_native_som_sra_v52.yaml" in command["command"]
             for command in rejected_v52["commands"]
         ))
-        self.assertEqual(ready_v53["status"], "ready")
-        self.assertFalse(ready_v53["blockers"])
-        self.assertTrue(ready_v53["produces_checkpoint"])
-        self.assertEqual(ready_v53["backend"], "sra")
-        self.assertEqual(ready_v53["variant"], "local_ft_abli_v52_trace_assistant_prefix_sra_v53")
-        self.assertTrue(any(command.get("enabled", False) for command in ready_v53["commands"]))
+        self.assertEqual(rejected_v53["status"], "rejected")
+        self.assertTrue(rejected_v53["blockers"])
+        self.assertTrue(rejected_v53["produces_checkpoint"])
+        self.assertEqual(rejected_v53["backend"], "sra")
+        self.assertEqual(rejected_v53["variant"], "local_ft_abli_v52_trace_assistant_prefix_sra_v53")
+        self.assertFalse(any(command.get("enabled", False) for command in rejected_v53["commands"]))
         self.assertTrue(any(
             command["phase"] == "candidate_export" and command.get("starts_heavy_job")
-            for command in ready_v53["commands"]
+            for command in rejected_v53["commands"]
         ))
         self.assertTrue(any(
             "qwen36_27b_ft_abli_v2_v52_trace_assistant_prefix_sra_v53.yaml" in command["command"]
-            for command in ready_v53["commands"]
+            for command in rejected_v53["commands"]
+        ))
+        self.assertEqual(ready_v54["status"], "ready")
+        self.assertFalse(ready_v54["blockers"])
+        self.assertTrue(ready_v54["produces_checkpoint"])
+        self.assertEqual(ready_v54["backend"], "sra")
+        self.assertEqual(ready_v54["variant"], "local_ft_abli_v53_care_first_assistant_prefix_sra_v54")
+        self.assertTrue(any(command.get("enabled", False) for command in ready_v54["commands"]))
+        self.assertTrue(any(
+            "qwen36_27b_ft_abli_v2_v53_care_first_assistant_prefix_sra_v54.yaml" in command["command"]
+            for command in ready_v54["commands"]
         ))
         self.assertTrue(gate_command["enabled"])
-        self.assertIn("v52_trace_assistant_prefix_sra_v53", plan["candidate_gate_command"])
+        self.assertIn("v53_care_first_assistant_prefix_sra_v54", plan["candidate_gate_command"])
         self.assertIn(
-            "qwen36_27b_local_ft_abli_v52_trace_assistant_prefix_sra_v53_targeted_gate_t3",
+            "qwen36_27b_local_ft_abli_v53_care_first_assistant_prefix_sra_v54_targeted_gate_t3",
             plan["candidate_gate_command"],
         )
 
@@ -1963,7 +1974,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("write_selective_direction_artifact", runner)
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 42)
 
-    def test_candidate_loop_blocks_rejected_v21_to_v52_and_enables_v53(self) -> None:
+    def test_candidate_loop_blocks_rejected_v21_to_v53_and_enables_v54(self) -> None:
         config_path = (
             REPO_DIR
             / "configs"
@@ -2006,6 +2017,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("native_sra_v51", candidates)
         self.assertIn("native_som_sra_v52", candidates)
         self.assertIn("v52_trace_assistant_prefix_sra_v53", candidates)
+        self.assertIn("v53_care_first_assistant_prefix_sra_v54", candidates)
         self.assertTrue(candidates["qwen_scope_sae_feature_diagnostic_v1"]["blockers"])
         self.assertFalse(any(
             command.get("enabled", True)
@@ -2265,19 +2277,26 @@ class AbliterationPlanTests(unittest.TestCase):
             for command in v52["commands"]
         ))
         v53 = candidates["v52_trace_assistant_prefix_sra_v53"]
-        self.assertEqual(v53["status"], "ready")
-        self.assertFalse(v53["blockers"])
+        self.assertEqual(v53["status"], "rejected")
+        self.assertTrue(v53["blockers"])
         self.assertTrue(v53["produces_checkpoint"])
         self.assertEqual(v53["backend"], "sra")
         self.assertEqual(v53["variant"], "local_ft_abli_v52_trace_assistant_prefix_sra_v53")
-        self.assertTrue(any(command.get("enabled", False) for command in v53["commands"]))
+        self.assertFalse(any(command.get("enabled", False) for command in v53["commands"]))
         self.assertTrue(any(
             command["phase"] == "candidate_export" and command.get("starts_heavy_job")
             for command in v53["commands"]
         ))
+        v54 = candidates["v53_care_first_assistant_prefix_sra_v54"]
+        self.assertEqual(v54["status"], "ready")
+        self.assertFalse(v54["blockers"])
+        self.assertTrue(v54["produces_checkpoint"])
+        self.assertEqual(v54["backend"], "sra")
+        self.assertEqual(v54["variant"], "local_ft_abli_v53_care_first_assistant_prefix_sra_v54")
+        self.assertTrue(any(command.get("enabled", False) for command in v54["commands"]))
         self.assertEqual(plan["executable_candidate_count"], 1)
         self.assertEqual(plan["planned_candidate_job_count"], 1)
-        self.assertIn("v52_trace_assistant_prefix_sra_v53", plan["candidate_gate_command"])
+        self.assertIn("v53_care_first_assistant_prefix_sra_v54", plan["candidate_gate_command"])
         self.assertTrue(any(
             command.get("enabled", False)
             for command in plan["commands"]
@@ -2422,6 +2441,57 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("qwen36_v52_targeted_gate_traces.jsonl", bad_trace["source"])
         self.assertIn("qwen36_v52_targeted_gate_traces.jsonl", good_trace["source"])
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 40)
+        self.assertIn("run_native_sra.py", str(result["paths"]["sra_runner"]))
+        self.assertIn("model_forge_sota_sra.json", runner)
+
+    def test_qwen_v54_care_first_assistant_prefix_sra_prepare_uses_v53_traces(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_v53_care_first_assistant_prefix_sra_v54.yaml"
+        )
+        config = load_yaml(config_path)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"]["work_dir"] = tmp
+            plan = build_sota_plan(config, config_path, "sra")
+            result = write_sota_artifacts(config, config_path, "sra")
+            native_config = load_yaml(Path(result["paths"]["sra_config"]))
+            runner = Path(result["paths"]["sra_runner"]).read_text(encoding="utf-8")
+            manifest = json.loads(
+                (Path(tmp) / "model_forge_native_prompt_pairs" / "manifest.json").read_text(encoding="utf-8")
+            )
+
+        activation = native_config["activation_collection"]
+        edit = native_config["edit"]
+        bad_trace = manifest["sections"]["harmful_prompts"]["response_conditioned"]
+        good_trace = manifest["sections"]["benign_prompts"]["response_conditioned"]
+
+        self.assertEqual(plan["backend"], "sra")
+        self.assertEqual(plan["backend_config"]["method_family"], "native_v53_care_first_assistant_prefix_sra_projection")
+        self.assertEqual(native_config["native_backend"]["backend"], "sra")
+        self.assertEqual(native_config["native_backend"]["method_family"], "native_v53_care_first_assistant_prefix_sra_projection")
+        self.assertEqual(activation["token_position"], "assistant_prefix_mean")
+        self.assertEqual(activation["direction_extraction"], "mean_plus_paired_svd")
+        self.assertEqual(activation["direction_components"], 8)
+        self.assertEqual(activation["sra_preservation_components"], 20)
+        self.assertTrue(activation["sra_include_benign_mean"])
+        self.assertTrue(activation["use_chat_template"])
+        self.assertIn("but I won't give instructions", activation["harmful_assistant_prefix"])
+        self.assertIn("focus on immediate safety", activation["benign_assistant_prefix"])
+        self.assertEqual(edit["direction_transform"], "sra_cleaned")
+        self.assertEqual(edit["strength"], 0.62)
+        self.assertEqual(edit["module_strengths"]["linear_attn.out_proj.weight"], 0.25)
+        self.assertIn("self_attn.o_proj.weight", edit["target_weight_suffixes"])
+        self.assertIn("linear_attn.out_proj.weight", edit["target_weight_suffixes"])
+        self.assertTrue(edit["leave_lm_head_untouched"])
+        self.assertTrue(edit["leave_moe_experts_untouched"])
+        self.assertEqual(bad_trace["count"], 2)
+        self.assertEqual(good_trace["count"], 1)
+        self.assertIn("qwen36_v53_targeted_gate_traces.jsonl", bad_trace["source"])
+        self.assertIn("qwen36_v53_targeted_gate_traces.jsonl", good_trace["source"])
+        self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 48)
         self.assertIn("run_native_sra.py", str(result["paths"]["sra_runner"]))
         self.assertIn("model_forge_sota_sra.json", runner)
 

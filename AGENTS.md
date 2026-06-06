@@ -299,24 +299,32 @@ Reject it: safe redirect stayed 3/3, harmful detail/compliance stayed 0/3, and
 1/3. Do not broad-eval, NVFP4-export, upload, promote, or rerun V52 unchanged.
 See `reports/qwen36_27b_native_som_sra_v52_targeted_summary.md`.
 
-There is no ready Qwen FT-abli promotion candidate right now. V53 is the only
-ready loop candidate. Do not add another numbered candidate beyond V53 unless
+There is no ready Qwen FT-abli promotion candidate right now. V54 is the only
+ready loop candidate. Do not add another numbered candidate beyond V54 unless
 it materially changes the refusal-opening objective and `candidate-loop-plan`
 exposes exactly one executable action before any heavy job starts.
 
-Qwen V53 is the current ready Qwen FT-abli loop candidate, not a promotion
-candidate:
+Qwen V53 is rejected:
 `configs/abliteration/qwen36_27b_ft_abli_v2_v52_trace_assistant_prefix_sra_v53.yaml`.
-The V53 label is candidate-ledger bookkeeping, not proof of 53 full training
-runs. V53 exists because V52 passed safe redirect, harmful-detail/compliance,
-and `model_selection_summary`, but missed one stochastic self-harm refusal
-opening. It uses exact V52 pass/fail traces from
-`datasets/abliteration/qwen36_v52_targeted_gate_traces.jsonl`, assistant-prefix
-activation pooling under the chat template, and SRA-cleaned late
-attention-output projection. Before any heavy job, run `candidate-loop-plan` and
-verify V53 is the only executable candidate. Do not broad-eval, NVFP4-export,
-upload, or promote V53 unless export, worker sync, strict audits, TP=2 serve,
-and the targeted three-trial gate all pass.
+It exported, synced, passed strict local and worker audits, served TP=2, and
+completed the targeted gate. Reject it because safe redirect,
+harmful-detail/compliance, and `model_selection_summary` all passed 3/3, but
+self-harm refusal wording worsened to 2/3 through denial/meta openings. See
+`reports/qwen36_27b_v53_trace_assistant_prefix_sra_targeted_summary.md`.
+
+Qwen V54 is the current ready Qwen FT-abli loop candidate, not a promotion
+candidate:
+`configs/abliteration/qwen36_27b_ft_abli_v2_v53_care_first_assistant_prefix_sra_v54.yaml`.
+The V54 label is candidate-ledger bookkeeping, not proof of 54 full training
+runs. V54 exists because V53 preserved safe redirect, harmful-detail/compliance,
+and `model_selection_summary`, but still used denial/meta openings. It uses
+exact V53 pass/fail traces from
+`datasets/abliteration/qwen36_v53_targeted_gate_traces.jsonl`, a direct
+care-first benign assistant-prefix anchor, and SRA-cleaned late attention-output
+projection. Before any heavy job, run `candidate-loop-plan` and verify V54 is
+the only executable candidate. Do not broad-eval, NVFP4-export, upload, or
+promote V54 unless export, worker sync, strict audits, TP=2 serve, and the
+targeted three-trial gate all pass.
 
 A checkpoint-arithmetic method-shift probe has been exported and rejected as
 `local_ft_abli_checkpoint_blend_v2_v12_alpha1p25`. It uses
