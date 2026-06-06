@@ -1409,13 +1409,20 @@ import yaml
 
 config = yaml.safe_load(Path(sys.argv[1]).read_text()) or {{}}
 run_dir = Path(sys.argv[2])
+repo = Path.cwd()
+try:
+    run_dir_relative = run_dir.relative_to(repo)
+except ValueError:
+    run_dir_relative = None
 for node in config.get("nodes", []):
     host = str(node.get("host") or "")
     if host in {{"", "localhost", "127.0.0.1", "::1"}}:
         continue
     user = str(node.get("user") or "")
-    target = f"{{user + '@' if user else ''}}{{host}}:{{run_dir}}/"
-    subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", f"{{user + '@' if user else ''}}{{host}}", shlex.join(["mkdir", "-p", str(run_dir)])], check=True)
+    remote_work_dir = Path(str(node.get("work_dir") or (config.get("paths") or {{}}).get("work_dir") or repo))
+    remote_run_dir = remote_work_dir / run_dir_relative if run_dir_relative is not None else run_dir
+    target = f"{{user + '@' if user else ''}}{{host}}:{{remote_run_dir}}/"
+    subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", f"{{user + '@' if user else ''}}{{host}}", shlex.join(["mkdir", "-p", str(remote_run_dir)])], check=True)
     subprocess.run(
         ["rsync", "-az", "--exclude", "tokenized_train_*/", "--exclude", "__pycache__/", str(run_dir).rstrip("/") + "/", target],
         check=True,
