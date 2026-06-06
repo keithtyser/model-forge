@@ -31,6 +31,7 @@ from model_forge.quantization.cli import (
     matrix_entries,
     matrix_workers,
     resolve_source,
+    export_execution_lock,
 )
 
 
@@ -125,6 +126,19 @@ class QuantizationCliTests(unittest.TestCase):
             }
             with self.assertRaisesRegex(RuntimeError, "source checkpoint audit failed"):
                 guard_export(export_plan)
+
+    def test_export_execution_lock_removes_lock_file_on_exit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            lock_path = Path(tmp) / "quantization_export.lock"
+            export_plan = {
+                "resource_policy": {"lock_path": str(lock_path)},
+                "run_id": "unit_lock_cleanup",
+            }
+
+            with export_execution_lock(export_plan):
+                self.assertTrue(lock_path.exists())
+
+            self.assertFalse(lock_path.exists())
 
     def test_quantization_card_compares_serving_and_sampled_eval_deltas(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -585,8 +599,10 @@ class QuantizationCliTests(unittest.TestCase):
             export["target"]["served_model_name"],
             "model-forge/qwen36-27b-local-ft-v4-nvfp4-modelopt",
         )
+        self.assertIn("/workspace/model-forge/scripts/quantization/qwen_text_modelopt.py", export["command"])
         self.assertIn("/models/Qwen3.6-27B-local-ft-v4-merged", export["command"])
         self.assertIn("/workspace/output_models/local_ft_v4_nvfp4_modelopt", export["command"])
+        self.assertNotIn("/opt/TensorRT-Model-Optimizer/examples/llm_ptq/hf_ptq.py", export["command"])
         self.assertNotIn("--attn_implementation", export["command"])
         self.assertNotIn("local-ft-abli", export["target"]["served_model_name"])
 

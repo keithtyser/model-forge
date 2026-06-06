@@ -94,9 +94,15 @@ current promoted FT source, use:
 ```
 
 The Qwen FT-v4 config exports `local_ft_v4 -> local_ft_v4_nvfp4_modelopt` and
-serves as `model-forge/qwen36-27b-local-ft-v4-nvfp4-modelopt`. It is not release
-evidence for the final FT-abli model. After export succeeds, serve and benchmark
-the quantized checkpoint on the two-Spark TP=2 path, then compare it against the
+serves as `model-forge/qwen36-27b-local-ft-v4-nvfp4-modelopt`. It uses the
+repo-owned `qwen_text_modelopt` strategy in
+`scripts/quantization/qwen_text_modelopt.py` because merged Qwen checkpoints can
+be valid for serving while still carrying wrapper-prefixed
+`model.language_model.*` tensors. The strategy streams a temporary text-only
+checkpoint view with `model.*` tensor names, then runs ModelOpt on that view
+without mutating the promoted source checkpoint. It is not release evidence for
+the final FT-abli model. After export succeeds, serve and benchmark the
+quantized checkpoint on the two-Spark TP=2 path, then compare it against the
 same unquantized `local_ft_v4` source with the quantization card and NVFP4 gate.
 ModelOpt PTQ export is currently single-node; serving, eval, and throughput
 benchmarks should use the cluster runtime.

@@ -346,11 +346,16 @@ def build_modelopt_export_command(
     kv_cache_qformat = str(ptq.get("kv_cache_qformat") or "fp8_cast")
 
     repo_mount: list[str] = []
-    if strategy == "gemma4_moe_modelopt":
-        script = Path(str(ptq.get("script") or export.get("script") or "scripts/quantization/gemma4_moe_nvfp4.py"))
+    if strategy in {"gemma4_moe_modelopt", "qwen_text_modelopt"}:
+        default_script = (
+            "scripts/quantization/qwen_text_modelopt.py"
+            if strategy == "qwen_text_modelopt"
+            else "scripts/quantization/gemma4_moe_nvfp4.py"
+        )
+        script = Path(str(ptq.get("script") or export.get("script") or default_script))
         script_host_path = resolve_repo_path(script)
         if not script_host_path.exists():
-            raise ValueError(f"Gemma4 MoE quantization script not found: {display_path(script_host_path)}")
+            raise ValueError(f"{strategy} quantization script not found: {display_path(script_host_path)}")
         repo_mount = ["-v", f"{REPO_DIR}:/workspace/model-forge:ro"]
         container_command = [
             "python3",
@@ -373,9 +378,11 @@ def build_modelopt_export_command(
             str(ptq.get("device") or "cuda:0"),
             "--device-map",
             str(ptq.get("device_map") or "auto"),
-            "--max-shard-size-gb",
-            str(ptq.get("max_shard_size_gb") or 8),
         ]
+        if strategy == "gemma4_moe_modelopt":
+            container_command.extend(["--max-shard-size-gb", str(ptq.get("max_shard_size_gb") or 8)])
+        if strategy == "qwen_text_modelopt" and bool(ptq.get("keep_text_input", False)):
+            container_command.append("--keep-text-input")
         if bool(ptq.get("trust_remote_code", True)):
             container_command.append("--trust-remote-code")
     elif strategy == "hf_ptq":
@@ -919,6 +926,10 @@ def export_execution_lock(export_plan: Mapping[str, Any]) -> Any:
             yield
         finally:
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            try:
+                lock_path.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def write_export_plan(export_plan: Mapping[str, Any], output_dir: Path) -> Path:

@@ -798,8 +798,14 @@ targets the promoted FT source only:
 `local_ft_v4 -> local_ft_v4_nvfp4_modelopt`, served as
 `model-forge/qwen36-27b-local-ft-v4-nvfp4-modelopt`. Treat this as Blackwell
 quantization validation for the FT leg, not as final FT-abli release evidence.
-ModelOpt export is single-node today; serve and benchmark the exported
-checkpoint through the two-Spark TP=2 runtime before making throughput claims.
+The Qwen config uses `scripts/quantization/qwen_text_modelopt.py` instead of
+stock `hf_ptq.py` because merged Qwen wrapper checkpoints can store valid
+serving tensors under `model.language_model.*`, while ModelOpt expects the
+text-only `model.*` namespace. Do not mutate the promoted source checkpoint to
+fix that. Use the repo strategy so the temporary text-only view is streamed
+under the quantization output root. ModelOpt export is single-node today; serve
+and benchmark the exported checkpoint through the two-Spark TP=2 runtime before
+making throughput claims.
 
 The longer-response Heretic search
 `configs/abliteration/qwen36_27b_ft_local_abli_heretic_long_search.yaml`

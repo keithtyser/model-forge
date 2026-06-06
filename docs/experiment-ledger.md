@@ -3422,6 +3422,12 @@ The first guarded execute attempt failed before calibration because ModelOpt's
 patched Accelerate loader rejected `--attn_implementation`; both Qwen ModelOpt
 configs now omit that optional flag and tests assert the FT-v4 command does not
 emit it.
+The second guarded execute attempt loaded farther but stock `hf_ptq.py` treated
+the merged checkpoint as `Qwen3_5ForCausalLM`, ignored the
+`model.language_model.*` tensors, and failed on meta tensors. Repo fix:
+`scripts/quantization/qwen_text_modelopt.py` now streams a temporary text-only
+checkpoint view with wrapper keys remapped to `model.*`, and both Qwen ModelOpt
+configs use the new `qwen_text_modelopt` strategy.
 
 Decision: proceed to a guarded ModelOpt export when ready. Do not use this
 checkpoint as final FT-abli release evidence; it is a FT-source quantization

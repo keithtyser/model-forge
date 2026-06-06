@@ -54,8 +54,12 @@ This is the short handoff state for humans and agents. Use
   local-FT, local-abli, and local-FT-abli variant nodes, Qwen chat-template
   defaults, serving/eval hooks, and doctor-audited source edges.
 - Qwen 3.6 27B local FT v4 has a dedicated ModelOpt NVFP4 config and family
-  variant. The export plan and calibration manifest have been validated against
-  the promoted FT source; full export, TP=2 serve, eval, and throughput
+  variant. The first stock `hf_ptq.py` execute attempts exposed two real
+  pain points: the optional `--attn_implementation` flag is incompatible with
+  this ModelOpt/Accelerate stack, and merged Qwen wrapper checkpoints need a
+  text-only key view before stock ModelOpt loading. The config now uses
+  `scripts/quantization/qwen_text_modelopt.py` to stream that view without
+  mutating the promoted FT source. Full export, TP=2 serve, eval, and throughput
   comparison still need to be run before any quantized artifact is promoted.
 - Llama 3.1 8B Instruct now has the same first-class family plan shape,
   including base, local-FT, local-abli, local-FT-abli, and Blackwell NVFP4

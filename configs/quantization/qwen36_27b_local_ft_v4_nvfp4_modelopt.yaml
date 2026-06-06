@@ -67,7 +67,8 @@ export:
     shm_size_gb: 32
     nice: 10
   ptq:
-    strategy: hf_ptq
+    strategy: qwen_text_modelopt
+    script: scripts/quantization/qwen_text_modelopt.py
     qformat: nvfp4
     dataset: cnn_dailymail,wikipedia
     calib_size: 256,256
