@@ -31,10 +31,10 @@ This is the short handoff state for humans and agents. Use
   with 1.82x output p50 tok/s speedup plus 1.93x decode-heavy output p50 tok/s
   speedup versus exact BF16 `local_ft_v4`. This proves the current FT-source
   Blackwell-quantization leg. HF upload/promotion still needs a public
-  quantized-model release review rather than another quantization run. A dry-run
-  HF plan works when serving eval evidence points to `scores.csv`; using the
-  full serving-eval directory fails the no-private-path gate because its
-  manifest contains private absolute paths.
+  quantized-model release review rather than another quantization run. The Hub
+  planner now rewrites a serving-eval directory passed via `--eval-results` to
+  its sanitized `scores.csv`, so public release plans do not fail just because
+  private absolute paths are present in ignored run manifests.
 
 ## Validated So Far
 

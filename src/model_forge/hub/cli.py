@@ -304,6 +304,21 @@ def scan_paths(paths: list[Path]) -> list[str]:
     return findings
 
 
+def resolve_supporting_path(path: str | Path | None, *, kind: str) -> tuple[Path | None, dict[str, str] | None]:
+    if not path:
+        return None, None
+    resolved = resolve_path(path)
+    if kind == "eval_results" and resolved.is_dir() and (resolved / "scores.csv").is_file():
+        used = resolved / "scores.csv"
+        return used, {
+            "kind": kind,
+            "input": publish_path_label(resolved) or str(resolved),
+            "used": publish_path_label(used) or str(used),
+            "reason": "serving-eval directories can contain private run manifests; scores.csv is the sanitized public evidence file",
+        }
+    return resolved, None
+
+
 def list_model_files(path: Path | None, *, include_weights: bool, include_adapter: bool, limit: int = 200) -> tuple[list[str], list[str]]:
     if not path or not path.exists():
         return [], []
@@ -547,18 +562,21 @@ def build_model_plan(args: argparse.Namespace) -> dict[str, Any]:
         include_adapter=include_adapter,
     )
 
-    extra_paths = [
-        resolve_path(path)
-        for path in [
-            args.eval_results,
-            args.serving_card,
-            args.quantization_card,
-            args.promotion_report,
-            args.risk_report,
-            args.manifest,
-        ]
-        if path
-    ]
+    extra_paths: list[Path] = []
+    supporting_path_rewrites: list[dict[str, str]] = []
+    for kind, raw_path in [
+        ("eval_results", args.eval_results),
+        ("serving_card", args.serving_card),
+        ("quantization_card", args.quantization_card),
+        ("promotion_report", args.promotion_report),
+        ("risk_report", args.risk_report),
+        ("manifest", args.manifest),
+    ]:
+        resolved_path, rewrite = resolve_supporting_path(raw_path, kind=kind)
+        if resolved_path:
+            extra_paths.append(resolved_path)
+        if rewrite:
+            supporting_path_rewrites.append(rewrite)
     included_scan_paths = ([model_path] if include_model_artifact and model_path and model_path.exists() else []) + extra_paths
     model_card = generate_model_card(
         family=args.family,
@@ -595,6 +613,7 @@ def build_model_plan(args: argparse.Namespace) -> dict[str, Any]:
         "files_included": files_included,
         "files_excluded": files_excluded,
         "supporting_paths": [publish_path_label(path) for path in extra_paths],
+        "supporting_path_rewrites": supporting_path_rewrites,
         "release_gates": [gate.__dict__ for gate in gates],
         "blocked": bool(blocking_failures),
         "blocked_until": [f"{gate.name}: {gate.message}" for gate in blocking_failures],

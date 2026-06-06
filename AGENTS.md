@@ -318,11 +318,12 @@ release work is the public quantized-model HF plan/model card, not another
 quantization run.
 
 When planning a public HF model release, pass sanitized evidence files to
-`./forge hf plan-model`. For serving eval evidence, prefer
-`<serving-eval-dir>/scores.csv` over the full serving-eval directory; the full
-directory includes `manifest.json`, which can contain private absolute paths
-and will fail the no-private-path gate. Do not attempt upload unless
-`HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN` is already present in the environment.
+`./forge hf plan-model`. If `--eval-results` points at a serving-eval directory
+with `scores.csv`, the Hub planner rewrites that evidence path to
+`<serving-eval-dir>/scores.csv` and records the rewrite in
+`supporting_path_rewrites`; this avoids scanning private run manifests in public
+release plans. Do not attempt upload unless `HF_TOKEN` or
+`HUGGINGFACE_HUB_TOKEN` is already present in the environment.
 
 If the watchdog stops a quantization job for memory, record the stop fraction,
 clean partial staging artifacts, and retry with smaller calibration

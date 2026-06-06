@@ -182,15 +182,18 @@ quantization sensitivity data is needed. The Qwen matrix now defaults to
 on a specific cluster when distributing exports.
 
 HF release planning: the dry-run public quantized-model plan was tested after
-the no-ablation scope change. Passing the full serving-eval directory as
-`--eval-results` correctly failed the no-private-path gate because
-`manifest.json` contains private absolute paths. Passing
-`reports/generated/serving_evals/qwen36_27b_local_ft_v4_nvfp4_attention_output_bf16_modelopt_tp2_serving_eval_20260606/scores.csv`
-instead passed the no-private-path gate and generated a model card linking back
-to `https://github.com/keithtyser/model-forge`. The dry run still blocks on the
-variant's `hf_upload`/promotion metadata, and this session does not have
-`HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN` in the environment. Do not upload from an
-ad hoc command that embeds a token literal.
+the no-ablation scope change. The first pass exposed a release-planning
+generalization pain point: passing the full serving-eval directory as
+`--eval-results` failed the no-private-path gate because `manifest.json`
+contains private absolute paths. The Hub planner now rewrites serving-eval
+directories that contain `scores.csv` to that sanitized evidence file and
+records the rewrite in `supporting_path_rewrites`. The real Qwen dry run now
+passes the no-private-path gate and generates a model card linking back to
+`https://github.com/keithtyser/model-forge` even when the caller passes the full
+serving-eval directory. The dry run still blocks on the variant's
+`hf_upload`/promotion metadata, and this session does not have `HF_TOKEN` or
+`HUGGINGFACE_HUB_TOKEN` in the environment. Do not upload from an ad hoc command
+that embeds a token literal.
 
 ## Qwen 3.6 27B: Native OT Diagnostic Path
 

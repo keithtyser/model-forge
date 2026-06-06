@@ -107,6 +107,42 @@ class HubCliTests(unittest.TestCase):
             self.assertEqual(gate["status"], "fail")
             self.assertIn("Spark validation", gate["message"])
 
+    def test_public_model_plan_uses_serving_eval_scores_file_for_scanning(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model_dir = root / "model"
+            model_dir.mkdir()
+            (model_dir / "config.json").write_text("{}", encoding="utf-8")
+            (model_dir / "model.safetensors").write_text("placeholder", encoding="utf-8")
+            eval_dir = root / "serving_eval"
+            eval_dir.mkdir()
+            (eval_dir / "manifest.json").write_text(
+                json.dumps({"private_path": "/" + "home" + "/ktyser/private/run"}),
+                encoding="utf-8",
+            )
+            (eval_dir / "scores.csv").write_text("bucket,metric,value\nnormal,pass,1.0\n", encoding="utf-8")
+
+            plan = build_model_plan(
+                model_args(
+                    artifact_path=str(model_dir),
+                    output_dir=str(root / "out"),
+                    release_class="public_quantized_model",
+                    validation_state="spark_cluster_validated",
+                    source_license_checked=True,
+                    eval_results=str(eval_dir),
+                    quantization_card=str(root / "quantization.json"),
+                    serving_card=str(root / "serving.json"),
+                    promotion_report=str(root / "promotion.json"),
+                )
+            )
+
+            gates = {gate["name"]: gate for gate in plan["release_gates"]}
+            self.assertFalse(plan["blocked"], plan["blocked_until"])
+            self.assertEqual(gates["no_private_tokens_or_paths"]["status"], "pass")
+            self.assertEqual(plan["supporting_paths"][0], "<external>/scores.csv")
+            self.assertEqual(plan["supporting_path_rewrites"][0]["kind"], "eval_results")
+            self.assertIn("scores.csv", plan["supporting_path_rewrites"][0]["used"])
+
     def test_model_artifact_plan_blocks_rejected_variant_upload(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
