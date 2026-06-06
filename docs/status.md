@@ -177,9 +177,10 @@ This is the short handoff state for humans and agents. Use
   `model_selection_summary` stayed 3/3. Do not broad-eval, NVFP4-export,
   upload, promote, or rerun V41 unchanged. The rejected full checkpoint was
   deleted from both Sparks after evidence was committed; adapter/config/report
-  and safe aggregate eval evidence were retained. There is no ready Qwen
-  FT-abli candidate after V41; the next candidate must materially change the
-  intervention or data objective.
+  and safe aggregate eval evidence were retained. V42 is now the next planned
+  Qwen FT-abli candidate: it returns to held v2 and uses a smaller
+  hand-reviewed care-first opening repair seed instead of V41's mined
+  sampled-opening rows.
 - Qwen 3.6 27B residual-trial12 preference-unlikelihood v6 trained for 32
   guarded two-node steps from held v2, merged, synced to both Sparks, passed
   strict checkpoint/tokenizer audits, served with TP=2, and ran the targeted

@@ -1,0 +1,109 @@
+version: 0.1.0
+description: >
+  Data-source registry for the Qwen 3.6 27B trial12 preference-unlikelihood V19
+  care-first opening repair. V41 showed that mined sampled-opening rows can
+  reinforce refusal/meta openings when chosen traces sit too close to denial
+  phrasing. V19 uses only hand-reviewed care-first self-harm support pairs plus
+  capability replay from local FT v4.
+
+sources:
+  qwen36_trial12_pref_ul_v19_care_first_opening_repair:
+    name: qwen36_trial12_pref_ul_v19_care_first_opening_repair
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v19_care_first_opening_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - care_first_opening_repair
+      - refusal_free_safe_redirect
+      - self_harm_support
+      - behavior_edit
+    sampling_cap: 16
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Primary V42 source. Chosen rows begin with direct support language and
+      avoid first-person/model-limitation openings. Rejected rows are safe in
+      content but contain the denial/meta openings observed in held v2, native
+      OT, V35, V38, and V41 near-misses.
+
+  qwen36_trial12_pref_ul_v16_sampled_gate_hard_negatives:
+    name: qwen36_trial12_pref_ul_v16_sampled_gate_hard_negatives
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v16_sampled_gate_hard_negatives.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - sampled_gate_repair
+      - refusal_free_safe_redirect
+      - self_harm_support
+      - behavior_edit_replay
+    sampling_cap: 8
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Small replay for earlier observed denial/help-not-help openings. Kept
+      below the new V19 seed so older phrasing does not dominate.
+
+  qwen36_trial12_pref_ul_v11_refusal_free_redirect_expansion:
+    name: qwen36_trial12_pref_ul_v11_refusal_free_redirect_expansion
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v11_refusal_free_redirect_expansion.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - self_harm_support
+      - behavior_edit_replay
+    sampling_cap: 4
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Minimal no-denial redirect replay for lexical diversity.
+
+  qwen36_trial12_pref_ul_v5_ablation_redirect_pairs:
+    name: qwen36_trial12_pref_ul_v5_ablation_redirect_pairs
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v5_ablation_redirect.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - ablation_unsafe_redirect
+      - behavior_edit_replay
+    sampling_cap: 4
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Minimal corrected unsafe-ablation-redirect replay so V42 does not regress
+      the broader no-denial ablation objective.
+
+  qwen36_local_ft_v4_capability_replay_v3:
+    name: qwen36_local_ft_v4_capability_replay_v3
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_capability_replay_v3.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - challenge_replay
+      - instruction_following
+    sampling_cap: 28
+    intended_use: >
+      Capability replay weighted high enough to protect model_selection_summary
+      and general instruction-following while the edit targets only opening
+      style.
+
+  qwen36_local_ft_v4_planning_repair_seeds:
+    name: qwen36_local_ft_v4_planning_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_planning_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - agentic_planning
+      - instruction_following
+    sampling_cap: 4
+    intended_use: >
+      Tiny planning anchor for source-distribution stability.

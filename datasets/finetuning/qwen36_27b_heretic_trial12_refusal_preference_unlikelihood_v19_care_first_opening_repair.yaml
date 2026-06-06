@@ -1,0 +1,78 @@
+name: qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v19_care_first_opening_repair
+description: >
+  Care-first opening repair dataset for the Qwen 3.6 27B trial12
+  preference-unlikelihood lineage. V19/V42 returns to the held v2 source after
+  V41 overfit noisy sampled-opening evidence. It uses only hand-reviewed
+  self-harm support pairs whose chosen assistant starts are direct care-first
+  support rather than first-person/model-limitation phrasing, plus capability
+  replay.
+format: messages
+chat_template: auto
+max_context_window: 4096
+random_seed: 4942
+
+source_registry: configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v19_care_first_opening_repair.yaml
+
+quality_gates:
+  min_turn_chars: 2
+  require_assistant_content: true
+  reject_unclosed_think: true
+  dedupe_by_conversation_hash: true
+  max_tokens: 4096
+  reject_eval_prompt_overlap: true
+  target_behavior:
+    pairwise_preference_behavior_edit: true
+    refusal_free_safe_redirect: true
+    refusal_unlikelihood_pairs: true
+    care_first_opening_repair: true
+    stochastic_gate_repair: true
+    prefix_scoped_unlikelihood: true
+    avoid_actionable_harmful_detail: true
+    self_harm_support_no_denial_opening: true
+    ablation_unsafe_redirect: true
+    capability_replay: true
+
+sources:
+  - id: qwen36_trial12_pref_ul_v19_care_first_opening_repair
+    target_samples: 16
+    role: primary_hand_reviewed_care_first_opening_repair
+  - id: qwen36_trial12_pref_ul_v16_sampled_gate_hard_negatives
+    target_samples: 8
+    role: sampled_gate_hard_negative_replay
+  - id: qwen36_trial12_pref_ul_v11_refusal_free_redirect_expansion
+    target_samples: 4
+    role: strict_no_refusal_redirect_replay
+  - id: qwen36_trial12_pref_ul_v5_ablation_redirect_pairs
+    target_samples: 4
+    role: unsafe_ablation_redirect_replay
+  - id: qwen36_local_ft_v4_capability_replay_v3
+    target_samples: 28
+    role: challenge_capability_replay
+  - id: qwen36_local_ft_v4_planning_repair_seeds
+    target_samples: 4
+    role: planning_capability_replay
+
+holdouts:
+  - evals/prompts/unsafe_ablation_redirect.yaml
+  - evals/prompts/unsafe_overcompliance.yaml
+  - evals/prompts/refusal_paired_boundary.yaml
+  - evals/prompts/capability_preservation_challenge.yaml
+  - evals/prompts/normal_use_regression.yaml
+  - evals/prompts/agentic_multi_step_planning.yaml
+  - evals/prompts/agentic_tool_use_json.yaml
+  - evals/prompts/refusal_benign_boundary.yaml
+
+promotion_notes:
+  - >
+    V19/V42 is a targeted repair candidate, not a promoted recipe. It must pass
+    the targeted three-trial self-harm blocker before broader evals.
+  - >
+    The primary rows are adjacent prompt variants, not exact held-out eval
+    prompts. If this clears the blocker, run fresh adjacent self-harm
+    paraphrases before promotion to check that the repair generalizes beyond
+    the original targeted gate.
+  - >
+    The model-agnostic pattern is: isolate the exact residual opening failure,
+    use clean hand-reviewed chosen openings when mined traces are noisy, train a
+    small preference/unlikelihood adapter from the strongest source, and
+    protect source capability with replay.

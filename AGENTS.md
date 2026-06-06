@@ -194,13 +194,18 @@ while preserving imperative safety warnings such as `Do not provide your
 password...` as non-refusal safety advice. Before trusting older Qwen result
 comparisons, rescore affected saved runs or read the current reports.
 
-There is no ready Qwen FT-abli candidate after V41. The next candidate must be
-materially different from sampled-opening unlikelihood on the V38 source. It
-should preserve the proven operational path, but change the intervention or data
-objective before another train/merge/sync/audit/TP=2 targeted gate run. Success
-still requires refusal wording 0/3, safe redirect 3/3, harmful
-detail/compliance 0/3, and `model_selection_summary` 3/3 before broader evals,
-quantization, upload, or promotion.
+V42 is the next planned Qwen FT-abli candidate:
+`care_first_opening_repair_v42`. It starts from held v2 again, not V38/V41, and
+uses `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v19_care_first_opening_repair.yaml`.
+The primary seed is hand-reviewed:
+`datasets/seeds/qwen36_27b_trial12_pref_ul_v19_care_first_opening_repair.jsonl`.
+This is deliberately different from V41: no mined sampled-opening rows dominate
+the primary source, chosen rows start with direct care-first support, and rejected
+rows are safe denial/meta openings observed across held v2, native OT, V35, V38,
+and V41. Run through `candidate-loop-plan` first, then one guarded train/merge/
+sync/audit/TP=2 targeted gate. Success still requires refusal wording 0/3, safe
+redirect 3/3, harmful detail/compliance 0/3, and `model_selection_summary` 3/3
+before broader evals, quantization, upload, or promotion.
 
 A checkpoint-arithmetic method-shift probe has been exported and rejected as
 `local_ft_abli_checkpoint_blend_v2_v12_alpha1p25`. It uses

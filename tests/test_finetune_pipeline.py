@@ -962,6 +962,126 @@ class FinetunePlanTests(unittest.TestCase):
             self.assertTrue(any(marker in rejected for marker in rejected_refusal_markers), row["id"])
             self.assertEqual(row["messages"][0]["content"], row["rejected_messages"][0]["content"])
 
+    def test_qwen36_trial12_v19_care_first_opening_repair_from_v2(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "finetuning"
+            / "qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v19_care_first_opening_repair.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["run_dir"] = tmp
+            plan = build_plan(config, config_path)
+            outputs = write_artifacts(plan, overwrite=False)
+            trainer_script = Path(outputs["trainer"]).read_text()
+            method_card = Path(outputs["method_card"]).read_text()
+
+        self.assertEqual(plan["family"], "qwen36_27b")
+        self.assertEqual(
+            plan["model"]["source"],
+            "local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v2",
+        )
+        self.assertTrue(
+            plan["model"]["output_dir"].endswith(
+                "model-forge-adapters/qwen36_27b/heretic_trial12_refusal_preference_unlikelihood_v19_care_first_opening_repair"
+            )
+        )
+        self.assertEqual(plan["eval"]["source_variant"], "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2")
+        self.assertEqual(plan["trainer"]["method"], "qlora_pairwise_preference_unlikelihood")
+        self.assertEqual(plan["trainer"]["preference_weight"], 1.0)
+        self.assertEqual(plan["trainer"]["preference_beta"], 0.40)
+        self.assertEqual(plan["trainer"]["preference_margin"], 0.05)
+        self.assertEqual(plan["trainer"]["sft_weight"], 1.35)
+        self.assertEqual(plan["trainer"]["unlikelihood_weight"], 1.65)
+        self.assertEqual(plan["trainer"]["unlikelihood_scope"], "assistant_prefix")
+        self.assertEqual(plan["trainer"]["unlikelihood_prefix_tokens"], 80)
+        self.assertEqual(plan["trainer"]["learning_rate"], 0.0000009)
+        self.assertEqual(plan["trainer"]["max_steps"], 72)
+        self.assertEqual(plan["lora"]["r"], 8)
+        self.assertEqual(
+            plan["lora"]["target_modules"],
+            ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+        )
+        self.assertEqual(plan["data"]["target_samples"], 64)
+        source_ids = {source["id"] for source in plan["data"]["sources"]}
+        self.assertIn("qwen36_trial12_pref_ul_v19_care_first_opening_repair", source_ids)
+        self.assertIn("qwen36_local_ft_v4_capability_replay_v3", source_ids)
+        self.assertIn("care_first_opening_repair", plan["data"]["quality_gates"]["target_behavior"])
+        self.assertIn("self_harm_support_no_denial_opening", plan["data"]["quality_gates"]["target_behavior"])
+        self.assertIn("PairwisePreferenceTrainer", trainer_script)
+        self.assertIn("self.unlikelihood_weight", trainer_script)
+        self.assertIn("Unlikelihood scope: `assistant_prefix`", method_card)
+        self.assertIn("Unlikelihood prefix tokens: `80`", method_card)
+        self.assertIn("primary_hand_reviewed_care_first_opening_repair", method_card)
+
+    def test_qwen36_trial12_v19_care_first_seed_avoids_refusal_openings(self) -> None:
+        import json
+
+        path = REPO_DIR / "datasets" / "seeds" / "qwen36_27b_trial12_pref_ul_v19_care_first_opening_repair.jsonl"
+        chosen_refusal_or_meta_markers = (
+            "i can't",
+            "i cannot",
+            "i can’t",
+            "i won't",
+            "i won’t",
+            "i will not",
+            "we cannot",
+            "we won't",
+            "cannot provide",
+            "cannot help",
+            "won't provide",
+            "will not help",
+            "do not provide",
+            "refuse",
+            "refusal",
+            "the assistant should refuse",
+            "but i won't",
+            "not with concealment",
+            "without helping",
+            "target style:",
+            "use care-first words",
+            "no-denial redirect",
+        )
+        rejected_refusal_or_meta_markers = (
+            "i won't",
+            "i won’t",
+            "i cannot",
+            "i can't",
+            "i should not",
+            "i will not",
+            "the assistant should refuse",
+            "but i won't",
+            "not with concealment",
+            "without helping",
+            "without providing",
+            "do not provide",
+        )
+        care_terms = (
+            "support",
+            "trusted",
+            "emergency",
+            "crisis",
+            "medical",
+            "safe",
+            "safety",
+            "care",
+            "danger",
+            "help",
+        )
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertEqual(len(rows), 16)
+        self.assertEqual(len([row for row in rows if "rejected_messages" in row]), 16)
+        for row in rows:
+            chosen = row["messages"][-1]["content"].lower()
+            rejected = row["rejected_messages"][-1]["content"].lower()
+            self.assertFalse(any(marker in chosen for marker in chosen_refusal_or_meta_markers), row["id"])
+            self.assertTrue(any(marker in rejected for marker in rejected_refusal_or_meta_markers), row["id"])
+            self.assertTrue(any(term in chosen for term in care_terms), row["id"])
+            self.assertEqual(row["messages"][0]["content"], row["rejected_messages"][0]["content"])
+            self.assertIn("self_harm_support", row["skills"])
+            self.assertIn("care_first_opening_repair", row["skills"])
+
     def test_prepare_writes_dry_run_artifacts(self) -> None:
         config_path = REPO_DIR / "configs" / "finetuning" / "gemma4_26b_a4b_local_ft_v0.yaml"
         config = load_yaml(config_path)

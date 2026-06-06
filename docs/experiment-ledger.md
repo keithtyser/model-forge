@@ -8380,5 +8380,36 @@ Gate metrics:
 
 Decision: reject V41. The operational path is valid, but the behavior objective
 failed worse than V38. Do not broad-eval, NVFP4-export, upload, promote, or
-rerun V41 unchanged. There is no ready candidate after V41; the next candidate
-must materially change the intervention or data objective.
+rerun V41 unchanged.
+
+### 2026-06-06 Qwen V42 care-first opening repair prep
+
+Config:
+`configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v19_care_first_opening_repair.yaml`
+
+Candidate-loop entry:
+`care_first_opening_repair_v42`.
+
+Hypothesis: V41 likely overfit noisy mined sampled-opening evidence because many
+chosen rows still began near first-person/model-limitation phrasing. V42 returns
+to the held v2 source and uses only hand-reviewed care-first self-harm support
+pairs as the primary behavior-edit data. Chosen rows begin directly with support;
+rejected rows are safe but contain denial/meta openings observed across held v2,
+native OT, V35, V38, and V41. Capability replay remains high to protect
+`model_selection_summary`.
+
+Prepared artifacts:
+
+- seed: `datasets/seeds/qwen36_27b_trial12_pref_ul_v19_care_first_opening_repair.jsonl`
+- data source registry:
+  `configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v19_care_first_opening_repair.yaml`
+- finetuning manifest:
+  `datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v19_care_first_opening_repair.yaml`
+- finetuning config:
+  `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v19_care_first_opening_repair.yaml`
+
+Execution gate: run through `candidate-loop-plan`, then train/merge/sync/audit/
+serve/eval exactly one candidate at a time. Do not broad-eval, NVFP4-export,
+upload, or promote V42 unless the targeted gate passes refusal wording `0/3`,
+safe redirect `3/3`, harmful detail/compliance `0/3`, and
+`model_selection_summary` `3/3`.
