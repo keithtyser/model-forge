@@ -30,16 +30,18 @@ For prepared datasets, pass `--repo-type dataset`.
 
 ## Qwen 3.6 27B: Local FT v4 ModelOpt NVFP4 Serving Validation
 
-Status: partially validated. The NVFP4 artifact exported, synced, audited,
-served on the two-Spark TP=2 path, completed smoke/core serving benchmarks,
-completed sampled serving eval, and passed the serving evidence gate. The exact
-unquantized `local_ft_v4` BF16 source serving/eval baseline is now available,
-and the quantization card shows strong source-relative speedup. Do not promote
-or upload as release quality because the behavior-preservation report failed on
-structured JSON/tool-use schema and workflow checks. The AWQ/NVFP4 follow-up
-candidate `local_ft_v4_nvfp4_awq_modelopt` has now exported and passed strict
-local structural/tokenizer audits, but it has not yet been served or
-behavior-gated.
+Status: partially validated with no promotable quantized candidate yet. The
+first NVFP4 artifact exported, synced, audited, served on the two-Spark TP=2
+path, completed smoke/core serving benchmarks, completed sampled serving eval,
+and passed the serving evidence gate. The exact unquantized `local_ft_v4` BF16
+source serving/eval baseline is available, and the quantization card shows
+strong source-relative speedup. Do not promote or upload as release quality
+because the behavior-preservation report failed on structured JSON/tool-use
+schema and workflow checks. The AWQ/NVFP4 follow-up exported and passed strict
+structural/tokenizer audits, but it is rejected for current vLLM because the
+artifact declares unsupported `quant_algo=NVFP4_AWQ`. The W4A16 follow-up
+exported, served, and improved throughput, but it is rejected because sampled
+evals and manual probes produced repeated punctuation instead of useful text.
 
 Hypothesis: ModelOpt NVFP4 should preserve the promoted Qwen local FT v4
 serving behavior closely enough for continued validation while improving tok/s
@@ -79,6 +81,14 @@ Evidence:
   `reports/generated/serving_eval_comparisons/qwen36_local_ft_v4_bf16_vs_nvfp4_json_tool_regression_20260606`
 - AWQ tokenizer-preservation report:
   `reports/generated/quantization/qwen36_local_ft_v4_bf16_vs_nvfp4_awq_modelopt_20260606`
+- AWQ ModelOpt/vLLM compatibility report:
+  `reports/generated/quantization/qwen36_local_ft_v4_nvfp4_awq_modelopt_vllm_compat_20260606`
+- W4A16 ModelOpt/vLLM compatibility report:
+  `reports/generated/quantization/qwen36_local_ft_v4_nvfp4_w4a16_modelopt_vllm_compat_20260606`
+- W4A16 serving benchmark/eval/gate:
+  `reports/generated/serve_bench/qwen36_27b_local_ft_v4_nvfp4_w4a16_modelopt_tp2_core_20260606`
+  and
+  `reports/generated/serving_evals/qwen36_27b_local_ft_v4_nvfp4_w4a16_modelopt_tp2_serving_eval_20260606`
 
 Result: the core serving benchmark completed 9/9 requests at success rate 1.0,
 13.0560 mean output tok/s, 13.9418 mean decode tok/s, 33.2008 mean total tok/s,
@@ -124,11 +134,22 @@ and removed the temporary text-input staging directory. Export summary:
 architecture audits all passed, and the source-vs-candidate tokenizer report
 passed with matching tokenizer/config/chat-template hashes.
 
-Decision: treat `local_ft_v4_nvfp4_awq_modelopt` as structurally valid but not
-promotable yet. Next required evidence is TP=2 serving on the two-Spark path,
-smoke/core serving benchmarks, and the same sampled serving eval comparison
-against the BF16 `local_ft_v4` source to test whether AWQ fixes the structured
-JSON/tool-use regression.
+Decision: reject both follow-up qformats for the current runtime and do not
+rerun them unchanged. `local_ft_v4_nvfp4_awq_modelopt` is structurally valid
+but vLLM-incompatible because `hf_quant_config.json` and `config.json` declare
+`quant_algo=NVFP4_AWQ`, which current vLLM ModelOpt does not support. The new
+`./forge quantize modelopt-compat-report` command catches this before serving.
+`local_ft_v4_nvfp4_w4a16_modelopt` passes ModelOpt/vLLM metadata compatibility
+with `quant_algo=NVFP4`, serves with FlashInfer NVFP4 kernels, and reaches
+about 2.46x output tok/s plus 2.50x decode-heavy source-relative speedup, but
+sampled serving eval and manual `temperature=0` probes degenerated into
+repeated `!` tokens. The NVFP4 behavior gate correctly rejects it.
+
+Next step: plan a component-sensitivity quantization policy instead of another
+whole-checkpoint qformat retry. Keep format-critical modules in BF16, compare
+each completed candidate against the exact BF16 `local_ft_v4` source, and
+promote only if the candidate passes ModelOpt compatibility, serving throughput,
+tokenizer preservation, and behavior preservation.
 
 ## Qwen 3.6 27B: Native OT Diagnostic Path
 

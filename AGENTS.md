@@ -200,10 +200,17 @@ For Blackwell NVFP4:
 ./forge variants checkpoint-audit <family> --variant <nvfp4-variant> --strict
 ./forge variants tokenizer-audit <family> --variant <nvfp4-variant> --strict
 ./forge variants architecture-audit <family> --variant <nvfp4-variant> --strict
+./forge quantize modelopt-compat-report \
+  --candidate-dir <candidate-checkpoint-dir> \
+  --runtime vllm \
+  --run-id <run-id> --write-report
 ```
 
 Serve and compare the quantized model against the exact unquantized source
 variant. Do not use an unrelated base model as the formal source baseline.
+Use `MODEL_FORGE_DRY_RUN=1 ./forge serve <family> <nvfp4-variant>` before
+starting vLLM and trust the printed launch command and port over assumptions
+from the matrix config.
 
 ```bash
 ./forge serve <family> <nvfp4-variant>
@@ -262,6 +269,15 @@ absolute targets or `gates.nvfp4.min_output_speedup` plus
 
 A quantized model is only a promotion candidate if behavior stays close to the
 source and tok/s improves on the target hardware.
+
+Checkpoint, tokenizer, and architecture audits prove artifact shape only. They
+do not prove serving-runtime compatibility or generation quality. ModelOpt
+exports must pass `modelopt-compat-report` before vLLM launch, and then must
+pass serving evals before promotion. With the current vLLM ModelOpt runtime,
+`quant_algo=NVFP4_AWQ` is not a compatible serving artifact even if structural
+audits pass. If a served quantized model emits repeated punctuation or other
+degenerate text under a simple deterministic manual probe, stop the server,
+reject the candidate, and move to a different component/precision policy.
 
 If speed improves but behavior fails, first inspect exact source-pass/candidate
 failures with `./forge bench serve-eval compare`. Then plan targeted

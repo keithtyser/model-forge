@@ -1355,12 +1355,12 @@ variants:
     quantization: nvfp4
     downloadable: false
     promotion:
-      decision: inconclusive
+      decision: rejected
       blocked_actions: [hf_upload, promotion]
-      reason: "Qwen local FT v4 NVFP4 target is for validating the Blackwell quantization and serving leg against the promoted FT source before a final FT-abli source is available. Promotion requires completed export, strict audits, source-vs-quantized behavior evidence, and serving throughput showing higher output tok/s than the unquantized FT source."
+      reason: "Exported, synced, passed strict local/worker audits, served TP=2 on the two-Spark path, and showed strong source-relative speedup versus BF16 local_ft_v4, but sampled behavior preservation failed on structured JSON/tool-use schema and workflow checks. Keep as evidence for the Blackwell path, but do not upload or promote."
       evidence:
         - configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml
-        - docs/quantization.md
+        - reports/qwen36_27b_local_ft_v4_nvfp4_modelopt_serving_validation_summary.md
   local_ft_v4_nvfp4_awq_modelopt:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_awq_modelopt
@@ -1369,9 +1369,9 @@ variants:
     quantization: nvfp4_awq
     downloadable: false
     promotion:
-      decision: inconclusive
+      decision: rejected
       blocked_actions: [hf_upload, promotion]
-      reason: "Planned Qwen local FT v4 NVFP4 AWQ-lite candidate to test whether format-following behavior is preserved better than default NVFP4 while retaining Blackwell speedup."
+      reason: "Exported with low-memory calibration and passed strict local/worker checkpoint, tokenizer, and architecture audits, but current vLLM ModelOpt rejects the artifact metadata because it declares quant_algo=NVFP4_AWQ. The modelopt-compat preflight now catches this before serving. Do not upload, promote, or rerun unchanged unless the runtime adds NVFP4_AWQ support or the exporter emits a supported algorithm."
       evidence:
         - configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml
         - reports/qwen36_27b_local_ft_v4_nvfp4_modelopt_serving_validation_summary.md
@@ -1383,9 +1383,9 @@ variants:
     quantization: nvfp4_w4a16
     downloadable: false
     promotion:
-      decision: inconclusive
+      decision: rejected
       blocked_actions: [hf_upload, promotion]
-      reason: "Planned Qwen local FT v4 weight-only NVFP4 candidate to test whether keeping activations higher precision preserves strict JSON/tool behavior while still improving serving speed."
+      reason: "Exported, synced, passed strict local/worker audits, passed ModelOpt/vLLM metadata compatibility, served TP=2 with NVFP4 kernels, and beat BF16 local_ft_v4 throughput by roughly 2.5x, but manual probes and sampled serving eval produced repeated punctuation instead of useful answers. The NVFP4 behavior gate failed. Do not upload, promote, or rerun unchanged."
       evidence:
         - configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml
         - reports/qwen36_27b_local_ft_v4_nvfp4_modelopt_serving_validation_summary.md

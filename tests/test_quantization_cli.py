@@ -11,6 +11,7 @@ from model_forge.quantization.cli import (
     CALIBRATION_MANIFEST_SCHEMA_VERSION,
     CARD_SCHEMA_VERSION,
     FP8_KV_REPORT_SCHEMA_VERSION,
+    MODELOPT_RUNTIME_COMPAT_SCHEMA_VERSION,
     NVFP4_GATE_SCHEMA_VERSION,
     SENSITIVITY_REPORT_SCHEMA_VERSION,
     TOKENIZER_REPORT_SCHEMA_VERSION,
@@ -21,6 +22,7 @@ from model_forge.quantization.cli import (
     build_export_command,
     build_gguf_export_command,
     build_modelopt_export_command,
+    build_modelopt_runtime_compat_report,
     build_nvfp4_gate_report,
     build_sensitivity_report,
     build_tokenizer_report,
@@ -87,6 +89,32 @@ def write_behavior_scores(path: Path, *, normal: float = 1.0, challenge: float =
         f"refusal_paired_boundary,benign_answer_quality_rate,{benign_quality},4,4,0,0.5,1.0,0\n"
     )
     (path / "scores.csv").write_text(header + rows, encoding="utf-8")
+
+
+def write_modelopt_quant_fixture(path: Path, *, quant_algo: str, quant_method: str = "modelopt") -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "hf_quant_config.json").write_text(
+        json.dumps(
+            {
+                "producer": {"name": "modelopt", "version": "0.43.0"},
+                "quantization": {"quant_algo": quant_algo, "quant_method": quant_method, "exclude_modules": ["lm_head"]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (path / "config.json").write_text(
+        json.dumps(
+            {
+                "model_type": "unit",
+                "quantization_config": {
+                    "quant_algo": quant_algo,
+                    "quant_method": quant_method,
+                    "producer": {"name": "modelopt", "version": "0.43.0"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 class QuantizationCliTests(unittest.TestCase):
@@ -449,6 +477,41 @@ class QuantizationCliTests(unittest.TestCase):
 
         self.assertFalse(report["passed"])
         self.assertTrue(any(finding["check"] == "tokenizer_preservation" for finding in report["findings"]))
+
+    def test_modelopt_runtime_compat_report_rejects_unsupported_vllm_quant_algo(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate = root / "candidate"
+            write_modelopt_quant_fixture(candidate, quant_algo="NVFP4_AWQ")
+            report = build_modelopt_runtime_compat_report(
+                candidate_dir=candidate,
+                runtime="vllm",
+                output_dir=root / "compat",
+                run_id="unit_modelopt_awq_compat",
+            )
+
+        self.assertEqual(report["schema_version"], MODELOPT_RUNTIME_COMPAT_SCHEMA_VERSION)
+        self.assertFalse(report["passed"])
+        checks = {check["name"]: check["status"] for check in report["checks"]}
+        self.assertEqual(checks["runtime_supports_quant_algo"], "fail")
+        self.assertEqual(report["candidate"]["quant_algo"], "NVFP4_AWQ")
+
+    def test_modelopt_runtime_compat_report_accepts_supported_vllm_quant_algo(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate = root / "candidate"
+            write_modelopt_quant_fixture(candidate, quant_algo="NVFP4")
+            report = build_modelopt_runtime_compat_report(
+                candidate_dir=candidate,
+                runtime="vllm",
+                output_dir=root / "compat",
+                run_id="unit_modelopt_nvfp4_compat",
+            )
+
+        self.assertTrue(report["passed"])
+        self.assertIn("NVFP4", report["supported_quant_algos"])
+        checks = {check["name"]: check["status"] for check in report["checks"]}
+        self.assertEqual(checks["runtime_supports_quant_algo"], "pass")
 
     def test_sensitivity_report_ranks_behavior_preserving_component_policy(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

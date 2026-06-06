@@ -112,6 +112,20 @@ FT-abli model.
 After export succeeds, serve and benchmark the
 quantized checkpoint on the two-Spark TP=2 path, then compare it against the
 same unquantized `local_ft_v4` source with the quantization card and NVFP4 gate.
+Run the ModelOpt runtime compatibility preflight before starting vLLM:
+
+```bash
+./forge quantize modelopt-compat-report \
+  --candidate-dir ~/models/model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_modelopt \
+  --runtime vllm \
+  --run-id qwen36_local_ft_v4_nvfp4_modelopt_vllm_compat \
+  --write-report
+```
+
+This check is generic to ModelOpt artifacts. It catches metadata/runtime
+mismatches that checkpoint, tokenizer, and architecture audits cannot see. For
+example, current vLLM ModelOpt supports `NVFP4` but not `NVFP4_AWQ`; an artifact
+declaring `quant_algo=NVFP4_AWQ` should be rejected before serving.
 ModelOpt PTQ export is currently single-node; serving, eval, and throughput
 benchmarks should use the cluster runtime.
 When syncing quantized variants to worker nodes, pass `--target-name` if the
@@ -230,6 +244,7 @@ Every quantization candidate needs these artifacts:
 - candidate serving benchmark summary
 - source sampled serving eval scores
 - candidate sampled serving eval scores
+- ModelOpt/runtime compatibility report for ModelOpt artifacts
 - quantization card comparing latency, throughput, memory, quality, and behavior
 
 For NVFP4 promotion, request/sec is not enough. The candidate should show a
@@ -238,6 +253,9 @@ workload, against the matching BF16/FP16 source served with the same model
 length, batching, scheduler, prompt set, max tokens, and hardware allocation.
 If token throughput does not improve, keep the run as loader evidence instead
 of claiming an optimized NVFP4 path.
+If throughput improves but sampled evals or manual deterministic probes produce
+degenerate text such as repeated punctuation, reject the candidate and change
+the component/precision policy before retrying.
 
 Gate completed Blackwell NVFP4 evidence before promotion:
 

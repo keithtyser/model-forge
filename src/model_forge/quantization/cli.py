@@ -37,6 +37,16 @@ BEHAVIOR_REPORT_SCHEMA_VERSION = "model_forge.quantization_behavior_preservation
 TOKENIZER_REPORT_SCHEMA_VERSION = "model_forge.quantization_tokenizer_preservation_report.v1"
 SENSITIVITY_REPORT_SCHEMA_VERSION = "model_forge.quantization_sensitivity_report.v1"
 NVFP4_GATE_SCHEMA_VERSION = "model_forge.nvfp4_evidence_gate.v1"
+MODELOPT_RUNTIME_COMPAT_SCHEMA_VERSION = "model_forge.modelopt_runtime_compat_report.v1"
+VLLM_MODELOPT_QUANT_ALGOS = {
+    "FP8",
+    "FP8_PER_CHANNEL_PER_TOKEN",
+    "FP8_PB_WO",
+    "NVFP4",
+    "W4A16_NVFP4",
+    "MXFP8",
+    "MIXED_PRECISION",
+}
 
 console = Console(stderr=True)
 
@@ -1688,6 +1698,158 @@ def write_tokenizer_report_outputs(report: Mapping[str, Any]) -> Path:
     return output_dir
 
 
+def maybe_load_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    return load_json(path)
+
+
+def modelopt_metadata_from_candidate(candidate_dir: Path) -> dict[str, Any]:
+    candidate_path = resolve_repo_path(candidate_dir)
+    hf_quant_config_path = candidate_path / "hf_quant_config.json"
+    config_path = candidate_path / "config.json"
+    hf_quant_config = maybe_load_json(hf_quant_config_path)
+    config = maybe_load_json(config_path)
+    hf_quantization = hf_quant_config.get("quantization") if isinstance(hf_quant_config.get("quantization"), Mapping) else {}
+    config_quantization = config.get("quantization_config") if isinstance(config.get("quantization_config"), Mapping) else {}
+    producer = {}
+    for source in (hf_quant_config, config_quantization):
+        raw_producer = source.get("producer") if isinstance(source, Mapping) else None
+        if isinstance(raw_producer, Mapping):
+            producer = dict(raw_producer)
+            break
+    quant_algo_values = {
+        "hf_quant_config": hf_quantization.get("quant_algo") if isinstance(hf_quantization, Mapping) else None,
+        "config": config_quantization.get("quant_algo") if isinstance(config_quantization, Mapping) else None,
+    }
+    quant_method_values = {
+        "hf_quant_config": hf_quantization.get("quant_method") if isinstance(hf_quantization, Mapping) else None,
+        "config": config_quantization.get("quant_method") if isinstance(config_quantization, Mapping) else None,
+    }
+    resolved_quant_algo = next((str(value) for value in quant_algo_values.values() if value), None)
+    resolved_quant_method = next((str(value) for value in quant_method_values.values() if value), None)
+    return {
+        "candidate_dir": display_path(candidate_path),
+        "candidate_dir_exists": candidate_path.exists(),
+        "files": {
+            "hf_quant_config": display_path(hf_quant_config_path) if hf_quant_config_path.exists() else None,
+            "config": display_path(config_path) if config_path.exists() else None,
+        },
+        "producer": producer,
+        "quant_algo": resolved_quant_algo,
+        "quant_method": resolved_quant_method,
+        "quant_algo_values": {key: value for key, value in quant_algo_values.items() if value},
+        "quant_method_values": {key: value for key, value in quant_method_values.items() if value},
+        "exclude_module_count": len(hf_quantization.get("exclude_modules") or config_quantization.get("ignore") or []),
+    }
+
+
+def build_modelopt_runtime_compat_report(
+    *,
+    candidate_dir: Path,
+    runtime: str,
+    output_dir: Path,
+    run_id: str,
+) -> dict[str, Any]:
+    runtime_name = str(runtime).lower()
+    metadata = modelopt_metadata_from_candidate(candidate_dir)
+    quant_algo = metadata.get("quant_algo")
+    quant_method = metadata.get("quant_method")
+    producer = metadata.get("producer") or {}
+    quant_algo_values = set((metadata.get("quant_algo_values") or {}).values())
+    is_modelopt = quant_method == "modelopt" or producer.get("name") == "modelopt"
+    supported_algos = sorted(VLLM_MODELOPT_QUANT_ALGOS) if runtime_name == "vllm" else []
+    runtime_supported = runtime_name == "vllm" and quant_algo in VLLM_MODELOPT_QUANT_ALGOS
+    checks = [
+        status_check(
+            "candidate_dir_exists",
+            bool(metadata.get("candidate_dir_exists")),
+            f"candidate_dir={metadata.get('candidate_dir')}",
+        ),
+        status_check(
+            "modelopt_metadata_found",
+            bool((metadata.get("files") or {}).get("hf_quant_config") or (metadata.get("files") or {}).get("config")),
+            f"files={metadata.get('files')}",
+        ),
+        status_check(
+            "quant_algo_present",
+            bool(quant_algo),
+            f"quant_algo={quant_algo}",
+        ),
+        status_check(
+            "quant_algo_metadata_consistent",
+            len(quant_algo_values) <= 1,
+            f"quant_algo_values={metadata.get('quant_algo_values')}",
+        ),
+        status_check(
+            "quant_method_modelopt",
+            is_modelopt,
+            f"quant_method={quant_method} producer={producer}",
+        ),
+        status_check(
+            "runtime_supported",
+            runtime_name == "vllm",
+            f"runtime={runtime_name}",
+        ),
+        status_check(
+            "runtime_supports_quant_algo",
+            runtime_supported,
+            f"runtime={runtime_name} quant_algo={quant_algo} supported={supported_algos}",
+        ),
+    ]
+    passed = all(check["status"] == "pass" for check in checks if check["required"])
+    return redact_value(
+        {
+            "schema_version": MODELOPT_RUNTIME_COMPAT_SCHEMA_VERSION,
+            "created_at": utc_now().isoformat(),
+            "run_id": run_id,
+            "runtime": runtime_name,
+            "candidate": metadata,
+            "supported_quant_algos": supported_algos,
+            "checks": checks,
+            "passed": passed,
+            "output_dir": display_path(output_dir),
+            "notes": [
+                "Run this after a ModelOpt export and before launching a serving runtime.",
+                "This report catches metadata/runtime mismatches that checkpoint and tokenizer audits cannot detect.",
+                "Passing this report does not prove generation quality; serving eval and behavior-preservation gates are still required.",
+            ],
+        }
+    )
+
+
+def write_modelopt_runtime_compat_outputs(report: Mapping[str, Any]) -> Path:
+    output_dir = resolve_repo_path(str(report["output_dir"]))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "modelopt_runtime_compat_report.json").write_text(
+        json.dumps(redact_value(report), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    candidate = report.get("candidate") or {}
+    lines = [
+        f"# ModelOpt Runtime Compatibility Report: {report.get('run_id')}",
+        "",
+        f"- Passed: `{str(report.get('passed')).lower()}`",
+        f"- Runtime: `{report.get('runtime')}`",
+        f"- Quant algo: `{candidate.get('quant_algo')}`",
+        f"- Quant method: `{candidate.get('quant_method')}`",
+        "",
+        "## Checks",
+        "",
+        "| Status | Required | Check | Message |",
+        "|---|---|---|---|",
+    ]
+    for check in report.get("checks") or []:
+        lines.append(
+            f"| {str(check.get('status')).upper()} | {'yes' if check.get('required') else 'no'} | "
+            f"{check.get('name')} | {check.get('message')} |"
+        )
+    lines.extend(["", "## Notes", ""])
+    lines.extend(f"- {note}" for note in report.get("notes") or [])
+    (output_dir / "modelopt_runtime_compat_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return output_dir
+
+
 def candidate_arg(raw: str) -> dict[str, str]:
     values = {}
     for item in raw.split(","):
@@ -2342,6 +2504,14 @@ def main() -> None:
     tokenizer_parser.add_argument("--write-report", action="store_true", help="Write tokenizer_preservation_report.json and .md")
     tokenizer_parser.add_argument("--json", action="store_true", help="Print JSON report")
 
+    modelopt_compat_parser = subparsers.add_parser("modelopt-compat-report", help="Check ModelOpt artifact metadata against a serving runtime")
+    modelopt_compat_parser.add_argument("--candidate-dir", type=Path, required=True)
+    modelopt_compat_parser.add_argument("--runtime", default="vllm", help="Serving runtime to check against")
+    modelopt_compat_parser.add_argument("--output-dir", type=Path, default=REPO_DIR / "reports" / "generated" / "quantization")
+    modelopt_compat_parser.add_argument("--run-id", required=True)
+    modelopt_compat_parser.add_argument("--write-report", action="store_true", help="Write modelopt_runtime_compat_report.json and .md")
+    modelopt_compat_parser.add_argument("--json", action="store_true", help="Print JSON report")
+
     sensitivity_parser = subparsers.add_parser("sensitivity-report", help="Rank layer/component quantization candidates from completed evidence")
     sensitivity_parser.add_argument("--config", type=Path, required=True)
     sensitivity_parser.add_argument("--baseline-serving-summary", type=Path, required=True)
@@ -2400,6 +2570,29 @@ def main() -> None:
             table.add_row("metadata_only", str(report["metadata_only"]))
             console.print(table)
         return
+
+    if args.command == "modelopt-compat-report":
+        output_dir = resolve_repo_path(args.output_dir) / sanitize_run_id(args.run_id)
+        report = build_modelopt_runtime_compat_report(
+            candidate_dir=args.candidate_dir,
+            runtime=args.runtime,
+            output_dir=output_dir,
+            run_id=sanitize_run_id(args.run_id),
+        )
+        if args.write_report:
+            write_modelopt_runtime_compat_outputs(report)
+        if args.json:
+            print(json.dumps(redact_value(report), indent=2, sort_keys=True) + "\n")
+        else:
+            table = Table(title="ModelOpt Runtime Compatibility Report")
+            table.add_column("Check")
+            table.add_column("Status")
+            table.add_column("Message")
+            for check in report.get("checks") or []:
+                table.add_row(str(check.get("name")), str(check.get("status")), str(check.get("message")))
+            console.print(table)
+            console.print(f"Compatible: {report.get('passed')}")
+        raise SystemExit(0 if report.get("passed") else 1)
 
     if args.command == "sensitivity-report":
         if not args.candidate:

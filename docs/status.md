@@ -41,22 +41,22 @@ This is the short handoff state for humans and agents. Use
   `safety_preserving_refusal_style_suppression` objective profile. It measures
   refusal-style suppression with safe redirect preservation; it is not a
   harmful-compliance or full guardrail-removal objective.
-- Qwen FT-source NVFP4 validation is partially complete separately from the
-  final FT-abli path. `local_ft_v4 -> local_ft_v4_nvfp4_modelopt` exported,
-  was repaired for Qwen wrapper serving, synced to the worker, passed strict
-  local/worker checkpoint-tokenizer-architecture audits, served with TP=2
-  across both Sparks, completed smoke/core serving benchmarks, completed a
-  sampled serving eval, and passed the serving evidence gate. The exact
-  unquantized `local_ft_v4` BF16 source baseline is now available. The
-  quantization card shows 2.47x output tok/s p50 speedup and 2.61x decode-heavy
-  output tok/s p50 speedup versus that source, but NVFP4 promotion is blocked
-  because sampled behavior preservation failed on structured JSON/tool-use
-  schema and workflow checks. This is not a substitute for final FT-abli
-  quantization evidence. The first AWQ/NVFP4 follow-up candidate,
-  `local_ft_v4_nvfp4_awq_modelopt`, now exports with low-memory calibration and
-  `device_map=cuda:0`, and it passes strict local checkpoint, tokenizer, and
-  architecture audits. It has not yet been served or behavior-gated, so it is
-  only an artifact-validation candidate.
+- Qwen FT-source NVFP4 validation is useful evidence but has no promotable
+  quantized candidate yet. `local_ft_v4 -> local_ft_v4_nvfp4_modelopt`
+  exported, was repaired for Qwen wrapper serving, synced to the worker, passed
+  strict local/worker audits, served with TP=2 across both Sparks, and showed
+  2.47x output tok/s p50 speedup plus 2.61x decode-heavy output tok/s p50
+  speedup versus exact BF16 `local_ft_v4`; promotion is rejected because
+  sampled behavior preservation failed on structured JSON/tool-use schema and
+  workflow checks. `local_ft_v4_nvfp4_awq_modelopt` exported and passed
+  structural/tokenizer audits, but current vLLM ModelOpt rejects
+  `quant_algo=NVFP4_AWQ`; the new `modelopt-compat-report` catches that before
+  serving. `local_ft_v4_nvfp4_w4a16_modelopt` exported, synced, passed
+  structural audits, passed ModelOpt/vLLM metadata compatibility, served TP=2
+  with NVFP4 kernels, and delivered about 2.5x source-relative throughput, but
+  manual deterministic probes and the sampled serving eval produced repeated
+  punctuation instead of useful answers, so the NVFP4 behavior gate rejects it.
+  This is not a substitute for final FT-abli quantization evidence.
 
 ## Validated So Far
 
@@ -86,10 +86,10 @@ This is the short handoff state for humans and agents. Use
   JSON/tool-use behavior regression. The serving-eval comparison report
   confirms the NVFP4 candidate wrapped strict JSON in markdown and emitted
   malformed `reason"` keys on `agentic_tool_use_json/model_serve_timeout`.
-  The next matrix candidates are `local_ft_v4_nvfp4_awq_modelopt` and
-  `local_ft_v4_nvfp4_w4a16_modelopt`, added to test more format-preserving
-  ModelOpt qformats before any upload or promotion. A full-default AWQ export
-  attempt hit the memory watchdog at 4.57% available RAM during activation
+  The follow-up matrix candidates `local_ft_v4_nvfp4_awq_modelopt` and
+  `local_ft_v4_nvfp4_w4a16_modelopt` were both rejected after export. A
+  full-default AWQ export attempt hit the memory watchdog at 4.57% available
+  RAM during activation
   statistics; those candidates now use low-memory probe calibration settings
   first. The low-memory AWQ retry completed AWQ statistics/search but failed
   ModelOpt export because `device_map=auto` left meta tensors. The
@@ -97,8 +97,16 @@ This is the short handoff state for humans and agents. Use
   `calib_size=64`, `calib_seq=1024`, and `batch_size=1`, wrote the
   18.8 GB `local_ft_v4_nvfp4_awq_modelopt` artifact, removed temporary
   staging, and passed strict checkpoint, tokenizer, architecture, and
-  source-vs-candidate tokenizer-preservation audits. Serving speed and sampled
-  behavior preservation are still pending.
+  source-vs-candidate tokenizer-preservation audits. It is rejected for the
+  current runtime because `hf_quant_config.json`/`config.json` declare
+  `quant_algo=NVFP4_AWQ`, which current vLLM ModelOpt does not support. The
+  W4A16 retry completed in 773.045 seconds, passed strict local/worker audits
+  and the ModelOpt/vLLM compatibility report, and served with TP=2 NVFP4
+  kernels, but it is rejected because all sampled serving-eval answers and
+  manual `temperature=0` probes degenerated into repeated `!` tokens. The next
+  credible quantization work is a sensitivity/component policy that leaves
+  format-critical modules in BF16 instead of rerunning these qformats
+  unchanged.
 - Llama 3.1 8B Instruct now has the same first-class family plan shape,
   including base, local-FT, local-abli, local-FT-abli, and Blackwell NVFP4
   runtime-import variants. Its NVFP4 plan compares against the unquantized base

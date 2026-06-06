@@ -6,7 +6,9 @@ Status: partial quantization validation complete. The exact unquantized
 `local_ft_v4` BF16 source baseline is now available, and the NVFP4 candidate
 shows clear source-relative speedup. Do not promote or upload this candidate as
 release quality yet because the sampled behavior-preservation report failed on
-structured JSON/tool-use checks.
+structured JSON/tool-use checks. The AWQ and W4A16 follow-up candidates were
+also rejected: AWQ is not compatible with current vLLM ModelOpt metadata
+support, and W4A16 serves fast but generates degenerate repeated punctuation.
 
 ## Hypothesis
 
@@ -187,7 +189,20 @@ settings (`calib_size=64`, `calib_seq=1024`, `batch_size=1`). It produced
 in 2616.392 seconds, wrote one 18.8 GB `model.safetensors` shard, removed the
 temporary text-input staging directory, and passed strict checkpoint,
 tokenizer, architecture, and source-vs-candidate tokenizer-preservation audits.
-This only validates artifact integrity. The next required step is TP=2 serving
-plus smoke/core throughput and sampled serving-eval comparison against BF16
-`local_ft_v4` to see whether AWQ preserves structured JSON/tool-use behavior
-better than the first NVFP4 candidate.
+The ModelOpt/vLLM compatibility preflight now rejects this artifact before
+serving because both `hf_quant_config.json` and `config.json` declare
+`quant_algo=NVFP4_AWQ`, which current vLLM ModelOpt does not support.
+
+The W4A16 retry exported successfully in 773.045 seconds and produced
+`~/models/model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_w4a16_modelopt`.
+It synced to the worker, passed strict local/worker structural audits, passed
+the new ModelOpt/vLLM compatibility report with `quant_algo=NVFP4`, served on
+the two-Spark TP=2 path with FlashInfer NVFP4 kernels, and reached roughly
+2.46x output tok/s plus 2.50x decode-heavy output tok/s speedup against BF16
+`local_ft_v4`. It is still rejected: the sampled serving eval and manual
+`temperature=0` probes produced repeated `!` tokens instead of useful answers,
+so the behavior-preservation and NVFP4 evidence gates correctly fail.
+
+The next quantization attempt should be a component-sensitivity policy that
+keeps format-critical modules in BF16 rather than rerunning default NVFP4, AWQ,
+or W4A16 unchanged.
