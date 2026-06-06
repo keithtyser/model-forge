@@ -190,7 +190,9 @@ directories that contain `scores.csv` to that sanitized evidence file and
 records the rewrite in `supporting_path_rewrites`. The real Qwen dry run now
 passes the no-private-path gate and generates a model card linking back to
 `https://github.com/keithtyser/model-forge` even when the caller passes the full
-serving-eval directory. The dry run still blocks on the variant's
+serving-eval directory. The generated model card now includes supplied evidence
+paths plus NVFP4 speedup/readiness summaries from the quantization card and gate
+JSON when those reports are provided. The dry run still blocks on the variant's
 `hf_upload`/promotion metadata, and this session does not have `HF_TOKEN` or
 `HUGGINGFACE_HUB_TOKEN` in the environment. Do not upload from an ad hoc command
 that embeds a token literal.

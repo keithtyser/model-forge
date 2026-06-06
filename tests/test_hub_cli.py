@@ -121,6 +121,32 @@ class HubCliTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (eval_dir / "scores.csv").write_text("bucket,metric,value\nnormal,pass,1.0\n", encoding="utf-8")
+            quantization_card = root / "quantization.json"
+            quantization_card.write_text(
+                json.dumps(
+                    {
+                        "serving_deltas": {
+                            "output_tokens_per_second_p50": {"source": 5.0, "candidate": 10.0},
+                            "decode_heavy_output_tokens_per_second_p50": {"source": 4.0, "candidate": 9.0},
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            promotion_report = root / "promotion.json"
+            promotion_report.write_text(
+                json.dumps(
+                    {
+                        "nvfp4_ready": True,
+                        "export_plan": "/" + "home" + "/ktyser/models/private/quantization_export_plan.json",
+                        "metrics": {
+                            "output_tokens_per_second_speedup": 2.0,
+                            "decode_heavy_output_tokens_per_second_speedup": 2.25,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             plan = build_model_plan(
                 model_args(
@@ -130,9 +156,9 @@ class HubCliTests(unittest.TestCase):
                     validation_state="spark_cluster_validated",
                     source_license_checked=True,
                     eval_results=str(eval_dir),
-                    quantization_card=str(root / "quantization.json"),
+                    quantization_card=str(quantization_card),
                     serving_card=str(root / "serving.json"),
-                    promotion_report=str(root / "promotion.json"),
+                    promotion_report=str(promotion_report),
                 )
             )
 
@@ -142,6 +168,16 @@ class HubCliTests(unittest.TestCase):
             self.assertEqual(plan["supporting_paths"][0], "<external>/scores.csv")
             self.assertEqual(plan["supporting_path_rewrites"][0]["kind"], "eval_results")
             self.assertIn("scores.csv", plan["supporting_path_rewrites"][0]["used"])
+            self.assertEqual(plan["supporting_path_rewrites"][1]["kind"], "promotion_report")
+            self.assertIn("promotion_report_promotion.json", plan["supporting_path_rewrites"][1]["used"])
+            sanitized_promotion = root / "out" / "supporting_evidence" / "promotion_report_promotion.json"
+            self.assertTrue(sanitized_promotion.is_file())
+            self.assertNotIn("/home/ktyser", sanitized_promotion.read_text(encoding="utf-8"))
+            self.assertNotIn("/home/ktyser", json.dumps(plan))
+            card = (root / "out" / "README.md").read_text(encoding="utf-8")
+            self.assertIn("Eval Results: `<external>/scores.csv`", card)
+            self.assertIn("output p50 tok/s: source 5.000, candidate 10.00, speedup 2.000x", card)
+            self.assertIn("NVFP4 evidence gate ready: True", card)
 
     def test_model_artifact_plan_blocks_rejected_variant_upload(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

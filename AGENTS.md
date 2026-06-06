@@ -322,8 +322,10 @@ When planning a public HF model release, pass sanitized evidence files to
 with `scores.csv`, the Hub planner rewrites that evidence path to
 `<serving-eval-dir>/scores.csv` and records the rewrite in
 `supporting_path_rewrites`; this avoids scanning private run manifests in public
-release plans. Do not attempt upload unless `HF_TOKEN` or
-`HUGGINGFACE_HUB_TOKEN` is already present in the environment.
+release plans. Generated model cards include the supplied evidence paths plus
+NVFP4 speedup/readiness summaries when quantization card and gate JSON are
+provided. Do not attempt upload unless `HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN` is
+already present in the environment.
 
 If the watchdog stops a quantization job for memory, record the stop fraction,
 clean partial staging artifacts, and retry with smaller calibration

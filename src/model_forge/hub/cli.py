@@ -35,6 +35,7 @@ SECRET_PATTERNS = (
     re.compile(r"(?i)(HF_TOKEN|HUGGINGFACE_HUB_TOKEN|API_KEY|SECRET|PASSWORD)\s*="),
 )
 ABSOLUTE_PRIVATE_PATH_RE = re.compile(r"(?<![A-Za-z0-9_])/(home|Users)/[A-Za-z0-9_.-]+/")
+ABSOLUTE_PRIVATE_PATH_VALUE_RE = re.compile(r"(?<![A-Za-z0-9_])/(home|Users)/[^\s\"'<>]+")
 
 console = Console(stderr=True)
 
@@ -304,6 +305,30 @@ def scan_paths(paths: list[Path]) -> list[str]:
     return findings
 
 
+def redact_private_path_text(text: str) -> str:
+    def replacement(match: re.Match[str]) -> str:
+        path = Path(match.group(0))
+        return f"<private-path>/{path.name or 'path'}"
+
+    return ABSOLUTE_PRIVATE_PATH_VALUE_RE.sub(replacement, text)
+
+
+def sanitize_public_json_value(value: Any, key: str = "") -> Any:
+    redacted = redact_value(value, key)
+    if isinstance(redacted, str):
+        return redact_private_path_text(redacted)
+    if isinstance(redacted, list):
+        return [sanitize_public_json_value(item) for item in redacted]
+    if isinstance(redacted, tuple):
+        return [sanitize_public_json_value(item) for item in redacted]
+    if isinstance(redacted, dict):
+        return {
+            str(child_key): sanitize_public_json_value(child_value, str(child_key))
+            for child_key, child_value in redacted.items()
+        }
+    return redacted
+
+
 def resolve_supporting_path(path: str | Path | None, *, kind: str) -> tuple[Path | None, dict[str, str] | None]:
     if not path:
         return None, None
@@ -317,6 +342,32 @@ def resolve_supporting_path(path: str | Path | None, *, kind: str) -> tuple[Path
             "reason": "serving-eval directories can contain private run manifests; scores.csv is the sanitized public evidence file",
         }
     return resolved, None
+
+
+def materialize_public_supporting_path(path: Path, *, kind: str, output_dir: Path) -> tuple[Path, dict[str, str] | None]:
+    if not path.is_file() or path.suffix.lower() != ".json":
+        return path, None
+    findings = scan_text_file(path)
+    if not findings:
+        return path, None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return path, None
+    sanitized = sanitize_public_json_value(data)
+    evidence_dir = output_dir / "supporting_evidence"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    sanitized_path = evidence_dir / f"{sanitize_run_id(kind)}_{path.name}"
+    sanitized_path.write_text(json.dumps(sanitized, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return sanitized_path, {
+        "kind": kind,
+        "input": publish_path_label(path) or str(path),
+        "used": publish_path_label(sanitized_path) or str(sanitized_path),
+        "reason": (
+            "source JSON evidence contained public-scan findings "
+            f"({'; '.join(findings[:3])}); wrote a sanitized copy"
+        ),
+    }
 
 
 def list_model_files(path: Path | None, *, include_weights: bool, include_adapter: bool, limit: int = 200) -> tuple[list[str], list[str]]:
@@ -352,6 +403,81 @@ def default_repo_id(family: str, variant: str, config: Mapping[str, Any]) -> str
     return f"{owner}/{slug_for(family, variant)}"
 
 
+def format_number(value: Any, *, suffix: str = "") -> str:
+    if isinstance(value, bool):
+        return str(value)
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "n/a"
+    if abs(number) >= 100:
+        text = f"{number:.1f}"
+    elif abs(number) >= 10:
+        text = f"{number:.2f}"
+    else:
+        text = f"{number:.3f}"
+    return f"{text}{suffix}"
+
+
+def speedup_from_serving_delta(delta: Mapping[str, Any] | None) -> float | None:
+    if not isinstance(delta, Mapping):
+        return None
+    try:
+        source = float(delta.get("source"))
+        candidate = float(delta.get("candidate"))
+    except (TypeError, ValueError):
+        return None
+    if source == 0:
+        return None
+    return candidate / source
+
+
+def quantization_summary_lines(
+    *,
+    quantization_card: Path | None,
+    promotion_report: Path | None,
+) -> list[str]:
+    lines: list[str] = []
+    card = load_optional_json(quantization_card) if quantization_card else None
+    if card:
+        serving_deltas = card.get("serving_deltas") or {}
+        output_delta = serving_deltas.get("output_tokens_per_second_p50")
+        decode_heavy_delta = serving_deltas.get("decode_heavy_output_tokens_per_second_p50")
+        if isinstance(output_delta, Mapping):
+            speedup = speedup_from_serving_delta(output_delta)
+            lines.append(
+                "output p50 tok/s: "
+                f"source {format_number(output_delta.get('source'))}, "
+                f"candidate {format_number(output_delta.get('candidate'))}, "
+                f"speedup {format_number(speedup, suffix='x')}"
+            )
+        if isinstance(decode_heavy_delta, Mapping):
+            speedup = speedup_from_serving_delta(decode_heavy_delta)
+            lines.append(
+                "decode-heavy output p50 tok/s: "
+                f"source {format_number(decode_heavy_delta.get('source'))}, "
+                f"candidate {format_number(decode_heavy_delta.get('candidate'))}, "
+                f"speedup {format_number(speedup, suffix='x')}"
+            )
+    promotion = load_optional_json(promotion_report) if promotion_report else None
+    if promotion:
+        if promotion.get("nvfp4_ready") is not None:
+            lines.append(f"NVFP4 evidence gate ready: {promotion.get('nvfp4_ready')}")
+        metrics = promotion.get("metrics") or {}
+        if isinstance(metrics, Mapping):
+            if metrics.get("output_tokens_per_second_speedup") is not None:
+                lines.append(
+                    "NVFP4 gate output speedup: "
+                    f"{format_number(metrics.get('output_tokens_per_second_speedup'), suffix='x')}"
+                )
+            if metrics.get("decode_heavy_output_tokens_per_second_speedup") is not None:
+                lines.append(
+                    "NVFP4 gate decode-heavy speedup: "
+                    f"{format_number(metrics.get('decode_heavy_output_tokens_per_second_speedup'), suffix='x')}"
+                )
+    return lines
+
+
 def generate_model_card(
     *,
     family: str,
@@ -360,6 +486,9 @@ def generate_model_card(
     release_class: Mapping[str, Any],
     repo_id: str,
     validation_state: str,
+    evidence_paths: Mapping[str, Path],
+    supporting_path_rewrites: list[dict[str, str]],
+    quantization_summary: list[str],
 ) -> str:
     base_model = variant_info.get("repo_id") or variant_info.get("served_model_name") or "unknown"
     quantization = variant_info.get("quantization")
@@ -370,6 +499,22 @@ def generate_model_card(
     if adapter:
         tags.append("adapter")
     tags_yaml = "\n".join(f"  - {tag}" for tag in tags)
+    evidence_lines = "\n".join(
+        f"- {kind.replace('_', ' ').title()}: `{publish_path_label(path)}`"
+        for kind, path in evidence_paths.items()
+    )
+    evidence_lines = evidence_lines or "- No supporting evidence paths were supplied."
+    rewrite_lines = "\n".join(
+        f"- {rewrite['kind']}: `{rewrite['input']}` -> `{rewrite['used']}` ({rewrite['reason']})"
+        for rewrite in supporting_path_rewrites
+    )
+    rewrite_section = (
+        f"\nEvidence path rewrites applied for public release hygiene:\n\n{rewrite_lines}\n"
+        if rewrite_lines
+        else ""
+    )
+    quantization_lines = "\n".join(f"- {line}" for line in quantization_summary)
+    quantization_section = f"\nQuantization summary:\n\n{quantization_lines}\n" if quantization_lines else ""
     return f"""---
 language:
   - en
@@ -399,9 +544,13 @@ This repository is a Model Forge release artifact for `{family}` / `{variant}`.
 
 ## Evidence
 
-This card is generated from a dry-run Model Forge Hub plan. Attach eval,
-serving, quantization, artifact execution, and promotion reports before making
-public quality claims.
+This card is generated from a dry-run Model Forge Hub plan. The release plan
+must pass before upload.
+
+Provided evidence:
+
+{evidence_lines}
+{rewrite_section}{quantization_section}
 
 ## Reproducibility
 
@@ -545,6 +694,7 @@ def build_model_plan(args: argparse.Namespace) -> dict[str, Any]:
     repo_id = args.repo_id or default_repo_id(args.family, args.variant, hub_config)
     run_id = args.run_id or sanitize_run_id(f"{args.family}_{args.variant}_{args.release_class}_hf_plan")
     output_dir = resolve_path(args.output_dir) if args.output_dir else DEFAULT_OUTPUT_ROOT / run_id
+    output_dir.mkdir(parents=True, exist_ok=True)
     include_weights = bool(release_class.get("publish_weights", False))
     include_adapter = bool(release_class.get("publish_adapter", False))
     include_model_artifact = include_weights or include_adapter
@@ -563,6 +713,7 @@ def build_model_plan(args: argparse.Namespace) -> dict[str, Any]:
     )
 
     extra_paths: list[Path] = []
+    evidence_paths: dict[str, Path] = {}
     supporting_path_rewrites: list[dict[str, str]] = []
     for kind, raw_path in [
         ("eval_results", args.eval_results),
@@ -573,11 +724,24 @@ def build_model_plan(args: argparse.Namespace) -> dict[str, Any]:
         ("manifest", args.manifest),
     ]:
         resolved_path, rewrite = resolve_supporting_path(raw_path, kind=kind)
+        public_rewrite = None
         if resolved_path:
-            extra_paths.append(resolved_path)
+            public_path, public_rewrite = materialize_public_supporting_path(
+                resolved_path,
+                kind=kind,
+                output_dir=output_dir,
+            )
+            extra_paths.append(public_path)
+            evidence_paths[kind] = public_path
         if rewrite:
             supporting_path_rewrites.append(rewrite)
+        if public_rewrite:
+            supporting_path_rewrites.append(public_rewrite)
     included_scan_paths = ([model_path] if include_model_artifact and model_path and model_path.exists() else []) + extra_paths
+    quantization_summary = quantization_summary_lines(
+        quantization_card=evidence_paths.get("quantization_card"),
+        promotion_report=evidence_paths.get("promotion_report"),
+    )
     model_card = generate_model_card(
         family=args.family,
         variant=args.variant,
@@ -585,6 +749,9 @@ def build_model_plan(args: argparse.Namespace) -> dict[str, Any]:
         release_class=release_class,
         repo_id=repo_id,
         validation_state=args.validation_state,
+        evidence_paths=evidence_paths,
+        supporting_path_rewrites=supporting_path_rewrites,
+        quantization_summary=quantization_summary,
     )
     gates = build_release_gates(
         release_class=release_class,
@@ -621,7 +788,6 @@ def build_model_plan(args: argparse.Namespace) -> dict[str, Any]:
         "hub_publish_path": "hub_publish.json",
         "github_repo": REPO_URL,
     }
-    output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "README.md").write_text(model_card, encoding="utf-8")
     (output_dir / "hub_publish.json").write_text(
         json.dumps(redact_value(plan), indent=2, sort_keys=True) + "\n",

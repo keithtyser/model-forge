@@ -33,8 +33,10 @@ This is the short handoff state for humans and agents. Use
   Blackwell-quantization leg. HF upload/promotion still needs a public
   quantized-model release review rather than another quantization run. The Hub
   planner now rewrites a serving-eval directory passed via `--eval-results` to
-  its sanitized `scores.csv`, so public release plans do not fail just because
-  private absolute paths are present in ignored run manifests.
+  its sanitized `scores.csv`, and generated model cards include supplied
+  evidence paths plus NVFP4 speedup/readiness summaries, so public release plans
+  do not fail just because private absolute paths are present in ignored run
+  manifests.
 
 ## Validated So Far
 
