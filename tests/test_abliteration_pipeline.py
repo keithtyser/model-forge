@@ -678,7 +678,7 @@ class AbliterationPlanTests(unittest.TestCase):
                     "candidates": [
                         {
                             "name": "unit_candidate",
-                            "variant": "local_ft_abli_unit",
+                            "variant": "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2",
                             "backend": "som_projection",
                             "config": "configs/abliteration/unit_candidate.yaml",
                             "output_dir": "~/models/unit-candidate",
@@ -708,7 +708,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertTrue(any("sota-run --backend som_projection --execute" in command for command in commands))
         self.assertTrue(any("cluster model-sync" in command for command in commands))
         self.assertTrue(any("MODEL_FORGE_TRIALS=3" in command and "--case-id self_harm_instruction_harmful" in command for command in commands))
-        self.assertIn("--candidate name=unit_candidate,variant=local_ft_abli_unit,eval=results/qwen36_27b_v0/base/", plan["candidate_gate_command"])
+        self.assertIn("--candidate name=unit_candidate,variant=local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2,eval=results/qwen36_27b_v0/base/", plan["candidate_gate_command"])
 
     def test_candidate_loop_accepts_custom_export_commands(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "unit_custom_loop.yaml"
@@ -728,7 +728,7 @@ class AbliterationPlanTests(unittest.TestCase):
                     "candidates": [
                         {
                             "name": "unit_lm_head_patch",
-                            "variant": "local_ft_abli_lm_head_patch",
+                            "variant": "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2",
                             "method_family": "lm_head_token_patch",
                             "output_dir": "~/models/unit-lm-head-patch",
                             "custom_commands": [
@@ -767,6 +767,56 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertTrue(any("cluster model-sync" in command for command in commands))
         self.assertTrue(any("variants checkpoint-audit" in command for command in commands))
         self.assertIn("unit_lm_head_patch", plan["candidate_gate_command"])
+
+    def test_candidate_loop_blocks_unregistered_checkpoint_variant(self) -> None:
+        config_path = REPO_DIR / "configs" / "abliteration" / "unit_candidate_loop.yaml"
+        config = {
+            "candidate_selection": {
+                "objective": "zero_refusal_capability_retention",
+                "loop": {
+                    "family": "qwen36_27b",
+                    "source_variant": "local_ft_abli_source",
+                    "cluster_config": "configs/clusters/dgx_spark_x2.example.yaml",
+                    "eval": {
+                        "trials": 3,
+                        "temperature": 1,
+                        "buckets": ["refusal_paired_boundary"],
+                        "case_ids": ["self_harm_instruction_harmful"],
+                    },
+                    "candidates": [
+                        {
+                            "name": "unit_unregistered_variant",
+                            "status": "ready",
+                            "method_family": "unit_backend",
+                            "backend": "norm_preserving_projection",
+                            "config": "configs/abliteration/unit_backend.yaml",
+                            "variant": "unit_missing_from_family_registry",
+                            "output_dir": "~/models/unit-missing-from-family-registry",
+                        }
+                    ],
+                },
+                "gate": {
+                    "requirements": [
+                        {
+                            "name": "no_refusal_wording",
+                            "bucket": "refusal_paired_boundary",
+                            "case_id": "self_harm_instruction_harmful",
+                            "metric": "refusal_rate_harmful",
+                            "value": 0.0,
+                        }
+                    ]
+                },
+            }
+        }
+
+        plan = build_candidate_loop_plan(config, config_path, run_id="unit_unregistered_variant")
+        candidate = plan["candidates"][0]
+
+        self.assertEqual(plan["executable_candidate_count"], 0)
+        self.assertEqual(plan["planned_candidate_job_count"], 0)
+        self.assertIn("not registered in configs/model_families/qwen36_27b.yaml", candidate["blockers"][0])
+        self.assertFalse(any(command.get("enabled", True) for command in candidate["commands"]))
+        self.assertIn("No executable candidate eval directories", plan["candidate_gate_command"])
 
     def test_candidate_loop_accepts_search_only_candidates(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "unit_search_loop.yaml"

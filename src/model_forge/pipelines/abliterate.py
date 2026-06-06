@@ -6074,6 +6074,9 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
         "case_ids": (loop.get("eval") or {}).get("case_ids") or ["self_harm_instruction_harmful", "model_selection_summary"],
     }
     output_root = family_eval_output_root(family)
+    family_path = REPO_DIR / "configs" / "model_families" / f"{family}.yaml"
+    family_config = load_yaml(family_path)
+    family_variants = family_config.get("variants") or {}
     run_id = run_id or sanitize_report_id(f"{Path(config_path).stem}_candidate_loop")
     commands: list[dict[str, Any]] = [
         command_entry("./forge doctor", phase="preflight", purpose="Verify repo hygiene, secrets, and local configuration before launching candidates."),
@@ -6097,7 +6100,7 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
         candidate_config = candidate.get("config")
         backend = candidate.get("backend")
         output_dir = candidate.get("output_dir")
-        custom_commands = candidate_custom_command_entries(candidate, blocked=blocked)
+        has_custom_commands = bool(candidate.get("custom_commands") or candidate.get("commands") or [])
         eval_suffix = candidate_loop_eval_suffix(family, candidate, int(eval_spec["trials"]))
         eval_dir = display_path(output_root / eval_suffix)
         candidate_export_env = {
@@ -6109,10 +6112,16 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
         blockers: list[str] = []
         if blocked:
             blockers.append(str(candidate.get("blocker") or f"candidate status is {status}"))
-        if not candidate_config and not custom_commands and not blocked:
+        if produces_checkpoint and variant not in family_variants and not blocked:
+            blockers.append(
+                f"candidate variant {variant} is not registered in configs/model_families/{family}.yaml"
+            )
+        if not candidate_config and not has_custom_commands and not blocked:
             blockers.append("candidate config is missing")
-        if not backend and not custom_commands and not blocked:
+        if not backend and not has_custom_commands and not blocked:
             blockers.append("candidate backend is missing")
+        command_blocked = bool(blockers)
+        custom_commands = candidate_custom_command_entries(candidate, blocked=command_blocked)
         if candidate_config and backend:
             candidate_commands.extend([
                 command_entry(
@@ -6120,14 +6129,14 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
                     phase="candidate_plan",
                     candidate=name,
                     purpose="Inspect the backend plan without loading model weights.",
-                    enabled=not blocked,
+                    enabled=not command_blocked,
                 ),
                 command_entry(
                     f"./forge ablate --config {candidate_config} sota-prepare --backend {backend}",
                     phase="candidate_prepare",
                     candidate=name,
                     purpose="Write backend-specific runner/config artifacts for this candidate.",
-                    enabled=not blocked,
+                    enabled=not command_blocked,
                 ),
                 command_entry(
                     " ".join([
@@ -6141,11 +6150,11 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
                     purpose="Run the guarded backend export for this candidate.",
                     starts_heavy_job=True,
                     requires_execute=True,
-                    enabled=not blocked,
+                    enabled=not command_blocked,
                 ),
             ])
         candidate_commands.extend(custom_commands)
-        if cluster_config and output_dir and not blocked and produces_checkpoint:
+        if cluster_config and output_dir and not command_blocked and produces_checkpoint:
             model_sync_parts = [
                 "./forge cluster model-sync",
                 f"--config {cluster_config}",
@@ -6165,7 +6174,7 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
                 starts_heavy_job=True,
                 requires_execute=True,
             ))
-        if not blocked and produces_checkpoint:
+        if not command_blocked and produces_checkpoint:
             candidate_commands.extend([
                 command_entry(
                     f"./forge variants checkpoint-audit {family} --variant {variant} --strict --json",

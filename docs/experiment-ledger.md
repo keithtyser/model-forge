@@ -8467,3 +8467,19 @@ manifests to fail early when realized rows fall below a configured floor and
 register candidate variants before sync/audit. The rejected full V42 checkpoint
 was deleted from both Sparks after evidence was captured; adapter/config/report
 and safe aggregate eval evidence were retained.
+
+Follow-up repo fix: `candidate-loop-plan` now blocks ready checkpoint candidates
+whose target variant is not registered in `configs/model_families/<family>.yaml`.
+This turns the V42 manual-registration pain point into a preflight blocker before
+export/sync/audit/serve commands are enabled. Validation:
+
+```bash
+PYTHONPATH=src python3 -m unittest \
+  tests.test_abliteration_pipeline.AbliterationPlanTests.test_candidate_loop_plan_writes_sequential_runbook_for_ready_candidate \
+  tests.test_abliteration_pipeline.AbliterationPlanTests.test_candidate_loop_accepts_custom_export_commands \
+  tests.test_abliteration_pipeline.AbliterationPlanTests.test_candidate_loop_blocks_unregistered_checkpoint_variant \
+  tests.test_abliteration_pipeline.AbliterationPlanTests.test_candidate_loop_accepts_search_only_candidates \
+  tests.test_abliteration_pipeline.AbliterationPlanTests.test_qwen_candidate_loop_blocks_rejected_sae_through_v42_and_has_no_ready_candidate \
+  tests.test_abliteration_pipeline.AbliterationPlanTests.test_candidate_loop_blocks_rejected_v21_to_v42_and_has_no_ready_candidate -v
+./forge doctor
+```

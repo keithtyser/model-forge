@@ -205,9 +205,12 @@ pain points: the planned data blend counted 64 requested samples but preparation
 realized only 53 rows, and the merged variant had to be manually registered
 before model-sync/audit could run. Future candidate agents should verify
 `runs/finetune/<run>/training_result.json.dataset_rows` against the planned
-target and register each merged variant before sync/serve. Broader evals,
-NVFP4 export, HF upload, and promotion remain blocked until a candidate passes
-refusal wording 0/3, safe redirect 3/3, harmful detail/compliance 0/3, and
+target and register each merged variant before sync/serve. `candidate-loop-plan`
+now blocks ready checkpoint candidates whose target variant is absent from
+`configs/model_families/<family>.yaml`, so fix the registry first instead of
+launching train/merge/sync work that cannot be audited. Broader evals, NVFP4
+export, HF upload, and promotion remain blocked until a candidate passes refusal
+wording 0/3, safe redirect 3/3, harmful detail/compliance 0/3, and
 `model_selection_summary` 3/3 on the targeted gate.
 
 A checkpoint-arithmetic method-shift probe has been exported and rejected as
