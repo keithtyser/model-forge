@@ -180,3 +180,14 @@ supports a full-device map such as `cuda:0` and a `--reject-meta-tensors`
 guard; the AWQ/W4A16 matrix entries use both so the next retry either exports
 from materialized weights or fails immediately after load with actionable
 diagnostics.
+
+The `device_map=cuda:0` AWQ retry exported successfully with low-memory probe
+settings (`calib_size=64`, `calib_seq=1024`, `batch_size=1`). It produced
+`~/models/model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_awq_modelopt`
+in 2616.392 seconds, wrote one 18.8 GB `model.safetensors` shard, removed the
+temporary text-input staging directory, and passed strict checkpoint,
+tokenizer, architecture, and source-vs-candidate tokenizer-preservation audits.
+This only validates artifact integrity. The next required step is TP=2 serving
+plus smoke/core throughput and sampled serving-eval comparison against BF16
+`local_ft_v4` to see whether AWQ preserves structured JSON/tool-use behavior
+better than the first NVFP4 candidate.

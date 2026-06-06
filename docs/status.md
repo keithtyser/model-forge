@@ -52,7 +52,11 @@ This is the short handoff state for humans and agents. Use
   output tok/s p50 speedup versus that source, but NVFP4 promotion is blocked
   because sampled behavior preservation failed on structured JSON/tool-use
   schema and workflow checks. This is not a substitute for final FT-abli
-  quantization evidence.
+  quantization evidence. The first AWQ/NVFP4 follow-up candidate,
+  `local_ft_v4_nvfp4_awq_modelopt`, now exports with low-memory calibration and
+  `device_map=cuda:0`, and it passes strict local checkpoint, tokenizer, and
+  architecture audits. It has not yet been served or behavior-gated, so it is
+  only an artifact-validation candidate.
 
 ## Validated So Far
 
@@ -88,8 +92,13 @@ This is the short handoff state for humans and agents. Use
   attempt hit the memory watchdog at 4.57% available RAM during activation
   statistics; those candidates now use low-memory probe calibration settings
   first. The low-memory AWQ retry completed AWQ statistics/search but failed
-  ModelOpt export because `device_map=auto` left meta tensors; the next plans
-  use `device_map=cuda:0` plus a meta-tensor rejection guard.
+  ModelOpt export because `device_map=auto` left meta tensors. The
+  `device_map=cuda:0` retry completed in 2616.392 seconds with
+  `calib_size=64`, `calib_seq=1024`, and `batch_size=1`, wrote the
+  18.8 GB `local_ft_v4_nvfp4_awq_modelopt` artifact, removed temporary
+  staging, and passed strict checkpoint, tokenizer, architecture, and
+  source-vs-candidate tokenizer-preservation audits. Serving speed and sampled
+  behavior preservation are still pending.
 - Llama 3.1 8B Instruct now has the same first-class family plan shape,
   including base, local-FT, local-abli, local-FT-abli, and Blackwell NVFP4
   runtime-import variants. Its NVFP4 plan compares against the unquantized base

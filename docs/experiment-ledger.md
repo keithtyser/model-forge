@@ -36,7 +36,10 @@ completed sampled serving eval, and passed the serving evidence gate. The exact
 unquantized `local_ft_v4` BF16 source serving/eval baseline is now available,
 and the quantization card shows strong source-relative speedup. Do not promote
 or upload as release quality because the behavior-preservation report failed on
-structured JSON/tool-use schema and workflow checks.
+structured JSON/tool-use schema and workflow checks. The AWQ/NVFP4 follow-up
+candidate `local_ft_v4_nvfp4_awq_modelopt` has now exported and passed strict
+local structural/tokenizer audits, but it has not yet been served or
+behavior-gated.
 
 Hypothesis: ModelOpt NVFP4 should preserve the promoted Qwen local FT v4
 serving behavior closely enough for continued validation while improving tok/s
@@ -74,6 +77,8 @@ Evidence:
   `reports/generated/quantization/qwen36_local_ft_v4_bf16_vs_nvfp4_modelopt_20260606`
 - serving-eval comparison:
   `reports/generated/serving_eval_comparisons/qwen36_local_ft_v4_bf16_vs_nvfp4_json_tool_regression_20260606`
+- AWQ tokenizer-preservation report:
+  `reports/generated/quantization/qwen36_local_ft_v4_bf16_vs_nvfp4_awq_modelopt_20260606`
 
 Result: the core serving benchmark completed 9/9 requests at success rate 1.0,
 13.0560 mean output tok/s, 13.9418 mean decode tok/s, 33.2008 mean total tok/s,
@@ -108,6 +113,22 @@ data!`. The Qwen text ModelOpt helper now accepts full-device maps such as
 matrix entries now use `device_map=cuda:0` plus `reject_meta_tensors=true` so
 the next retry does not spend another full AWQ search on an unexportable
 offloaded model.
+
+The `device_map=cuda:0` AWQ retry succeeded. It used `nvfp4_awq`,
+`dataset=cnn_dailymail,wikipedia`, `calib_size=64`, `calib_seq=1024`, and
+`batch_size=1`, completed in 2616.392 seconds, wrote
+`~/models/model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_awq_modelopt`,
+and removed the temporary text-input staging directory. Export summary:
+`wrapper_tensor_count=2467`, `wrapper_shard_count=1`, and
+`wrapper_total_size=18791091072` bytes. Strict checkpoint, tokenizer, and
+architecture audits all passed, and the source-vs-candidate tokenizer report
+passed with matching tokenizer/config/chat-template hashes.
+
+Decision: treat `local_ft_v4_nvfp4_awq_modelopt` as structurally valid but not
+promotable yet. Next required evidence is TP=2 serving on the two-Spark path,
+smoke/core serving benchmarks, and the same sampled serving eval comparison
+against the BF16 `local_ft_v4` source to test whether AWQ fixes the structured
+JSON/tool-use regression.
 
 ## Qwen 3.6 27B: Native OT Diagnostic Path
 
