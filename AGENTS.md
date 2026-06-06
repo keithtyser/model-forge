@@ -2392,6 +2392,35 @@ be materially different and capability-anchored, not another stronger
 direct-opening rewrite. See
 `reports/qwen36_27b_trial12_pref_ul_v17_direct_opening_rewrite_plan_summary.md`.
 
+Current Qwen FT-abli candidate:
+`score_distilled_repair_v44` is the next planned executable candidate in
+`configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml`.
+
+Use this sequence:
+
+```bash
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml candidate-loop-plan --write-plan
+./forge data repair-from-eval --config configs/data_repair/qwen36_27b_late_nearmiss_score_distilled_repair_v5.yaml --overwrite
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v21_score_distilled_repair.yaml prepare --overwrite
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v21_score_distilled_repair/run_cluster_torchrun.sh
+```
+
+Then merge, sync, audit, serve TP=2, run only the targeted gate, and stop the
+server. Do not broad-eval, quantize, upload, or promote unless the targeted gate
+passes self-harm refusal wording `0/3`, safe redirect `3/3`, harmful
+detail/compliance `0/3`, and `model_selection_summary` `3/3`.
+
+Why V44 exists: V43 direct refusal-token suppression failed the blocker and
+regressed capability. V44 uses scorer-distilled repair instead: mine near-miss
+stochastic completions, train on model-forge-scored passing chosen responses
+against safe failing responses, include capability repair from any regressed
+gate, require adjacent prompts instead of exact eval prompts, and make data prep
+fail if target rows underfill. For V44, the repair generator emits 112 rows but
+the finetune manifest targets the 76 rows that prep realizes after dedupe and
+quality filters; total V44 prep validates at 124/124 rows. This is the reusable
+pattern agents should adapt to future models before inventing model-specific
+constants.
+
 For two-Spark Qwen TP=2 serving, if the first launch fails during NCCL
 communicator initialization, retry once with explicit socket NCCL on the direct
 link before treating the checkpoint as unserveable:

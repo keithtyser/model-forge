@@ -1065,6 +1065,49 @@ class FinetunePlanTests(unittest.TestCase):
         self.assertIn("Refusal-token unlikelihood weight: `0.85`", method_card)
         self.assertIn("primary_hand_reviewed_care_first_opening_repair", method_card)
 
+    def test_qwen36_trial12_v21_score_distilled_repair_from_v16(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "finetuning"
+            / "qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v21_score_distilled_repair.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["run_dir"] = tmp
+            plan = build_plan(config, config_path)
+            outputs = write_artifacts(plan, overwrite=False)
+            trainer_script = Path(outputs["trainer"]).read_text()
+            method_card = Path(outputs["method_card"]).read_text()
+
+        self.assertEqual(plan["family"], "qwen36_27b")
+        self.assertEqual(
+            plan["eval"]["source_variant"],
+            "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v16_sampled_gate_repair",
+        )
+        self.assertTrue(any(
+            "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v21_score_distilled_repair" in command
+            for command in plan["eval"]["commands"]
+        ))
+        self.assertEqual(plan["trainer"]["method"], "qlora_pairwise_preference_unlikelihood")
+        self.assertEqual(plan["trainer"]["learning_rate"], 0.0000005)
+        self.assertEqual(plan["trainer"]["preference_weight"], 0.85)
+        self.assertEqual(plan["trainer"]["unlikelihood_scope"], "assistant_prefix")
+        self.assertEqual(plan["trainer"]["unlikelihood_prefix_tokens"], 48)
+        self.assertEqual(plan["trainer"]["max_steps"], 96)
+        self.assertEqual(plan["data"]["target_samples"], 124)
+        self.assertTrue(plan["data"]["quality_gates"]["require_target_samples"])
+        self.assertEqual(plan["data"]["quality_gates"]["min_realized_sample_fraction"], 1.0)
+        source_targets = {source["id"]: source["target_samples"] for source in plan["data"]["sources"]}
+        self.assertEqual(source_targets["qwen36_late_nearmiss_score_distilled_repair_v5"], 76)
+        self.assertEqual(source_targets["qwen36_local_ft_v4_capability_replay_v3"], 17)
+        self.assertIn("scorer_distilled_preference", plan["data"]["quality_gates"]["target_behavior"])
+        self.assertIn("source_is_local_file", trainer_script)
+        self.assertIn("len(rows) >= target", trainer_script)
+        self.assertIn("sampled", trainer_script)
+        self.assertIn("primary_score_distilled_nearmiss_repair", method_card)
+        self.assertIn("qwen36_late_nearmiss_score_distilled_repair_v5: 76 rows", method_card)
+
     def test_qwen36_trial12_v19_care_first_seed_avoids_refusal_openings(self) -> None:
         import json
 
@@ -1163,6 +1206,8 @@ class FinetunePlanTests(unittest.TestCase):
             self.assertIn("planned_target_rows", trainer_script)
             self.assertIn("min_realized_sample_fraction", trainer_script)
             self.assertIn("underfilled", trainer_script)
+            self.assertIn("source_is_local_file", trainer_script)
+            self.assertIn("len(rows) >= target", trainer_script)
             self.assertIn('"lora": {', trainer_script)
             self.assertIn('"target_modules": list(plan["lora"].get("target_modules", []))', trainer_script)
             method_card = Path(outputs["method_card"]).read_text()

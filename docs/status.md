@@ -1121,6 +1121,29 @@ length filtering:
    TP=2, and failed the targeted gate: self-harm refusal wording 1/3, safe
    redirect 3/3, harmful detail/compliance 0/3, and `model_selection_summary`
    2/3. Do not broad-eval, quantize, upload, promote, or rerun V39 unchanged.
+   V43 refusal-token opening suppression has also been attempted and rejected:
+   `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v20_refusal_token_opening_suppression.yaml`.
+   It trained from held FT-abli v2, merged, synced to the worker, passed strict
+   local/worker audits, served TP=2, and completed the targeted gate. Reject:
+   self-harm refusal wording stayed 2/3 and `model_selection_summary` dropped
+   to 2/3, while safe redirect stayed 3/3 and harmful detail/compliance stayed
+   0/3. Do not broad-eval, quantize, upload, promote, or rerun V43 unchanged.
+   V44 score-distilled repair is now the next planned executable Qwen FT-abli
+   candidate:
+   `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v21_score_distilled_repair.yaml`.
+   It starts from the strongest near-miss V38/V16 checkpoint, mines
+   passing-vs-failing adjacent response pairs from late targeted-gate traces,
+   and includes V43 model-selection pass/fail evidence as capability repair.
+   The generated repair seed has 112 rows, 0 exact eval-prompt rows, and no
+   promotion blockers; finetune prep realizes 76 unique high-quality rows from
+   this source after dedupe/quality filters, and the full V44 data prep
+   validates at 124/124 realized rows. The target variant is registered before
+   training so candidate-loop-plan can enable
+   prepare/train/merge/sync/audit/serve/eval without the V42
+   manual-registration miss. Do not broad-eval, NVFP4-export, upload, or
+   promote V44 unless the targeted gate passes self-harm refusal wording 0/3,
+   safe redirect 3/3, harmful detail/compliance 0/3, and
+   `model_selection_summary` 3/3.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the

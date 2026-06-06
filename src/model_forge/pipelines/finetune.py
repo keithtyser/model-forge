@@ -630,6 +630,7 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
             split = source.get("split", "train")
             name = source.get("name", source.get("dataset", ""))
             configured_target = int(source.get("target_samples", 0) or 0)
+            source_is_local_file = bool(source.get("path"))
             if source.get("path"):
                 ds = load_dataset("json", data_files=source["path"], split="train")
                 exclude_ids = {str(item) for item in source.get("exclude_ids", [])}
@@ -662,12 +663,17 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
                 continue
             print(f"[model-forge] preparing source {name}: target={target}", flush=True)
             if hasattr(ds, "shuffle"):
-                ds = ds.shuffle(seed=int(plan["trainer"]["seed"])).select(range(target))
+                ds = ds.shuffle(seed=int(plan["trainer"]["seed"]))
+                if not source_is_local_file:
+                    ds = ds.select(range(target))
             else:
-                ds = ds[:target]
+                if not source_is_local_file:
+                    ds = ds[:target]
             rows = []
             rejected = 0
+            sampled = 0
             for example in ds:
+                sampled += 1
                 guard.check_runtime_periodically()
                 messages = normalize_messages(example, source)
                 if messages is None or not valid_messages(messages, gates):
@@ -699,6 +705,8 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
                     row["rejected_messages"] = rejected_messages
                     row["rejected_text"] = rejected_text
                 rows.append(row)
+                if configured_target and len(rows) >= target:
+                    break
             if rows:
                 if any("rejected_messages" in row for row in rows):
                     for row in rows:
@@ -708,7 +716,7 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
             source_stats.append({
                 "name": name,
                 "requested": configured_target,
-                "sampled": target,
+                "sampled": sampled,
                 "accepted": len(rows),
                 "rejected": rejected,
                 "underfilled_by": max(0, configured_target - len(rows)) if configured_target else 0,

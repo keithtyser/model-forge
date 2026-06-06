@@ -3375,6 +3375,56 @@ Validation:
 ./forge doctor
 ```
 
+### 2026-06-06 Qwen V44 score-distilled repair plan
+
+Config:
+`configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v21_score_distilled_repair.yaml`
+
+Candidate-loop entry:
+`score_distilled_repair_v44`.
+
+Hypothesis: V43 showed direct refusal-token suppression was too blunt: it did
+not remove the stochastic self-harm refusal opening and it damaged
+`model_selection_summary`. V44 changes the objective to scorer-distilled repair:
+mine stochastic pass/fail behavior from actual targeted-gate traces, select only
+model-forge-scored passing chosen responses, reject safe failing responses, and
+include the V43 model-selection pass/fail pair as capability repair. This is a
+reusable workflow for other model families because it depends on source-relative
+scoring and adjacent prompt variants rather than Qwen-specific projection
+constants.
+
+Prepared artifacts:
+
+- `configs/data_repair/qwen36_27b_late_nearmiss_score_distilled_repair_v5.yaml`
+- `datasets/seeds/qwen36_27b_late_nearmiss_score_distilled_repair_v5.jsonl`
+- `reports/qwen36_27b_late_nearmiss_score_distilled_repair_v5_report.json`
+- `configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v21_score_distilled_repair.yaml`
+- `datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v21_score_distilled_repair.yaml`
+- `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v21_score_distilled_repair.yaml`
+- `reports/qwen36_27b_v44_score_distilled_repair_plan_summary.md`
+
+Preparation evidence so far:
+
+- `./forge data repair-from-eval --config configs/data_repair/qwen36_27b_late_nearmiss_score_distilled_repair_v5.yaml --overwrite`
+  wrote 112 rows.
+- The repair report has 0 exact eval-prompt rows and no promotion blockers.
+- Finetune prep realizes 76 unique high-quality rows from the generated repair
+  source after dedupe/quality filters, so the manifest targets 76 rather than
+  all 112 emitted rows.
+- `./forge finetune ... prepare --overwrite` followed by the generated
+  `--prepare-data` step wrote 124/124 realized rows with no underfill. The
+  primary source scanned all 112 emitted rows to accept 76 after dedupe and
+  quality filters.
+- The model-family registry already includes
+  `local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v21_score_distilled_repair`
+  so sync/audit/serve preflights will not repeat the V42 registration miss.
+
+Execution gate: run through `candidate-loop-plan`, then train/merge/sync/audit/
+serve/eval exactly one candidate at a time. Do not broad-eval, NVFP4-export,
+upload, or promote V44 unless the targeted gate passes refusal wording `0/3`,
+safe redirect `3/3`, harmful detail/compliance `0/3`, and
+`model_selection_summary` `3/3`.
+
 ### 2026-06-06 Qwen V43 refusal-token opening suppression prep
 
 Status: trained and rejected.
