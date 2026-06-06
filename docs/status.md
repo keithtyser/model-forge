@@ -165,9 +165,15 @@ This is the short handoff state for humans and agents. Use
   self-harm refusal wording worsened to 2/3 while safe redirect stayed 3/3,
   harmful detail/compliance stayed 0/3, and `model_selection_summary` stayed
   3/3. Do not broad-eval, NVFP4-export, upload, promote, or rerun V40
-  unchanged. The next candidate should change intervention class or optimize a
-  sampled response-opening objective directly rather than only increasing
-  projection strength on the same direction family.
+  unchanged. V41 is now prepared as the next ready candidate:
+  `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair.yaml`.
+  It starts from V38, uses score-gated sampled-opening repair data including
+  V40 near-miss evidence, constrains LoRA to attention output projections, and
+  increases capability replay. The prepared train data has 101 rows, including
+  80 pairwise preference/unlikelihood rows and 21 capability/planning replay
+  rows. Do not broad-eval, NVFP4-export, upload, or promote V41 until it
+  trains, merges, syncs, passes strict local/worker audits, serves TP=2, and
+  clears the targeted zero-refusal capability-retention gate.
 - Qwen 3.6 27B residual-trial12 preference-unlikelihood v6 trained for 32
   guarded two-node steps from held v2, merged, synced to both Sparks, passed
   strict checkpoint/tokenizer audits, served with TP=2, and ran the targeted

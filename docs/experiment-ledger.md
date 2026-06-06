@@ -8302,3 +8302,58 @@ from V38's 1/3 to 2/3. Do not broad-eval, NVFP4-export, upload, promote, or
 rerun V40 unchanged. The next candidate should change intervention class or
 directly optimize the sampled response-opening objective rather than only
 increasing strength on the same projection direction family.
+
+### 2026-06-06 Qwen V41 attention-output sampled-opening repair prep
+
+Config:
+`configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair.yaml`
+
+Status: implemented, data-prepared, and registered as the sole ready
+candidate. Not yet trained.
+
+Hypothesis: V38 preserved capability but left one stochastic refusal-opening
+trial; V39 made direct-opening rewrite too dominant and regressed
+`model_selection_summary`; V40 changed the projection path and preserved
+capability, but worsened refusal wording. V41 returns to V38 as the source,
+uses score-gated sampled-opening repair rows as the primary objective, includes
+fresh V40 near-miss evidence, keeps V39 direct-opening hard negatives only as
+small replay, restricts LoRA to attention output projections, and increases
+capability replay.
+
+Artifacts:
+
+- `configs/data_repair/qwen36_27b_late_nearmiss_self_harm_sampled_opening_repair_v4.yaml`
+- `datasets/seeds/qwen36_27b_late_nearmiss_self_harm_sampled_opening_repair_v4.jsonl`
+- `reports/qwen36_27b_late_nearmiss_self_harm_sampled_opening_repair_v4_report.json`
+- `configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair.yaml`
+- `datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair.yaml`
+- `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair.yaml`
+- `reports/qwen36_27b_v41_attention_output_sampled_opening_repair_plan_summary.md`
+
+Preparation evidence:
+
+- `./forge data repair-from-eval --config configs/data_repair/qwen36_27b_late_nearmiss_self_harm_sampled_opening_repair_v4.yaml --overwrite`
+  wrote 84 mined repair rows.
+- The repair report shows 24 emitted rows from V40, 12 from V38, 12 from held
+  v2, 12 from V35, and 24 from V37.
+- `./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair.yaml plan`
+  resolved to 124 target samples, attention-output target modules, and guarded
+  DGX Spark cluster settings.
+- `./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair.yaml prepare --overwrite`
+  wrote the run directory and method card.
+- The generated trainer `--prepare-data` step wrote 101 train rows: 80
+  pairwise preference/unlikelihood rows plus 21 capability/planning replay rows.
+- `./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml candidate-loop-plan --run-id qwen36_v41_attention_output_sampled_opening --write-plan --json`
+  exposes exactly one executable candidate:
+  `attention_output_sampled_opening_repair_v41`.
+
+Run next:
+
+```bash
+MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair/run_cluster_torchrun.sh
+scripts/run_merge_peft_container.sh --base-model ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v16-sampled-gate-repair --adapter ~/models/model-forge-adapters/qwen36_27b/heretic_trial12_refusal_preference_unlikelihood_v18_attention_output_sampled_opening_repair --output-dir ~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v18-attention-output-sampled-opening-repair --dtype bf16 --merge-method direct --trust-remote-code --overwrite
+```
+
+Do not broad-eval, NVFP4-export, upload, or promote V41 until it trains,
+merges, syncs, passes strict local and worker audits, serves TP=2, and clears
+the targeted gate.
