@@ -26,6 +26,7 @@ from model_forge.quantization.cli import (
     build_nvfp4_gate_report,
     build_sensitivity_report,
     build_tokenizer_report,
+    config_from_matrix_entry,
     deep_merge_mappings,
     guard_export,
     build_plan,
@@ -1032,14 +1033,7 @@ class QuantizationCliTests(unittest.TestCase):
         config = load_quantization_config(Path("configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml"))
         source = resolve_source(config, "qwen36_27b", "local_ft_v4", {"MODEL_FORGE_MODELS_DIR": "/models-host"})
         entry = filter_matrix_entries(matrix_entries(config), "local_ft_v4_nvfp4_attention_output_bf16_modelopt")[0]
-        variant_config = config.__class__(
-            **{
-                **config.__dict__,
-                "target_variant": entry["target_variant"],
-                "runtime": deep_merge_mappings(config.runtime, entry.get("runtime")),
-                "export": deep_merge_mappings(config.export, entry.get("export")),
-            }
-        )
+        variant_config = config_from_matrix_entry(config, source=source, entry=entry)
         with tempfile.TemporaryDirectory() as tmp:
             export = build_modelopt_export_command(
                 variant_config,
@@ -1062,6 +1056,17 @@ class QuantizationCliTests(unittest.TestCase):
             export["target"]["served_model_name"],
             "model-forge/qwen36-27b-local-ft-v4-nvfp4-attn-output-bf16-modelopt",
         )
+
+    def test_config_from_matrix_entry_merges_runtime_export_and_calibration(self) -> None:
+        config = load_quantization_config(Path("configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml"))
+        source = resolve_source(config, "qwen36_27b", "local_ft_v4", {"MODEL_FORGE_MODELS_DIR": "/models-host"})
+        entry = filter_matrix_entries(matrix_entries(config), "local_ft_v4_nvfp4_mlp_only")[0]
+        variant_config = config_from_matrix_entry(config, source=source, entry=entry)
+
+        self.assertEqual(variant_config.target_variant, "local_ft_v4_nvfp4_mlp_only_modelopt")
+        self.assertEqual(variant_config.runtime["port"], 8022)
+        self.assertEqual(variant_config.export["ptq"]["disable_patterns"], ["*self_attn*", "*linear_attn*"])
+        self.assertEqual(variant_config.export["ptq"]["qformat"], "nvfp4")
 
     def test_modelopt_export_allows_calibration_dataset_override(self) -> None:
         config = load_quantization_config(Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml"))

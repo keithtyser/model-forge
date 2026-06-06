@@ -2352,6 +2352,7 @@ def add_export_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("family", nargs="?", help="Model family; defaults to config family")
     parser.add_argument("variant", nargs="?", help="Source variant; defaults to config source_variant")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument("--matrix-variant", help="Use one matrix entry by name, source variant, or target variant and execute its overrides")
     parser.add_argument("--target-variant", help="Target variant label for export metadata")
     parser.add_argument("--output-dir", type=Path, help="Quantized checkpoint output root")
     parser.add_argument("--run-id", help="Stable export run id")
@@ -2452,6 +2453,34 @@ def matrix_run_id(config: QuantizationConfig, entry: Mapping[str, Any]) -> str:
     source_variant = str(entry.get("source_variant") or config.source_variant or "runtime")
     target_variant = str(entry.get("target_variant") or f"{source_variant}_{config.method}_{config.backend}")
     return sanitize_run_id(f"{config.name}_{target_variant}")
+
+
+def config_from_matrix_entry(
+    config: QuantizationConfig,
+    *,
+    source: QuantizationSource,
+    entry: Mapping[str, Any],
+) -> QuantizationConfig:
+    target_variant = str(entry.get("target_variant") or f"{source.variant}_{config.method}_{config.backend}")
+    return QuantizationConfig(
+        name=config.name,
+        description=config.description,
+        method=config.method,
+        backend=config.backend,
+        objective=config.objective,
+        family=config.family,
+        source_variant=source.variant,
+        target_variant=target_variant,
+        hardware_profile=config.hardware_profile,
+        calibration=deep_merge_mappings(config.calibration, entry.get("calibration") if isinstance(entry.get("calibration"), Mapping) else None),
+        exclusions=deep_merge_mappings(config.exclusions, entry.get("exclusions") if isinstance(entry.get("exclusions"), Mapping) else None),
+        runtime=deep_merge_mappings(config.runtime, entry.get("runtime") if isinstance(entry.get("runtime"), Mapping) else None),
+        export=deep_merge_mappings(config.export, entry.get("export") if isinstance(entry.get("export"), Mapping) else None),
+        matrix=config.matrix,
+        outputs=config.outputs,
+        evals=config.evals,
+        raw_config=config.raw_config,
+    )
 
 
 def main() -> None:
@@ -2696,11 +2725,25 @@ def main() -> None:
         return
 
     if args.command == "export":
-        source = resolve_source(config, args.family, args.variant, os.environ)
-        actual_run_id = sanitize_run_id(args.run_id or f"{config.name}_{args.target_variant or source.variant or 'runtime'}")
         output_root = resolve_repo_path(args.output_dir or config.export.get("output_root") or config.outputs.get("models_dir") or "~/models/model-forge-quantized")
         export_config = config
-        if args.target_variant:
+        matrix_entry = None
+        if args.matrix_variant:
+            if args.target_variant:
+                raise SystemExit("--matrix-variant and --target-variant are mutually exclusive")
+            entries = filter_matrix_entries(matrix_entries(config), args.matrix_variant)
+            if len(entries) != 1:
+                raise SystemExit(f"--matrix-variant must resolve exactly one entry, got {len(entries)}")
+            matrix_entry = entries[0]
+            family = args.family or str(matrix_entry.get("family") or config.family or "")
+            variant = args.variant or str(matrix_entry.get("source_variant") or config.source_variant or "")
+            source = resolve_source(config, family or None, variant or None, os.environ)
+            export_config = config_from_matrix_entry(config, source=source, entry=matrix_entry)
+            actual_run_id = sanitize_run_id(args.run_id or matrix_run_id(config, matrix_entry))
+        else:
+            source = resolve_source(config, args.family, args.variant, os.environ)
+            actual_run_id = sanitize_run_id(args.run_id or f"{config.name}_{args.target_variant or source.variant or 'runtime'}")
+        if args.target_variant and not matrix_entry:
             export_config = QuantizationConfig(
                 name=config.name,
                 description=config.description,
@@ -2726,6 +2769,13 @@ def main() -> None:
             output_dir=output_root,
             run_id=actual_run_id,
         )
+        if matrix_entry:
+            export_plan["matrix_entry"] = {
+                "name": matrix_entry.get("name"),
+                "policy": matrix_entry.get("policy"),
+                "baseline_eval": matrix_entry.get("baseline_eval"),
+                "baseline_artifact_eval": matrix_entry.get("baseline_artifact_eval"),
+            }
         if args.write_plan:
             write_export_plan(export_plan, output_root / actual_run_id)
         if args.json:
@@ -2775,27 +2825,8 @@ def main() -> None:
             family = str(entry.get("family") or config.family or "")
             variant = str(entry.get("source_variant") or "")
             source = resolve_source(config, family or None, variant or None, os.environ)
-            target_variant = str(entry.get("target_variant") or f"{source.variant}_{config.method}_{config.backend}")
-            variant_config = QuantizationConfig(
-                name=config.name,
-                description=config.description,
-                method=config.method,
-                backend=config.backend,
-                objective=config.objective,
-                family=config.family,
-                source_variant=source.variant,
-                target_variant=target_variant,
-                hardware_profile=config.hardware_profile,
-                calibration=deep_merge_mappings(config.calibration, entry.get("calibration") if isinstance(entry.get("calibration"), Mapping) else None),
-                exclusions=deep_merge_mappings(config.exclusions, entry.get("exclusions") if isinstance(entry.get("exclusions"), Mapping) else None),
-                runtime=deep_merge_mappings(config.runtime, entry.get("runtime") if isinstance(entry.get("runtime"), Mapping) else None),
-                export=deep_merge_mappings(config.export, entry.get("export") if isinstance(entry.get("export"), Mapping) else None),
-                matrix=config.matrix,
-                outputs=config.outputs,
-                evals=config.evals,
-                raw_config=config.raw_config,
-            )
-            run_id = matrix_run_id(config, {"source_variant": source.variant, "target_variant": target_variant})
+            variant_config = config_from_matrix_entry(config, source=source, entry=entry)
+            run_id = matrix_run_id(config, {"source_variant": source.variant, "target_variant": variant_config.target_variant})
             plan = build_export_command(variant_config, source, output_dir=output_root, run_id=run_id)
             annotate_matrix_worker(plan, workers[index % len(workers)], index % len(workers))
             plan["baseline_eval"] = entry.get("baseline_eval")

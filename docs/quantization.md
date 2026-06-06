@@ -202,6 +202,16 @@ assigned workers. The target variant for single exports can be set explicitly:
   --write-plan --execute
 ```
 
+When a matrix entry has nested overrides, execute it directly instead of
+copying the command from `matrix-plan`:
+
+```bash
+./forge quantize export \
+  --config configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml \
+  --matrix-variant local_ft_v4_nvfp4_attention_output_bf16_modelopt \
+  --write-plan --execute
+```
+
 For component-sensitivity runs, add `export.ptq.disable_patterns` under a
 matrix entry instead of forking the export script. The Qwen text ModelOpt helper
 passes these patterns through as `--disable-pattern`, keeping matching modules

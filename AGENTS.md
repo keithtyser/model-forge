@@ -292,7 +292,10 @@ quantization matrix candidates by target variant or entry name:
 
 Matrix entries support nested overrides like `export.ptq.qformat` and
 `runtime.served_model_name`; do not clone whole configs just to change one PTQ
-field.
+field. To execute exactly one matrix entry through the guarded export path, use
+`./forge quantize export --matrix-variant <target-variant-or-entry-name>
+--config <config> --write-plan --execute`. Do not copy a printed Docker command
+unless the CLI path is missing a required capability; add the capability first.
 For ModelOpt scripts that support component policies, use
 `export.ptq.disable_patterns` to keep sensitive modules in BF16. Good first
 cuts are attention-output projections, attention blocks, routers, embeddings,

@@ -149,7 +149,17 @@ Next step: run the registered component-sensitivity candidates instead of
 another whole-checkpoint qformat retry. The first candidate should be
 `local_ft_v4_nvfp4_attention_output_bf16_modelopt`, which keeps
 `*self_attn.o_proj*` and `*linear_attn.out_proj*` in BF16 while quantizing the
-rest of the supported linear stack. The second candidate is
+rest of the supported linear stack. Execute it through the guarded matrix-entry
+path:
+
+```bash
+./forge quantize export \
+  --config configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml \
+  --matrix-variant local_ft_v4_nvfp4_attention_output_bf16_modelopt \
+  --write-plan --execute
+```
+
+The second candidate is
 `local_ft_v4_nvfp4_mlp_only_modelopt`, which keeps `*self_attn*` and
 `*linear_attn*` in BF16 and quantizes MLPs. Compare each completed candidate
 against the exact BF16 `local_ft_v4` source, and promote only if it passes
