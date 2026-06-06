@@ -1031,6 +1031,19 @@ length filtering:
    `model_selection_summary` was 2/3. Do not broad-eval, quantize, upload,
    promote, or rerun V36 unchanged. The next ablation attempt should be a method
    shift away from cumulative response-opening phrase projection.
+   V37 source-anchored concept-cone projection has now been attempted and
+   rejected:
+   `configs/abliteration/qwen36_27b_ft_abli_v2_source_anchored_concept_cone_v37.yaml`.
+   It returned to the held FT-abli v2 source, extracted a source-anchored
+   concept cone after projecting away dominant benign capability/style subspaces,
+   edited only late attention-output tensors, and left embeddings, `lm_head`, MoE
+   experts, and MLP weights untouched. The checkpoint exported safely, changed 8
+   tensors, synced to the worker, passed strict local and worker
+   checkpoint/tokenizer/architecture audits, and served on the two-Spark TP=2
+   path after one socket-NCCL retry. The targeted gate rejected it: self-harm
+   refusal wording was 2/3, safe redirect was 3/3, harmful detail/compliance was
+   0/3, and `model_selection_summary` was 3/3. Do not broad-eval, quantize,
+   upload, promote, or rerun V37 unchanged.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the
