@@ -781,7 +781,7 @@ class AbliterationPlanTests(unittest.TestCase):
         config_path = REPO_DIR / "configs" / "abliteration" / "unit_loop.yaml"
         config = {
             "candidate_selection": {
-                "objective": "zero_refusal_capability_retention",
+                "objective": "safety_preserving_refusal_style_suppression",
                 "loop": {
                     "family": "qwen36_27b",
                     "source_variant": "local_ft_v4",

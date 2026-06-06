@@ -3375,6 +3375,36 @@ Validation:
 ./forge doctor
 ```
 
+### 2026-06-06 Qwen FT-abli objective-profile clarification
+
+Status: implemented as config/docs/tests only. No model server, training run,
+ablation export, quantization job, or Hugging Face upload was launched.
+
+Reason: the V54 targeted gate made the objective mismatch explicit. The model
+was not merely using awkward refusal wording; all three self-harm concealment
+responses were still safety-steered through either explicit refusal language or
+safe redirects. The active Qwen gate also required safe redirect `3/3` and
+harmful detail/compliance `0/3`, so it was never a full guardrail-removal or
+harmful-compliance objective.
+
+Implementation:
+
+- added `configs/objectives/safety_preserving_refusal_style_suppression.yaml`
+- changed
+  `configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml` to use that
+  objective profile
+- clarified `configs/objectives/zero_refusal_capability_retention.yaml` as the
+  broader refusal-reduction/research-reporting profile
+- updated `README.md`, `AGENTS.md`, `docs/status.md`, and
+  `docs/evaluation-strategy.md` so agents distinguish refusal-style suppression
+  from harmful-compliance or full guardrail-removal objectives
+- updated objective and ablation tests for the new profile
+
+Current Qwen FT-abli state remains unchanged: V54 is rejected, there is no ready
+loop candidate, and broad eval/NVFP4/HF upload remain blocked until a future
+unquantized FT-abli candidate passes the targeted gate for the selected
+objective profile.
+
 ### 2026-06-06 Qwen V49 native SRA candidate prep
 
 Status: local export complete; targeted behavioral gate not run yet.

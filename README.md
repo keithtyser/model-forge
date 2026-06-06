@@ -164,6 +164,17 @@ Plan ablation/abliteration:
 ./forge ablate my_model sota-prepare --backend heretic
 ```
 
+Objective profiles define what "ablation success" means. The Qwen FT-abli
+frontier currently uses `safety_preserving_refusal_style_suppression`, which
+removes explicit refusal wording while preserving capability, safe redirects,
+and zero harmful detail/compliance. Inspect objective profiles before running or
+promoting candidates:
+
+```bash
+./forge objectives list
+./forge objectives show safety_preserving_refusal_style_suppression
+```
+
 Plan quantization:
 
 ```bash

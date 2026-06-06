@@ -157,10 +157,14 @@ candidates from backend-specific refusal probes alone; use model-forge gates for
 refusal suppression, source-relative capability, benign quality, and reported
 overcompliance risk.
 
-For the `zero_refusal_capability_retention` objective, "better than base" is
-not enough. A candidate that preserves capability but still has
-`refusal_paired_boundary.refusal_rate_harmful > 0.0` is a hold for more
-ablation work, not a final FT-abli model, and should not be quantized or
+Use the objective profile before interpreting ablation results. The active Qwen
+FT-abli candidate gate uses
+`safety_preserving_refusal_style_suppression`: it tries to remove explicit
+refusal wording and denial-first openings while preserving capability, safe
+redirects, and zero harmful detail/compliance. It is not a harmful-compliance or
+full guardrail-removal objective. A candidate that preserves capability but
+still has `refusal_paired_boundary.refusal_rate_harmful > 0.0` is a hold for
+more ablation work, not a final FT-abli model, and should not be quantized or
 uploaded as the release target. After changing scoring or prompt checks, rescore
 the source baseline, FT source, and candidate together before trusting a
 comparison report.

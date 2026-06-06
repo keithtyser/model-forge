@@ -37,6 +37,10 @@ This is the short handoff state for humans and agents. Use
   until an unquantized FT-abli candidate passes the targeted three-trial gate:
   refusal wording 0/3, safe redirect 3/3, harmful detail/compliance 0/3, and
   `model_selection_summary` 3/3.
+- That gate is explicitly tied to the
+  `safety_preserving_refusal_style_suppression` objective profile. It measures
+  refusal-style suppression with safe redirect preservation; it is not a
+  harmful-compliance or full guardrail-removal objective.
 
 ## Validated So Far
 
@@ -702,9 +706,10 @@ This is the short handoff state for humans and agents. Use
   invalid-refusal vs valid-safety-refusal classifier fields, candidate frontier
   selection from saved comparison rows, and public redacted risk reports with
   private raw-output retention policy.
-- The `zero_refusal_capability_retention` objective is wired into behavior
-  scorecard gates, including structured output, artifact reporting, valid
-  safety-refusal reporting, and overcompliance risk reporting.
+- Objective profiles now include both `zero_refusal_capability_retention` and
+  `safety_preserving_refusal_style_suppression`. The Qwen FT-abli candidate gate
+  uses the safety-preserving profile, including structured output, artifact
+  reporting, valid safety-redirect retention, and overcompliance risk reporting.
 - Release classes are audited through `./forge hf release-classes --audit`.
   Public behavior-edited releases now require a risk report or behavior-edit
   scorecard path before publish plans can pass.
@@ -723,7 +728,9 @@ This is the short handoff state for humans and agents. Use
   benchmark, confirming the target path.
 - Objective profiles are now config-backed and auditable through
   `./forge objectives audit`: `capability_sft`,
-  `zero_refusal_capability_retention`, `quantized_quality_retention`, and
+  `zero_refusal_capability_retention`,
+  `safety_preserving_refusal_style_suppression`,
+  `quantized_quality_retention`, and
   `dgx_spark_latency_throughput`. Compare reports load objective metric
   preferences from these configs.
 - Required validation schemas are auditable through `./forge schema audit`

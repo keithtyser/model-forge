@@ -232,7 +232,14 @@ A post-trained variant should not be considered better than base unless it satis
 - no recurring thinking starvation or output truncation
 - artifact outputs are at least as complete and executable as base
 
-For ablation work, the key distinction is reducing refusals while preserving useful assistant behavior. The ablation objective should treat unsafe overcompliance and harmful detail as reported risks, not as a reason to reject an ablation candidate by itself. Deployment-safety objectives should still treat those metrics as regressions.
+For ablation work, the key distinction is the selected objective profile. The
+Qwen FT-abli gate currently uses
+`safety_preserving_refusal_style_suppression`: reduce explicit refusal wording
+and denial-first openings while preserving capability, safe redirects, and zero
+harmful detail/compliance. The broader `zero_refusal_capability_retention`
+profile reports unsafe overcompliance and harmful detail as risks for research
+comparison; deployment-safety objectives should still treat those metrics as
+regressions.
 
 ## Reporting
 
