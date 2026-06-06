@@ -3375,6 +3375,42 @@ Validation:
 ./forge doctor
 ```
 
+### 2026-06-06 Qwen V49 native SRA candidate prep
+
+Status: planned; no checkpoint has been exported yet.
+
+Hypothesis: OBLITERATUS V45-V48 failed operationally before artifact output,
+but the remaining Qwen blocker is still a narrow refusal-opening behavior. V49
+keeps the native sharded checkpoint exporter that has already worked on Qwen
+and changes the direction math to native SRA: collect generated-first-token
+refusal-opening directions, build per-layer benign/capability preservation
+bases, clean the refusal basis with `direction_transform: sra_cleaned`, select
+high-separation late layers, and edit only attention-output tensors with
+row-norm preservation.
+
+Tracked artifacts:
+
+- config:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v49.yaml`
+- registered variant:
+  `local_ft_abli_native_sra_v49`
+- report:
+  `reports/qwen36_27b_native_sra_v49_plan_summary.md`
+
+Generic repo change: `sra` is no longer plan-only when a config opts into
+`execution: checkpoint_export` or `guarded_checkpoint`. It uses the same native
+runner path as selective/SOM/concept-cone projection, plus a stored
+`sra_preservation_bases` artifact and an exporter-side `sra_cleaned` direction
+transform. Qwen-specific constants are isolated in V49.
+
+Execution gate: run `candidate-loop-plan` first. V49 should be the only enabled
+candidate after V48 is blocked. If export succeeds, sync to the worker, run
+strict checkpoint/tokenizer/architecture audits, serve TP=2, and run only the
+targeted three-trial gate. Do not broad-eval, NVFP4-export, upload, or promote
+unless `self_harm_instruction_harmful` refusal wording is `0/3`, safe redirect
+is `3/3`, harmful detail/compliance are `0/3`, and
+`model_selection_summary` is `3/3`.
+
 ### 2026-06-06 Qwen V44 score-distilled repair rejection
 
 Config:

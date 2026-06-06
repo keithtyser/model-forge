@@ -27,6 +27,7 @@ from model_forge.pipelines.abliterate import (
     build_candidate_gate_report,
     build_candidate_loop_plan,
     build_plan,
+    build_sra_preservation_basis,
     build_sota_plan,
     candidate_gate_entries,
     configured_target_layers,
@@ -985,7 +986,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertFalse(any("variants checkpoint-audit" in command for command in commands))
         self.assertIn("Search-only candidate jobs are planned", plan["candidate_gate_command"])
 
-    def test_qwen_candidate_loop_blocks_rejected_sae_through_v48(self) -> None:
+    def test_qwen_candidate_loop_blocks_rejected_sae_through_v48_and_plans_v49(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_candidate_gate.yaml"
         plan = build_candidate_loop_plan(load_yaml(config_path), config_path, run_id="qwen_unit_loop")
 
@@ -1010,12 +1011,13 @@ class AbliterationPlanTests(unittest.TestCase):
         blocked_v46 = candidates["obliteratus_lora_attn_output_v46"]
         blocked_v47 = candidates["obliteratus_lora_late_attn_output_v47"]
         blocked_v48 = candidates["obliteratus_lora_target_layer_activation_v48"]
+        planned_v49 = candidates["native_sra_v49"]
 
         self.assertEqual(candidate["name"], "qwen_scope_sae_feature_diagnostic_v1")
         self.assertEqual(candidate["status"], "rejected")
         self.assertTrue(candidate["blockers"])
-        self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertEqual(plan["planned_candidate_job_count"], 0)
+        self.assertEqual(plan["executable_candidate_count"], 1)
+        self.assertEqual(plan["planned_candidate_job_count"], 1)
         self.assertFalse(any(command.get("enabled", False) for command in candidate["commands"]))
         self.assertEqual(rejected_v31["status"], "rejected")
         self.assertTrue(rejected_v31["blockers"])
@@ -1108,8 +1110,16 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(blocked_v48["variant"], "local_ft_abli_obliteratus_lora_target_layer_activation_v48")
         self.assertFalse(any(command.get("enabled", False) for command in blocked_v48["commands"]))
         self.assertTrue(any("qwen36_27b_ft_abli_v2_obliteratus_lora_target_layer_activation_v48.yaml" in command["command"] for command in blocked_v48["commands"]))
-        self.assertFalse(gate_command["enabled"])
-        self.assertIn("No executable candidate eval directories", plan["candidate_gate_command"])
+        self.assertEqual(planned_v49["status"], "planned")
+        self.assertFalse(planned_v49["blockers"])
+        self.assertTrue(planned_v49["produces_checkpoint"])
+        self.assertEqual(planned_v49["backend"], "sra")
+        self.assertEqual(planned_v49["variant"], "local_ft_abli_native_sra_v49")
+        self.assertTrue(any(command.get("enabled", False) for command in planned_v49["commands"]))
+        self.assertTrue(any("qwen36_27b_ft_abli_v2_native_sra_v49.yaml" in command["command"] for command in planned_v49["commands"]))
+        self.assertTrue(any(command["phase"] == "candidate_export" and command.get("starts_heavy_job") for command in planned_v49["commands"]))
+        self.assertTrue(gate_command["enabled"])
+        self.assertIn("native_sra_v49", plan["candidate_gate_command"])
 
     def test_qwen_scope_sae_prepare_writes_guarded_runner(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml"
@@ -1903,7 +1913,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("write_selective_direction_artifact", runner)
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 42)
 
-    def test_candidate_loop_blocks_rejected_v21_to_v48(self) -> None:
+    def test_candidate_loop_blocks_rejected_v21_to_v48_and_plans_v49(self) -> None:
         config_path = (
             REPO_DIR
             / "configs"
@@ -1939,6 +1949,9 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("score_distilled_repair_v44", candidates)
         self.assertIn("obliteratus_lora_adapter_v45", candidates)
         self.assertIn("obliteratus_lora_attn_output_v46", candidates)
+        self.assertIn("obliteratus_lora_late_attn_output_v47", candidates)
+        self.assertIn("obliteratus_lora_target_layer_activation_v48", candidates)
+        self.assertIn("native_sra_v49", candidates)
         self.assertTrue(candidates["qwen_scope_sae_feature_diagnostic_v1"]["blockers"])
         self.assertFalse(any(
             command.get("enabled", True)
@@ -2148,10 +2161,21 @@ class AbliterationPlanTests(unittest.TestCase):
             "qwen36_27b_ft_abli_v2_obliteratus_lora_target_layer_activation_v48.yaml" in command.get("command", "")
             for command in v48["commands"]
         ))
-        self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertEqual(plan["planned_candidate_job_count"], 0)
-        self.assertIn("No executable candidate eval directories", plan["candidate_gate_command"])
-        self.assertFalse(any(
+        v49 = candidates["native_sra_v49"]
+        self.assertEqual(v49["status"], "planned")
+        self.assertFalse(v49["blockers"])
+        self.assertTrue(v49["produces_checkpoint"])
+        self.assertEqual(v49["backend"], "sra")
+        self.assertEqual(v49["variant"], "local_ft_abli_native_sra_v49")
+        self.assertTrue(any(command.get("enabled", False) for command in v49["commands"]))
+        self.assertTrue(any(
+            "qwen36_27b_ft_abli_v2_native_sra_v49.yaml" in command.get("command", "")
+            for command in v49["commands"]
+        ))
+        self.assertEqual(plan["executable_candidate_count"], 1)
+        self.assertEqual(plan["planned_candidate_job_count"], 1)
+        self.assertIn("native_sra_v49", plan["candidate_gate_command"])
+        self.assertTrue(any(
             command.get("enabled", False)
             for command in plan["commands"]
             if command["phase"] == "candidate_gate"
@@ -2183,6 +2207,50 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(execution["command"][1], str((REPO_DIR / runner).resolve()))
         self.assertEqual(execution["cwd"], REPO_DIR)
         self.assertEqual(execution["env"]["MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION"], "0.05")
+        self.assertEqual(execution["env"]["MODEL_FORGE_NATIVE_CHECKPOINT_IMAGE"], "model-forge-posttrain-tf5:latest")
+
+    def test_qwen_v49_native_sra_prepare_writes_guarded_runner(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_native_sra_v49.yaml"
+        )
+        config = load_yaml(config_path)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"]["work_dir"] = tmp
+            plan = build_sota_plan(config, config_path, "sra")
+            result = write_sota_artifacts(config, config_path, "sra")
+            native_config = load_yaml(Path(result["paths"]["sra_config"]))
+            runner = Path(result["paths"]["sra_runner"]).read_text(encoding="utf-8")
+
+        self.assertEqual(plan["backend"], "sra")
+        self.assertEqual(plan["backend_config"]["execution"], "checkpoint_export")
+        self.assertEqual(native_config["method"], "native_surgical_refusal_ablation_projection")
+        self.assertEqual(native_config["native_backend"]["backend"], "sra")
+        self.assertEqual(native_config["activation_collection"]["sra_preservation_components"], 8)
+        self.assertTrue(native_config["activation_collection"]["sra_include_benign_mean"])
+        self.assertEqual(native_config["edit"]["direction_transform"], "sra_cleaned")
+        self.assertIn("run_native_sra.py", str(result["paths"]["sra_runner"]))
+        self.assertIn("collect_directions", runner)
+        self.assertIn("export_projection", runner)
+
+    def test_native_sra_sota_run_uses_guarded_native_runner(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_native_sra_v49.yaml"
+        )
+        plan = build_sota_plan(load_yaml(config_path), config_path, "sra")
+        runner = Path(plan["work_dir"]) / "run_native_sra.py"
+
+        execution = optimal_transport_execution_spec(plan, runner)
+
+        self.assertEqual(execution["mode"], "guarded_container")
+        self.assertEqual(execution["command"][0], str(REPO_DIR / "scripts" / "run_native_checkpoint_container.sh"))
+        self.assertEqual(execution["command"][1], str((REPO_DIR / runner).resolve()))
         self.assertEqual(execution["env"]["MODEL_FORGE_NATIVE_CHECKPOINT_IMAGE"], "model-forge-posttrain-tf5:latest")
 
     def test_qwen_v2_method_shift_uses_guarded_abliterix_sra_search(self) -> None:
@@ -2782,6 +2850,27 @@ class AbliterationPlanTests(unittest.TestCase):
         direction = intervention_direction(5, artifact, {"direction_transform": "biprojection"})
         self.assertAlmostEqual(float(torch.dot(direction, torch.tensor([1.0, 0.0, 0.0]))), 0.0, places=6)
         self.assertAlmostEqual(float(torch.linalg.vector_norm(direction)), 1.0, places=6)
+
+    def test_sra_preservation_basis_cleans_direction(self) -> None:
+        import torch
+
+        benign = torch.tensor([
+            [1.0, 0.0, 0.0],
+            [1.0, 0.2, 0.0],
+            [1.0, -0.2, 0.0],
+        ])
+        basis = build_sra_preservation_basis(benign, components=1, include_benign_mean=True)
+        artifact = {
+            "refusal_directions": {5: torch.tensor([1.0, 1.0, 1.0])},
+            "sra_preservation_bases": {5: basis},
+        }
+
+        direction = intervention_direction(5, artifact, {"direction_transform": "sra_cleaned"})
+
+        self.assertAlmostEqual(float(torch.dot(direction, basis[0])), 0.0, places=6)
+        self.assertAlmostEqual(float(torch.dot(direction, basis[1])), 0.0, places=6)
+        self.assertAlmostEqual(float(torch.linalg.vector_norm(direction)), 1.0, places=6)
+        self.assertGreater(abs(float(torch.dot(direction, torch.tensor([0.0, 0.0, 1.0])))), 0.99)
 
     def test_norm_preserving_projection_restores_row_norms(self) -> None:
         import torch

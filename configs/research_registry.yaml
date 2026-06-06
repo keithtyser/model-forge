@@ -500,7 +500,8 @@ entries:
     implementation_hooks:
       - configs/abliteration/*method_shift*.yaml
       - configs/abliteration/*abliterix*.yaml
-      - future:src/model_forge/behavior_editing/sra.py
+      - src/model_forge/pipelines/abliterate.py
+      - configs/abliteration/*native_sra*.yaml
     eval_hooks:
       - evals/prompts/refusal_paired_boundary.yaml
       - evals/prompts/capability_preservation_challenge.yaml

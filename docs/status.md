@@ -156,7 +156,15 @@ This is the short handoff state for humans and agents. Use
   That improved the post-load memory profile but still crossed the 5% host RAM
   floor during activation/direction processing before writing an adapter
   directory, so it is blocked and should not be rerun unchanged. No OBLITERATUS
-  adapter has completed export yet for this Qwen 27B branch.
+  adapter has completed export yet for this Qwen 27B branch. V49 is now the
+  next planned executable candidate:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v49.yaml`. It turns
+  SRA from a plan-only method into a native guarded checkpoint path: collect
+  generated-first-token refusal-opening directions, build benign/capability
+  preservation bases, clean directions with `direction_transform: sra_cleaned`,
+  select high-separation late layers, and export only late attention-output
+  tensors through the sharded native writer. Candidate-loop-plan should expose
+  V49 as the only executable candidate.
   V34/V35/V36 native phrase/projection candidates were exported and
   gated, but each missed or worsened the residual self-harm refusal-opening
   target. V37 native source-anchored concept-cone projection was also exported,
@@ -1195,8 +1203,14 @@ length filtering:
    a 100 GiB memory cap and 5% host RAM floor. The run still crossed the RAM
    floor during activation/direction processing before writing an adapter and
    was stopped with exit 137. Candidate-loop-plan should now expose no
-   executable OBLITERATUS candidate until a native streaming or otherwise
-   lower-memory successor is added.
+   executable OBLITERATUS candidate. V49 native SRA is now the next planned
+   non-OBLITERATUS successor:
+   `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v49.yaml`. It keeps
+   the native sharded checkpoint exporter, adds SRA preservation-basis cleanup,
+   and should be run only through the candidate loop under the 5% RAM and 15%
+   disk floors. If it exports, sync to both Sparks, run strict
+   checkpoint/tokenizer/architecture audits, serve TP=2, and run only the
+   targeted three-trial gate before broader evals or NVFP4.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the

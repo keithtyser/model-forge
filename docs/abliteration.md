@@ -168,7 +168,8 @@ method-shift backends:
   enable OBLITERATUS reversible LoRA with `lora_adapter_export.adapter_only`
   when full-checkpoint export is too memory-heavy
 - `apostate`: guarded preservation-direction baked checkpoint backend
-- `sra`: surgical refusal ablation / concept-preserving direction cleanup
+- `sra`: native guarded surgical refusal ablation / preservation-basis direction
+  cleanup
 - `optimal_transport`: native guarded diagnostic for distributional activation
   transport-style checkpoint edits
 - `norm_preserving_projection`: native guarded projected/biprojected checkpoint
@@ -198,11 +199,17 @@ highest-separation layers before expanding edit scope. The candidate still must
 pass the same model-forge harmful-detail, safe-redirect, benign-quality, and
 source-capability gates.
 
-Standalone `sra` remains plan-only until a guarded model-forge runner exists.
-OBLITERATUS, Apostate, Abliterix, native optimal transport, and native
-norm-preserving/SOM projection now have guarded execution paths. Abliterix first
-runs in non-interactive search-only mode; it writes an Optuna journal and exits
-without exporting a checkpoint. Use
+Native `sra` now has a guarded checkpoint execution path. It materializes
+source-relative harmful and benign/capability prompt files, collects refusal
+directions, builds per-layer preservation bases from benign activations, applies
+`direction_transform: sra_cleaned`, then exports through the same sharded
+norm-preserving checkpoint writer used by the other native projection methods.
+Use config constants for the model family being edited; do not copy Qwen or
+Gemma target layers into a new family without architecture audit evidence.
+OBLITERATUS, Apostate, Abliterix, native optimal transport, native SRA, and
+native norm-preserving/SOM projection now have guarded execution paths.
+Abliterix first runs in non-interactive search-only mode; it writes an Optuna
+journal and exits without exporting a checkpoint. Use
 `abliterix-search-analyze` before `abliterix-export` for a selected trial.
 For OBLITERATUS recipes that use reversible LoRA, prefer adapter-only rebirth
 first: set `use_lora_ablation: true` and

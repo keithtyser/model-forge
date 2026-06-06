@@ -604,6 +604,32 @@ def extract_concept_cone_direction(
     return direction[0] if component_count == 1 else direction
 
 
+def build_sra_preservation_basis(
+    benign_stack: Any,
+    *,
+    components: int,
+    include_benign_mean: bool = True,
+) -> Any:
+    """Build a compact preservation basis for SRA-style direction cleanup."""
+    import torch
+
+    if benign_stack.ndim != 2:
+        raise SystemExit("SRA preservation basis requires a 2D benign activation stack")
+    rows = []
+    benign = benign_stack.float()
+    benign_mean = benign.mean(dim=0)
+    if include_benign_mean:
+        rows.append(benign_mean)
+    component_count = max(0, int(components))
+    if component_count > 0 and benign.shape[0] > 1:
+        centered = benign - benign_mean.unsqueeze(0)
+        _, _, vh = torch.linalg.svd(centered, full_matrices=False)
+        rows.extend(vh[:component_count])
+    if not rows:
+        return benign.new_empty((0, benign.shape[1]))
+    return _orthonormal_rows(torch.vstack(rows))
+
+
 def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Path) -> None:
     import torch
     from transformers import AutoTokenizer
@@ -800,6 +826,7 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
     directions = {}
     harmful_means = {}
     benign_means = {}
+    sra_preservation_bases = {}
     def maybe_winsorize(values: Any) -> Any:
         quantile = activation.get("winsorize_quantile")
         if quantile is None:
@@ -940,6 +967,15 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
         benign_mean = benign_stack.mean(dim=0)
         direction = extract_direction(harmful_stack, benign_stack)
         direction = normalize_direction_basis(direction)
+        sra_components = int(activation.get("sra_preservation_components", 0) or 0)
+        if sra_components or bool(activation.get("sra_include_benign_mean", False)):
+            sra_basis = build_sra_preservation_basis(
+                benign_stack,
+                components=sra_components,
+                include_benign_mean=bool(activation.get("sra_include_benign_mean", True)),
+            )
+            if sra_basis.numel() > 0:
+                sra_preservation_bases[layer_index] = sra_basis
         extracted_directions[layer_index] = direction
         directions[layer_index] = direction
         harmful_means[layer_index] = harmful_mean
@@ -956,9 +992,12 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
             "refusal_directions": directions,
             "harmful_means": harmful_means,
             "benign_means": benign_means,
+            "sra_preservation_bases": sra_preservation_bases,
             "direction_method": activation["token_position"],
             "direction_extraction": activation["direction_extraction"],
             "direction_components": int(activation.get("direction_components", 1)),
+            "sra_preservation_components": int(activation.get("sra_preservation_components", 0) or 0),
+            "sra_include_benign_mean": bool(activation.get("sra_include_benign_mean", False)),
             "som_neurons": activation.get("som_neurons"),
             "som_steps": activation.get("som_steps"),
             "som_learning_rate": activation.get("som_learning_rate"),
@@ -1046,6 +1085,7 @@ def load_direction_artifact(path: Path) -> dict[str, Any]:
             "refusal_directions": {int(layer): vector.float() for layer, vector in raw.items()},
             "harmful_means": {},
             "benign_means": {},
+            "sra_preservation_bases": {},
             "source_path": str(path),
             "format": "legacy_refusal_directions",
         }
@@ -1056,6 +1096,10 @@ def load_direction_artifact(path: Path) -> dict[str, Any]:
         "refusal_directions": {int(layer): vector.float() for layer, vector in directions.items()},
         "harmful_means": {int(layer): vector.float() for layer, vector in raw.get("harmful_means", {}).items()},
         "benign_means": {int(layer): vector.float() for layer, vector in raw.get("benign_means", {}).items()},
+        "sra_preservation_bases": {
+            int(layer): vector.float()
+            for layer, vector in raw.get("sra_preservation_bases", raw.get("preservation_bases", {})).items()
+        },
         "source_path": str(path),
         "format": raw.get("format", "direction_artifact_v1"),
     }
@@ -1226,6 +1270,16 @@ def intervention_direction(layer: int, artifact: dict[str, Any], edit: dict[str,
             direction = direction - benign * torch.dot(direction, benign)
         else:
             direction = direction - torch.outer(direction @ benign, benign)
+    elif mode in {"sra", "sra_cleaned", "surgical_refusal_ablation", "preservation_cleaned"}:
+        basis = artifact.get("sra_preservation_bases", {}).get(layer)
+        if basis is None or basis.numel() == 0:
+            if edit.get("sra_require_preservation_basis", True):
+                raise SystemExit(
+                    f"direction_transform={mode} requires sra_preservation_bases for layer {layer}; "
+                    "set activation_collection.sra_preservation_components or sra_include_benign_mean"
+                )
+        else:
+            direction = _project_out_rowspace(direction, _orthonormal_rows(basis.float()))
     elif mode != "raw":
         raise SystemExit(f"unsupported direction_transform: {mode!r}")
     return normalize_intervention_direction(direction)
@@ -3476,6 +3530,8 @@ def materialize_native_prompt_pair_files(plan: dict[str, Any], backend: dict[str
 
 
 def native_checkpoint_method_name(plan: dict[str, Any]) -> str:
+    if plan["backend"] == "sra":
+        return "native_surgical_refusal_ablation_projection"
     if plan["backend"] == "norm_preserving_projection":
         return "native_norm_preserving_projected_abliteration"
     if plan["backend"] == "som_projection":
@@ -3510,6 +3566,8 @@ def write_native_optimal_transport_config(plan: dict[str, Any]) -> Path:
         "benign_subspace_components",
         "concept_cone_project_mean_out",
         "concept_cone_whiten",
+        "sra_preservation_components",
+        "sra_include_benign_mean",
         "direction_source_layer",
         "replicate_source_direction",
         "use_chat_template",
@@ -3595,7 +3653,7 @@ def write_native_optimal_transport_config(plan: dict[str, Any]) -> Path:
                 if backend.get(key) is not None
             } if plan["backend"] == "qwen_scope_sae" else None,
             "layer_selection": backend.get("layer_selection")
-            if plan["backend"] in {"selective_projection", "concept_cone_projection"}
+            if plan["backend"] in {"sra", "selective_projection", "concept_cone_projection"}
             else None,
             "next_gate": "Run model-forge source-vs-candidate targeted eval before broader evals, quantization, promotion, or upload.",
         },
@@ -4362,6 +4420,9 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
         elif name == "apostate" and plan["backend_config"].get("execution") in APOSTATE_EXECUTIONS:
             paths["apostate_config"] = str(write_apostate_config(plan))
             paths["apostate_runner"] = str(write_apostate_runner(plan))
+        elif name == "sra" and plan["backend_config"].get("execution") in NATIVE_PROJECTED_ABLATION_EXECUTIONS:
+            paths["sra_config"] = str(write_native_optimal_transport_config(plan))
+            paths["sra_runner"] = str(write_optimal_transport_runner(plan))
         elif name == "optimal_transport" and plan["backend_config"].get("execution") in NATIVE_OPTIMAL_TRANSPORT_EXECUTIONS:
             paths["optimal_transport_config"] = str(write_native_optimal_transport_config(plan))
             paths["optimal_transport_runner"] = str(write_optimal_transport_runner(plan))
@@ -4448,6 +4509,23 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
             "```",
             "",
             "The native optimal-transport path materializes source-relative model-forge prompts, collects multi-component activation directions, and writes a normal Transformers checkpoint. Treat it as a candidate only after the targeted model-forge gate passes.",
+            "",
+        ])
+    if paths.get("sra_runner"):
+        sra_plan = build_sota_plan(config, config_path, "sra")
+        sra_command = (
+            f"scripts/run_native_checkpoint_container.sh {paths['sra_runner']}"
+            if sra_plan["backend_config"].get("container_image")
+            else f"scripts/run_native_checkpoint_scope.sh {paths['sra_runner']}"
+        )
+        run_sections.extend([
+            "Run native SRA checkpoint export:",
+            "",
+            "```bash",
+            sra_command,
+            "```",
+            "",
+            "The native SRA path materializes source-relative model-forge prompts, collects refusal directions, cleans them against a benign/capability preservation basis, and writes a normal Transformers checkpoint with row-norm preservation. Treat it as a candidate only after the targeted model-forge gate passes.",
             "",
         ])
     if paths.get("norm_preserving_projection_runner"):
@@ -5313,6 +5391,18 @@ def command_sota_run(args: argparse.Namespace) -> None:
             raise SystemExit("missing generated Apostate runner")
         execution = apostate_execution_spec(plan, runner)
         console.print(f"[bold]Apostate execution mode[/bold]: {execution['mode']}")
+        subprocess.run(
+            execution["command"],
+            cwd=execution["cwd"],
+            env=execution["env"],
+            check=True,
+        )
+    elif plan["backend"] == "sra" and plan["backend_config"].get("execution") in NATIVE_PROJECTED_ABLATION_EXECUTIONS:
+        runner = result["paths"].get("sra_runner")
+        if runner is None:
+            raise SystemExit("missing generated SRA runner")
+        execution = optimal_transport_execution_spec(plan, runner)
+        console.print(f"[bold]SRA execution mode[/bold]: {execution['mode']}")
         subprocess.run(
             execution["command"],
             cwd=execution["cwd"],
