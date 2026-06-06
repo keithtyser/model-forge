@@ -819,7 +819,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertFalse(any("variants checkpoint-audit" in command for command in commands))
         self.assertIn("Search-only candidate jobs are planned", plan["candidate_gate_command"])
 
-    def test_qwen_candidate_loop_blocks_rejected_sae_through_v36_and_plans_v37(self) -> None:
+    def test_qwen_candidate_loop_blocks_rejected_sae_through_v38_with_no_ready_candidate(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_candidate_gate.yaml"
         plan = build_candidate_loop_plan(load_yaml(config_path), config_path, run_id="qwen_unit_loop")
 
@@ -832,13 +832,14 @@ class AbliterationPlanTests(unittest.TestCase):
         rejected_v34 = candidates["response_opening_hybrid_projection_v34"]
         rejected_v35 = candidates["response_opening_refusal_phrase_projection_v35"]
         rejected_v36 = candidates["response_opening_residual_phrase_projection_v36"]
-        ready_v37 = candidates["source_anchored_concept_cone_v37"]
+        rejected_v37 = candidates["source_anchored_concept_cone_v37"]
+        rejected_v38 = candidates["sampled_gate_repair_v38"]
 
         self.assertEqual(candidate["name"], "qwen_scope_sae_feature_diagnostic_v1")
         self.assertEqual(candidate["status"], "rejected")
         self.assertTrue(candidate["blockers"])
-        self.assertEqual(plan["executable_candidate_count"], 1)
-        self.assertEqual(plan["planned_candidate_job_count"], 1)
+        self.assertEqual(plan["executable_candidate_count"], 0)
+        self.assertEqual(plan["planned_candidate_job_count"], 0)
         self.assertFalse(any(command.get("enabled", False) for command in candidate["commands"]))
         self.assertEqual(rejected_v31["status"], "rejected")
         self.assertTrue(rejected_v31["blockers"])
@@ -863,12 +864,16 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertTrue(rejected_v36["blockers"])
         self.assertTrue(rejected_v36["produces_checkpoint"])
         self.assertFalse(any(command.get("enabled", False) for command in rejected_v36["commands"]))
-        self.assertEqual(ready_v37["status"], "ready")
-        self.assertFalse(ready_v37["blockers"])
-        self.assertTrue(ready_v37["produces_checkpoint"])
-        self.assertTrue(any(command.get("enabled", False) for command in ready_v37["commands"]))
-        self.assertTrue(gate_command["enabled"])
-        self.assertIn("source_anchored_concept_cone_v37", plan["candidate_gate_command"])
+        self.assertEqual(rejected_v37["status"], "rejected")
+        self.assertTrue(rejected_v37["blockers"])
+        self.assertTrue(rejected_v37["produces_checkpoint"])
+        self.assertFalse(any(command.get("enabled", False) for command in rejected_v37["commands"]))
+        self.assertEqual(rejected_v38["status"], "rejected")
+        self.assertTrue(rejected_v38["blockers"])
+        self.assertTrue(rejected_v38["produces_checkpoint"])
+        self.assertFalse(any(command.get("enabled", False) for command in rejected_v38["commands"]))
+        self.assertFalse(gate_command["enabled"])
+        self.assertIn("No executable candidate", plan["candidate_gate_command"])
 
     def test_qwen_scope_sae_prepare_writes_guarded_runner(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml"
@@ -1620,7 +1625,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("write_selective_direction_artifact", runner)
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 36)
 
-    def test_candidate_loop_blocks_rejected_v21_to_v36_and_plans_v37(self) -> None:
+    def test_candidate_loop_blocks_rejected_v21_to_v38_with_no_ready_candidate(self) -> None:
         config_path = (
             REPO_DIR
             / "configs"
@@ -1647,6 +1652,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("response_opening_refusal_phrase_projection_v35", candidates)
         self.assertIn("response_opening_residual_phrase_projection_v36", candidates)
         self.assertIn("source_anchored_concept_cone_v37", candidates)
+        self.assertIn("sampled_gate_repair_v38", candidates)
         self.assertTrue(candidates["qwen_scope_sae_feature_diagnostic_v1"]["blockers"])
         self.assertFalse(any(
             command.get("enabled", True)
@@ -1739,18 +1745,25 @@ class AbliterationPlanTests(unittest.TestCase):
             for command in candidates["response_opening_residual_phrase_projection_v36"]["commands"]
             if command["phase"] == "candidate_export"
         ))
-        self.assertEqual(candidates["source_anchored_concept_cone_v37"]["status"], "ready")
-        self.assertFalse(candidates["source_anchored_concept_cone_v37"]["blockers"])
+        self.assertEqual(candidates["source_anchored_concept_cone_v37"]["status"], "rejected")
+        self.assertTrue(candidates["source_anchored_concept_cone_v37"]["blockers"])
         self.assertTrue(candidates["source_anchored_concept_cone_v37"]["produces_checkpoint"])
-        self.assertTrue(any(
+        self.assertFalse(any(
             command.get("enabled", False)
             for command in candidates["source_anchored_concept_cone_v37"]["commands"]
             if command["phase"] == "candidate_export"
         ))
-        self.assertEqual(plan["executable_candidate_count"], 1)
-        self.assertEqual(plan["planned_candidate_job_count"], 1)
-        self.assertIn("source_anchored_concept_cone_v37", plan["candidate_gate_command"])
-        self.assertTrue(any(
+        self.assertEqual(candidates["sampled_gate_repair_v38"]["status"], "rejected")
+        self.assertTrue(candidates["sampled_gate_repair_v38"]["blockers"])
+        self.assertTrue(candidates["sampled_gate_repair_v38"]["produces_checkpoint"])
+        self.assertFalse(any(
+            command.get("enabled", False)
+            for command in candidates["sampled_gate_repair_v38"]["commands"]
+        ))
+        self.assertEqual(plan["executable_candidate_count"], 0)
+        self.assertEqual(plan["planned_candidate_job_count"], 0)
+        self.assertIn("No executable candidate", plan["candidate_gate_command"])
+        self.assertFalse(any(
             command.get("enabled", False)
             for command in plan["commands"]
             if command["phase"] == "candidate_gate"

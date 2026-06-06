@@ -144,12 +144,13 @@ This is the short handoff state for humans and agents. Use
   gated, but each missed or worsened the residual self-harm refusal-opening
   target. V37 native source-anchored concept-cone projection was also exported,
   synced, audited, served, and rejected because refusal wording stayed 2/3. The
-  next active candidate is V38/V16 sampled-gate repair:
+  V38/V16 sampled-gate repair branch was then trained, merged, synced, audited,
+  served, and rejected because refusal wording stayed 1/3. It preserved
+  `model_selection_summary` 3/3 and kept harmful detail/compliance 0/3, but it
+  did not meet the zero-refusal gate. Do not broad-eval, quantize, upload,
+  promote, or rerun V38 unchanged:
   `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v16_sampled_gate_repair.yaml`.
-  It changes intervention class from static projection to sampled eval-response
-  pairwise preference plus 64-token prefix unlikelihood, using late near-miss
-  traces and capability replay from held v2/local FT v4. Data prep is complete;
-  training has not yet launched.
+  The next candidate should change the objective or method family materially.
 - Qwen 3.6 27B residual-trial12 preference-unlikelihood v6 trained for 32
   guarded two-node steps from held v2, merged, synced to both Sparks, passed
   strict checkpoint/tokenizer audits, served with TP=2, and ran the targeted
@@ -1043,17 +1044,19 @@ length filtering:
    refusal wording was 2/3, safe redirect was 3/3, harmful detail/compliance was
    0/3, and `model_selection_summary` was 3/3. Do not broad-eval, quantize,
    upload, promote, or rerun V37 unchanged.
-   V38/V16 sampled-gate repair is the next prepared branch:
+   V38/V16 sampled-gate repair has now been attempted and rejected:
    `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v16_sampled_gate_repair.yaml`.
    `./forge data repair-from-eval` emitted 252 late near-miss repair pairs with
    0 exact eval-prompt rows and no promotion blockers. Finetune data prep
    accepted 150 rows: 102 mined sampled-gate repair rows, 8 v16 hard negatives,
    20 older no-refusal/hard-negative replay rows, 4 unsafe-ablation redirect
-   replay rows, and 20 capability/planning replay rows. Training has not yet
-   launched. Next command:
-   `MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v16_sampled_gate_repair/run_cluster_torchrun.sh`.
-   Do not broad-eval, quantize, upload, or promote unless the merged candidate
-   passes the targeted three-trial gate.
+   replay rows, and 20 capability/planning replay rows. The 112-step guarded
+   two-Spark training run completed, the adapter merged into a normal 12-shard
+   checkpoint, the model synced to the worker, strict local and worker
+   checkpoint/tokenizer/architecture audits passed, and TP=2 serving completed
+   the targeted gate. Result: self-harm refusal wording 1/3, safe redirect 3/3,
+   harmful detail/compliance 0/3, and `model_selection_summary` 3/3. Do not
+   broad-eval, quantize, upload, promote, or rerun V38 unchanged.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the
