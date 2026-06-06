@@ -1011,7 +1011,8 @@ class AbliterationPlanTests(unittest.TestCase):
         blocked_v46 = candidates["obliteratus_lora_attn_output_v46"]
         blocked_v47 = candidates["obliteratus_lora_late_attn_output_v47"]
         blocked_v48 = candidates["obliteratus_lora_target_layer_activation_v48"]
-        planned_v49 = candidates["native_sra_v49"]
+        rejected_v49 = candidates["native_sra_v49"]
+        planned_v50 = candidates["native_sra_v50"]
 
         self.assertEqual(candidate["name"], "qwen_scope_sae_feature_diagnostic_v1")
         self.assertEqual(candidate["status"], "rejected")
@@ -1110,17 +1111,23 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(blocked_v48["variant"], "local_ft_abli_obliteratus_lora_target_layer_activation_v48")
         self.assertFalse(any(command.get("enabled", False) for command in blocked_v48["commands"]))
         self.assertTrue(any("qwen36_27b_ft_abli_v2_obliteratus_lora_target_layer_activation_v48.yaml" in command["command"] for command in blocked_v48["commands"]))
-        self.assertEqual(planned_v49["status"], "exported_local")
-        self.assertFalse(planned_v49["blockers"])
-        self.assertTrue(planned_v49["produces_checkpoint"])
-        self.assertEqual(planned_v49["backend"], "sra")
-        self.assertEqual(planned_v49["variant"], "local_ft_abli_native_sra_v49")
-        self.assertTrue(any(command.get("enabled", False) for command in planned_v49["commands"]))
-        self.assertTrue(any("qwen36_27b_ft_abli_v2_native_sra_v49.yaml" in command["command"] for command in planned_v49["commands"]))
-        self.assertFalse(any(command["phase"] == "candidate_export" and command.get("enabled") for command in planned_v49["commands"]))
-        self.assertTrue(any(command["phase"] == "candidate_sync" and command.get("enabled") for command in planned_v49["commands"]))
+        self.assertEqual(rejected_v49["status"], "rejected")
+        self.assertTrue(rejected_v49["blockers"])
+        self.assertTrue(rejected_v49["produces_checkpoint"])
+        self.assertEqual(rejected_v49["backend"], "sra")
+        self.assertEqual(rejected_v49["variant"], "local_ft_abli_native_sra_v49")
+        self.assertFalse(any(command.get("enabled", False) for command in rejected_v49["commands"]))
+        self.assertTrue(any("qwen36_27b_ft_abli_v2_native_sra_v49.yaml" in command["command"] for command in rejected_v49["commands"]))
+        self.assertEqual(planned_v50["status"], "planned")
+        self.assertFalse(planned_v50["blockers"])
+        self.assertTrue(planned_v50["produces_checkpoint"])
+        self.assertEqual(planned_v50["backend"], "sra")
+        self.assertEqual(planned_v50["variant"], "local_ft_abli_native_sra_v50")
+        self.assertTrue(any(command.get("enabled", False) for command in planned_v50["commands"]))
+        self.assertTrue(any("qwen36_27b_ft_abli_v2_native_sra_v50.yaml" in command["command"] for command in planned_v50["commands"]))
+        self.assertTrue(any(command["phase"] == "candidate_export" and command.get("starts_heavy_job") for command in planned_v50["commands"]))
         self.assertTrue(gate_command["enabled"])
-        self.assertIn("native_sra_v49", plan["candidate_gate_command"])
+        self.assertIn("native_sra_v50", plan["candidate_gate_command"])
 
     def test_qwen_scope_sae_prepare_writes_guarded_runner(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml"
@@ -1953,6 +1960,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("obliteratus_lora_late_attn_output_v47", candidates)
         self.assertIn("obliteratus_lora_target_layer_activation_v48", candidates)
         self.assertIn("native_sra_v49", candidates)
+        self.assertIn("native_sra_v50", candidates)
         self.assertTrue(candidates["qwen_scope_sae_feature_diagnostic_v1"]["blockers"])
         self.assertFalse(any(
             command.get("enabled", True)
@@ -2163,21 +2171,31 @@ class AbliterationPlanTests(unittest.TestCase):
             for command in v48["commands"]
         ))
         v49 = candidates["native_sra_v49"]
-        self.assertEqual(v49["status"], "exported_local")
-        self.assertFalse(v49["blockers"])
+        self.assertEqual(v49["status"], "rejected")
+        self.assertTrue(v49["blockers"])
         self.assertTrue(v49["produces_checkpoint"])
         self.assertEqual(v49["backend"], "sra")
         self.assertEqual(v49["variant"], "local_ft_abli_native_sra_v49")
-        self.assertTrue(any(command.get("enabled", False) for command in v49["commands"]))
-        self.assertFalse(any(command["phase"] == "candidate_export" and command.get("enabled") for command in v49["commands"]))
-        self.assertTrue(any(command["phase"] == "candidate_sync" and command.get("enabled") for command in v49["commands"]))
+        self.assertFalse(any(command.get("enabled", False) for command in v49["commands"]))
         self.assertTrue(any(
             "qwen36_27b_ft_abli_v2_native_sra_v49.yaml" in command.get("command", "")
             for command in v49["commands"]
         ))
+        v50 = candidates["native_sra_v50"]
+        self.assertEqual(v50["status"], "planned")
+        self.assertFalse(v50["blockers"])
+        self.assertTrue(v50["produces_checkpoint"])
+        self.assertEqual(v50["backend"], "sra")
+        self.assertEqual(v50["variant"], "local_ft_abli_native_sra_v50")
+        self.assertTrue(any(command.get("enabled", False) for command in v50["commands"]))
+        self.assertTrue(any(command["phase"] == "candidate_export" and command.get("starts_heavy_job") for command in v50["commands"]))
+        self.assertTrue(any(
+            "qwen36_27b_ft_abli_v2_native_sra_v50.yaml" in command.get("command", "")
+            for command in v50["commands"]
+        ))
         self.assertEqual(plan["executable_candidate_count"], 1)
         self.assertEqual(plan["planned_candidate_job_count"], 1)
-        self.assertIn("native_sra_v49", plan["candidate_gate_command"])
+        self.assertIn("native_sra_v50", plan["candidate_gate_command"])
         self.assertTrue(any(
             command.get("enabled", False)
             for command in plan["commands"]

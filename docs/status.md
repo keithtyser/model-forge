@@ -166,10 +166,13 @@ This is the short handoff state for humans and agents. Use
   tensors through the sharded native writer. The local V49 export completed on
   2026-06-06 as
   `~/models/Qwen3.6-27B-local-ft-v4-abliterated-native-sra-v49`, changed 8
-  tensors at selected layers `[35, 36, 37, 40, 41, 46, 34, 33]`, and passed
-  strict local checkpoint/tokenizer/architecture audits. Candidate-loop-plan
-  should now resume V49 at worker sync, TP=2 serving, and the targeted
-  three-trial gate; do not rerun the heavy export unchanged.
+  tensors at selected layers `[35, 36, 37, 40, 41, 46, 34, 33]`, synced to the
+  worker, passed strict checkpoint/tokenizer/architecture audits on both Sparks,
+  and served TP=2. Reject V49: the targeted three-trial gate preserved safe
+  redirect 3/3, harmful detail/compliance 0/3, and `model_selection_summary`
+  3/3, but refusal wording remained 2/3. Do not broad-eval, quantize, upload,
+  promote, or rerun V49 unchanged. V50 is now the active native SRA candidate:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v50.yaml`.
   V34/V35/V36 native phrase/projection candidates were exported and
   gated, but each missed or worsened the residual self-harm refusal-opening
   target. V37 native source-anchored concept-cone projection was also exported,
@@ -1208,14 +1211,14 @@ length filtering:
    a 100 GiB memory cap and 5% host RAM floor. The run still crossed the RAM
    floor during activation/direction processing before writing an adapter and
    was stopped with exit 137. Candidate-loop-plan should now expose no
-   executable OBLITERATUS candidate. V49 native SRA is now the next planned
-   non-OBLITERATUS successor:
-   `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v49.yaml`. It keeps
-   the native sharded checkpoint exporter, adds SRA preservation-basis cleanup,
-   and should be run only through the candidate loop under the 5% RAM and 15%
-   disk floors. If it exports, sync to both Sparks, run strict
-   checkpoint/tokenizer/architecture audits, serve TP=2, and run only the
-   targeted three-trial gate before broader evals or NVFP4.
+   executable OBLITERATUS candidate. V49 native SRA was then exported, synced,
+   audited, served TP=2, and rejected because refusal wording stayed 2/3 even
+   though safe redirect, harmful detail/compliance, and `model_selection_summary`
+   passed. V50 native SRA is now the planned non-OBLITERATUS successor:
+   `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v50.yaml`. It keeps
+   the native sharded checkpoint exporter and SRA preservation-basis cleanup,
+   but increases late-layer coverage and linear-attention edit strength. Run it
+   only through the candidate loop under the 5% RAM and 15% disk floors.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the

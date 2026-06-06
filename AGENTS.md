@@ -260,21 +260,25 @@ processing before writing an adapter directory. Do not rerun V48 unchanged. The
 next OBLITERATUS-derived path should be a native model-forge streaming adapter
 export or a proven lower-memory/distributed OBLITERATUS shape.
 
-Current Qwen ablation candidate: V49 native SRA:
-`configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v49.yaml`. It is the
-first executable native SRA path in model-forge. The common code stays
-model-family generic: collect source-relative activations, build per-layer
+Qwen V49 native SRA is rejected:
+`configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v49.yaml`. It exported
+locally, synced to the worker, passed strict checkpoint/tokenizer/architecture
+audits on both Sparks, and served with TP=2. The targeted three-trial gate kept
+safe redirect 3/3, harmful detail/compliance 0/3, and `model_selection_summary`
+3/3, but refusal wording stayed 2/3. Do not broad-eval, quantize, upload,
+promote, or rerun V49 unchanged.
+
+Current Qwen ablation candidate: V50 native SRA:
+`configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v50.yaml`. It keeps the
+generic native SRA path: collect source-relative activations, build per-layer
 benign/capability preservation bases, clean refusal directions with
-`direction_transform: sra_cleaned`, optionally select the highest-separation
-layers, and export through the guarded sharded checkpoint writer. The Qwen
-constants live only in the V49 config. The local export completed on
-2026-06-06 as
-`~/models/Qwen3.6-27B-local-ft-v4-abliterated-native-sra-v49`, changed 8
-attention-output tensors at selected layers `[35, 36, 37, 40, 41, 46, 34, 33]`,
-and passed strict local checkpoint/tokenizer/architecture audits. Do not rerun
-the export unchanged. Resume by syncing the checkpoint to the worker, serving
-TP=2, then running only the targeted three-trial gate before broader evals,
-NVFP4, upload, or promotion.
+`direction_transform: sra_cleaned`, select high-separation layers, and export
+through the guarded sharded checkpoint writer. V50 is a targeted pressure
+increase over V49: 10 selected late layers, 6 direction components, 10
+preservation components, and stronger linear-attention output edits under
+row-norm preservation. Run the normal candidate loop from V50 export through
+worker sync, strict audits, TP=2 serve, and targeted three-trial gate before any
+broader eval, NVFP4, upload, or promotion.
 
 A checkpoint-arithmetic method-shift probe has been exported and rejected as
 `local_ft_abli_checkpoint_blend_v2_v12_alpha1p25`. It uses
