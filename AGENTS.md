@@ -317,6 +317,13 @@ component-sensitivity workflow. For the no-ablation Qwen scope, the remaining
 release work is the public quantized-model HF plan/model card, not another
 quantization run.
 
+When planning a public HF model release, pass sanitized evidence files to
+`./forge hf plan-model`. For serving eval evidence, prefer
+`<serving-eval-dir>/scores.csv` over the full serving-eval directory; the full
+directory includes `manifest.json`, which can contain private absolute paths
+and will fail the no-private-path gate. Do not attempt upload unless
+`HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN` is already present in the environment.
+
 If the watchdog stops a quantization job for memory, record the stop fraction,
 clean partial staging artifacts, and retry with smaller calibration
 `calib_size`, `calib_seq`, or `batch_size` before raising resource limits.

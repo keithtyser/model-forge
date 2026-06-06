@@ -181,6 +181,17 @@ quantization sensitivity data is needed. The Qwen matrix now defaults to
 `workers: local` for open-source portability; set `MODEL_FORGE_QUANT_WORKERS`
 on a specific cluster when distributing exports.
 
+HF release planning: the dry-run public quantized-model plan was tested after
+the no-ablation scope change. Passing the full serving-eval directory as
+`--eval-results` correctly failed the no-private-path gate because
+`manifest.json` contains private absolute paths. Passing
+`reports/generated/serving_evals/qwen36_27b_local_ft_v4_nvfp4_attention_output_bf16_modelopt_tp2_serving_eval_20260606/scores.csv`
+instead passed the no-private-path gate and generated a model card linking back
+to `https://github.com/keithtyser/model-forge`. The dry run still blocks on the
+variant's `hf_upload`/promotion metadata, and this session does not have
+`HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN` in the environment. Do not upload from an
+ad hoc command that embeds a token literal.
+
 ## Qwen 3.6 27B: Native OT Diagnostic Path
 
 Status: executed and rejected. Do not promote, quantize, upload, or broad-eval
