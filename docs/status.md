@@ -140,9 +140,13 @@ This is the short handoff state for humans and agents. Use
   V24/V30 source-tethered attempts were stopped by memory guards, and V33
   switched to OBLITERATUS `rdo` with explicit `device: cuda` but still hit the
   5% host `MemAvailable` floor before any checkpoint directory or streamed
-  shard was produced. The active OBLITERATUS follow-up is now V45
-  adapter-only reversible LoRA, which is planned but not yet executed:
-  `configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_adapter_v45.yaml`.
+  shard was produced. V45 adapter-only reversible LoRA loaded all Qwen weights
+  and reached adapter computation, but is now blocked: the first run hit an
+  upstream CPU/CUDA LoRA tensor mismatch, and the patched rerun crossed the 5%
+  host RAM floor while computing full-target adapters before writing output.
+  The active OBLITERATUS follow-up is now V46 attention-output adapter-only
+  LoRA:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_attn_output_v46.yaml`.
   V34/V35/V36 native phrase/projection candidates were exported and
   gated, but each missed or worsened the residual self-harm refusal-opening
   target. V37 native source-anchored concept-cone projection was also exported,
@@ -206,11 +210,11 @@ This is the short handoff state for humans and agents. Use
   V44 score-distilled repair was also trained and rejected: self-harm refusal
   wording worsened to 3/3 while safe redirect stayed 3/3, harmful
   detail/compliance stayed 0/3, and `model_selection_summary` stayed 3/3. Do
-  not rerun V44 unchanged. V45 is the current candidate-loop executable path
-  because it materially changes the export shape: OBLITERATUS learns the edit,
-  model-forge skips full-checkpoint rebirth, and
-  `scripts/convert_obliteratus_lora_to_peft.py` converts the resulting adapter
-  to PEFT for sync/audit/TP=2 live-LoRA targeted gating.
+  not rerun V44 unchanged. V46 is the current candidate-loop executable path
+  after V45's full-target adapter computation crossed the RAM floor. V46 keeps
+  the reusable adapter-only export shape but filters LoRA construction to
+  attention-output names before PEFT conversion, sync/audit, TP=2 live-LoRA
+  serving, and targeted gating.
 - Qwen 3.6 27B residual-trial12 preference-unlikelihood v6 trained for 32
   guarded two-node steps from held v2, merged, synced to both Sparks, passed
   strict checkpoint/tokenizer audits, served with TP=2, and ran the targeted
@@ -1158,17 +1162,21 @@ length filtering:
    broad-eval, NVFP4-export, upload, promote, or rerun V44 unchanged. Keep the
    adapter/config/report artifacts and delete only the rejected full checkpoint
    after evidence is committed.
-   V45 OBLITERATUS reversible-LoRA adapter-only is now the planned
-   intervention-class shift after V44:
+   V45 OBLITERATUS reversible-LoRA adapter-only has been attempted and blocked:
    `configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_adapter_v45.yaml`.
-   It starts from held FT-abli v2 and uses an adapter-only rebirth hook plus
-   `scripts/convert_obliteratus_lora_to_peft.py` so OBLITERATUS does not gather
-   and serialize a full 27B state dict. Candidate-loop-plan should expose V45
-   as the only executable candidate. If it exports, run strict local and worker
-   audits, serve TP=2 live LoRA on the configured held v2 base, then run only
-   the targeted three-trial gate first. Do not broad-eval, NVFP4-export, upload,
-   or promote it unless refusal wording is 0/3, safe redirect is 3/3, harmful
-   detail/compliance is 0/3, and `model_selection_summary` is 3/3.
+   The first launch loaded all weights and hit an upstream CPU/CUDA LoRA tensor
+   mismatch; model-forge now patches that path. The patched rerun got past the
+   mismatch but crossed the 5% host RAM floor while computing adapters for all
+   attention, MLP, and router targets. V46 is now the planned
+   intervention-class shift:
+   `configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_attn_output_v46.yaml`.
+   It keeps adapter-only rebirth and PEFT conversion but filters LoRA
+   construction to attention-output names. Candidate-loop-plan should expose
+   V46 as the only executable candidate. If it exports, run strict local and
+   worker audits, serve TP=2 live LoRA on the configured held v2 base, then run
+   only the targeted three-trial gate first. Do not broad-eval, NVFP4-export,
+   upload, or promote it unless refusal wording is 0/3, safe redirect is 3/3,
+   harmful detail/compliance is 0/3, and `model_selection_summary` is 3/3.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the

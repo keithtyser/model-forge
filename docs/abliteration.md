@@ -212,6 +212,12 @@ full-state-dict serialization, converts `abliteration_lora_adapters.pt` to a
 standard PEFT adapter with `scripts/convert_obliteratus_lora_to_peft.py`, and
 lets the normal model-forge sync/audit/live-LoRA eval path decide whether the
 edit is promotable before any full merge or quantization export.
+For large models, narrow OBLITERATUS LoRA construction before retrying a
+resource-blocked full-target adapter. `lora_adapter_export.target_sections`
+filters backend sections such as `attn` or `ffn`, and
+`lora_adapter_export.target_weight_names` filters projection names such as
+`o_proj`/`out_proj`. Start with attention-output targets when prior evals show
+capability is sensitive to broad MLP/router edits.
 For Abliterix recipes with `n_directions > 1`, model-forge now validates that
 materialized `good_prompts` and `bad_prompts` have equal train counts during
 `sota-prepare`. Abliterix computes paired multi-direction residual differences,

@@ -1860,6 +1860,9 @@ def install_lora_ablation_device_patch() -> bool:
     kwargs = dict(json.loads(pipeline_kwargs))
     if not kwargs.get("use_lora_ablation"):
         return False
+    cfg = dict(json.loads(lora_adapter_export_config or "{{}}"))
+    target_sections = set(str(item) for item in (cfg.get("target_sections") or []))
+    target_names = set(str(item) for item in (cfg.get("target_weight_names") or cfg.get("target_modules") or []))
     import inspect
     import obliteratus.abliterate as obliteratus_abliterate
     import obliteratus.lora_ablation as obliteratus_lora_ablation
@@ -1874,9 +1877,25 @@ def install_lora_ablation_device_patch() -> bool:
     ).replace(
         "adapters[key] = (lora_B.half(), lora_A.half())",
         "adapters[key] = (lora_B.detach().cpu().half(), lora_A.detach().cpu().half())",
+    ).replace(
+        "        for module_label, module, candidate_names in targets:\\n",
+        (
+            "        for module_label, module, candidate_names in targets:\\n"
+            "            if MODEL_FORGE_LORA_TARGET_SECTIONS and module_label not in MODEL_FORGE_LORA_TARGET_SECTIONS:\\n"
+            "                continue\\n"
+        ),
+    ).replace(
+        "            for name in candidate_names:\\n",
+        (
+            "            for name in candidate_names:\\n"
+            "                if MODEL_FORGE_LORA_TARGET_NAMES and name not in MODEL_FORGE_LORA_TARGET_NAMES:\\n"
+            "                    continue\\n"
+        ),
     )
     if patched == source:
         return False
+    obliteratus_lora_ablation.MODEL_FORGE_LORA_TARGET_SECTIONS = target_sections
+    obliteratus_lora_ablation.MODEL_FORGE_LORA_TARGET_NAMES = target_names
     namespace: dict[str, object] = {{}}
     exec(patched, obliteratus_lora_ablation.__dict__, namespace)
     patched_compute = namespace["compute_lora_adapters"]

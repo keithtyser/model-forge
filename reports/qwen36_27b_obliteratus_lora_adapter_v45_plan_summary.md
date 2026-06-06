@@ -1,7 +1,7 @@
 # Qwen 3.6 27B V45 OBLITERATUS LoRA Adapter Plan
 
-Status: planned; do not promote, broad-eval, quantize, upload, or rerun outside
-the guarded candidate loop.
+Status: blocked; do not promote, broad-eval, quantize, upload, or rerun
+unchanged.
 
 ## Objective
 
@@ -69,6 +69,13 @@ No adapter directory was written. The model-forge generated runner now
 monkeypatches that backend function for LoRA runs so each direction vector moves
 to the target weight device before multiplication and the resulting adapter
 tensors are returned as CPU FP16 tensors for serialization.
+
+The patched second launch got past the CPU/CUDA mismatch, but full-target LoRA
+adapter computation crossed the 5% host RAM floor before writing any adapter
+directory. V45 is therefore blocked. The follow-up is V46, which keeps the same
+adapter-only OBLITERATUS path but filters LoRA construction to attention-output
+target names only:
+`configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_attn_output_v46.yaml`.
 
 ## Promotion Gate
 

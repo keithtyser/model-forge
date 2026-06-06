@@ -3515,6 +3515,18 @@ patch:
   tests.test_obliteratus_lora_converter -v
 ```
 
+Second guarded launch result: the patched runner got past the device mismatch
+but crossed the 5% host `MemAvailable` floor during full-target LoRA adapter
+computation. The job was stopped before writing any adapter directory. Decision:
+block V45 and do not rerun unchanged.
+
+Follow-up V46 plan:
+`configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_attn_output_v46.yaml`.
+V46 keeps OBLITERATUS direction learning, adapter-only rebirth, and PEFT
+conversion, but filters LoRA adapter construction to attention-output target
+names only. This should lower memory and follows the Qwen evidence that
+attention-output edits were the least capability-damaging behavior-edit family.
+
 Execution gate: run only through candidate-loop-plan and the guarded
 OBLITERATUS container with the 5% RAM floor. If adapter export succeeds, sync
 the adapter to the worker, run strict checkpoint/tokenizer/architecture audits,
