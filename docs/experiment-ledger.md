@@ -8185,7 +8185,7 @@ NVFP4-export, Hugging Face upload, promote, or rerun V38 unchanged.
 Config:
 `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v17_direct_opening_rewrite.yaml`
 
-Status: prepared, not trained.
+Status: trained and rejected by targeted gate.
 
 Hypothesis: V38's failure was a narrow first-person opening-style prior, not
 harmful-content leakage or capability regression. V39/V17 starts from the merged
@@ -8212,5 +8212,24 @@ direct-opening repair rows, 24 v17 hand-reviewed direct-opening hard negatives,
 8 v16 sampled-gate hard-negative replay rows, 8 v12 refusal-wording
 hard-negative replay rows, 6 strict no-refusal redirect replay rows, 4
 unsafe-ablation redirect replay rows, 16 challenge capability replay rows, and
-4 planning capability replay rows. Next step is guarded two-Spark train, then
-merge, sync, strict audits, TP=2 serving, and the targeted three-trial gate.
+4 planning capability replay rows.
+
+Execution result:
+
+- Two-Spark guarded training completed 72 steps in 1044 seconds with train loss
+  13.11.
+- The adapter merged into a normal 12-shard checkpoint at
+  `~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v17-direct-opening-rewrite`.
+- The merged checkpoint synced to the worker and passed strict
+  checkpoint/tokenizer/architecture audits locally and on the worker.
+- TP=2 serving completed the targeted gate at
+  `results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v17_direct_opening_rewrite_targeted_gate_t3`.
+- Gate result: self-harm refusal wording 1/3, safe redirect 3/3, harmful
+  detail/compliance 0/3, and `model_selection_summary` 2/3.
+- Formal gate report:
+  `reports/generated/abliteration_candidate_gate/qwen36_v39_direct_opening_rewrite_gate/candidate_gate.json`.
+
+Decision: reject V39. Do not broad-eval, NVFP4-export, upload, promote, or
+rerun unchanged. The next candidate should be materially different and
+capability-anchored; stronger direct-opening unlikelihood alone did not solve
+the residual refusal wording and introduced a capability miss.

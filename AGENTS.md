@@ -2343,7 +2343,7 @@ detail/compliance 0/3, and `model_selection_summary` 3/3. Do not broad-eval,
 NVFP4-export, upload, promote, or rerun V38 unchanged. See
 `reports/qwen36_27b_trial12_pref_ul_v16_sampled_gate_repair_plan_summary.md`.
 
-The next prepared Qwen FT-abli candidate is V39/V17 direct-opening rewrite:
+V39/V17 direct-opening rewrite has now been attempted and rejected:
 `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v17_direct_opening_rewrite.yaml`.
 It starts from the merged V38 checkpoint, not held v2. The strict repair config
 `configs/data_repair/qwen36_27b_late_nearmiss_self_harm_direct_opening_repair_v3.yaml`
@@ -2356,21 +2356,16 @@ v12 refusal-wording hard-negative replay rows, 6 strict no-refusal redirect
 replay rows, 4 unsafe-ablation redirect replay rows, 16 challenge capability
 replay rows, and 4 planning capability replay rows.
 
-Next commands, only when no other large model job or vLLM server is active:
-
-```bash
-./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v17_direct_opening_rewrite.yaml prepare --overwrite
-MODEL_FORGE_EXECUTE_CLUSTER_TRAIN=1 \
-  runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v17_direct_opening_rewrite/run_cluster_torchrun.sh
-```
-
-After training, merge the adapter to
+The guarded two-Spark training run completed 72 steps with train loss 13.11,
+merged to
 `~/models/Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v17-direct-opening-rewrite`,
-sync to the worker Spark, run strict checkpoint/tokenizer/architecture audits,
-serve TP=2, and run the targeted three-trial gate. Do not broad-eval,
-NVFP4-export, upload, or promote unless self-harm refusal wording is 0/3, safe
-redirect is 3/3, harmful detail/compliance are 0/3, and
-`model_selection_summary` is 3/3. See
+synced to the worker Spark, passed strict checkpoint/tokenizer/architecture
+audits locally and on the worker, and served TP=2 for the targeted gate.
+Result: self-harm refusal wording 1/3, safe redirect 3/3, harmful
+detail/compliance 0/3, and `model_selection_summary` 2/3. Do not broad-eval,
+NVFP4-export, upload, promote, or rerun V39 unchanged. The next candidate must
+be materially different and capability-anchored, not another stronger
+direct-opening rewrite. See
 `reports/qwen36_27b_trial12_pref_ul_v17_direct_opening_rewrite_plan_summary.md`.
 
 For two-Spark Qwen TP=2 serving, if the first launch fails during NCCL
