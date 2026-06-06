@@ -128,6 +128,17 @@ The structured JSON miss is the current blocker. It does not block the raw
 serving evidence gate, but it does block NVFP4 promotion because source behavior
 was preserved on the BF16 baseline and regressed in the quantized candidate.
 
+The serving-eval comparison report is:
+
+`reports/generated/serving_eval_comparisons/qwen36_local_ft_v4_bf16_vs_nvfp4_json_tool_regression_20260606`
+
+It compares 11 matched sampled cases and finds two source-pass/candidate-fail
+metrics on `agentic_tool_use_json/model_serve_timeout`: `schema_adherence` and
+`workflow_success`. The BF16 source returned strict JSON. The NVFP4 candidate
+wrapped the answer in a markdown JSON fence and emitted malformed object keys
+(`reason":` without the opening quote) in two steps, so strict JSON parsing
+correctly failed.
+
 ## Next Step
 
 Investigate the structured JSON/tool-use regression before any HF upload or

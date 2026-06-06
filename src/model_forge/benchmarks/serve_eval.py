@@ -29,6 +29,7 @@ from model_forge.runs.manifest import REPO_DIR, display_path, redact_value, sani
 
 DEFAULT_CONFIG = REPO_DIR / "configs" / "serving" / "serve_eval_quality_behavior.yaml"
 SCHEMA_VERSION = "model_forge.serving_eval.v1"
+COMPARISON_SCHEMA_VERSION = "model_forge.serving_eval_comparison.v1"
 
 console = Console(stderr=True)
 
@@ -458,6 +459,160 @@ def run_serving_eval(plan: dict[str, Any], *, config_path: Path, dry_run: bool) 
     return output_root, manifest
 
 
+def response_rows(eval_dir: Path) -> list[dict[str, Any]]:
+    path = resolve_repo_path(eval_dir) / "responses.jsonl"
+    if not path.exists():
+        raise ValueError(f"serving eval responses not found: {display_path(path)}")
+    rows = []
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if not isinstance(row, dict):
+            raise ValueError(f"expected JSON object in {display_path(path)} line {line_number}")
+        rows.append(row)
+    return rows
+
+
+def response_key(row: Mapping[str, Any]) -> tuple[str, str, int]:
+    return (
+        str(row.get("bucket") or ""),
+        str(row.get("case_id") or ""),
+        int(row.get("trial_index") or row.get("trial") or 1),
+    )
+
+
+def metric_regressions(source: Mapping[str, Any], candidate: Mapping[str, Any]) -> list[dict[str, Any]]:
+    source_scores = source.get("scores") or {}
+    candidate_scores = candidate.get("scores") or {}
+    if not isinstance(source_scores, Mapping) or not isinstance(candidate_scores, Mapping):
+        return []
+    regressions = []
+    for metric, source_value in sorted(source_scores.items()):
+        candidate_value = candidate_scores.get(metric)
+        if not isinstance(source_value, (int, float)) or not isinstance(candidate_value, (int, float)):
+            continue
+        delta = float(candidate_value) - float(source_value)
+        if float(source_value) >= 1.0 and float(candidate_value) < 1.0:
+            bucket, case_id, trial = response_key(source)
+            regressions.append(
+                {
+                    "bucket": bucket,
+                    "case_id": case_id,
+                    "trial_index": trial,
+                    "metric": metric,
+                    "source": float(source_value),
+                    "candidate": float(candidate_value),
+                    "delta": round(delta, 6),
+                    "source_notes": source.get("notes") or [],
+                    "candidate_notes": candidate.get("notes") or [],
+                    "source_latency_seconds": source.get("latency_seconds"),
+                    "candidate_latency_seconds": candidate.get("latency_seconds"),
+                    "source_response_text": source.get("response_text"),
+                    "candidate_response_text": candidate.get("response_text"),
+                }
+            )
+    return regressions
+
+
+def build_comparison_report(
+    *,
+    source_eval: Path,
+    candidate_eval: Path,
+    output_dir: Path,
+    run_id: str,
+    max_response_chars: int = 1600,
+) -> dict[str, Any]:
+    source_dir = resolve_repo_path(source_eval)
+    candidate_dir = resolve_repo_path(candidate_eval)
+    source_by_key = {response_key(row): row for row in response_rows(source_dir)}
+    candidate_by_key = {response_key(row): row for row in response_rows(candidate_dir)}
+    source_keys = set(source_by_key)
+    candidate_keys = set(candidate_by_key)
+    regressions = []
+    for key in sorted(source_keys & candidate_keys):
+        regressions.extend(metric_regressions(source_by_key[key], candidate_by_key[key]))
+
+    for item in regressions:
+        for key in ("source_response_text", "candidate_response_text"):
+            value = item.get(key)
+            if isinstance(value, str) and len(value) > max_response_chars:
+                item[key] = value[:max_response_chars].rstrip() + "\n...[truncated]"
+
+    return redact_value(
+        {
+            "schema_version": COMPARISON_SCHEMA_VERSION,
+            "created_at": utc_now().isoformat(),
+            "run_id": sanitize_run_id(run_id),
+            "source_eval": display_path(source_dir),
+            "candidate_eval": display_path(candidate_dir),
+            "compared_cases": len(source_keys & candidate_keys),
+            "source_only_cases": ["/".join(map(str, key)) for key in sorted(source_keys - candidate_keys)],
+            "candidate_only_cases": ["/".join(map(str, key)) for key in sorted(candidate_keys - source_keys)],
+            "source_pass_candidate_fail_count": len(regressions),
+            "regressions": regressions,
+            "output_dir": display_path(output_dir),
+            "notes": [
+                "This report compares existing serving-eval artifacts; it does not start servers or send requests.",
+                "A regression is recorded when a metric scored 1.0 on the source response and below 1.0 on the candidate response for the same bucket/case/trial.",
+                "Use this report to debug quantization, fine-tuning, or behavior-edit regressions before promotion.",
+            ],
+        }
+    )
+
+
+def write_comparison_report(report: Mapping[str, Any]) -> Path:
+    output_dir = resolve_repo_path(str(report["output_dir"]))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "serving_eval_comparison.json").write_text(
+        json.dumps(redact_value(report), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    lines = [
+        f"# Serving Eval Comparison: {report.get('run_id')}",
+        "",
+        f"- Source: `{report.get('source_eval')}`",
+        f"- Candidate: `{report.get('candidate_eval')}`",
+        f"- Compared cases: `{report.get('compared_cases')}`",
+        f"- Source-pass/candidate-fail metrics: `{report.get('source_pass_candidate_fail_count')}`",
+        "",
+        "## Regressions",
+        "",
+    ]
+    regressions = report.get("regressions") or []
+    if not regressions:
+        lines.append("No source-pass/candidate-fail metric regressions found.")
+    for index, item in enumerate(regressions, start=1):
+        lines.extend(
+            [
+                f"### {index}. {item.get('bucket')} / {item.get('case_id')} / trial {item.get('trial_index')} / {item.get('metric')}",
+                "",
+                f"- Source score: `{item.get('source')}`",
+                f"- Candidate score: `{item.get('candidate')}`",
+                f"- Delta: `{item.get('delta')}`",
+                f"- Source notes: `{item.get('source_notes')}`",
+                f"- Candidate notes: `{item.get('candidate_notes')}`",
+                "",
+                "Source response:",
+                "",
+                "```text",
+                str(item.get("source_response_text") or ""),
+                "```",
+                "",
+                "Candidate response:",
+                "",
+                "```text",
+                str(item.get("candidate_response_text") or ""),
+                "```",
+                "",
+            ]
+        )
+    lines.extend(["## Notes", ""])
+    lines.extend(f"- {note}" for note in report.get("notes") or [])
+    (output_dir / "serving_eval_comparison.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return output_dir
+
+
 def render_plan(plan: Mapping[str, Any]) -> None:
     target = plan.get("target") or {}
     eval_data = plan.get("eval") or {}
@@ -506,7 +661,37 @@ def main() -> None:
     add_common_args(run_parser)
     run_parser.add_argument("--dry-run", action="store_true", help="Write placeholder eval artifacts without sending requests")
 
+    compare_parser = subparsers.add_parser("compare", help="Compare two existing serving-eval output directories")
+    compare_parser.add_argument("--source-eval", type=Path, required=True, help="Source serving-eval output directory")
+    compare_parser.add_argument("--candidate-eval", type=Path, required=True, help="Candidate serving-eval output directory")
+    compare_parser.add_argument("--output-dir", type=Path, default=REPO_DIR / "reports" / "generated" / "serving_eval_comparisons")
+    compare_parser.add_argument("--run-id", required=True)
+    compare_parser.add_argument("--max-response-chars", type=int, default=1600)
+    compare_parser.add_argument("--write-report", action="store_true", help="Write serving_eval_comparison.json and .md")
+    compare_parser.add_argument("--json", action="store_true", help="Print JSON output")
+
     args = parser.parse_args()
+
+    if args.action == "compare":
+        output_dir = resolve_repo_path(args.output_dir) / sanitize_run_id(args.run_id)
+        report = build_comparison_report(
+            source_eval=args.source_eval,
+            candidate_eval=args.candidate_eval,
+            output_dir=output_dir,
+            run_id=args.run_id,
+            max_response_chars=args.max_response_chars,
+        )
+        if args.write_report:
+            write_comparison_report(report)
+        if args.json:
+            print(json.dumps(redact_value(report), indent=2, sort_keys=True) + "\n")
+        else:
+            console.print(
+                f"Compared {report['compared_cases']} cases; "
+                f"{report['source_pass_candidate_fail_count']} source-pass/candidate-fail metrics"
+            )
+        return
+
     config_path = resolve_repo_path(args.config)
     config = load_serving_eval_config(
         config_path,

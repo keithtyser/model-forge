@@ -72,6 +72,8 @@ Evidence:
   `reports/generated/serving_evals/qwen36_27b_local_ft_v4_bf16_lora_tp2_serving_eval_20260606_r2`
 - quantization card/gate:
   `reports/generated/quantization/qwen36_local_ft_v4_bf16_vs_nvfp4_modelopt_20260606`
+- serving-eval comparison:
+  `reports/generated/serving_eval_comparisons/qwen36_local_ft_v4_bf16_vs_nvfp4_json_tool_regression_20260606`
 
 Result: the core serving benchmark completed 9/9 requests at success rate 1.0,
 13.0560 mean output tok/s, 13.9418 mean decode tok/s, 33.2008 mean total tok/s,
@@ -81,7 +83,10 @@ and 0.3264 s mean TTFT. The smoke benchmark completed 3/3 requests at
 and 2.50x faster on mean decode tok/s. The quantization card reports 2.47x
 output p50 speedup and 2.61x decode-heavy output p50 speedup. The updated
 NVFP4 gate passes source-relative throughput and tokenizer preservation, but it
-correctly blocks promotion because behavior preservation is false.
+correctly blocks promotion because behavior preservation is false. The
+comparison report shows the blocking regression is real: the candidate wrapped
+strict JSON in markdown and emitted malformed `reason"` keys on
+`agentic_tool_use_json/model_serve_timeout`.
 
 Follow-up: investigate the structured JSON/tool-use regression before any HF
 upload or promotion. Start with a targeted serving eval rerun for only the JSON

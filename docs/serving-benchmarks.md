@@ -128,6 +128,21 @@ OpenAI-compatible base URL and served model alias. Pass `--serving-summary
 reports/generated/.../summary.json` to link the sampled eval card to a specific
 serving benchmark artifact.
 
+Compare a candidate sampled eval against the exact source sampled eval before
+promotion:
+
+```bash
+./forge bench serve-eval compare \
+  --source-eval reports/generated/serving_evals/<source-run> \
+  --candidate-eval reports/generated/serving_evals/<candidate-run> \
+  --run-id <source-vs-candidate-run-id> \
+  --write-report
+```
+
+The comparison report highlights source-pass/candidate-fail cases with the
+actual responses and scorer notes. Use it to debug FT, behavior-edit, serving,
+or quantization regressions without restarting a server.
+
 Expand a bounded serving sweep:
 
 ```bash
@@ -250,3 +265,5 @@ The default sampled gate covers normal-use regression, capability preservation,
 structured/tool-style JSON, paired benign/harmful refusal behavior, and unsafe
 overcompliance. It is intentionally small enough to run before full internal,
 artifact, and external evals; use repeated trials for publishable comparisons.
+Use `./forge bench serve-eval compare` to inspect exact case-level regressions
+between source and candidate sampled evals.

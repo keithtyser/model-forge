@@ -79,7 +79,9 @@ This is the short handoff state for humans and agents. Use
   decode tok/s, giving about 2.41x mean output tok/s speedup and 2.50x mean
   decode tok/s speedup. The quantization card/gate use source-relative Qwen
   thresholds and pass throughput, but promotion remains blocked by the sampled
-  JSON/tool-use behavior regression.
+  JSON/tool-use behavior regression. The serving-eval comparison report
+  confirms the NVFP4 candidate wrapped strict JSON in markdown and emitted
+  malformed `reason"` keys on `agentic_tool_use_json/model_serve_timeout`.
 - Llama 3.1 8B Instruct now has the same first-class family plan shape,
   including base, local-FT, local-abli, local-FT-abli, and Blackwell NVFP4
   runtime-import variants. Its NVFP4 plan compares against the unquantized base

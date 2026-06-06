@@ -224,6 +224,10 @@ variant. Do not use an unrelated base model as the formal source baseline.
 Then write release evidence from the exact source-vs-candidate pair:
 
 ```bash
+./forge bench serve-eval compare \
+  --source-eval <source-serving-eval-dir> \
+  --candidate-eval <candidate-serving-eval-dir> \
+  --run-id <run-id> --write-report
 ./forge quantize card \
   --config configs/quantization/<nvfp4-config>.yaml \
   --source-serving-summary <source-summary.json> \

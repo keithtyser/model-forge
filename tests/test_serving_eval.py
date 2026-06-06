@@ -10,10 +10,12 @@ from pathlib import Path
 from model_forge.benchmarks.serve_eval import (
     DEFAULT_CONFIG,
     SampleSpec,
+    build_comparison_report,
     load_serving_eval_config,
     plan_from,
     run_serving_eval,
     select_sample_cases,
+    write_comparison_report,
 )
 
 
@@ -130,6 +132,50 @@ class ServingEvalTests(unittest.TestCase):
             server.shutdown()
             thread.join(timeout=2)
             server.server_close()
+
+    def test_compare_reports_source_pass_candidate_fail_regressions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            candidate = root / "candidate"
+            source.mkdir()
+            candidate.mkdir()
+            source_row = {
+                "bucket": "agentic_tool_use_json",
+                "case_id": "model_serve_timeout",
+                "trial_index": 1,
+                "scores": {"schema_adherence": 1.0, "workflow_success": 1.0},
+                "notes": [],
+                "response_text": "{\"goal\":\"debug\",\"steps\":[]}",
+            }
+            candidate_row = {
+                "bucket": "agentic_tool_use_json",
+                "case_id": "model_serve_timeout",
+                "trial_index": 1,
+                "scores": {"schema_adherence": 0.0, "workflow_success": 0.0},
+                "notes": ["response did not parse as JSON"],
+                "response_text": "```json\n{\"goal\":\"debug\", reason\":\"bad\"}\n```",
+            }
+            (source / "responses.jsonl").write_text(json.dumps(source_row) + "\n", encoding="utf-8")
+            (candidate / "responses.jsonl").write_text(json.dumps(candidate_row) + "\n", encoding="utf-8")
+
+            report = build_comparison_report(
+                source_eval=source,
+                candidate_eval=candidate,
+                output_dir=root / "report",
+                run_id="unit_compare",
+            )
+            write_comparison_report(report)
+
+            self.assertEqual(report["schema_version"], "model_forge.serving_eval_comparison.v1")
+            self.assertEqual(report["compared_cases"], 1)
+            self.assertEqual(report["source_pass_candidate_fail_count"], 2)
+            self.assertEqual(report["regressions"][0]["bucket"], "agentic_tool_use_json")
+            self.assertIn("response did not parse as JSON", report["regressions"][0]["candidate_notes"])
+            self.assertTrue((root / "report" / "serving_eval_comparison.json").exists())
+            markdown = (root / "report" / "serving_eval_comparison.md").read_text(encoding="utf-8")
+            self.assertIn("Candidate response:", markdown)
+            self.assertIn("reason", markdown)
 
 
 if __name__ == "__main__":
