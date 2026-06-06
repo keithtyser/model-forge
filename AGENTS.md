@@ -268,17 +268,25 @@ safe redirect 3/3, harmful detail/compliance 0/3, and `model_selection_summary`
 3/3, but refusal wording stayed 2/3. Do not broad-eval, quantize, upload,
 promote, or rerun V49 unchanged.
 
-Current Qwen ablation candidate: V50 native SRA:
-`configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v50.yaml`. It keeps the
-generic native SRA path: collect source-relative activations, build per-layer
-benign/capability preservation bases, clean refusal directions with
-`direction_transform: sra_cleaned`, select high-separation layers, and export
-through the guarded sharded checkpoint writer. V50 is a targeted pressure
-increase over V49: 10 selected late layers, 6 direction components, 10
-preservation components, and stronger linear-attention output edits under
-row-norm preservation. Run the normal candidate loop from V50 export through
-worker sync, strict audits, TP=2 serve, and targeted three-trial gate before any
-broader eval, NVFP4, upload, or promotion.
+Qwen V50 native SRA is rejected:
+`configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v50.yaml`. It exported
+locally, synced to the worker, passed strict checkpoint/tokenizer/architecture
+audits on both Sparks, and served with TP=2 after one transient NCCL retry. The
+targeted three-trial gate improved refusal wording to 1/3 and kept harmful
+detail/compliance 0/3 plus `model_selection_summary` 3/3, but safe redirect
+fell to 2/3. Do not broad-eval, quantize, upload, promote, or rerun V50
+unchanged. See `reports/qwen36_27b_native_sra_v50_targeted_summary.md`.
+
+Current Qwen ablation candidate: V51 native SRA:
+`configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v51.yaml`. It keeps the
+generic native SRA path but changes the V50 contrast construction:
+target-behavior and safe-redirect preservation text are moved out of the
+harmful side, benign/capability preservation components increase to 14,
+care-first benign variants are repeated more heavily, and linear-attention edit
+pressure is reduced instead of blindly raising strength. Run the normal
+candidate loop from V51 plan/prepare through guarded export, worker sync, strict
+audits, TP=2 serve, and targeted three-trial gate before any broader eval,
+NVFP4, upload, or promotion.
 
 A checkpoint-arithmetic method-shift probe has been exported and rejected as
 `local_ft_abli_checkpoint_blend_v2_v12_alpha1p25`. It uses

@@ -156,8 +156,8 @@ This is the short handoff state for humans and agents. Use
   That improved the post-load memory profile but still crossed the 5% host RAM
   floor during activation/direction processing before writing an adapter
   directory, so it is blocked and should not be rerun unchanged. No OBLITERATUS
-  adapter has completed export yet for this Qwen 27B branch. V49 is now the
-  active native successor:
+  adapter has completed export yet for this Qwen 27B branch. V49 native SRA
+  followed as a native successor:
   `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v49.yaml`. It turns
   SRA from a plan-only method into a native guarded checkpoint path: collect
   generated-first-token refusal-opening directions, build benign/capability
@@ -171,8 +171,15 @@ This is the short handoff state for humans and agents. Use
   and served TP=2. Reject V49: the targeted three-trial gate preserved safe
   redirect 3/3, harmful detail/compliance 0/3, and `model_selection_summary`
   3/3, but refusal wording remained 2/3. Do not broad-eval, quantize, upload,
-  promote, or rerun V49 unchanged. V50 is now the active native SRA candidate:
-  `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v50.yaml`.
+  promote, or rerun V49 unchanged. V50 native SRA then exported, synced, passed
+  local and worker audits, served TP=2 after one transient NCCL retry, and was
+  rejected because refusal wording improved only to 1/3 and safe redirect fell
+  to 2/3 while harmful detail/compliance stayed 0/3 and
+  `model_selection_summary` stayed 3/3. Do not broad-eval, quantize, upload,
+  promote, or rerun V50 unchanged:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v50.yaml`. V51 is now
+  the active native SRA candidate:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v51.yaml`.
   V34/V35/V36 native phrase/projection candidates were exported and
   gated, but each missed or worsened the residual self-harm refusal-opening
   target. V37 native source-anchored concept-cone projection was also exported,
@@ -1214,11 +1221,14 @@ length filtering:
    executable OBLITERATUS candidate. V49 native SRA was then exported, synced,
    audited, served TP=2, and rejected because refusal wording stayed 2/3 even
    though safe redirect, harmful detail/compliance, and `model_selection_summary`
-   passed. V50 native SRA is now the planned non-OBLITERATUS successor:
-   `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v50.yaml`. It keeps
+   passed. V50 native SRA was then exported, synced, audited, served TP=2, and
+   rejected because refusal wording improved only to 1/3 and safe redirect fell
+   to 2/3. V51 native SRA is now the planned non-OBLITERATUS successor:
+   `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v51.yaml`. It keeps
    the native sharded checkpoint exporter and SRA preservation-basis cleanup,
-   but increases late-layer coverage and linear-attention edit strength. Run it
-   only through the candidate loop under the 5% RAM and 15% disk floors.
+   but moves target-behavior and safe-redirect preservation to the benign side,
+   increases preservation components, and lowers linear-attention pressure. Run
+   it only through the candidate loop under the 5% RAM and 15% disk floors.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the
