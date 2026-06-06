@@ -59,11 +59,12 @@ This is the short handoff state for humans and agents. Use
   this ModelOpt/Accelerate stack, and merged Qwen wrapper checkpoints need a
   text-only key view before stock ModelOpt loading. The config now uses
   `scripts/quantization/qwen_text_modelopt.py` to stream that view without
-  mutating the promoted FT source. The guarded export completed, wrote an
-  18.8 GB NVFP4 checkpoint, synced to the worker's nested family path, and
-  passed strict checkpoint/tokenizer/architecture audits on both Sparks. TP=2
-  serve, eval, and throughput comparison still need to be run before any
-  quantized artifact is promoted.
+  mutating the promoted FT source, then wrapperizes the exported checkpoint back
+  to Qwen conditional-generation metadata for vLLM text-only serving. The
+  guarded export completed, wrote an 18.8 GB NVFP4 checkpoint, and passed strict
+  local checkpoint/tokenizer/architecture audits after wrapper repair. Worker
+  resync, TP=2 serve, eval, and throughput comparison still need to be run
+  before any quantized artifact is promoted.
 - Llama 3.1 8B Instruct now has the same first-class family plan shape,
   including base, local-FT, local-abli, local-FT-abli, and Blackwell NVFP4
   runtime-import variants. Its NVFP4 plan compares against the unquantized base

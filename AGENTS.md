@@ -803,8 +803,12 @@ stock `hf_ptq.py` because merged Qwen wrapper checkpoints can store valid
 serving tensors under `model.language_model.*`, while ModelOpt expects the
 text-only `model.*` namespace. Do not mutate the promoted source checkpoint to
 fix that. Use the repo strategy so the temporary text-only view is streamed
-under the quantization output root. ModelOpt export is single-node today; serve
-and benchmark the exported checkpoint through the two-Spark TP=2 runtime before
+under the quantization output root. The exported serving artifact must then be
+wrapperized back to Qwen conditional-generation metadata with
+`language_model.model.*` and `language_model.lm_head.*` tensor names; the
+current vLLM Qwen3.5 loader needs that wrapper shape even with
+`--language-model-only`. ModelOpt export is single-node today; serve and
+benchmark the exported checkpoint through the two-Spark TP=2 runtime before
 making throughput claims.
 If syncing this variant to worker nodes, pass
 `--target-name model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_modelopt`.

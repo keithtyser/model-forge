@@ -100,8 +100,13 @@ repo-owned `qwen_text_modelopt` strategy in
 be valid for serving while still carrying wrapper-prefixed
 `model.language_model.*` tensors. The strategy streams a temporary text-only
 checkpoint view with `model.*` tensor names, then runs ModelOpt on that view
-without mutating the promoted source checkpoint. It is not release evidence for
-the final FT-abli model. After export succeeds, serve and benchmark the
+without mutating the promoted source checkpoint. After ModelOpt writes the
+text-only export, the strategy rewrites the serving artifact back to Qwen
+wrapper shape (`language_model.model.*` / `language_model.lm_head.*`) and stores
+the quantization metadata on both the wrapper config and `text_config`; this is
+required by the current vLLM Qwen3.5 conditional-generation loader even with
+`--language-model-only`. It is not release evidence for the final FT-abli model.
+After export succeeds, serve and benchmark the
 quantized checkpoint on the two-Spark TP=2 path, then compare it against the
 same unquantized `local_ft_v4` source with the quantization card and NVFP4 gate.
 ModelOpt PTQ export is currently single-node; serving, eval, and throughput

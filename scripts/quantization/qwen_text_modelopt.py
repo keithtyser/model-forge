@@ -57,12 +57,91 @@ def load_text_config(source_dir: Path) -> dict[str, Any]:
     return config
 
 
+def exported_text_config(config: dict[str, Any]) -> dict[str, Any]:
+    text_config = config.get("text_config")
+    if isinstance(text_config, dict):
+        return copy.deepcopy(text_config)
+    return copy.deepcopy(config)
+
+
+def prefix_wrapper_module_path(path: str) -> str:
+    if path.startswith("language_model.") or path.startswith("*language_model."):
+        return path
+    if path.startswith("*"):
+        return "*language_model." + path[1:]
+    if path.startswith(("model.", "lm_head")):
+        return "language_model." + path
+    return path
+
+
+def prefix_quantization_paths(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: prefix_quantization_paths(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [prefix_quantization_paths(item) for item in value]
+    if isinstance(value, str):
+        return prefix_wrapper_module_path(value)
+    return value
+
+
+def wrapper_config_for_vllm(source_dir: Path, export_config: dict[str, Any]) -> dict[str, Any]:
+    source_config = json.loads((source_dir / "config.json").read_text(encoding="utf-8"))
+    text_config = exported_text_config(export_config)
+    quant_config = text_config.get("quantization_config") or export_config.get("quantization_config")
+    if isinstance(quant_config, dict):
+        prefixed_quant_config = prefix_quantization_paths(quant_config)
+        text_config["quantization_config"] = copy.deepcopy(prefixed_quant_config)
+    else:
+        prefixed_quant_config = None
+
+    if isinstance(source_config.get("text_config"), dict):
+        wrapper = {
+            key: copy.deepcopy(value)
+            for key, value in source_config.items()
+            if key not in text_config and key != "text_config"
+        }
+    else:
+        wrapper = {}
+
+    wrapper["architectures"] = ["Qwen3_5ForConditionalGeneration"]
+    wrapper["model_type"] = source_config.get("model_type", "qwen3_5")
+    wrapper["language_model_only"] = True
+    wrapper["text_config"] = text_config
+    wrapper["tie_word_embeddings"] = source_config.get(
+        "tie_word_embeddings",
+        text_config.get("tie_word_embeddings", False),
+    )
+    if prefixed_quant_config is not None:
+        wrapper["quantization_config"] = copy.deepcopy(prefixed_quant_config)
+    if "vision_config" not in wrapper and isinstance(source_config.get("vision_config"), dict):
+        wrapper["vision_config"] = copy.deepcopy(source_config["vision_config"])
+    return wrapper
+
+
 def remap_qwen_text_key(key: str) -> str:
     if key.startswith("model.language_model."):
         return key.replace("model.language_model.", "model.", 1)
     if key.startswith("language_model."):
         return key.replace("language_model.", "model.", 1)
     return key
+
+
+def wrap_qwen_text_export_key(key: str) -> str:
+    if key.startswith("language_model."):
+        return key
+    if key.startswith(("model.", "lm_head.")):
+        return "language_model." + key
+    return key
+
+
+def rewrite_hf_quant_config_for_wrapper(output_dir: Path) -> bool:
+    path = output_dir / "hf_quant_config.json"
+    if not path.exists():
+        return False
+    data = json.loads(path.read_text(encoding="utf-8"))
+    rewritten = prefix_quantization_paths(data)
+    path.write_text(json.dumps(rewritten, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return True
 
 
 def copy_metadata_files(source_dir: Path, target_dir: Path) -> None:
@@ -145,6 +224,79 @@ def prepare_text_checkpoint(source_dir: Path, target_dir: Path) -> dict[str, Any
     }
 
 
+def wrap_text_export_for_vllm(output_dir: Path, source_dir: Path) -> dict[str, Any]:
+    files = checkpoint_files(output_dir)
+    if not files:
+        raise FileNotFoundError(f"no safetensors checkpoint files found under {output_dir}")
+
+    config_path = output_dir / "config.json"
+    export_config = json.loads(config_path.read_text(encoding="utf-8"))
+    index_path = output_dir / "model.safetensors.index.json"
+    if index_path.exists():
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        source_weight_map = dict(index.get("weight_map") or {})
+        shard_names = sorted(set(source_weight_map.values()))
+    else:
+        source_weight_map = {}
+        shard_names = [path.name for path in files]
+
+    output_weight_map: dict[str, str] = {}
+    renamed = 0
+    tensor_count = 0
+    total_size = 0
+    for shard_name in shard_names:
+        source_shard = output_dir / shard_name
+        tensors = load_file(str(source_shard))
+        remapped = {}
+        for key, tensor in tensors.items():
+            new_key = wrap_qwen_text_export_key(key)
+            if new_key != key:
+                renamed += 1
+            if new_key in remapped:
+                raise RuntimeError(f"duplicate wrapper tensor key {new_key!r} from shard {shard_name}")
+            remapped[new_key] = tensor
+            output_weight_map[new_key] = shard_name
+            tensor_count += 1
+            total_size += tensor.numel() * tensor.element_size()
+        tmp_shard = output_dir / f".{shard_name}.wrapper.tmp"
+        save_file(remapped, str(tmp_shard))
+        tmp_shard.replace(source_shard)
+
+    if source_weight_map and len(source_weight_map) != tensor_count:
+        raise RuntimeError(
+            f"checkpoint tensor count mismatch after wrapper remap: index={len(source_weight_map)} wrapped={tensor_count}"
+        )
+
+    if source_weight_map:
+        index_path.write_text(
+            json.dumps(
+                {
+                    "metadata": {"total_size": total_size},
+                    "weight_map": output_weight_map,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    config_path.write_text(
+        json.dumps(wrapper_config_for_vllm(source_dir, export_config), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    quant_config_rewritten = rewrite_hf_quant_config_for_wrapper(output_dir)
+    return {
+        "wrapper_source": str(source_dir),
+        "wrapper_output": str(output_dir),
+        "wrapper_shard_count": len(shard_names),
+        "wrapper_tensor_count": tensor_count,
+        "wrapper_renamed_key_count": renamed,
+        "wrapper_total_size": total_size,
+        "wrapper_hf_quant_config_rewritten": quant_config_rewritten,
+    }
+
+
 def quant_config(name: str) -> dict[str, Any]:
     import modelopt.torch.quantization as mtq
     from modelopt.torch.quantization.config import _nvfp4_selective_quant_cfg
@@ -197,6 +349,7 @@ def main() -> None:
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--device-map", default="auto")
     parser.add_argument("--keep-text-input", action="store_true")
+    parser.add_argument("--wrap-existing-output", action="store_true")
     parser.add_argument("--trust-remote-code", action="store_true")
     args = parser.parse_args()
 
@@ -206,6 +359,24 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     text_input_dir = output_dir.parent / f".{output_dir.name}.qwen_text_modelopt_input"
     dataset_name = args.dataset.split(",", 1)[0].strip()
+
+    if args.wrap_existing_output:
+        wrapper_stats = wrap_text_export_for_vllm(output_dir, source_dir)
+        summary_path = output_dir / "model_forge_quantization_summary.json"
+        summary = {}
+        if summary_path.exists():
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        summary.update(
+            {
+                "model": str(source_dir),
+                "output": str(output_dir),
+                "duration_seconds": round(time.time() - started_at, 3),
+                **wrapper_stats,
+            }
+        )
+        summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print(json.dumps(summary, indent=2, sort_keys=True), flush=True)
+        return
 
     print(f"preparing text-only Qwen checkpoint view at {text_input_dir}", flush=True)
     remap_stats = prepare_text_checkpoint(source_dir, text_input_dir)
@@ -246,6 +417,7 @@ def main() -> None:
 
     export_hf_checkpoint(model, dtype=torch.bfloat16, export_dir=str(output_dir))
     save_tokenizer_and_processor(str(text_input_dir), output_dir, args.trust_remote_code)
+    wrapper_stats = wrap_text_export_for_vllm(output_dir, source_dir)
 
     if not args.keep_text_input:
         shutil.rmtree(text_input_dir, ignore_errors=True)
@@ -264,6 +436,7 @@ def main() -> None:
         "text_input_kept": args.keep_text_input,
         "text_input_dir": str(text_input_dir),
         **remap_stats,
+        **wrapper_stats,
     }
     (output_dir / "model_forge_quantization_summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n",

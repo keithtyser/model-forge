@@ -96,6 +96,97 @@ class QwenTextModelOptTests(unittest.TestCase):
             self.assertEqual(config["model_type"], "qwen3_5_text")
             self.assertTrue((target / "tokenizer_config.json").exists())
 
+    def test_wrap_text_export_for_vllm_restores_wrapper_shape(self) -> None:
+        module = load_qwen_text_modelopt_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            output = root / "output"
+            source.mkdir()
+            output.mkdir()
+            (source / "config.json").write_text(
+                json.dumps(
+                    {
+                        "architectures": ["Qwen3_5ForConditionalGeneration"],
+                        "image_token_id": 248056,
+                        "language_model_only": True,
+                        "model_type": "qwen3_5",
+                        "text_config": {
+                            "architectures": ["Qwen3_5ForCausalLM"],
+                            "hidden_size": 4,
+                            "model_type": "qwen3_5_text",
+                            "tie_word_embeddings": False,
+                        },
+                        "tie_word_embeddings": False,
+                        "vision_config": {
+                            "hidden_size": 2,
+                            "model_type": "qwen3_5",
+                        },
+                    },
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+            (output / "config.json").write_text(
+                json.dumps(
+                    {
+                        "architectures": ["Qwen3_5ForCausalLM"],
+                        "hidden_size": 4,
+                        "model_type": "qwen3_5_text",
+                        "quantization_config": {
+                            "ignore": ["lm_head", "model.layers.0.linear_attn.conv1d"],
+                            "quant_method": "modelopt",
+                        },
+                        "tie_word_embeddings": False,
+                    },
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+            (output / "hf_quant_config.json").write_text(
+                json.dumps(
+                    {
+                        "quantization": {
+                            "exclude_modules": ["lm_head", "model.layers.0.linear_attn.conv1d"],
+                            "quant_algo": "NVFP4",
+                        }
+                    },
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+            save_file(
+                {
+                    "lm_head.weight": torch.ones(1, 1),
+                    "model.layers.0.self_attn.o_proj.weight": torch.ones(1, 1) * 2,
+                },
+                str(output / "model.safetensors"),
+            )
+
+            stats = module.wrap_text_export_for_vllm(output, source)
+            tensors = load_file(str(output / "model.safetensors"))
+            config = json.loads((output / "config.json").read_text(encoding="utf-8"))
+            hf_quant_config = json.loads((output / "hf_quant_config.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(stats["wrapper_renamed_key_count"], 2)
+            self.assertIn("language_model.lm_head.weight", tensors)
+            self.assertIn("language_model.model.layers.0.self_attn.o_proj.weight", tensors)
+            self.assertNotIn("lm_head.weight", tensors)
+            self.assertEqual(config["architectures"], ["Qwen3_5ForConditionalGeneration"])
+            self.assertEqual(config["model_type"], "qwen3_5")
+            self.assertTrue(config["language_model_only"])
+            self.assertIn("vision_config", config)
+            self.assertEqual(config["text_config"]["model_type"], "qwen3_5_text")
+            self.assertEqual(
+                config["quantization_config"]["ignore"],
+                ["language_model.lm_head", "language_model.model.layers.0.linear_attn.conv1d"],
+            )
+            self.assertEqual(config["text_config"]["quantization_config"], config["quantization_config"])
+            self.assertEqual(
+                hf_quant_config["quantization"]["exclude_modules"],
+                ["language_model.lm_head", "language_model.model.layers.0.linear_attn.conv1d"],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

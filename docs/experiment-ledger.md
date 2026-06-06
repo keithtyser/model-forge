@@ -3455,6 +3455,29 @@ applies Gemma parser defaults to Gemma-family NVFP4 variants. Qwen FT-v4 NVFP4
 dry-run now uses `--reasoning-parser qwen3` and does not emit a Gemma tool
 parser.
 
+First TP=2 serve attempt after the parser fix failed cleanly during vLLM engine
+initialization, before serving traffic. Root cause:
+`AttributeError: 'Qwen3_5TextConfig' object has no attribute 'vision_config'`.
+The ModelOpt export was text-only, but this vLLM build registers Qwen3.5 through
+`Qwen3_5ForConditionalGeneration`; even with `--language-model-only`, that
+loader expects wrapper metadata with `vision_config` before it replaces the
+vision tower with a missing stage.
+
+Repo/artifact fix: `qwen_text_modelopt` now keeps the text-only temporary input
+for ModelOpt, then wrapperizes the exported serving artifact back to
+Qwen conditional-generation shape with `language_model.model.*` and
+`language_model.lm_head.*` tensor names. It also stores prefixed ModelOpt
+quantization metadata on both the wrapper config and `text_config`. A
+`--wrap-existing-output` mode repaired the already-exported 18.8 GB artifact in
+15.832s without rerunning calibration or quantization:
+
+- wrapper tensor count: 2339
+- wrapper-renamed tensor count: 2339
+- wrapper shape: `Qwen3_5ForConditionalGeneration`, `language_model_only: true`,
+  `text_config.model_type: qwen3_5_text`, `vision_config` present
+- local strict checkpoint, tokenizer, and architecture audits passed after
+  repair
+
 Decision: proceed to two-Spark TP=2 serve, sampled eval, and serving throughput
 comparison. Do not use this checkpoint as final FT-abli release evidence; it is
 a FT-source quantization validation candidate. ModelOpt export is still a
