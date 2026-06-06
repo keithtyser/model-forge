@@ -303,6 +303,20 @@ and LM heads. The exact patterns are model-family specific, so confirm them
 against the checkpoint index or architecture audit before launching a heavy
 export.
 
+Known Qwen lesson: whole-checkpoint NVFP4 can be fast but regress structured
+JSON/tool-use, AWQ can export an artifact current vLLM rejects
+(`quant_algo=NVFP4_AWQ`), and W4A16 can serve but generate degenerate repeated
+punctuation. For Qwen 3.6 27B `local_ft_v4`, the validated FT-source
+research-report candidate is
+`local_ft_v4_nvfp4_attention_output_bf16_modelopt`; it keeps
+`*self_attn.o_proj*` and `*linear_attn.out_proj*` in BF16, passes
+ModelOpt/vLLM compatibility, sampled serving eval, behavior preservation,
+tokenizer preservation, and the NVFP4 gate, with 1.82x output p50 tok/s
+speedup versus exact BF16 source. Treat it as evidence for the generalized
+component-sensitivity workflow. For the no-ablation Qwen scope, the remaining
+release work is the public quantized-model HF plan/model card, not another
+quantization run.
+
 If the watchdog stops a quantization job for memory, record the stop fraction,
 clean partial staging artifacts, and retry with smaller calibration
 `calib_size`, `calib_seq`, or `batch_size` before raising resource limits.

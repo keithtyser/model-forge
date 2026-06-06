@@ -30,18 +30,20 @@ For prepared datasets, pass `--repo-type dataset`.
 
 ## Qwen 3.6 27B: Local FT v4 ModelOpt NVFP4 Serving Validation
 
-Status: partially validated with no promotable quantized candidate yet. The
-first NVFP4 artifact exported, synced, audited, served on the two-Spark TP=2
-path, completed smoke/core serving benchmarks, completed sampled serving eval,
-and passed the serving evidence gate. The exact unquantized `local_ft_v4` BF16
-source serving/eval baseline is available, and the quantization card shows
-strong source-relative speedup. Do not promote or upload as release quality
-because the behavior-preservation report failed on structured JSON/tool-use
-schema and workflow checks. The AWQ/NVFP4 follow-up exported and passed strict
-structural/tokenizer audits, but it is rejected for current vLLM because the
-artifact declares unsupported `quant_algo=NVFP4_AWQ`. The W4A16 follow-up
-exported, served, and improved throughput, but it is rejected because sampled
-evals and manual probes produced repeated punctuation instead of useful text.
+Status: validated for the Qwen local FT v4 source quantization leg. The first
+NVFP4 artifact exported, synced, audited, served on the two-Spark TP=2 path,
+completed smoke/core serving benchmarks, completed sampled serving eval, and
+passed the serving evidence gate, but is rejected because the behavior-
+preservation report failed on structured JSON/tool-use schema and workflow
+checks. The AWQ/NVFP4 follow-up exported and passed strict structural/tokenizer
+audits, but it is rejected for current vLLM because the artifact declares
+unsupported `quant_algo=NVFP4_AWQ`. The W4A16 follow-up exported, served, and
+improved throughput, but it is rejected because sampled evals and manual probes
+produced repeated punctuation instead of useful text. The component-sensitivity candidate
+`local_ft_v4_nvfp4_attention_output_bf16_modelopt` keeps attention output
+projections in BF16, passed export/sync/audit/serve/bench/eval/report/gate
+evidence, and is accepted as research-report evidence for the current FT ->
+NVFP4 Blackwell path.
 
 Hypothesis: ModelOpt NVFP4 should preserve the promoted Qwen local FT v4
 serving behavior closely enough for continued validation while improving tok/s
@@ -89,6 +91,15 @@ Evidence:
   `reports/generated/serve_bench/qwen36_27b_local_ft_v4_nvfp4_w4a16_modelopt_tp2_core_20260606`
   and
   `reports/generated/serving_evals/qwen36_27b_local_ft_v4_nvfp4_w4a16_modelopt_tp2_serving_eval_20260606`
+- attention-output-BF16 NVFP4 export plan:
+  `~/models/model-forge-quantized/qwen36_27b/qwen36_27b_local_ft_v4_nvfp4_modelopt_local_ft_v4_nvfp4_attention_output_bf16_modelopt/quantization_export_plan.json`
+- attention-output-BF16 serving benchmark:
+  `reports/generated/serve_bench/qwen36_27b_local_ft_v4_nvfp4_attention_output_bf16_modelopt_tp2_core_20260606`
+- attention-output-BF16 sampled serving eval:
+  `reports/generated/serving_evals/qwen36_27b_local_ft_v4_nvfp4_attention_output_bf16_modelopt_tp2_serving_eval_20260606`
+- attention-output-BF16 quantization card, behavior report, tokenizer report,
+  and NVFP4 gate:
+  `reports/generated/quantization/qwen36_local_ft_v4_bf16_vs_nvfp4_attention_output_bf16_modelopt_20260606`
 
 Result: the core serving benchmark completed 9/9 requests at success rate 1.0,
 13.0560 mean output tok/s, 13.9418 mean decode tok/s, 33.2008 mean total tok/s,
@@ -145,28 +156,30 @@ about 2.46x output tok/s plus 2.50x decode-heavy source-relative speedup, but
 sampled serving eval and manual `temperature=0` probes degenerated into
 repeated `!` tokens. The NVFP4 behavior gate correctly rejects it.
 
-Next step: run the registered component-sensitivity candidates instead of
-another whole-checkpoint qformat retry. The first candidate should be
-`local_ft_v4_nvfp4_attention_output_bf16_modelopt`, which keeps
-`*self_attn.o_proj*` and `*linear_attn.out_proj*` in BF16 while quantizing the
-rest of the supported linear stack. Execute it through the guarded matrix-entry
-path:
+Component-sensitivity result: `local_ft_v4_nvfp4_attention_output_bf16_modelopt`
+completed in 718.025 seconds through the guarded matrix-entry export path. It
+used `qformat=nvfp4` with `disable_patterns=["*self_attn.o_proj*",
+"*linear_attn.out_proj*"]`, wrote
+`~/models/model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_attention_output_bf16_modelopt`,
+synced to the worker, passed strict local and worker checkpoint/tokenizer/
+architecture audits, passed the ModelOpt/vLLM compatibility preflight with
+`quant_algo=NVFP4`, served TP=2 across both Sparks with FlashInfer NVFP4
+kernels, and passed manual deterministic probes for normal explanation and
+strict JSON output. The core serving benchmark completed 9/9 requests at
+10.0411 mean output tok/s and 10.5648 mean decode tok/s. The sampled serving
+eval completed 11/11 cases: normal-use, challenge, and JSON/tool-use all passed.
+The source-vs-candidate behavior report passed, tokenizer preservation passed,
+and the NVFP4 gate passed with 1.82x output p50 tok/s speedup plus 1.93x
+decode-heavy output p50 tok/s speedup versus exact BF16 `local_ft_v4`.
 
-```bash
-./forge quantize export \
-  --config configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml \
-  --matrix-variant local_ft_v4_nvfp4_attention_output_bf16_modelopt \
-  --write-plan --execute
-```
-
-The second candidate is
-`local_ft_v4_nvfp4_mlp_only_modelopt`, which keeps `*self_attn*` and
-`*linear_attn*` in BF16 and quantizes MLPs. Compare each completed candidate
-against the exact BF16 `local_ft_v4` source, and promote only if it passes
-ModelOpt compatibility, serving throughput, tokenizer preservation, and
-behavior preservation. The Qwen matrix now defaults to `workers: local` for
-open-source portability; set `MODEL_FORGE_QUANT_WORKERS` on a specific cluster
-when distributing exports.
+Decision: keep `local_ft_v4_nvfp4_attention_output_bf16_modelopt` as validated
+research-report evidence for the FT-source Blackwell quantization leg. Do not
+upload or promote it until the public quantized-model release plan/model card is
+generated and reviewed. The remaining component-sensitivity fallback is
+`local_ft_v4_nvfp4_mlp_only_modelopt`; run it only if more Qwen FT-source
+quantization sensitivity data is needed. The Qwen matrix now defaults to
+`workers: local` for open-source portability; set `MODEL_FORGE_QUANT_WORKERS`
+on a specific cluster when distributing exports.
 
 ## Qwen 3.6 27B: Native OT Diagnostic Path
 

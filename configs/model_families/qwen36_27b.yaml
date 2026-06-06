@@ -1411,12 +1411,15 @@ variants:
     quantization: nvfp4_attention_output_bf16
     downloadable: false
     promotion:
-      decision: inconclusive
+      decision: research_report_only
       blocked_actions: [hf_upload, promotion]
-      reason: "Planned component-sensitivity candidate after default NVFP4 broke JSON/tool behavior, AWQ was vLLM-incompatible, and W4A16 generated degenerate punctuation. This policy keeps attention output projections in BF16 while quantizing the rest of the supported linear stack, aiming for a better speed/quality tradeoff than MLP-only. Do not upload or promote until export, compatibility, TP=2 serving, source-vs-candidate behavior, tokenizer, and NVFP4 gates pass."
+      reason: "Validated as Qwen local_ft_v4 Blackwell NVFP4 evidence for the current FT -> quantize workflow. Exported through the guarded matrix path, synced to the worker, passed strict local/worker checkpoint-tokenizer-architecture audits, passed ModelOpt/vLLM compatibility with quant_algo=NVFP4, served TP=2 across both Sparks with NVFP4 kernels, passed sampled serving eval including JSON/tool-use, passed tokenizer preservation, passed behavior preservation, and passed the NVFP4 gate with 1.82x output p50 tok/s speedup plus 1.93x decode-heavy output p50 tok/s speedup versus exact BF16 local_ft_v4. Keep blocked from HF upload/promotion until a public quantized-model release plan/model card is generated and reviewed."
       evidence:
         - configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml
         - reports/qwen36_27b_local_ft_v4_nvfp4_modelopt_serving_validation_summary.md
+        - reports/generated/serve_bench/qwen36_27b_local_ft_v4_nvfp4_attention_output_bf16_modelopt_tp2_core_20260606
+        - reports/generated/serving_evals/qwen36_27b_local_ft_v4_nvfp4_attention_output_bf16_modelopt_tp2_serving_eval_20260606
+        - reports/generated/quantization/qwen36_local_ft_v4_bf16_vs_nvfp4_attention_output_bf16_modelopt_20260606
 
 serve:
   script: scripts/dgx_spark_serve_qwen.sh

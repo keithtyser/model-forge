@@ -2,13 +2,17 @@
 
 Date: 2026-06-06
 
-Status: partial quantization validation complete. The exact unquantized
-`local_ft_v4` BF16 source baseline is now available, and the NVFP4 candidate
-shows clear source-relative speedup. Do not promote or upload this candidate as
-release quality yet because the sampled behavior-preservation report failed on
-structured JSON/tool-use checks. The AWQ and W4A16 follow-up candidates were
-also rejected: AWQ is not compatible with current vLLM ModelOpt metadata
-support, and W4A16 serves fast but generates degenerate repeated punctuation.
+Status: FT-source quantization validation complete for a research-report
+candidate. The exact unquantized `local_ft_v4` BF16 source baseline is
+available. The default whole-checkpoint NVFP4 candidate was fast but failed
+sampled JSON/tool-use behavior preservation. AWQ and W4A16 follow-ups were
+rejected: AWQ is not compatible with current vLLM ModelOpt metadata support,
+and W4A16 serves fast but generates degenerate repeated punctuation. The
+component-sensitivity candidate
+`local_ft_v4_nvfp4_attention_output_bf16_modelopt` keeps attention output
+projections in BF16, passes behavior and tokenizer preservation, and passes the
+NVFP4 gate with source-relative speedup. Do not promote or upload it until the
+public quantized-model release plan/model card is generated and reviewed.
 
 ## Hypothesis
 
@@ -20,9 +24,13 @@ Spark Blackwell path.
 
 - Family: `qwen36_27b`
 - Source variant: `local_ft_v4`
-- Candidate variant: `local_ft_v4_nvfp4_modelopt`
+- Candidate variants: `local_ft_v4_nvfp4_modelopt`,
+  `local_ft_v4_nvfp4_awq_modelopt`, `local_ft_v4_nvfp4_w4a16_modelopt`, and
+  `local_ft_v4_nvfp4_attention_output_bf16_modelopt`
 - Config: `configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml`
-- Local artifact:
+- Successful research-report artifact:
+  `~/models/model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_attention_output_bf16_modelopt`
+- Rejected default local artifact:
   `~/models/model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_modelopt`
 
 ## Implementation Notes
@@ -203,10 +211,22 @@ the two-Spark TP=2 path with FlashInfer NVFP4 kernels, and reached roughly
 `temperature=0` probes produced repeated `!` tokens instead of useful answers,
 so the behavior-preservation and NVFP4 evidence gates correctly fail.
 
-The next quantization attempt should use the registered component-sensitivity
-matrix entries rather than rerunning default NVFP4, AWQ, or W4A16 unchanged.
-Start with `local_ft_v4_nvfp4_attention_output_bf16_modelopt`, which keeps
-attention output projections in BF16 and quantizes the rest of the supported
-linear stack. If that still fails behavior gates, compare
-`local_ft_v4_nvfp4_mlp_only_modelopt`, which keeps attention modules in BF16
-and quantizes MLPs.
+The attention-output-BF16 component-sensitivity retry succeeded. It exported
+through the guarded matrix-entry path in 718.025 seconds with
+`qformat=nvfp4` and `disable_patterns=["*self_attn.o_proj*",
+"*linear_attn.out_proj*"]`, wrote
+`~/models/model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_attention_output_bf16_modelopt`,
+synced to the worker, passed strict local and worker audits, passed
+ModelOpt/vLLM compatibility with `quant_algo=NVFP4`, served TP=2 across both
+Sparks with NVFP4 kernels, passed manual deterministic probes, and completed
+the core serving benchmark at 10.0411 mean output tok/s and 10.5648 mean decode
+tok/s. The sampled serving eval completed 11/11 cases with normal-use,
+challenge, and JSON/tool-use checks passing. The source-vs-candidate behavior
+report and tokenizer report passed. The NVFP4 gate passed with 1.82x output p50
+tok/s speedup and 1.93x decode-heavy output p50 tok/s speedup versus exact
+BF16 `local_ft_v4`.
+
+Decision: keep `local_ft_v4_nvfp4_attention_output_bf16_modelopt` as validated
+research-report evidence for the Qwen FT-source Blackwell path. Do not promote
+or upload it until the public quantized-model release plan/model card is
+generated and reviewed.
