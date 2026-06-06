@@ -1630,7 +1630,49 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("write_selective_direction_artifact", runner)
         self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 36)
 
-    def test_candidate_loop_blocks_rejected_v21_to_v39_with_no_ready_candidate(self) -> None:
+    def test_qwen_v40_controlled_latent_evasion_som_writes_guarded_runner(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_v38_controlled_latent_evasion_som_v40.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+                "output_dir": f"{tmp}/exported",
+            }
+            result = write_sota_artifacts(config, config_path, "selective_projection")
+            native_config = load_yaml(Path(result["paths"]["selective_projection_config"]))
+            runner = Path(result["paths"]["selective_projection_runner"]).read_text(encoding="utf-8")
+            manifest = json.loads(
+                (Path(tmp) / "model_forge_native_prompt_pairs" / "manifest.json").read_text(encoding="utf-8")
+            )
+
+        activation = native_config["activation_collection"]
+        edit = native_config["edit"]
+        selection = native_config["native_backend"]["layer_selection"]
+        self.assertTrue(native_config["model"]["local_dir"].endswith("refusal-pref-ul-v16-sampled-gate-repair"))
+        self.assertEqual(native_config["native_backend"]["backend"], "selective_projection")
+        self.assertEqual(native_config["native_backend"]["method_family"], "controlled_latent_space_evasion_som_projection")
+        self.assertEqual(activation["token_position"], "generated_first_token")
+        self.assertEqual(activation["direction_extraction"], "som_centroids")
+        self.assertEqual(activation["direction_components"], 8)
+        self.assertEqual(activation["som_neurons"], 12)
+        self.assertEqual(selection["top_k"], 10)
+        self.assertEqual(selection["required_layers"], [35, 36, 37, 40, 41, 46])
+        self.assertGreater(float(edit["strength"]), 1.0)
+        self.assertIn("self_attn.o_proj.weight", edit["target_weight_suffixes"])
+        self.assertIn("linear_attn.out_proj.weight", edit["target_weight_suffixes"])
+        self.assertNotIn("mlp.down_proj.weight", edit["target_weight_suffixes"])
+        self.assertTrue(edit["leave_lm_head_untouched"])
+        self.assertTrue(edit["leave_moe_experts_untouched"])
+        self.assertIn("write_selective_direction_artifact", runner)
+        self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 42)
+
+    def test_candidate_loop_blocks_rejected_v21_to_v39_and_exposes_v40_ready_candidate(self) -> None:
         config_path = (
             REPO_DIR
             / "configs"
@@ -1659,6 +1701,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("source_anchored_concept_cone_v37", candidates)
         self.assertIn("sampled_gate_repair_v38", candidates)
         self.assertIn("direct_opening_rewrite_v39", candidates)
+        self.assertIn("v38_controlled_latent_evasion_som_v40", candidates)
         self.assertTrue(candidates["qwen_scope_sae_feature_diagnostic_v1"]["blockers"])
         self.assertFalse(any(
             command.get("enabled", True)
@@ -1773,10 +1816,24 @@ class AbliterationPlanTests(unittest.TestCase):
             command.get("enabled", False)
             for command in candidates["direct_opening_rewrite_v39"]["commands"]
         ))
-        self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertEqual(plan["planned_candidate_job_count"], 0)
-        self.assertIn("No executable candidate", plan["candidate_gate_command"])
-        self.assertFalse(any(
+        v40 = candidates["v38_controlled_latent_evasion_som_v40"]
+        self.assertEqual(v40["status"], "ready")
+        self.assertFalse(v40["blockers"])
+        self.assertTrue(v40["produces_checkpoint"])
+        self.assertEqual(v40["backend"], "selective_projection")
+        self.assertEqual(v40["variant"], "local_ft_abli_v38_controlled_latent_evasion_som_v40")
+        self.assertTrue(any(
+            command.get("enabled", False) and command["phase"] == "candidate_export"
+            for command in v40["commands"]
+        ))
+        self.assertTrue(any(
+            command.get("enabled", False) and command["phase"] == "candidate_eval"
+            for command in v40["commands"]
+        ))
+        self.assertEqual(plan["executable_candidate_count"], 1)
+        self.assertEqual(plan["planned_candidate_job_count"], 1)
+        self.assertIn("v38_controlled_latent_evasion_som_v40", plan["candidate_gate_command"])
+        self.assertTrue(any(
             command.get("enabled", False)
             for command in plan["commands"]
             if command["phase"] == "candidate_gate"

@@ -547,6 +547,20 @@ variants:
         - configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v17_direct_opening_rewrite.yaml
         - results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v17_direct_opening_rewrite_targeted_gate_t3
         - reports/generated/abliteration_candidate_gate/qwen36_v39_direct_opening_rewrite_gate/candidate_gate.json
+  local_ft_abli_v38_controlled_latent_evasion_som_v40:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-ft-v4-abliterated-v38-controlled-latent-evasion-som-v40
+    served_model_name: local/qwen36-27b-local-ft-v4-abliterated-v38-controlled-latent-evasion-som-v40
+    transform_type: behavior_edit
+    base_variant: local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v16_sampled_gate_repair
+    downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Prepared but not yet exported/evaluated. V40 starts from V38 and uses a native controlled latent-space evasion style SOM/selective projection. Promotion remains blocked until the checkpoint exports, syncs to both Sparks, passes strict local/worker audits, serves TP=2, and clears the targeted zero-refusal capability-retention gate."
+      evidence:
+        - configs/abliteration/qwen36_27b_ft_abli_v2_v38_controlled_latent_evasion_som_v40.yaml
+        - reports/qwen36_27b_v38_controlled_latent_evasion_som_v40_plan_summary.md
   local_ft_abli_norm_projection_v16_self_harm_opening:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-norm-projection-v16-self-harm-opening

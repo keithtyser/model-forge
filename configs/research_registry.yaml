@@ -222,6 +222,32 @@ entries:
       - Multi-direction methods increase sweep surface area and must be bounded by resource guardrails.
       - More suppression is only useful for this repo when source capability is preserved.
 
+  controlled_latent_space_evasion_2026:
+    title: "Latent-space Attacks for Refusal Evasion in Language Models"
+    kind: paper
+    year: 2026
+    status: tracked_sota
+    url: https://arxiv.org/abs/2605.21706
+    areas:
+      - behavior_editing
+      - refusal_suppression
+      - latent_space_steering
+    claims:
+      - Difference-in-means refusal ablation can be interpreted as projecting activations onto a refusal-vs-answer probe decision boundary.
+      - Controlled latent-space evasion pushes representations past that boundary toward the answer/compliance region instead of stopping at minimum-confidence ablation.
+      - Confidence-controlled overshoot improves attack success across instruction-tuned, multimodal, and reasoning models versus refusal-ablation baselines.
+    implementation_hooks:
+      - src/model_forge/pipelines/abliterate.py
+      - configs/abliteration/*controlled_latent_evasion*.yaml
+      - configs/abliteration/*selective_projection*.yaml
+    eval_hooks:
+      - evals/prompts/refusal_paired_boundary.yaml
+      - evals/prompts/capability_preservation_challenge.yaml
+      - configs/promotion/
+    limitations:
+      - This is a refusal-evasion/suppression method; Model Forge must still gate harmful detail, harmful compliance, benign quality, and source capability before promotion.
+      - Overshoot strength is model- and objective-specific and must be selected by source-relative evals, not copied across families.
+
   qwen_topic_matched_refusal_contrast_2026:
     title: "Why Topic-Matched Contrastive Prompts Make Refusal Directions Ineffective for Qwen"
     kind: paper

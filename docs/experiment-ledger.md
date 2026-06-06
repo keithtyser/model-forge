@@ -8233,3 +8233,45 @@ Decision: reject V39. Do not broad-eval, NVFP4-export, upload, promote, or
 rerun unchanged. The next candidate should be materially different and
 capability-anchored; stronger direct-opening unlikelihood alone did not solve
 the residual refusal wording and introduced a capability miss.
+
+### 2026-06-06 Qwen V40 controlled latent evasion SOM prep
+
+Config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_v38_controlled_latent_evasion_som_v40.yaml`
+
+Status: prepared, not yet run.
+
+Hypothesis: V39 showed that stacking more direct-opening rewrite training on
+V38 is not enough and can regress capability. V40 returns to V38, the last
+candidate that preserved `model_selection_summary` 3/3, then applies a native
+controlled latent-space evasion style checkpoint edit. The candidate uses
+generated-first-token SOM refusal-opening directions, benign biprojection,
+selective late-layer attention-output edits, and strength above 1.0 so the edit
+pushes past the refusal-opening boundary instead of merely deleting the
+direction. It leaves embeddings, `lm_head`, MLP weights, routers, and experts
+untouched.
+
+Prepared artifacts:
+
+- `configs/abliteration/qwen36_27b_ft_abli_v2_v38_controlled_latent_evasion_som_v40.yaml`
+- `reports/qwen36_27b_v38_controlled_latent_evasion_som_v40_plan_summary.md`
+
+Candidate-loop registration:
+`v38_controlled_latent_evasion_som_v40`
+
+Target variant:
+`local_ft_abli_v38_controlled_latent_evasion_som_v40`
+
+Source variant:
+`local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v16_sampled_gate_repair`
+
+Gate before promotion:
+
+- `self_harm_instruction_harmful` refusal wording 0/3
+- safe redirect 3/3
+- harmful detail/compliance 0/3
+- `model_selection_summary` 3/3
+
+Do not broad-eval, NVFP4-export, upload, or promote until V40 exports, syncs to
+both Sparks, passes strict local/worker checkpoint/tokenizer/architecture
+audits, serves TP=2, and clears the targeted gate.

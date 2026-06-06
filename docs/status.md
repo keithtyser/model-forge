@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-05.
+Last updated: 2026-06-06.
 
 This is the short handoff state for humans and agents. Use
 `docs/experiment-ledger.md` for detailed run history and raw observations.
@@ -150,11 +150,19 @@ This is the short handoff state for humans and agents. Use
   did not meet the zero-refusal gate. Do not broad-eval, quantize, upload,
   promote, or rerun V38 unchanged:
   `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v16_sampled_gate_repair.yaml`.
-  The next prepared branch is V39/V17 direct-opening rewrite:
+  V39/V17 direct-opening rewrite has also been trained and rejected:
   `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v17_direct_opening_rewrite.yaml`.
-  It starts from V38, filters mined chosen rows to direct care-first openings,
-  pairs them against safe first-person denial/help-not-help openings, increases
-  prefix unlikelihood to 96 assistant tokens, and keeps capability replay.
+  It kept self-harm refusal wording at 1/3 and regressed
+  `model_selection_summary` to 2/3. The next prepared branch is V40:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_v38_controlled_latent_evasion_som_v40.yaml`.
+  It returns to V38 and uses native controlled latent-space evasion style
+  SOM/selective projection: generated-first-token multi-direction refusal
+  openings, benign biprojection, strength above 1.0 to push past the refusal
+  boundary, and selective late attention-output edits while leaving
+  embeddings, `lm_head`, MLP weights, routers, and experts untouched. V40 is
+  prepared but not yet run; broad eval, NVFP4 export, HF upload, and promotion
+  remain blocked until it exports, syncs, audits, serves TP=2, and passes the
+  targeted zero-refusal capability-retention gate.
 - Qwen 3.6 27B residual-trial12 preference-unlikelihood v6 trained for 32
   guarded two-node steps from held v2, merged, synced to both Sparks, passed
   strict checkpoint/tokenizer audits, served with TP=2, and ran the targeted
