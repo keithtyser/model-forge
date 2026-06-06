@@ -32,10 +32,11 @@ For prepared datasets, pass `--repo-type dataset`.
 
 Status: partially validated. The NVFP4 artifact exported, synced, audited,
 served on the two-Spark TP=2 path, completed smoke/core serving benchmarks,
-completed sampled serving eval, and passed the serving evidence gate. Do not
-promote or upload as the final quantized release until an exact unquantized
-`local_ft_v4` BF16 source serving/eval baseline exists for source-vs-quantized
-comparison.
+completed sampled serving eval, and passed the serving evidence gate. The exact
+unquantized `local_ft_v4` BF16 source serving/eval baseline is now available,
+and the quantization card shows strong source-relative speedup. Do not promote
+or upload as release quality because the behavior-preservation report failed on
+structured JSON/tool-use schema and workflow checks.
 
 Hypothesis: ModelOpt NVFP4 should preserve the promoted Qwen local FT v4
 serving behavior closely enough for continued validation while improving tok/s
@@ -65,18 +66,27 @@ Evidence:
   `reports/generated/serving_evals/qwen36_27b_local_ft_v4_nvfp4_modelopt_tp2_serving_eval_20260606`
 - serving evidence gate:
   `reports/generated/serve_bench/qwen36_27b_local_ft_v4_nvfp4_modelopt_tp2_core_20260606/serving_evidence_gate.md`
+- BF16 source core benchmark:
+  `reports/generated/serve_bench/qwen36_27b_local_ft_v4_bf16_lora_tp2_core_20260606`
+- BF16 source sampled serving eval:
+  `reports/generated/serving_evals/qwen36_27b_local_ft_v4_bf16_lora_tp2_serving_eval_20260606_r2`
+- quantization card/gate:
+  `reports/generated/quantization/qwen36_local_ft_v4_bf16_vs_nvfp4_modelopt_20260606`
 
 Result: the core serving benchmark completed 9/9 requests at success rate 1.0,
 13.0560 mean output tok/s, 13.9418 mean decode tok/s, 33.2008 mean total tok/s,
 and 0.3264 s mean TTFT. The smoke benchmark completed 3/3 requests at
-13.4769 mean output tok/s and 14.4903 mean decode tok/s. Against the existing
-Qwen base BF16 smoke baseline, the NVFP4 run is about 1.88x output tok/s and
-1.99x decode tok/s, but this is not yet a formal source-vs-quantized comparison
-because the BF16 baseline is `base`, not `local_ft_v4`.
+13.4769 mean output tok/s and 14.4903 mean decode tok/s. Against the exact BF16
+`local_ft_v4` source core run, NVFP4 is about 2.41x faster on mean output tok/s
+and 2.50x faster on mean decode tok/s. The quantization card reports 2.47x
+output p50 speedup and 2.61x decode-heavy output p50 speedup. The updated
+NVFP4 gate passes source-relative throughput and tokenizer preservation, but it
+correctly blocks promotion because behavior preservation is false.
 
-Follow-up: serve unquantized `local_ft_v4` BF16 with the same two-Spark TP=2
-settings, run the same serving benchmark and sampled serving eval, then write
-the quantization card/gate from the exact source-vs-candidate evidence.
+Follow-up: investigate the structured JSON/tool-use regression before any HF
+upload or promotion. Start with a targeted serving eval rerun for only the JSON
+case, then run a quantization sensitivity pass that leaves likely
+format-critical modules in BF16 if needed.
 
 ## Qwen 3.6 27B: Native OT Diagnostic Path
 

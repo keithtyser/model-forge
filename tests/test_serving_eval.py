@@ -36,6 +36,7 @@ class ServingEvalTests(unittest.TestCase):
         )
         self.assertEqual(plan["target"]["model"], "google/gemma-4-26B-A4B-it")
         self.assertEqual(plan["eval"]["trials"], 3)
+        self.assertEqual(plan["eval"]["timeout_seconds"], 300)
         self.assertEqual(plan["eval"]["case_count"], 11)
         buckets = {sample["bucket"] for sample in plan["eval"]["samples"]}
         self.assertIn("normal_use_regression", buckets)

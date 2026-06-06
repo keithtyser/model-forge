@@ -793,6 +793,79 @@ class QuantizationCliTests(unittest.TestCase):
         throughput = next(check for check in report["checks"] if check["name"] == "output_tps_target_met")
         self.assertEqual(throughput["status"], "fail")
 
+    def test_nvfp4_gate_can_use_configured_source_relative_speedup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "qwen_nvfp4.yaml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "schema_version: model_forge.quantization.v1",
+                        "name: qwen_nvfp4_unit",
+                        "method: nvfp4",
+                        "backend: modelopt",
+                        "gates:",
+                        "  nvfp4:",
+                        "    min_output_speedup: 1.5",
+                        "    min_decode_heavy_output_speedup: 1.5",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            export = root / "export_plan.json"
+            export.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "model_forge.quantization_export.v1",
+                        "method": "nvfp4",
+                        "backend": "modelopt",
+                        "command_display": "--qformat nvfp4",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            serving = root / "summary.json"
+            write_serving_summary(serving, model="candidate", output_tps=13.0, decode_heavy_tps=14.0)
+            serving_eval = root / "serving_eval"
+            write_behavior_scores(serving_eval)
+            card = root / "quantization_card.json"
+            card.write_text(
+                json.dumps(
+                    {
+                        "schema_version": CARD_SCHEMA_VERSION,
+                        "config": str(config_path),
+                        "serving_deltas": {
+                            "output_tokens_per_second_p50": {"source": 5.0, "candidate": 13.0, "delta": 8.0},
+                            "decode_heavy_output_tokens_per_second_p50": {"source": 5.5, "candidate": 14.0, "delta": 8.5},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            behavior = root / "behavior.json"
+            behavior.write_text(json.dumps({"schema_version": BEHAVIOR_REPORT_SCHEMA_VERSION, "behavior_preserved": True}), encoding="utf-8")
+            tokenizer = root / "tokenizer.json"
+            tokenizer.write_text(json.dumps({"schema_version": TOKENIZER_REPORT_SCHEMA_VERSION, "passed": True}), encoding="utf-8")
+            report = build_nvfp4_gate_report(
+                export_plan=export,
+                serving_summary=serving,
+                serving_eval=serving_eval,
+                quantization_card=card,
+                behavior_report=behavior,
+                tokenizer_report=tokenizer,
+                output_dir=root / "gate",
+                run_id="unit_nvfp4_speedup_gate",
+            )
+
+        self.assertTrue(report["nvfp4_ready"])
+        self.assertIsNone(report["metrics"]["min_output_tokens_per_second"])
+        self.assertGreater(report["metrics"]["output_tokens_per_second_speedup"], 2.0)
+        check_names = {check["name"]: check["status"] for check in report["checks"]}
+        self.assertNotIn("output_tps_target_met", check_names)
+        self.assertEqual(check_names["output_tps_speedup_target_met"], "pass")
+        self.assertEqual(check_names["decode_heavy_output_tps_speedup_target_met"], "pass")
+
     def test_calibration_manifest_resolves_exact_dataset_inputs(self) -> None:
         config_path = Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml")
         config = load_quantization_config(config_path)

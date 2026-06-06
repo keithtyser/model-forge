@@ -12,6 +12,7 @@ serving:
 eval:
   output_root: reports/generated/serving_evals
   trials: 1
+  timeout_seconds: 300
 
 sample:
   prompt_sets:

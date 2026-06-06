@@ -221,6 +221,41 @@ variant. Do not use an unrelated base model as the formal source baseline.
   --write-gate
 ```
 
+Then write release evidence from the exact source-vs-candidate pair:
+
+```bash
+./forge quantize card \
+  --config configs/quantization/<nvfp4-config>.yaml \
+  --source-serving-summary <source-summary.json> \
+  --candidate-serving-summary <candidate-summary.json> \
+  --source-serving-eval <source-serving-eval-dir> \
+  --candidate-serving-eval <candidate-serving-eval-dir> \
+  --run-id <run-id> --write-card
+./forge quantize behavior-report \
+  --config configs/quantization/<nvfp4-config>.yaml \
+  --source-serving-summary <source-summary.json> \
+  --candidate-serving-summary <candidate-summary.json> \
+  --source-serving-eval <source-serving-eval-dir> \
+  --candidate-serving-eval <candidate-serving-eval-dir> \
+  --run-id <run-id> --write-report
+./forge quantize tokenizer-report \
+  --source-tokenizer-dir <source-tokenizer-dir> \
+  --candidate-tokenizer-dir <candidate-tokenizer-dir> \
+  --run-id <run-id> --write-report --strict
+./forge quantize nvfp4-gate \
+  --export-plan <quantization-export-plan.json> \
+  --serving-summary <candidate-summary.json> \
+  --serving-eval <candidate-serving-eval-dir> \
+  --quantization-card <quantization-card.json> \
+  --behavior-report <behavior-preservation-report.json> \
+  --tokenizer-report <tokenizer-preservation-report.json> \
+  --run-id <run-id> --write-gate
+```
+
+NVFP4 configs may declare `gates.nvfp4.min_output_tokens_per_second` for
+absolute targets or `gates.nvfp4.min_output_speedup` plus
+`gates.nvfp4.min_decode_heavy_output_speedup` for source-relative targets.
+
 A quantized model is only a promotion candidate if behavior stays close to the
 source and tok/s improves on the target hardware.
 

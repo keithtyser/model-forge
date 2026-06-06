@@ -111,6 +111,11 @@ runtime:
     load_format: auto
     moe_backend: marlin
 
+gates:
+  nvfp4:
+    min_output_speedup: 1.5
+    min_decode_heavy_output_speedup: 1.5
+
 matrix:
   workers_env: MODEL_FORGE_QUANT_WORKERS
   workers: dgx_spark_x2

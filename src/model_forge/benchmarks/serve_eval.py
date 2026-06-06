@@ -49,6 +49,7 @@ class ServingEvalConfig:
     output_root: Path
     samples: list[SampleSpec]
     trials: int
+    timeout_seconds: int | None
     raw_config: dict[str, Any]
 
 
@@ -119,6 +120,7 @@ def load_serving_eval_config(path: Path, *, serving_config: Path | None = None, 
         output_root=resolve_repo_path(eval_data.get("output_root") or "reports/generated/serving_evals"),
         samples=parse_samples(sample_data.get("prompt_sets") or sample_data.get("samples")),
         trials=int(eval_data.get("trials", 1)),
+        timeout_seconds=int(eval_data["timeout_seconds"]) if eval_data.get("timeout_seconds") is not None else None,
         raw_config=raw,
     )
 
@@ -263,6 +265,7 @@ def plan_from(
             "config": display_path(resolved_eval_config),
             "output_dir": display_path(root),
             "trials": actual_trials,
+            "timeout_seconds": config.timeout_seconds,
             "case_count": len(selected),
             "total_cases": len(selected) * actual_trials,
             "samples": [
@@ -302,6 +305,9 @@ def build_eval_config_for_plan(plan: Mapping[str, Any]) -> Any:
     backend = dict(eval_config.backend)
     backend["base_url"] = target["base_url"]
     backend["model_alias"] = target["model"]
+    timeout_seconds = (plan.get("eval") or {}).get("timeout_seconds")
+    if timeout_seconds is not None:
+        backend["timeout_seconds"] = int(timeout_seconds)
     return replace(
         eval_config,
         experiment_name=str(plan.get("name") or eval_config.experiment_name),

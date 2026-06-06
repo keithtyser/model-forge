@@ -46,11 +46,13 @@ This is the short handoff state for humans and agents. Use
   was repaired for Qwen wrapper serving, synced to the worker, passed strict
   local/worker checkpoint-tokenizer-architecture audits, served with TP=2
   across both Sparks, completed smoke/core serving benchmarks, completed a
-  sampled serving eval, and passed the serving evidence gate. This is not a
-  substitute for final FT-abli quantization evidence. Formal NVFP4 promotion
-  still needs an exact unquantized `local_ft_v4` BF16 serving/eval baseline;
-  the current speedup comparison is against the existing Qwen base BF16 serving
-  baseline.
+  sampled serving eval, and passed the serving evidence gate. The exact
+  unquantized `local_ft_v4` BF16 source baseline is now available. The
+  quantization card shows 2.47x output tok/s p50 speedup and 2.61x decode-heavy
+  output tok/s p50 speedup versus that source, but NVFP4 promotion is blocked
+  because sampled behavior preservation failed on structured JSON/tool-use
+  schema and workflow checks. This is not a substitute for final FT-abli
+  quantization evidence.
 
 ## Validated So Far
 
@@ -72,10 +74,12 @@ This is the short handoff state for humans and agents. Use
   passed strict local and worker audits, served TP=2 across both Sparks, and
   passed the serving evidence gate. The smoke benchmark hit 13.4769 output
   tok/s and 14.4903 decode tok/s. The core benchmark hit 13.0560 output tok/s
-  and 13.9418 decode tok/s with 9/9 requests complete. Against the existing
-  Qwen base BF16 smoke baseline, this is about 1.88x output tok/s and 1.99x
-  decode tok/s, but an exact `local_ft_v4` BF16 source baseline is still needed
-  before formal promotion.
+  and 13.9418 decode tok/s with 9/9 requests complete. The exact BF16
+  `local_ft_v4` source core benchmark hit 5.4250 output tok/s and 5.5714
+  decode tok/s, giving about 2.41x mean output tok/s speedup and 2.50x mean
+  decode tok/s speedup. The quantization card/gate use source-relative Qwen
+  thresholds and pass throughput, but promotion remains blocked by the sampled
+  JSON/tool-use behavior regression.
 - Llama 3.1 8B Instruct now has the same first-class family plan shape,
   including base, local-FT, local-abli, local-FT-abli, and Blackwell NVFP4
   runtime-import variants. Its NVFP4 plan compares against the unquantized base

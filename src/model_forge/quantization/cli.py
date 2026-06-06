@@ -1850,6 +1850,68 @@ def nested_float(data: Mapping[str, Any], path: tuple[str, ...]) -> float | None
     return value
 
 
+def positive_float(value: Any) -> float | None:
+    if not isinstance(value, (int, float)):
+        return None
+    numeric = float(value)
+    return numeric if numeric > 0 else None
+
+
+def speedup_from_delta(card_data: Mapping[str, Any], key: str) -> float | None:
+    serving_deltas = card_data.get("serving_deltas") or {}
+    values = serving_deltas.get(key) or serving_deltas.get(f"{key}_p50") or {}
+    if not isinstance(values, Mapping):
+        return None
+    source = positive_float(values.get("source"))
+    candidate = positive_float(values.get("candidate"))
+    if source is None or candidate is None:
+        return None
+    return candidate / source
+
+
+def nvfp4_gate_config(card_data: Mapping[str, Any]) -> dict[str, Any]:
+    config_path = card_data.get("config")
+    if not config_path:
+        return {}
+    try:
+        config = load_quantization_config(resolve_repo_path(str(config_path)))
+    except Exception:
+        return {}
+    gates = config.raw_config.get("gates") or {}
+    nvfp4 = gates.get("nvfp4") if isinstance(gates, Mapping) else {}
+    return dict(nvfp4) if isinstance(nvfp4, Mapping) else {}
+
+
+def nvfp4_gate_targets(card_data: Mapping[str, Any], min_output_tps: float | None) -> dict[str, Any]:
+    gate_config = nvfp4_gate_config(card_data)
+    output_speedup = speedup_from_delta(card_data, "output_tokens_per_second")
+    decode_heavy_output_speedup = speedup_from_delta(card_data, "decode_heavy_output_tokens_per_second")
+    if min_output_tps is not None:
+        absolute_tps = float(min_output_tps)
+        absolute_source = "cli"
+    elif gate_config.get("min_output_tokens_per_second") is not None:
+        absolute_tps = float(gate_config["min_output_tokens_per_second"])
+        absolute_source = "config"
+    elif gate_config.get("min_output_speedup") is not None or gate_config.get("min_decode_heavy_output_speedup") is not None:
+        absolute_tps = None
+        absolute_source = "not_required"
+    else:
+        absolute_tps = 45.0
+        absolute_source = "default"
+    return {
+        "min_output_tokens_per_second": absolute_tps,
+        "min_output_tokens_per_second_source": absolute_source,
+        "min_output_speedup": float(gate_config["min_output_speedup"]) if gate_config.get("min_output_speedup") is not None else None,
+        "min_decode_heavy_output_speedup": (
+            float(gate_config["min_decode_heavy_output_speedup"])
+            if gate_config.get("min_decode_heavy_output_speedup") is not None
+            else None
+        ),
+        "output_tokens_per_second_speedup": output_speedup,
+        "decode_heavy_output_tokens_per_second_speedup": decode_heavy_output_speedup,
+    }
+
+
 def build_nvfp4_gate_report(
     *,
     export_plan: Path,
@@ -1860,7 +1922,7 @@ def build_nvfp4_gate_report(
     tokenizer_report: Path,
     output_dir: Path,
     run_id: str,
-    min_output_tps: float = 45.0,
+    min_output_tps: float | None = None,
 ) -> dict[str, Any]:
     export_data = load_json(resolve_repo_path(export_plan))
     serving_data = load_json(resolve_repo_path(serving_summary))
@@ -1871,17 +1933,13 @@ def build_nvfp4_gate_report(
     output_tps = nested_float(serving_data, ("metrics", "output_tokens_per_second", "p50"))
     decode_heavy_tps = nested_float(serving_data, ("by_category", "decode_heavy", "metrics", "output_tokens_per_second", "p50"))
     command_display = str(export_data.get("command_display") or "")
+    targets = nvfp4_gate_targets(card_data, min_output_tps)
     checks = [
         status_check("export_plan_schema", export_data.get("schema_version") == "model_forge.quantization_export.v1", f"schema={export_data.get('schema_version')}"),
         status_check("export_method_nvfp4", export_data.get("method") == "nvfp4", f"method={export_data.get('method')}"),
         status_check("export_backend_modelopt", export_data.get("backend") == "modelopt", f"backend={export_data.get('backend')}"),
         status_check("export_command_modelopt_nvfp4", "--qformat nvfp4" in command_display or "--qformat nvfp4" in " ".join(map(str, export_data.get("command") or [])), "command includes qformat nvfp4"),
         status_check("serving_success_rate_complete", serving_data.get("success_rate") == 1.0, f"success_rate={serving_data.get('success_rate')}"),
-        status_check(
-            "output_tps_target_met",
-            any(isinstance(value, (int, float)) and float(value) >= min_output_tps for value in (output_tps, decode_heavy_tps)),
-            f"output_tps={output_tps} decode_heavy_output_tps={decode_heavy_tps} min={min_output_tps}",
-        ),
         status_check("serving_eval_scores_exist", eval_scores_path.exists(), f"scores={display_path(eval_scores_path)}"),
         status_check("quantization_card_schema", card_data.get("schema_version") == CARD_SCHEMA_VERSION, f"schema={card_data.get('schema_version')}"),
         status_check("behavior_report_schema", behavior_data.get("schema_version") == BEHAVIOR_REPORT_SCHEMA_VERSION, f"schema={behavior_data.get('schema_version')}"),
@@ -1889,6 +1947,45 @@ def build_nvfp4_gate_report(
         status_check("tokenizer_report_schema", tokenizer_data.get("schema_version") == TOKENIZER_REPORT_SCHEMA_VERSION, f"schema={tokenizer_data.get('schema_version')}"),
         status_check("tokenizer_preserved", tokenizer_data.get("passed") is True, f"passed={tokenizer_data.get('passed')}"),
     ]
+    absolute_tps = targets["min_output_tokens_per_second"]
+    if absolute_tps is not None:
+        checks.insert(
+            6,
+            status_check(
+                "output_tps_target_met",
+                any(isinstance(value, (int, float)) and float(value) >= absolute_tps for value in (output_tps, decode_heavy_tps)),
+                (
+                    f"output_tps={output_tps} decode_heavy_output_tps={decode_heavy_tps} "
+                    f"min={absolute_tps} source={targets['min_output_tokens_per_second_source']}"
+                ),
+            ),
+        )
+    if targets["min_output_speedup"] is not None:
+        checks.insert(
+            7,
+            status_check(
+                "output_tps_speedup_target_met",
+                isinstance(targets["output_tokens_per_second_speedup"], (int, float))
+                and float(targets["output_tokens_per_second_speedup"]) >= float(targets["min_output_speedup"]),
+                (
+                    f"output_speedup={targets['output_tokens_per_second_speedup']} "
+                    f"min={targets['min_output_speedup']}"
+                ),
+            ),
+        )
+    if targets["min_decode_heavy_output_speedup"] is not None:
+        checks.insert(
+            8,
+            status_check(
+                "decode_heavy_output_tps_speedup_target_met",
+                isinstance(targets["decode_heavy_output_tokens_per_second_speedup"], (int, float))
+                and float(targets["decode_heavy_output_tokens_per_second_speedup"]) >= float(targets["min_decode_heavy_output_speedup"]),
+                (
+                    f"decode_heavy_output_speedup={targets['decode_heavy_output_tokens_per_second_speedup']} "
+                    f"min={targets['min_decode_heavy_output_speedup']}"
+                ),
+            ),
+        )
     ready = all(check["status"] == "pass" for check in checks if check["required"])
     return redact_value(
         {
@@ -1906,7 +2003,7 @@ def build_nvfp4_gate_report(
             "metrics": {
                 "output_tokens_per_second_p50": output_tps,
                 "decode_heavy_output_tokens_per_second_p50": decode_heavy_tps,
-                "min_output_tokens_per_second": min_output_tps,
+                **targets,
             },
             "checks": checks,
             "nvfp4_ready": ready,
@@ -1914,7 +2011,8 @@ def build_nvfp4_gate_report(
             "notes": [
                 "This gate consumes completed artifacts; it does not run export, serving, or eval jobs.",
                 "Blackwell NVFP4 promotion requires export evidence, serving throughput, behavior preservation, tokenizer preservation, and a quantization card.",
-                "For Gemma 4 MoE on DGX Spark, the near-term target is roughly 45-60 output tok/s on decode-heavy workloads.",
+                "Configs may declare source-relative throughput gates when absolute tok/s targets are not portable across model families.",
+                "For Gemma 4 MoE on DGX Spark, the near-term absolute target is roughly 45-60 output tok/s on decode-heavy workloads.",
             ],
         }
     )
@@ -2238,7 +2336,7 @@ def main() -> None:
     nvfp4_gate_parser.add_argument("--quantization-card", type=Path, required=True)
     nvfp4_gate_parser.add_argument("--behavior-report", type=Path, required=True)
     nvfp4_gate_parser.add_argument("--tokenizer-report", type=Path, required=True)
-    nvfp4_gate_parser.add_argument("--min-output-tps", type=float, default=45.0)
+    nvfp4_gate_parser.add_argument("--min-output-tps", type=float, default=None)
     nvfp4_gate_parser.add_argument("--output-dir", type=Path, default=REPO_DIR / "reports" / "generated" / "quantization")
     nvfp4_gate_parser.add_argument("--run-id", required=True)
     nvfp4_gate_parser.add_argument("--write-gate", action="store_true", help="Write nvfp4_evidence_gate.json and .md")
@@ -2321,7 +2419,7 @@ def main() -> None:
             tokenizer_report=args.tokenizer_report,
             output_dir=output_dir,
             run_id=sanitize_run_id(args.run_id),
-            min_output_tps=float(args.min_output_tps),
+            min_output_tps=float(args.min_output_tps) if args.min_output_tps is not None else None,
         )
         if args.write_gate:
             write_nvfp4_gate_outputs(report)
