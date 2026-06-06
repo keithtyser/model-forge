@@ -263,6 +263,21 @@ absolute targets or `gates.nvfp4.min_output_speedup` plus
 A quantized model is only a promotion candidate if behavior stays close to the
 source and tok/s improves on the target hardware.
 
+If speed improves but behavior fails, first inspect exact source-pass/candidate
+failures with `./forge bench serve-eval compare`. Then plan targeted
+quantization matrix candidates by target variant or entry name:
+
+```bash
+./forge quantize matrix-plan \
+  --config configs/quantization/<nvfp4-config>.yaml \
+  --variants <target-variant-or-entry-name> \
+  --write-plan
+```
+
+Matrix entries support nested overrides like `export.ptq.qformat` and
+`runtime.served_model_name`; do not clone whole configs just to change one PTQ
+field.
+
 ### 6. Publish
 
 Before publishing:

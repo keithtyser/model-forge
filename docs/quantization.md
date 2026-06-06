@@ -344,6 +344,22 @@ checks pass. Use it to compare all-linear, MLP-only, attention-only,
 experts-only, keep-router-BF16, or similar policies without baking
 architecture-specific constants into the common pipeline.
 
+For configs with a `matrix.variants` section, generate candidate export plans
+by source variant, target variant, or matrix entry name:
+
+```bash
+./forge quantize matrix-plan \
+  --config configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml \
+  --variants local_ft_v4_nvfp4_awq_modelopt \
+  --write-plan
+```
+
+Matrix entries may override nested config blocks such as `export.ptq.qformat`,
+`runtime.served_model_name`, `runtime.launch.container_name`, calibration, or
+exclusions. Overrides are merged recursively, so a one-field PTQ override keeps
+the parent recipe's script, calibration defaults, resource policy, and safety
+guards.
+
 ## GGUF And llama.cpp
 
 GGUF is the portable local-inference path. It is separate from Spark-native

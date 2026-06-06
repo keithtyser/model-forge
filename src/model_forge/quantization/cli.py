@@ -2195,14 +2195,40 @@ def matrix_entries(config: QuantizationConfig) -> list[dict[str, Any]]:
     return [dict(item) for item in entries if isinstance(item, Mapping)]
 
 
+def deep_merge_mappings(base: Mapping[str, Any], override: Mapping[str, Any] | None) -> dict[str, Any]:
+    merged = dict(base)
+    if not override:
+        return merged
+    for key, value in override.items():
+        current = merged.get(key)
+        if isinstance(current, Mapping) and isinstance(value, Mapping):
+            merged[key] = deep_merge_mappings(current, value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def matrix_entry_names(entry: Mapping[str, Any]) -> set[str]:
+    return {
+        str(value)
+        for value in (
+            entry.get("name"),
+            entry.get("source_variant"),
+            entry.get("target_variant"),
+        )
+        if value
+    }
+
+
 def filter_matrix_entries(entries: list[dict[str, Any]], variants: str | None) -> list[dict[str, Any]]:
     wanted = set(comma_list(variants))
     if not wanted:
         return entries
-    filtered = [entry for entry in entries if str(entry.get("source_variant") or "") in wanted]
-    missing = sorted(wanted - {str(entry.get("source_variant") or "") for entry in filtered})
+    filtered = [entry for entry in entries if matrix_entry_names(entry) & wanted]
+    matched = set().union(*(matrix_entry_names(entry) for entry in filtered)) if filtered else set()
+    missing = sorted(wanted - matched)
     if missing:
-        raise ValueError(f"matrix variants not found: {', '.join(missing)}")
+        raise ValueError(f"matrix entries not found: {', '.join(missing)}")
     return filtered
 
 
@@ -2544,10 +2570,10 @@ def main() -> None:
                 source_variant=source.variant,
                 target_variant=target_variant,
                 hardware_profile=config.hardware_profile,
-                calibration=config.calibration,
-                exclusions=config.exclusions,
-                runtime=config.runtime,
-                export={**config.export, **dict(entry.get("export") or {})},
+                calibration=deep_merge_mappings(config.calibration, entry.get("calibration") if isinstance(entry.get("calibration"), Mapping) else None),
+                exclusions=deep_merge_mappings(config.exclusions, entry.get("exclusions") if isinstance(entry.get("exclusions"), Mapping) else None),
+                runtime=deep_merge_mappings(config.runtime, entry.get("runtime") if isinstance(entry.get("runtime"), Mapping) else None),
+                export=deep_merge_mappings(config.export, entry.get("export") if isinstance(entry.get("export"), Mapping) else None),
                 matrix=config.matrix,
                 outputs=config.outputs,
                 evals=config.evals,

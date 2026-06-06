@@ -1361,6 +1361,34 @@ variants:
       evidence:
         - configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml
         - docs/quantization.md
+  local_ft_v4_nvfp4_awq_modelopt:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_awq_modelopt
+    served_model_name: model-forge/qwen36-27b-local-ft-v4-nvfp4-awq-modelopt
+    base_variant: local_ft_v4
+    quantization: nvfp4_awq
+    downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [hf_upload, promotion]
+      reason: "Planned Qwen local FT v4 NVFP4 AWQ-lite candidate to test whether format-following behavior is preserved better than default NVFP4 while retaining Blackwell speedup."
+      evidence:
+        - configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml
+        - reports/qwen36_27b_local_ft_v4_nvfp4_modelopt_serving_validation_summary.md
+  local_ft_v4_nvfp4_w4a16_modelopt:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_w4a16_modelopt
+    served_model_name: model-forge/qwen36-27b-local-ft-v4-nvfp4-w4a16-modelopt
+    base_variant: local_ft_v4
+    quantization: nvfp4_w4a16
+    downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [hf_upload, promotion]
+      reason: "Planned Qwen local FT v4 weight-only NVFP4 candidate to test whether keeping activations higher precision preserves strict JSON/tool behavior while still improving serving speed."
+      evidence:
+        - configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml
+        - reports/qwen36_27b_local_ft_v4_nvfp4_modelopt_serving_validation_summary.md
 
 serve:
   script: scripts/dgx_spark_serve_qwen.sh

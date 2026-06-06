@@ -90,8 +90,11 @@ strict JSON in markdown and emitted malformed `reason"` keys on
 
 Follow-up: investigate the structured JSON/tool-use regression before any HF
 upload or promotion. Start with a targeted serving eval rerun for only the JSON
-case, then run a quantization sensitivity pass that leaves likely
-format-critical modules in BF16 if needed.
+case, then run the planned matrix candidates
+`local_ft_v4_nvfp4_awq_modelopt` and `local_ft_v4_nvfp4_w4a16_modelopt`.
+AWQ should be tried first because it may preserve format-following while
+retaining FP4 acceleration; weight-only FP4 is the fallback if activation
+quantization is the source of the malformed JSON.
 
 ## Qwen 3.6 27B: Native OT Diagnostic Path
 

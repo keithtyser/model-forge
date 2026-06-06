@@ -145,3 +145,21 @@ Investigate the structured JSON/tool-use regression before any HF upload or
 promotion. Likely next checks are a targeted serving eval rerun for only the
 JSON/tool case, then a quantization sensitivity pass that preserves the modules
 most responsible for format adherence.
+
+The next planned quantization candidates are now in the Qwen matrix:
+
+- `local_ft_v4_nvfp4_awq_modelopt`: ModelOpt `nvfp4_awq`; test this first
+  because AWQ calibration may preserve format-following better while retaining
+  Blackwell FP4 acceleration.
+- `local_ft_v4_nvfp4_w4a16_modelopt`: ModelOpt `nvfp4_w4a16`; use this if AWQ
+  still fails strict JSON, because weight-only FP4 should keep activations in a
+  safer precision regime at possible speed cost.
+
+Plan either candidate with:
+
+```bash
+./forge quantize matrix-plan \
+  --config configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml \
+  --variants local_ft_v4_nvfp4_awq_modelopt \
+  --write-plan
+```

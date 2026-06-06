@@ -82,6 +82,9 @@ This is the short handoff state for humans and agents. Use
   JSON/tool-use behavior regression. The serving-eval comparison report
   confirms the NVFP4 candidate wrapped strict JSON in markdown and emitted
   malformed `reason"` keys on `agentic_tool_use_json/model_serve_timeout`.
+  The next matrix candidates are `local_ft_v4_nvfp4_awq_modelopt` and
+  `local_ft_v4_nvfp4_w4a16_modelopt`, added to test more format-preserving
+  ModelOpt qformats before any upload or promotion.
 - Llama 3.1 8B Instruct now has the same first-class family plan shape,
   including base, local-FT, local-abli, local-FT-abli, and Blackwell NVFP4
   runtime-import variants. Its NVFP4 plan compares against the unquantized base
