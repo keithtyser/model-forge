@@ -7,12 +7,14 @@ from argparse import Namespace
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from model_forge.hub.cli import (
     DATASET_PLAN_SCHEMA_VERSION,
     audit_release_classes,
     build_dataset_plan,
     build_model_plan,
+    execute_model_publish,
     hf_status,
     main,
     scan_text_file,
@@ -319,6 +321,124 @@ class HubCliTests(unittest.TestCase):
                 )
 
             self.assertEqual(code, 1)
+
+    def test_publish_model_execute_requires_token_after_passing_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model_dir = root / "model"
+            model_dir.mkdir()
+            (model_dir / "config.json").write_text("{}", encoding="utf-8")
+            (model_dir / "model.safetensors").write_text("placeholder", encoding="utf-8")
+            eval_scores = root / "scores.csv"
+            eval_scores.write_text("bucket,metric,value\nnormal,pass,1.0\n", encoding="utf-8")
+            serving = root / "serving.json"
+            serving.write_text(json.dumps({"success_rate": 1.0}), encoding="utf-8")
+            quantization = root / "quantization.json"
+            quantization.write_text(json.dumps({"serving_deltas": {}}), encoding="utf-8")
+            promotion = root / "promotion.json"
+            promotion.write_text(json.dumps({"nvfp4_ready": True}), encoding="utf-8")
+
+            with patch("model_forge.hub.cli.token_value", return_value=None) as token_mock, redirect_stdout(StringIO()):
+                code = main(
+                    [
+                        "publish-model",
+                        "qwen36_27b",
+                        "local_ft_v4_nvfp4_attention_output_bf16_modelopt",
+                        "--release-class",
+                        "public_quantized_model",
+                        "--artifact-path",
+                        str(model_dir),
+                        "--validation-state",
+                        "spark_cluster_validated",
+                        "--source-license-checked",
+                        "--eval-results",
+                        str(eval_scores),
+                        "--serving-card",
+                        str(serving),
+                        "--quantization-card",
+                        str(quantization),
+                        "--promotion-report",
+                        str(promotion),
+                        "--output-dir",
+                        str(root / "out"),
+                        "--execute",
+                        "--json",
+                    ]
+                )
+
+            self.assertEqual(code, 1)
+            token_mock.assert_called_with(include_cached=False)
+
+    def test_execute_model_publish_uploads_whitelisted_model_card_and_evidence(self) -> None:
+        uploads: list[dict[str, object]] = []
+        created: list[dict[str, object]] = []
+
+        class FakeApi:
+            def __init__(self, token: str) -> None:
+                self.token = token
+
+            def whoami(self, token: str) -> dict[str, str]:
+                return {"name": "tester"}
+
+            def upload_file(self, **kwargs: object) -> None:
+                uploads.append(kwargs)
+
+        def fake_create_repo(**kwargs: object) -> None:
+            created.append(kwargs)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model_dir = root / "model"
+            model_dir.mkdir()
+            (model_dir / "config.json").write_text("{}", encoding="utf-8")
+            (model_dir / "model.safetensors").write_text("placeholder", encoding="utf-8")
+            (model_dir / "scratch.tmp").write_text("do not upload", encoding="utf-8")
+            eval_scores = root / "scores.csv"
+            eval_scores.write_text("bucket,metric,value\nnormal,pass,1.0\n", encoding="utf-8")
+            serving = root / "serving.json"
+            serving.write_text(json.dumps({"success_rate": 1.0}), encoding="utf-8")
+            quantization = root / "quantization.json"
+            quantization.write_text(json.dumps({"serving_deltas": {}}), encoding="utf-8")
+            promotion = root / "promotion.json"
+            promotion.write_text(json.dumps({"nvfp4_ready": True}), encoding="utf-8")
+            args = model_args(
+                family="qwen36_27b",
+                variant="local_ft_v4_nvfp4_attention_output_bf16_modelopt",
+                artifact_path=str(model_dir),
+                output_dir=str(root / "out"),
+                release_class="public_quantized_model",
+                validation_state="spark_cluster_validated",
+                source_license_checked=True,
+                eval_results=str(eval_scores),
+                serving_card=str(serving),
+                quantization_card=str(quantization),
+                promotion_report=str(promotion),
+                evidence_prefix="evidence",
+                revision="main",
+                commit_message="Upload test artifact",
+            )
+            plan = build_model_plan(args)
+
+            publish_record = execute_model_publish(
+                args,
+                plan,
+                token="test-token",
+                api_factory=FakeApi,
+                create_repo_fn=fake_create_repo,
+            )
+
+            uploaded_repo_paths = {str(item["path_in_repo"]) for item in uploads}
+            self.assertFalse(publish_record["dry_run"])
+            self.assertEqual(created[0]["repo_id"], plan["repo_id"])
+            self.assertFalse(created[0]["private"])
+            self.assertIn("README.md", uploaded_repo_paths)
+            self.assertIn("config.json", uploaded_repo_paths)
+            self.assertIn("model.safetensors", uploaded_repo_paths)
+            self.assertIn("evidence/eval_results/scores.csv", uploaded_repo_paths)
+            self.assertIn("evidence/hub_publish.json", uploaded_repo_paths)
+            self.assertNotIn("scratch.tmp", uploaded_repo_paths)
+            provenance = (root / "out" / "hub_publish.json").read_text(encoding="utf-8")
+            self.assertNotIn("test-token", provenance)
 
     def test_publish_dataset_dry_run_accepts_redacted_public_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

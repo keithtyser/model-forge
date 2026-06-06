@@ -16,17 +16,25 @@ status so another agent can resume without relying on chat history.
 - Follow `docs/artifact-retention.md` before committing, deleting, or uploading
   generated artifacts.
 
-Publishing helper:
+Model publishing command:
 
 ```bash
-.venv/bin/python scripts/publish_hf_artifact.py \
-  --repo-id <user-or-org>/<artifact-name> \
-  --folder <local-folder> \
-  --repo-type model \
-  --commit-message "Upload model-forge artifact"
+./forge hf publish-model <family> <variant> \
+  --release-class <release-class> \
+  --artifact-path <local-folder> \
+  --validation-state <validation-state> \
+  --eval-results <eval-scores-or-serving-eval-dir> \
+  --serving-card <serving-summary.json> \
+  --quantization-card <quantization-card.json> \
+  --promotion-report <promotion-or-gate.json> \
+  --source-license-checked \
+  --execute
 ```
 
-For prepared datasets, pass `--repo-type dataset`.
+The model publish command defaults to env-only tokens. Cached Hugging Face
+tokens require explicit `--token-source cache` so tests and unattended agent
+runs do not publish accidentally. Prepared datasets use the dataset-factory
+publish path for execution.
 
 ## Qwen 3.6 27B: Local FT v4 ModelOpt NVFP4 Serving Validation
 

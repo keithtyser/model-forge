@@ -356,17 +356,27 @@ Document:
 - known gaps and rejected candidates
 - Hugging Face repo IDs for completed artifacts
 
-Use the helper for uploads:
+Use the gated Hub CLI for model uploads after the plan is unblocked:
 
 ```bash
-.venv/bin/python scripts/publish_hf_artifact.py \
-  --repo-id <user-or-org>/<artifact-name> \
-  --folder <local-folder> \
-  --repo-type model \
-  --commit-message "Upload model-forge artifact"
+./forge hf publish-model <family> <variant> \
+  --release-class <release-class> \
+  --artifact-path <local-folder> \
+  --validation-state <validation-state> \
+  --eval-results <eval-scores-or-serving-eval-dir> \
+  --serving-card <serving-summary.json> \
+  --quantization-card <quantization-card.json> \
+  --promotion-report <promotion-or-gate.json> \
+  --source-license-checked \
+  --execute
 ```
 
-Prepared datasets use `--repo-type dataset`.
+`publish-model --execute` defaults to environment tokens only and refuses
+blocked plans, missing evidence, missing artifact files, and public-scan
+findings before upload. Cached Hugging Face credentials require explicit
+`--token-source cache`; do not use that option in tests or unattended agent
+runs. Prepared datasets still use the dataset-factory publish path for
+execution and `./forge hf publish-dataset --dry-run` for Hub-side audit.
 
 ## Handoff Checklist
 

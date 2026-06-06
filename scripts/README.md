@@ -45,8 +45,9 @@ wrappers, operational helpers, or hardware-specific launchers.
   bounded ablation-strength sweeps from an existing adapter.
 - `scale_lora_adapter.py`: creates small scaled copies of a LoRA adapter for
   live-serving ablation sweeps without writing a full checkpoint.
-- `publish_hf_artifact.py`: Hugging Face upload helper for completed models,
-  datasets, or durable report bundles.
+- `publish_hf_artifact.py`: legacy generic Hugging Face upload helper. Prefer
+  `./forge hf publish-model --execute` for model uploads because it enforces
+  release gates, whitelisted files, sanitized evidence, and provenance.
 - `rescore_internal_eval.py`: re-score an existing internal eval run from its
   saved `responses.jsonl` after rubric/check changes, without querying the
   model again.

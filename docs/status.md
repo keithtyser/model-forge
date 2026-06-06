@@ -803,10 +803,13 @@ This is the short handoff state for humans and agents. Use
   `artifact_execution_card.json` / `.md`. Compare reports also emit claim
   warnings when an artifact-generation metric improves without
   `artifact_validation_pass_rate` evidence.
-- Hugging Face model release planning is now wired through `./forge hf`.
-  `status`, `whoami`, `login`, `plan-model`, and dry-run `publish-model`
-  generate model cards, `hub_publish.json` provenance, no-secret/no-private-path
-  checks, and release-class gates from `configs/release_classes/`.
+- Hugging Face model release planning and guarded upload execution are now
+  wired through `./forge hf`. `status`, `whoami`, `login`, `plan-model`, and
+  `publish-model` generate model cards, `hub_publish.json` provenance,
+  no-secret/no-private-path checks, and release-class gates from
+  `configs/release_classes/`. `publish-model --execute` uploads only after the
+  plan passes, defaults to env-only tokens, and requires explicit
+  `--token-source cache` to use cached Hugging Face credentials.
 - Dataset Hub dry runs now create a public redacted bundle for `public_dataset`
   release plans. The bundle keeps provenance, hashes, verification, quality, and
   review evidence while excluding raw accepted/rejected rows and message text.

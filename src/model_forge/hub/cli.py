@@ -216,12 +216,14 @@ def audit_release_classes(root: Path = RELEASE_CLASS_DIR) -> list[ReleaseClassFi
     return findings
 
 
-def token_source(env: Mapping[str, str] | None = None) -> tuple[str, bool]:
+def token_source(env: Mapping[str, str] | None = None, *, include_cached: bool = True) -> tuple[str, bool]:
     env = env or os.environ
     if env.get("HF_TOKEN"):
         return "HF_TOKEN", True
     if env.get("HUGGINGFACE_HUB_TOKEN"):
         return "HUGGINGFACE_HUB_TOKEN", True
+    if not include_cached:
+        return "none", False
     try:
         from huggingface_hub import HfFolder
 
@@ -231,12 +233,14 @@ def token_source(env: Mapping[str, str] | None = None) -> tuple[str, bool]:
     return ("hf-cli-cache", True) if token else ("none", False)
 
 
-def token_value(env: Mapping[str, str] | None = None) -> str | None:
+def token_value(env: Mapping[str, str] | None = None, *, include_cached: bool = True) -> str | None:
     env = env or os.environ
     if env.get("HF_TOKEN"):
         return str(env["HF_TOKEN"])
     if env.get("HUGGINGFACE_HUB_TOKEN"):
         return str(env["HUGGINGFACE_HUB_TOKEN"])
+    if not include_cached:
+        return None
     try:
         from huggingface_hub import HfFolder
 
@@ -401,6 +405,40 @@ def slug_for(family: str, variant: str) -> str:
 def default_repo_id(family: str, variant: str, config: Mapping[str, Any]) -> str:
     owner = str(config.get("default_owner") or "model-forge")
     return f"{owner}/{slug_for(family, variant)}"
+
+
+def model_plan_output_dir(args: argparse.Namespace) -> Path:
+    run_id = args.run_id or sanitize_run_id(f"{args.family}_{args.variant}_{args.release_class}_hf_plan")
+    return resolve_path(args.output_dir) if args.output_dir else DEFAULT_OUTPUT_ROOT / run_id
+
+
+def model_artifact_path(args: argparse.Namespace, variant_info: Mapping[str, Any], release_class: Mapping[str, Any]) -> Path | None:
+    include_weights = bool(release_class.get("publish_weights", False))
+    include_adapter = bool(release_class.get("publish_adapter", False))
+    if args.artifact_path:
+        return resolve_path(args.artifact_path)
+    if include_adapter and variant_info.get("adapter_path"):
+        return variant_info.get("adapter_path")
+    if include_weights and variant_info.get("merged_path"):
+        return variant_info.get("merged_path")
+    return variant_info.get("local_path")
+
+
+def resolved_supporting_paths(args: argparse.Namespace, *, output_dir: Path) -> list[tuple[str, Path]]:
+    paths: list[tuple[str, Path]] = []
+    for kind, raw_path in [
+        ("eval_results", args.eval_results),
+        ("serving_card", args.serving_card),
+        ("quantization_card", args.quantization_card),
+        ("promotion_report", args.promotion_report),
+        ("risk_report", args.risk_report),
+        ("manifest", args.manifest),
+    ]:
+        resolved_path, _ = resolve_supporting_path(raw_path, kind=kind)
+        if resolved_path:
+            public_path, _ = materialize_public_supporting_path(resolved_path, kind=kind, output_dir=output_dir)
+            paths.append((kind, public_path))
+    return paths
 
 
 def format_number(value: Any, *, suffix: str = "") -> str:
@@ -693,19 +731,12 @@ def build_model_plan(args: argparse.Namespace) -> dict[str, Any]:
     release_class = load_release_class(args.release_class)
     repo_id = args.repo_id or default_repo_id(args.family, args.variant, hub_config)
     run_id = args.run_id or sanitize_run_id(f"{args.family}_{args.variant}_{args.release_class}_hf_plan")
-    output_dir = resolve_path(args.output_dir) if args.output_dir else DEFAULT_OUTPUT_ROOT / run_id
+    output_dir = model_plan_output_dir(args)
     output_dir.mkdir(parents=True, exist_ok=True)
     include_weights = bool(release_class.get("publish_weights", False))
     include_adapter = bool(release_class.get("publish_adapter", False))
     include_model_artifact = include_weights or include_adapter
-    if args.artifact_path:
-        model_path = resolve_path(args.artifact_path)
-    elif include_adapter and variant_info.get("adapter_path"):
-        model_path = variant_info.get("adapter_path")
-    elif include_weights and variant_info.get("merged_path"):
-        model_path = variant_info.get("merged_path")
-    else:
-        model_path = variant_info.get("local_path")
+    model_path = model_artifact_path(args, variant_info, release_class)
     files_included, files_excluded = list_model_files(
         model_path if include_model_artifact else None,
         include_weights=include_weights,
@@ -798,6 +829,136 @@ def build_model_plan(args: argparse.Namespace) -> dict[str, Any]:
         encoding="utf-8",
     )
     return plan
+
+
+def execute_model_publish(
+    args: argparse.Namespace,
+    plan: dict[str, Any],
+    *,
+    token: str | None = None,
+    api_factory: Any | None = None,
+    create_repo_fn: Any | None = None,
+) -> dict[str, Any]:
+    if plan.get("blocked"):
+        raise RuntimeError(f"refusing to upload blocked plan: {', '.join(plan.get('blocked_until') or [])}")
+    token_source_policy = str(getattr(args, "token_source", "env") or "env")
+    include_cached_token = token_source_policy == "cache"
+    token = token or token_value(include_cached=include_cached_token)
+    if not token:
+        raise RuntimeError(
+            "Set HF_TOKEN or HUGGINGFACE_HUB_TOKEN before executing model publish, "
+            "or pass --token-source cache to explicitly use the local Hugging Face token cache"
+        )
+
+    output_dir = model_plan_output_dir(args)
+    readme_path = output_dir / "README.md"
+    if not readme_path.is_file():
+        raise RuntimeError(f"generated model card is missing: {publish_path_label(readme_path)}")
+
+    variant_info = resolve_variant(args.family, args.variant)
+    release_class = load_release_class(args.release_class)
+    model_path = model_artifact_path(args, variant_info, release_class)
+    if not model_path or not model_path.is_dir():
+        raise RuntimeError(f"model artifact directory is missing: {publish_path_label(model_path)}")
+
+    supporting_paths = resolved_supporting_paths(args, output_dir=output_dir)
+    missing_support = [f"{kind}: {publish_path_label(path)}" for kind, path in supporting_paths if not path.exists()]
+    if missing_support:
+        raise RuntimeError(f"supporting evidence path is missing: {', '.join(missing_support)}")
+
+    scan_findings = scan_paths([readme_path, *[path for _, path in supporting_paths]])
+    if scan_findings:
+        raise RuntimeError(f"refusing to upload files with public-scan findings: {'; '.join(scan_findings[:5])}")
+
+    upload_files: list[tuple[Path, str]] = [(readme_path, "README.md")]
+    for rel_path in plan.get("files_included") or []:
+        rel = Path(str(rel_path))
+        if rel.is_absolute() or any(part in {"", ".", ".."} for part in rel.parts):
+            raise RuntimeError(f"refusing unsafe planned artifact path: {rel_path}")
+        if rel.as_posix() == "README.md":
+            continue
+        source_path = model_path / rel
+        if not source_path.is_file():
+            raise RuntimeError(f"planned artifact file is missing: {publish_path_label(source_path)}")
+        upload_files.append((source_path, rel.as_posix()))
+    evidence_prefix = sanitize_run_id(getattr(args, "evidence_prefix", None) or "model-forge-evidence")
+    for kind, path in supporting_paths:
+        upload_files.append((path, f"{evidence_prefix}/{sanitize_run_id(kind)}/{path.name}"))
+
+    try:
+        if api_factory is None or create_repo_fn is None:
+            from huggingface_hub import HfApi, create_repo
+
+            api_factory = api_factory or HfApi
+            create_repo_fn = create_repo_fn or create_repo
+    except Exception as exc:
+        raise RuntimeError("Install huggingface_hub before executing model publish") from exc
+
+    repo_id = str(plan["repo_id"])
+    private = str(plan.get("visibility") or "private") != "public"
+    commit_message = getattr(args, "commit_message", None) or f"Upload {args.family}/{args.variant} from model-forge"
+    revision = getattr(args, "revision", None)
+    token_name, _ = token_source(include_cached=include_cached_token)
+    if token_name == "none":
+        token_name = "provided"
+    api = api_factory(token=token)
+    user = None
+    try:
+        user = (api.whoami(token=token) or {}).get("name")
+    except Exception:
+        user = None
+
+    create_repo_fn(
+        repo_id=repo_id,
+        repo_type="model",
+        private=private,
+        exist_ok=True,
+        token=token,
+    )
+    uploaded_files = []
+    for source_path, path_in_repo in upload_files:
+        api.upload_file(
+            path_or_fileobj=str(source_path),
+            path_in_repo=path_in_repo,
+            repo_id=repo_id,
+            repo_type="model",
+            revision=revision,
+            commit_message=commit_message,
+            token=token,
+        )
+        uploaded_files.append({
+            "path": publish_path_label(source_path),
+            "path_in_repo": path_in_repo,
+        })
+
+    hub_publish_repo_path = f"{evidence_prefix}/hub_publish.json"
+    hub_publish_entry = {
+        "path": publish_path_label(output_dir / "hub_publish.json"),
+        "path_in_repo": hub_publish_repo_path,
+    }
+    publish_record = {
+        **plan,
+        "dry_run": False,
+        "uploaded_at": utc_now().isoformat(),
+        "uploaded_by": user,
+        "token_source": token_name,
+        "hub_url": f"https://huggingface.co/{repo_id}",
+        "uploaded_files": [*uploaded_files, hub_publish_entry],
+        "revision": revision,
+        "commit_message": commit_message,
+    }
+    publish_path = output_dir / "hub_publish.json"
+    publish_path.write_text(json.dumps(redact_value(publish_record), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    api.upload_file(
+        path_or_fileobj=str(publish_path),
+        path_in_repo=hub_publish_repo_path,
+        repo_id=repo_id,
+        repo_type="model",
+        revision=revision,
+        commit_message=commit_message,
+        token=token,
+    )
+    return publish_record
 
 
 def count_jsonl_rows(path: Path) -> int | None:
@@ -1050,10 +1211,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     plan_model = sub.add_parser("plan-model", help="Write a dry-run model publish plan and model card")
     add_model_args(plan_model)
-    publish_model = sub.add_parser("publish-model", help="Dry-run model publish plan; real upload is intentionally blocked")
+    publish_model = sub.add_parser("publish-model", help="Plan or execute a gated model upload")
     add_model_args(publish_model)
     publish_model.add_argument("--dry-run", action="store_true", default=True)
-    publish_model.add_argument("--execute", action="store_true", help="Reserved for future guarded upload support")
+    publish_model.add_argument("--execute", action="store_true", help="Upload after the generated release plan passes")
+    publish_model.add_argument("--revision", help="Optional Hub branch/revision for upload")
+    publish_model.add_argument("--commit-message", help="Hub commit message for uploaded files")
+    publish_model.add_argument("--evidence-prefix", default="model-forge-evidence", help="Path prefix for uploaded evidence files")
+    publish_model.add_argument(
+        "--token-source",
+        choices=["env", "cache"],
+        default="env",
+        help="Use environment tokens by default; pass cache to explicitly use the local Hugging Face token cache",
+    )
     publish_dataset = sub.add_parser("publish-dataset", help="Dry-run dataset publish plan")
     publish_dataset.add_argument("dataset_path")
     publish_dataset.add_argument("--repo-id")
@@ -1109,13 +1279,16 @@ def main(argv: list[str] | None = None) -> int:
             console.print("HF token present; token value was not printed.")
         return 0
     if args.command in {"plan-model", "publish-model"}:
-        if args.command == "publish-model" and args.execute:
-            console.print(
-                "[red]Non-dry-run model upload is not implemented; "
-                "use scripts/publish_hf_artifact.py only after reviewing the plan.[/red]"
-            )
-            return 2
         plan = build_model_plan(args)
+        if args.command == "publish-model" and args.execute and not plan.get("blocked"):
+            try:
+                plan = execute_model_publish(args, plan)
+            except RuntimeError as exc:
+                if args.json:
+                    print(json.dumps({"error": str(exc), "plan": redact_value(plan)}, indent=2, sort_keys=True))
+                else:
+                    console.print(f"[red]{exc}[/red]")
+                return 1
         if args.json:
             print(json.dumps(redact_value(plan), indent=2, sort_keys=True))
         else:

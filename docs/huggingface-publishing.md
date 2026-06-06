@@ -20,6 +20,24 @@ Plan a model release and generate local card/provenance files:
 ./forge hf publish-model <family> <variant> --release-class public_quantized_model --dry-run
 ```
 
+Execute a model upload only after the dry run is unblocked:
+
+```bash
+./forge hf publish-model <family> <variant> \
+  --release-class public_quantized_model \
+  --artifact-path <local-artifact-dir> \
+  --validation-state spark_cluster_validated \
+  --eval-results <serving-eval-dir-or-scores.csv> \
+  --serving-card <serve-bench-summary.json> \
+  --quantization-card <quantization-card.json> \
+  --promotion-report <promotion-or-gate.json> \
+  --source-license-checked \
+  --execute
+```
+
+`publish-model --execute` defaults to environment tokens only. It will not use a
+cached Hugging Face token unless `--token-source cache` is passed explicitly.
+
 Plan a public dataset release through the dataset factory:
 
 ```bash
@@ -40,10 +58,14 @@ hub_publish.json
 hub_model_plan.json
 ```
 
-`publish-model` and `hf publish-dataset` are dry-run only for now. A blocked dry
-run returns nonzero so it can be used in CI or before a manual upload. Dataset
-factory publishing can execute only for non-smoke datasets and uploads the
-generated redacted bundle when the release class requires public redaction.
+`publish-model --execute` refuses blocked plans, missing tokens, missing
+artifact/evidence files, and public-scan findings before any upload. It uploads
+the generated `README.md`, the whitelisted artifact files from the plan,
+sanitized supporting evidence under `model-forge-evidence/`, and final
+`hub_publish.json` provenance. A blocked dry run returns nonzero so it can be
+used in CI. Dataset factory publishing can execute only for non-smoke datasets
+and uploads the generated redacted bundle when the release class requires public
+redaction; `forge hf publish-dataset` remains a Hub-side dry-run audit.
 
 ## Release Classes
 
@@ -112,14 +134,16 @@ path, or under `--output-dir` when supplied. It checks:
 - planned files do not contain private absolute paths or secret-like tokens
 
 Use the factory path to build a Model Forge dataset bundle, then use
-`forge hf publish-dataset --dry-run` as the final publication gate before any
-manual or future automated Hub upload.
+`forge hf publish-dataset --dry-run` as the final publication gate before a
+dataset-factory upload.
 
 ## Secrets And Paths
 
 Use `HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN` only from the environment. The CLI
-reports token source but never prints token values. Generated publish plans
-redact secret-like values and use external path labels such as
+does not print token values. Model upload execution defaults to env-only tokens;
+cached tokens require `--token-source cache` so tests and agent runs do not
+publish accidentally. Generated publish plans redact secret-like values and use
+external path labels such as
 `<external>/model` rather than user-specific paths.
 
 Never commit model weights, tokens, private hostnames, or private local paths.
