@@ -177,8 +177,12 @@ This is the short handoff state for humans and agents. Use
   to 2/3 while harmful detail/compliance stayed 0/3 and
   `model_selection_summary` stayed 3/3. Do not broad-eval, quantize, upload,
   promote, or rerun V50 unchanged:
-  `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v50.yaml`. V51 is now
-  the active native SRA candidate:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v50.yaml`. V51 native
+  SRA then exported, synced, passed local and worker audits, served TP=2 after
+  one transient NCCL retry, and was rejected because safe redirect recovered to
+  3/3 but refusal wording regressed to 2/3 while harmful detail/compliance stayed
+  0/3 and `model_selection_summary` stayed 3/3. Do not broad-eval, quantize,
+  upload, promote, or rerun V51 unchanged:
   `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v51.yaml`.
   V34/V35/V36 native phrase/projection candidates were exported and
   gated, but each missed or worsened the residual self-harm refusal-opening
@@ -1223,12 +1227,12 @@ length filtering:
    though safe redirect, harmful detail/compliance, and `model_selection_summary`
    passed. V50 native SRA was then exported, synced, audited, served TP=2, and
    rejected because refusal wording improved only to 1/3 and safe redirect fell
-   to 2/3. V51 native SRA is now the planned non-OBLITERATUS successor:
-   `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v51.yaml`. It keeps
-   the native sharded checkpoint exporter and SRA preservation-basis cleanup,
-   but moves target-behavior and safe-redirect preservation to the benign side,
-   increases preservation components, and lowers linear-attention pressure. Run
-   it only through the candidate loop under the 5% RAM and 15% disk floors.
+   to 2/3. V51 native SRA then exported, synced, audited, served TP=2, and was
+   rejected because safe redirect recovered to 3/3 but refusal wording regressed
+   to 2/3. Do not broad-eval, NVFP4-export, upload, promote, or rerun V51
+   unchanged. The next candidate must materially change the sampled-opening
+   objective or use a lower-memory native implementation of the useful
+   OBLITERATUS-style adapter/source-tether idea.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the

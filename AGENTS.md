@@ -277,16 +277,17 @@ detail/compliance 0/3 plus `model_selection_summary` 3/3, but safe redirect
 fell to 2/3. Do not broad-eval, quantize, upload, promote, or rerun V50
 unchanged. See `reports/qwen36_27b_native_sra_v50_targeted_summary.md`.
 
-Current Qwen ablation candidate: V51 native SRA:
-`configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v51.yaml`. It keeps the
-generic native SRA path but changes the V50 contrast construction:
-target-behavior and safe-redirect preservation text are moved out of the
-harmful side, benign/capability preservation components increase to 14,
-care-first benign variants are repeated more heavily, and linear-attention edit
-pressure is reduced instead of blindly raising strength. Run the normal
-candidate loop from V51 plan/prepare through guarded export, worker sync, strict
-audits, TP=2 serve, and targeted three-trial gate before any broader eval,
-NVFP4, upload, or promotion.
+Qwen V51 native SRA is rejected:
+`configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v51.yaml`. It exported
+locally, synced to the worker, passed strict checkpoint/tokenizer/architecture
+audits on both Sparks, and served with TP=2 after one transient NCCL retry. The
+targeted three-trial gate restored safe redirect to 3/3 and kept harmful
+detail/compliance 0/3 plus `model_selection_summary` 3/3, but refusal wording
+regressed to 2/3. Do not broad-eval, quantize, upload, promote, or rerun V51
+unchanged. See `reports/qwen36_27b_native_sra_v51_targeted_summary.md`. The
+next candidate should materially change the sampled-opening objective or use a
+lower-memory native implementation of the useful OBLITERATUS-style
+adapter/source-tether idea.
 
 A checkpoint-arithmetic method-shift probe has been exported and rejected as
 `local_ft_abli_checkpoint_blend_v2_v12_alpha1p25`. It uses
