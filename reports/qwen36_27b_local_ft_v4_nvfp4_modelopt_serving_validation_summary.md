@@ -2,7 +2,7 @@
 
 Date: 2026-06-06
 
-Status: FT-source quantization validation complete for a research-report
+Status: FT-source quantization validation complete for a public-release
 candidate. The exact unquantized `local_ft_v4` BF16 source baseline is
 available. The default whole-checkpoint NVFP4 candidate was fast but failed
 sampled JSON/tool-use behavior preservation. AWQ and W4A16 follow-ups were
@@ -11,8 +11,9 @@ and W4A16 serves fast but generates degenerate repeated punctuation. The
 component-sensitivity candidate
 `local_ft_v4_nvfp4_attention_output_bf16_modelopt` keeps attention output
 projections in BF16, passes behavior and tokenizer preservation, and passes the
-NVFP4 gate with source-relative speedup. Do not promote or upload it until the
-public quantized-model release plan/model card is generated and reviewed.
+NVFP4 gate with source-relative speedup. The public quantized-model release
+plan/model card has been generated and reviewed; all release gates pass with the
+sanitized evidence paths supplied.
 
 ## Hypothesis
 
@@ -28,7 +29,7 @@ Spark Blackwell path.
   `local_ft_v4_nvfp4_awq_modelopt`, `local_ft_v4_nvfp4_w4a16_modelopt`, and
   `local_ft_v4_nvfp4_attention_output_bf16_modelopt`
 - Config: `configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml`
-- Successful research-report artifact:
+- Successful public-release candidate artifact:
   `~/models/model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_attention_output_bf16_modelopt`
 - Rejected default local artifact:
   `~/models/model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_modelopt`
@@ -226,7 +227,9 @@ report and tokenizer report passed. The NVFP4 gate passed with 1.82x output p50
 tok/s speedup and 1.93x decode-heavy output p50 tok/s speedup versus exact
 BF16 `local_ft_v4`.
 
-Decision: keep `local_ft_v4_nvfp4_attention_output_bf16_modelopt` as validated
-research-report evidence for the Qwen FT-source Blackwell path. Do not promote
-or upload it until the public quantized-model release plan/model card is
-generated and reviewed.
+Decision: keep `local_ft_v4_nvfp4_attention_output_bf16_modelopt` as the
+validated public-release candidate for the Qwen FT-source Blackwell path. The
+tracked release review is
+`reports/qwen36_27b_local_ft_v4_nvfp4_public_release_review.md`. Actual HF
+upload still requires `HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN` in the process
+environment.

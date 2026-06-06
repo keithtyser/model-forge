@@ -313,9 +313,11 @@ research-report candidate is
 ModelOpt/vLLM compatibility, sampled serving eval, behavior preservation,
 tokenizer preservation, and the NVFP4 gate, with 1.82x output p50 tok/s
 speedup versus exact BF16 source. Treat it as evidence for the generalized
-component-sensitivity workflow. For the no-ablation Qwen scope, the remaining
-release work is the public quantized-model HF plan/model card, not another
-quantization run.
+component-sensitivity workflow. For the no-ablation Qwen scope, the public
+quantized-model HF plan/model card has been generated and reviewed, and the
+variant is promoted in `configs/model_families/qwen36_27b.yaml`; the remaining
+release execution step is upload through the Hub CLI when an HF token is present
+in the environment, not another quantization run.
 
 When planning a public HF model release, pass sanitized evidence files to
 `./forge hf plan-model`. If `--eval-results` points at a serving-eval directory

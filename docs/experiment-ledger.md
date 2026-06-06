@@ -39,11 +39,12 @@ checks. The AWQ/NVFP4 follow-up exported and passed strict structural/tokenizer
 audits, but it is rejected for current vLLM because the artifact declares
 unsupported `quant_algo=NVFP4_AWQ`. The W4A16 follow-up exported, served, and
 improved throughput, but it is rejected because sampled evals and manual probes
-produced repeated punctuation instead of useful text. The component-sensitivity candidate
+produced repeated punctuation instead of useful text. The component-sensitivity
+candidate
 `local_ft_v4_nvfp4_attention_output_bf16_modelopt` keeps attention output
 projections in BF16, passed export/sync/audit/serve/bench/eval/report/gate
-evidence, and is accepted as research-report evidence for the current FT ->
-NVFP4 Blackwell path.
+evidence, and is promoted as the public-release candidate for the current FT ->
+NVFP4 Blackwell path after the public Hub plan/model card passed review.
 
 Hypothesis: ModelOpt NVFP4 should preserve the promoted Qwen local FT v4
 serving behavior closely enough for continued validation while improving tok/s
@@ -173,9 +174,10 @@ and the NVFP4 gate passed with 1.82x output p50 tok/s speedup plus 1.93x
 decode-heavy output p50 tok/s speedup versus exact BF16 `local_ft_v4`.
 
 Decision: keep `local_ft_v4_nvfp4_attention_output_bf16_modelopt` as validated
-research-report evidence for the FT-source Blackwell quantization leg. Do not
-upload or promote it until the public quantized-model release plan/model card is
-generated and reviewed. The remaining component-sensitivity fallback is
+public-release evidence for the FT-source Blackwell quantization leg. The
+public quantized-model release plan/model card has now been generated and
+reviewed; all release gates pass when the sanitized evidence paths are
+supplied. The remaining component-sensitivity fallback is
 `local_ft_v4_nvfp4_mlp_only_modelopt`; run it only if more Qwen FT-source
 quantization sensitivity data is needed. The Qwen matrix now defaults to
 `workers: local` for open-source portability; set `MODEL_FORGE_QUANT_WORKERS`
@@ -192,10 +194,14 @@ passes the no-private-path gate and generates a model card linking back to
 `https://github.com/keithtyser/model-forge` even when the caller passes the full
 serving-eval directory. The generated model card now includes supplied evidence
 paths plus NVFP4 speedup/readiness summaries from the quantization card and gate
-JSON when those reports are provided. The dry run still blocks on the variant's
-`hf_upload`/promotion metadata, and this session does not have `HF_TOKEN` or
-`HUGGINGFACE_HUB_TOKEN` in the environment. Do not upload from an ad hoc command
-that embeds a token literal.
+JSON when those reports are provided. A second dry run after the variant
+metadata review returned `blocked: false` with every public quantized-model gate
+passing, including `variant_promotion_not_blocked` and
+`no_private_tokens_or_paths`. The tracked release review is
+`reports/qwen36_27b_local_ft_v4_nvfp4_public_release_review.md`. This session
+does not have `HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN` in the process environment,
+so no upload was attempted. Do not upload from an ad hoc command that embeds a
+token literal.
 
 ## Qwen 3.6 27B: Native OT Diagnostic Path
 

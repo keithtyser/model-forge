@@ -208,6 +208,52 @@ class HubCliTests(unittest.TestCase):
             self.assertEqual(gate["status"], "fail")
             self.assertIn("Refusal-unlikelihood v2", gate["message"])
 
+    def test_promoted_qwen_nvfp4_variant_public_plan_is_unblocked(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model_dir = root / "model"
+            model_dir.mkdir()
+            (model_dir / "config.json").write_text("{}", encoding="utf-8")
+            (model_dir / "model.safetensors").write_text("placeholder", encoding="utf-8")
+            eval_scores = root / "scores.csv"
+            eval_scores.write_text("bucket,metric,value\nnormal,pass,1.0\n", encoding="utf-8")
+            serving = root / "serving.json"
+            serving.write_text(json.dumps({"success_rate": 1.0}), encoding="utf-8")
+            quantization = root / "quantization.json"
+            quantization.write_text(
+                json.dumps(
+                    {
+                        "serving_deltas": {
+                            "output_tokens_per_second_p50": {"source": 5.0, "candidate": 9.0}
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            promotion = root / "promotion.json"
+            promotion.write_text(json.dumps({"nvfp4_ready": True}), encoding="utf-8")
+
+            plan = build_model_plan(
+                model_args(
+                    family="qwen36_27b",
+                    variant="local_ft_v4_nvfp4_attention_output_bf16_modelopt",
+                    artifact_path=str(model_dir),
+                    output_dir=str(root / "out"),
+                    release_class="public_quantized_model",
+                    validation_state="spark_cluster_validated",
+                    source_license_checked=True,
+                    eval_results=str(eval_scores),
+                    serving_card=str(serving),
+                    quantization_card=str(quantization),
+                    promotion_report=str(promotion),
+                )
+            )
+
+            gates = {gate["name"]: gate for gate in plan["release_gates"]}
+            self.assertFalse(plan["blocked"], plan["blocked_until"])
+            self.assertEqual(gates["variant_promotion_not_blocked"]["status"], "pass")
+            self.assertEqual(gates["no_private_tokens_or_paths"]["status"], "pass")
+
     def test_release_class_audit_has_no_errors(self) -> None:
         findings = audit_release_classes()
         errors = [finding for finding in findings if finding.severity == "error"]

@@ -1411,12 +1411,14 @@ variants:
     quantization: nvfp4_attention_output_bf16
     downloadable: false
     promotion:
-      decision: research_report_only
-      blocked_actions: [hf_upload, promotion]
-      reason: "Validated as Qwen local_ft_v4 Blackwell NVFP4 evidence for the current FT -> quantize workflow. Exported through the guarded matrix path, synced to the worker, passed strict local/worker checkpoint-tokenizer-architecture audits, passed ModelOpt/vLLM compatibility with quant_algo=NVFP4, served TP=2 across both Sparks with NVFP4 kernels, passed sampled serving eval including JSON/tool-use, passed tokenizer preservation, passed behavior preservation, and passed the NVFP4 gate with 1.82x output p50 tok/s speedup plus 1.93x decode-heavy output p50 tok/s speedup versus exact BF16 local_ft_v4. Keep blocked from HF upload/promotion until a public quantized-model release plan/model card is generated and reviewed."
+      decision: promoted
+      blocked_actions: []
+      reason: "Validated as Qwen local_ft_v4 Blackwell NVFP4 evidence for the current FT -> quantize workflow. Exported through the guarded matrix path, synced to the worker, passed strict local/worker checkpoint-tokenizer-architecture audits, passed ModelOpt/vLLM compatibility with quant_algo=NVFP4, served TP=2 across both Sparks with NVFP4 kernels, passed sampled serving eval including JSON/tool-use, passed tokenizer preservation, passed behavior preservation, and passed the NVFP4 gate with 1.82x output p50 tok/s speedup plus 1.93x decode-heavy output p50 tok/s speedup versus exact BF16 local_ft_v4. The public quantized-model Hub plan/model card was generated and reviewed on 2026-06-06; all release gates pass when the same sanitized evidence paths are supplied."
       evidence:
         - configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml
         - reports/qwen36_27b_local_ft_v4_nvfp4_modelopt_serving_validation_summary.md
+        - reports/qwen36_27b_local_ft_v4_nvfp4_public_release_review.md
+        - reports/generated/hub/qwen36_local_ft_v4_nvfp4_attention_output_bf16_modelopt_public_plan_autoscores_20260606
         - reports/generated/serve_bench/qwen36_27b_local_ft_v4_nvfp4_attention_output_bf16_modelopt_tp2_core_20260606
         - reports/generated/serving_evals/qwen36_27b_local_ft_v4_nvfp4_attention_output_bf16_modelopt_tp2_serving_eval_20260606
         - reports/generated/quantization/qwen36_local_ft_v4_bf16_vs_nvfp4_attention_output_bf16_modelopt_20260606
