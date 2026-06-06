@@ -260,18 +260,21 @@ processing before writing an adapter directory. Do not rerun V48 unchanged. The
 next OBLITERATUS-derived path should be a native model-forge streaming adapter
 export or a proven lower-memory/distributed OBLITERATUS shape.
 
-Current next Qwen ablation candidate: V49 native SRA:
+Current Qwen ablation candidate: V49 native SRA:
 `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v49.yaml`. It is the
 first executable native SRA path in model-forge. The common code stays
 model-family generic: collect source-relative activations, build per-layer
 benign/capability preservation bases, clean refusal directions with
 `direction_transform: sra_cleaned`, optionally select the highest-separation
 layers, and export through the guarded sharded checkpoint writer. The Qwen
-constants live only in the V49 config. Before any run, use candidate-loop-plan;
-V49 should be the only enabled candidate. If export succeeds, sync it to the
-worker, run strict checkpoint/tokenizer/architecture audits, serve TP=2, then
-run only the targeted three-trial gate before broader evals, NVFP4, upload, or
-promotion.
+constants live only in the V49 config. The local export completed on
+2026-06-06 as
+`~/models/Qwen3.6-27B-local-ft-v4-abliterated-native-sra-v49`, changed 8
+attention-output tensors at selected layers `[35, 36, 37, 40, 41, 46, 34, 33]`,
+and passed strict local checkpoint/tokenizer/architecture audits. Do not rerun
+the export unchanged. Resume by syncing the checkpoint to the worker, serving
+TP=2, then running only the targeted three-trial gate before broader evals,
+NVFP4, upload, or promotion.
 
 A checkpoint-arithmetic method-shift probe has been exported and rejected as
 `local_ft_abli_checkpoint_blend_v2_v12_alpha1p25`. It uses

@@ -157,14 +157,19 @@ This is the short handoff state for humans and agents. Use
   floor during activation/direction processing before writing an adapter
   directory, so it is blocked and should not be rerun unchanged. No OBLITERATUS
   adapter has completed export yet for this Qwen 27B branch. V49 is now the
-  next planned executable candidate:
+  active native successor:
   `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v49.yaml`. It turns
   SRA from a plan-only method into a native guarded checkpoint path: collect
   generated-first-token refusal-opening directions, build benign/capability
   preservation bases, clean directions with `direction_transform: sra_cleaned`,
   select high-separation late layers, and export only late attention-output
-  tensors through the sharded native writer. Candidate-loop-plan should expose
-  V49 as the only executable candidate.
+  tensors through the sharded native writer. The local V49 export completed on
+  2026-06-06 as
+  `~/models/Qwen3.6-27B-local-ft-v4-abliterated-native-sra-v49`, changed 8
+  tensors at selected layers `[35, 36, 37, 40, 41, 46, 34, 33]`, and passed
+  strict local checkpoint/tokenizer/architecture audits. Candidate-loop-plan
+  should now resume V49 at worker sync, TP=2 serving, and the targeted
+  three-trial gate; do not rerun the heavy export unchanged.
   V34/V35/V36 native phrase/projection candidates were exported and
   gated, but each missed or worsened the residual self-harm refusal-opening
   target. V37 native source-anchored concept-cone projection was also exported,

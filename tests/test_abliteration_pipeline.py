@@ -1110,14 +1110,15 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(blocked_v48["variant"], "local_ft_abli_obliteratus_lora_target_layer_activation_v48")
         self.assertFalse(any(command.get("enabled", False) for command in blocked_v48["commands"]))
         self.assertTrue(any("qwen36_27b_ft_abli_v2_obliteratus_lora_target_layer_activation_v48.yaml" in command["command"] for command in blocked_v48["commands"]))
-        self.assertEqual(planned_v49["status"], "planned")
+        self.assertEqual(planned_v49["status"], "exported_local")
         self.assertFalse(planned_v49["blockers"])
         self.assertTrue(planned_v49["produces_checkpoint"])
         self.assertEqual(planned_v49["backend"], "sra")
         self.assertEqual(planned_v49["variant"], "local_ft_abli_native_sra_v49")
         self.assertTrue(any(command.get("enabled", False) for command in planned_v49["commands"]))
         self.assertTrue(any("qwen36_27b_ft_abli_v2_native_sra_v49.yaml" in command["command"] for command in planned_v49["commands"]))
-        self.assertTrue(any(command["phase"] == "candidate_export" and command.get("starts_heavy_job") for command in planned_v49["commands"]))
+        self.assertFalse(any(command["phase"] == "candidate_export" and command.get("enabled") for command in planned_v49["commands"]))
+        self.assertTrue(any(command["phase"] == "candidate_sync" and command.get("enabled") for command in planned_v49["commands"]))
         self.assertTrue(gate_command["enabled"])
         self.assertIn("native_sra_v49", plan["candidate_gate_command"])
 
@@ -2162,12 +2163,14 @@ class AbliterationPlanTests(unittest.TestCase):
             for command in v48["commands"]
         ))
         v49 = candidates["native_sra_v49"]
-        self.assertEqual(v49["status"], "planned")
+        self.assertEqual(v49["status"], "exported_local")
         self.assertFalse(v49["blockers"])
         self.assertTrue(v49["produces_checkpoint"])
         self.assertEqual(v49["backend"], "sra")
         self.assertEqual(v49["variant"], "local_ft_abli_native_sra_v49")
         self.assertTrue(any(command.get("enabled", False) for command in v49["commands"]))
+        self.assertFalse(any(command["phase"] == "candidate_export" and command.get("enabled") for command in v49["commands"]))
+        self.assertTrue(any(command["phase"] == "candidate_sync" and command.get("enabled") for command in v49["commands"]))
         self.assertTrue(any(
             "qwen36_27b_ft_abli_v2_native_sra_v49.yaml" in command.get("command", "")
             for command in v49["commands"]
@@ -2220,6 +2223,7 @@ class AbliterationPlanTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             config["sota"]["work_dir"] = tmp
+            normalized = build_plan(config, config_path)
             plan = build_sota_plan(config, config_path, "sra")
             result = write_sota_artifacts(config, config_path, "sra")
             native_config = load_yaml(Path(result["paths"]["sra_config"]))
@@ -2227,6 +2231,8 @@ class AbliterationPlanTests(unittest.TestCase):
 
         self.assertEqual(plan["backend"], "sra")
         self.assertEqual(plan["backend_config"]["execution"], "checkpoint_export")
+        self.assertEqual(normalized["activation_collection"]["sra_preservation_components"], 8)
+        self.assertTrue(normalized["activation_collection"]["sra_include_benign_mean"])
         self.assertEqual(native_config["method"], "native_surgical_refusal_ablation_projection")
         self.assertEqual(native_config["native_backend"]["backend"], "sra")
         self.assertEqual(native_config["activation_collection"]["sra_preservation_components"], 8)

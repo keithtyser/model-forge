@@ -1125,11 +1125,12 @@ variants:
     promotion:
       decision: inconclusive
       blocked_actions: [quantization_export, hf_upload, promotion]
-      reason: "V49 is the next planned Qwen FT-abli candidate after OBLITERATUS V48 blocked under the RAM floor. It uses the native SRA checkpoint path: generated-first-token refusal directions cleaned against benign/capability preservation bases, selective late attention-output targets, row-norm preservation, and source-relative targeted gates. Do not promote, upload, or quantize until export, sync, strict audits, TP=2 serving, and targeted three-trial eval pass."
+      reason: "V49 is the active Qwen FT-abli native SRA candidate after OBLITERATUS V48 blocked under the RAM floor. The local guarded export completed on 2026-06-06 as Qwen3.6-27B-local-ft-v4-abliterated-native-sra-v49, selected layers [35, 36, 37, 40, 41, 46, 34, 33], changed 8 attention-output tensors, and passed strict local checkpoint/tokenizer/architecture audits. Do not promote, upload, or quantize until worker sync, TP=2 serving, and targeted three-trial eval pass."
       evidence:
         - configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v49.yaml
         - configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml
         - reports/qwen36_27b_native_sra_v49_plan_summary.md
+        - artifacts/abliteration/qwen36_27b_ft_abli_v2_native_sra_v49/sota_sra/model_forge_sota_sra.json
   local_ft_abli_checkpoint_blend_v2_v12_alpha1p25:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-checkpoint-blend-v2-v12-alpha1p25

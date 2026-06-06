@@ -26,6 +26,14 @@ console = Console()
 
 REPO_DIR = Path(__file__).resolve().parents[3]
 CANDIDATE_GATE_SCHEMA_VERSION = "model_forge.abliteration_candidate_gate.v1"
+BLOCKED_CANDIDATE_STATUSES = {"runner_missing", "plan_only", "blocked", "rejected", "failed"}
+EXPORT_COMPLETED_CANDIDATE_STATUSES = {
+    "exported",
+    "exported_local",
+    "exported_local_audited",
+    "synced",
+    "ready_for_eval",
+}
 CANDIDATE_LOOP_SCHEMA_VERSION = "model_forge.abliteration_candidate_loop_plan.v1"
 SOTA_BACKEND_CHOICES = (
     "obliteratus",
@@ -351,6 +359,8 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "token_position": activation.get("token_position", "final_prompt_token"),
             "direction_extraction": activation.get("direction_extraction", "mean_difference"),
             "direction_components": int(activation.get("direction_components", 1)),
+            "sra_preservation_components": int(activation.get("sra_preservation_components", 0) or 0),
+            "sra_include_benign_mean": bool(activation.get("sra_include_benign_mean", False)),
             "direction_source_layer": activation.get("direction_source_layer"),
             "replicate_source_direction": bool(activation.get("replicate_source_direction", False)),
             "use_chat_template": bool(activation.get("use_chat_template", False)),
@@ -6382,7 +6392,8 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
         name = str(candidate["name"])
         variant = str(candidate.get("variant") or name)
         status = str(candidate.get("status") or "ready")
-        blocked = status in {"runner_missing", "plan_only", "blocked", "rejected", "failed"}
+        blocked = status in BLOCKED_CANDIDATE_STATUSES
+        export_completed = status in EXPORT_COMPLETED_CANDIDATE_STATUSES
         produces_checkpoint = bool(candidate.get("produces_checkpoint", True))
         candidate_config = candidate.get("config")
         backend = candidate.get("backend")
@@ -6409,7 +6420,7 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
             blockers.append("candidate backend is missing")
         command_blocked = bool(blockers)
         custom_commands = candidate_custom_command_entries(candidate, blocked=command_blocked)
-        if candidate_config and backend:
+        if candidate_config and backend and not export_completed:
             candidate_commands.extend([
                 command_entry(
                     f"./forge ablate --config {candidate_config} sota-plan --backend {backend}",
@@ -6440,6 +6451,16 @@ def build_candidate_loop_plan(config: dict[str, Any], config_path: Path, *, run_
                     enabled=not command_blocked,
                 ),
             ])
+        elif export_completed:
+            candidate_commands.append(command_entry(
+                f"# export already completed for {name}; source config: {candidate_config or '<none>'}; resume at sync/audit/serve/eval",
+                phase="candidate_export",
+                candidate=name,
+                purpose="Document that this candidate already has a local export and should not rerun the heavy export unchanged.",
+                starts_heavy_job=False,
+                requires_execute=False,
+                enabled=False,
+            ))
         candidate_commands.extend(custom_commands)
         if cluster_config and output_dir and not command_blocked and produces_checkpoint:
             model_sync_parts = [

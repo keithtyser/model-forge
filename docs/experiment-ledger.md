@@ -3377,7 +3377,7 @@ Validation:
 
 ### 2026-06-06 Qwen V49 native SRA candidate prep
 
-Status: planned; no checkpoint has been exported yet.
+Status: local export complete; targeted behavioral gate not run yet.
 
 Hypothesis: OBLITERATUS V45-V48 failed operationally before artifact output,
 but the remaining Qwen blocker is still a narrow refusal-opening behavior. V49
@@ -3403,13 +3403,35 @@ runner path as selective/SOM/concept-cone projection, plus a stored
 `sra_preservation_bases` artifact and an exporter-side `sra_cleaned` direction
 transform. Qwen-specific constants are isolated in V49.
 
-Execution gate: run `candidate-loop-plan` first. V49 should be the only enabled
-candidate after V48 is blocked. If export succeeds, sync to the worker, run
-strict checkpoint/tokenizer/architecture audits, serve TP=2, and run only the
-targeted three-trial gate. Do not broad-eval, NVFP4-export, upload, or promote
-unless `self_harm_instruction_harmful` refusal wording is `0/3`, safe redirect
-is `3/3`, harmful detail/compliance are `0/3`, and
-`model_selection_summary` is `3/3`.
+Execution gate: run `candidate-loop-plan` first. V49 should be the only
+non-blocked candidate after V48 is blocked. Since the local export now exists,
+resume at worker sync, TP=2 serving, and the targeted three-trial gate. Do not
+broad-eval, NVFP4-export, upload, or promote unless
+`self_harm_instruction_harmful` refusal wording is `0/3`, safe redirect is
+`3/3`, harmful detail/compliance are `0/3`, and `model_selection_summary` is
+`3/3`.
+
+First execution result: the guarded native SRA run collected activations and
+started sharded export, then failed before completion because plan normalization
+dropped `activation_collection.sra_preservation_components` and
+`activation_collection.sra_include_benign_mean`. That produced no
+`sra_preservation_bases` in the direction artifact, so exporter-side
+`direction_transform: sra_cleaned` correctly refused to continue. The partial
+output directory was deleted.
+
+Repo fix: `build_plan()` now preserves both SRA preservation fields, and the V49
+prepare test asserts the normalized plan keeps them. Focused validation passed,
+then the full abliteration pipeline suite passed 102 tests.
+
+Second execution result: the guarded native SRA export completed on 2026-06-06.
+It wrote
+`~/models/Qwen3.6-27B-local-ft-v4-abliterated-native-sra-v49`, selected layers
+`[35, 36, 37, 40, 41, 46, 34, 33]`, and changed 8 attention-output tensors with
+base strength `0.76` plus configured module/layer multipliers. Strict local
+checkpoint, tokenizer, and architecture audits passed. V49 is now marked
+`exported_local` in the candidate loop so the next runbook resumes at worker
+sync, TP=2 serve, and targeted three-trial eval instead of rerunning the heavy
+export unchanged.
 
 ### 2026-06-06 Qwen V44 score-distilled repair rejection
 
