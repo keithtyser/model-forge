@@ -106,6 +106,18 @@ quantized checkpoint on the two-Spark TP=2 path, then compare it against the
 same unquantized `local_ft_v4` source with the quantization card and NVFP4 gate.
 ModelOpt PTQ export is currently single-node; serving, eval, and throughput
 benchmarks should use the cluster runtime.
+When syncing quantized variants to worker nodes, pass `--target-name` if the
+family variant's `local_dir` contains subdirectories:
+
+```bash
+./forge cluster model-sync \
+  --config /path/to/cluster.yaml \
+  --source ~/models/model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_modelopt \
+  --family qwen36_27b \
+  --variant local_ft_v4_nvfp4_modelopt \
+  --target-name model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_modelopt \
+  --execute --delete
+```
 
 Gemma 4 A4B uses the repo-native `gemma4_moe_modelopt` strategy in
 `scripts/quantization/gemma4_moe_nvfp4.py`. Stock ModelOpt export can leave

@@ -806,6 +806,10 @@ fix that. Use the repo strategy so the temporary text-only view is streamed
 under the quantization output root. ModelOpt export is single-node today; serve
 and benchmark the exported checkpoint through the two-Spark TP=2 runtime before
 making throughput claims.
+If syncing this variant to worker nodes, pass
+`--target-name model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_modelopt`.
+The default model-sync target is only the source basename, which is wrong for
+family variants whose `local_dir` lives under nested subdirectories.
 
 The longer-response Heretic search
 `configs/abliteration/qwen36_27b_ft_local_abli_heretic_long_search.yaml`

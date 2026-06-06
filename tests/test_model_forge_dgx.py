@@ -181,6 +181,61 @@ class ModelForgeDgxServeTests(unittest.TestCase):
             self.assertNotIn("MODEL_FORGE_LORA_MODULES", env)
             self.assertEqual(details["adapter"], "")
 
+    def test_qwen_nvfp4_variant_does_not_inherit_gemma_parser(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "qwen-nvfp4").mkdir()
+            family = {
+                "models_dir_env": "MODEL_FORGE_TEST_MODELS_DIR",
+                "default_models_dir": str(root),
+                "architecture": {
+                    "family": "qwen",
+                    "chat_template": {
+                        "reasoning_parser": "qwen3",
+                        "default_chat_template_kwargs": {"enable_thinking": False},
+                    },
+                },
+                "variants": {
+                    "qwen_nvfp4": {
+                        "repo_id": "org/qwen",
+                        "local_dir": "qwen-nvfp4",
+                        "served_model_name": "local/qwen-nvfp4",
+                        "quantization": "nvfp4",
+                    },
+                },
+            }
+            env: dict[str, str] = {}
+            model_forge_dgx.configure_serving_variant(family, "qwen_nvfp4", env)
+
+            self.assertEqual(env["VLLM_QUANTIZATION"], "modelopt")
+            self.assertEqual(env["VLLM_REASONING_PARSER"], "qwen3")
+            self.assertNotIn("VLLM_TOOL_CALL_PARSER", env)
+            self.assertNotIn("VLLM_ENABLE_AUTO_TOOL_CHOICE", env)
+
+    def test_gemma_nvfp4_variant_keeps_gemma_parser_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "gemma-nvfp4").mkdir()
+            family = {
+                "models_dir_env": "MODEL_FORGE_TEST_MODELS_DIR",
+                "default_models_dir": str(root),
+                "architecture": {"family": "gemma"},
+                "variants": {
+                    "gemma_nvfp4": {
+                        "repo_id": "org/gemma",
+                        "local_dir": "gemma-nvfp4",
+                        "served_model_name": "local/gemma-nvfp4",
+                        "quantization": "nvfp4",
+                    },
+                },
+            }
+            env: dict[str, str] = {}
+            model_forge_dgx.configure_serving_variant(family, "gemma_nvfp4", env)
+
+            self.assertEqual(env["VLLM_TOOL_CALL_PARSER"], "gemma4")
+            self.assertEqual(env["VLLM_REASONING_PARSER"], "gemma4")
+            self.assertEqual(env["VLLM_ENABLE_AUTO_TOOL_CHOICE"], "true")
+
     def test_teacher_launcher_has_single_server_and_resource_guards(self) -> None:
         script = (REPO_DIR / "scripts" / "serve_teacher_vllm_dgx_spark.sh").read_text(encoding="utf-8")
         self.assertIn("refusing to start teacher server", script)

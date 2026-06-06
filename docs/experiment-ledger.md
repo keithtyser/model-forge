@@ -3429,10 +3429,37 @@ the merged checkpoint as `Qwen3_5ForCausalLM`, ignored the
 checkpoint view with wrapper keys remapped to `model.*`, and both Qwen ModelOpt
 configs use the new `qwen_text_modelopt` strategy.
 
-Decision: proceed to a guarded ModelOpt export when ready. Do not use this
-checkpoint as final FT-abli release evidence; it is a FT-source quantization
-validation candidate. ModelOpt export is still a single-node PTQ process, while
-serving/eval/benchmark should use the two-Spark TP=2 runtime.
+Guarded export result:
+
+- command:
+  `./forge quantize export qwen36_27b local_ft_v4 --config configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml --run-id qwen36_local_ft_v4_nvfp4_modelopt --execute`
+- duration: 2107.677 seconds
+- output: `~/models/model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_modelopt`
+- output size: 18.8 GB
+- text-input view: 12 shards, 851 tensors, 850 wrapper keys remapped, removed
+  after export
+- calibration: `cnn_dailymail`, 256 samples, sequence length 2048, batch size 4
+- local audits: strict checkpoint, tokenizer, and architecture audits passed
+
+Worker sync/audit result:
+
+- first `model-sync` used the source basename and copied to
+  `~/models/local_ft_v4_nvfp4_modelopt`; that accidental flat copy was deleted
+- correct sync used
+  `--target-name model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_modelopt`
+- worker strict checkpoint, tokenizer, and architecture audits passed
+
+Serving fix: the Qwen NVFP4 dry-run exposed a generalization bug where all NVFP4
+variants inherited Gemma parser defaults. `scripts/model_forge_dgx.py` now only
+applies Gemma parser defaults to Gemma-family NVFP4 variants. Qwen FT-v4 NVFP4
+dry-run now uses `--reasoning-parser qwen3` and does not emit a Gemma tool
+parser.
+
+Decision: proceed to two-Spark TP=2 serve, sampled eval, and serving throughput
+comparison. Do not use this checkpoint as final FT-abli release evidence; it is
+a FT-source quantization validation candidate. ModelOpt export is still a
+single-node PTQ process, while serving/eval/benchmark should use the two-Spark
+TP=2 runtime.
 
 ### 2026-06-06 Qwen FT-abli objective-profile clarification
 

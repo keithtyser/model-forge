@@ -194,6 +194,8 @@ def configure_serving_variant(family: dict[str, Any], variant: str, env: dict[st
     path = variant_local_path(family, variant)
     if not path.is_dir():
         raise SystemExit(f"model path does not exist: {path}")
+    architecture = family.get("architecture") or {}
+    family_type = str(architecture.get("family") or "").lower()
     chat_template = (family.get("architecture") or {}).get("chat_template") or {}
     if isinstance(chat_template, dict):
         if chat_template.get("tool_call_parser"):
@@ -271,9 +273,11 @@ def configure_serving_variant(family: dict[str, Any], variant: str, env: dict[st
         env.setdefault("VLLM_QUANTIZATION", "modelopt")
         env.setdefault("VLLM_KV_CACHE_DTYPE", "fp8")
         env.setdefault("VLLM_TRUST_REMOTE_CODE", "true")
-        env.setdefault("VLLM_TOOL_CALL_PARSER", "gemma4")
-        env.setdefault("VLLM_REASONING_PARSER", "gemma4")
-        env.setdefault("VLLM_ENABLE_AUTO_TOOL_CHOICE", "true")
+        if family_type == "gemma":
+            env.setdefault("VLLM_TOOL_CALL_PARSER", "gemma4")
+            env.setdefault("VLLM_REASONING_PARSER", "gemma4")
+        if env.get("VLLM_TOOL_CALL_PARSER"):
+            env.setdefault("VLLM_ENABLE_AUTO_TOOL_CHOICE", "true")
         env.setdefault("GPU_MEMORY_UTILIZATION", "0.60")
         env.setdefault("MAX_MODEL_LEN", "8192")
         env.setdefault("MAX_NUM_BATCHED_TOKENS", "4096")
