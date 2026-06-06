@@ -84,6 +84,11 @@ def build_plan(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
             "unlikelihood_weight": float(trainer.get("unlikelihood_weight", 0.0) or 0.0),
             "unlikelihood_scope": str(trainer.get("unlikelihood_scope", "assistant")),
             "unlikelihood_prefix_tokens": int(trainer.get("unlikelihood_prefix_tokens", 0) or 0),
+            "refusal_token_unlikelihood_weight": float(trainer.get("refusal_token_unlikelihood_weight", 0.0) or 0.0),
+            "refusal_token_unlikelihood_strings": [str(item) for item in trainer.get("refusal_token_unlikelihood_strings", [])],
+            "refusal_token_unlikelihood_scope": str(trainer.get("refusal_token_unlikelihood_scope", "assistant_prefix")),
+            "refusal_token_unlikelihood_prefix_tokens": int(trainer.get("refusal_token_unlikelihood_prefix_tokens", 0) or 0),
+            "refusal_token_unlikelihood_requires_rejected": bool(trainer.get("refusal_token_unlikelihood_requires_rejected", True)),
             "preference_weight": float(trainer.get("preference_weight", preference_default_weight) or 0.0),
             "preference_beta": float(trainer.get("preference_beta", 0.1) or 0.1),
             "preference_margin": float(trainer.get("preference_margin", 0.0) or 0.0),
@@ -246,6 +251,8 @@ def render_training_method_card(plan: dict[str, Any]) -> str:
             f"- Unlikelihood weight: `{trainer['unlikelihood_weight']}`",
             f"- Unlikelihood scope: `{trainer['unlikelihood_scope']}`",
             f"- Unlikelihood prefix tokens: `{trainer['unlikelihood_prefix_tokens']}`",
+            f"- Refusal-token unlikelihood weight: `{trainer['refusal_token_unlikelihood_weight']}`",
+            f"- Refusal-token unlikelihood scope/prefix tokens: `{trainer['refusal_token_unlikelihood_scope']}` / `{trainer['refusal_token_unlikelihood_prefix_tokens']}`",
             f"- Preference weight/beta/margin: `{trainer['preference_weight']}` / `{trainer['preference_beta']}` / `{trainer['preference_margin']}`",
             f"- SFT replay weight: `{trainer['sft_weight']}`",
             f"- Preference length normalize: `{trainer['preference_length_normalize']}`",
@@ -625,6 +632,9 @@ def build_dataset(plan: dict[str, Any], output_path: Path, limit: int | None = N
             configured_target = int(source.get("target_samples", 0) or 0)
             if source.get("path"):
                 ds = load_dataset("json", data_files=source["path"], split="train")
+                exclude_ids = {str(item) for item in source.get("exclude_ids", [])}
+                if exclude_ids:
+                    ds = ds.filter(lambda example: str(example.get("id") or "") not in exclude_ids)
                 target = configured_target or len(ds)
                 target = min(target, len(ds))
                 if limit is not None:
@@ -797,8 +807,30 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
     unlikelihood_weight = float(plan["trainer"].get("unlikelihood_weight", 0.0) or 0.0)
     unlikelihood_scope = str(plan["trainer"].get("unlikelihood_scope", "assistant") or "assistant").lower()
     unlikelihood_prefix_tokens = int(plan["trainer"].get("unlikelihood_prefix_tokens", 0) or 0)
-    use_unlikelihood = unlikelihood_weight > 0 or "unlikelihood" in method
-    assistant_only_loss = bool(plan["trainer"].get("assistant_only_loss", False)) or use_unlikelihood or use_pairwise_preference
+    refusal_token_unlikelihood_weight = float(plan["trainer"].get("refusal_token_unlikelihood_weight", 0.0) or 0.0)
+    refusal_token_unlikelihood_strings = [
+        str(item)
+        for item in plan["trainer"].get("refusal_token_unlikelihood_strings", [])
+        if str(item).strip()
+    ]
+    refusal_token_unlikelihood_scope = str(plan["trainer"].get("refusal_token_unlikelihood_scope", "assistant_prefix") or "assistant_prefix").lower()
+    refusal_token_unlikelihood_prefix_tokens = int(plan["trainer"].get("refusal_token_unlikelihood_prefix_tokens", 0) or 0)
+    refusal_token_unlikelihood_requires_rejected = bool(plan["trainer"].get("refusal_token_unlikelihood_requires_rejected", True))
+    use_refusal_token_unlikelihood = refusal_token_unlikelihood_weight > 0 and bool(refusal_token_unlikelihood_strings)
+    use_unlikelihood = unlikelihood_weight > 0 or "unlikelihood" in method or use_refusal_token_unlikelihood
+    assistant_only_loss = bool(plan["trainer"].get("assistant_only_loss", False)) or use_unlikelihood or use_pairwise_preference or use_refusal_token_unlikelihood
+
+    def configured_refusal_token_ids() -> list[int]:
+        token_ids: list[int] = []
+        for text in refusal_token_unlikelihood_strings:
+            ids = tokenizer(text, add_special_tokens=False)["input_ids"]
+            token_ids.extend(int(token_id) for token_id in ids)
+        blocked = {int(tokenizer.pad_token_id)} if tokenizer.pad_token_id is not None else set()
+        return sorted({token_id for token_id in token_ids if token_id not in blocked})
+
+    refusal_token_ids = configured_refusal_token_ids()
+    if use_refusal_token_unlikelihood and not refusal_token_ids:
+        raise RuntimeError("refusal_token_unlikelihood_strings did not tokenize to any usable token ids")
 
     def assistant_prefix_text(messages: list[dict[str, str]]) -> str:
         return tokenizer.apply_chat_template(messages[:-1], tokenize=False, add_generation_prompt=True)
@@ -1032,6 +1064,29 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
 
     pad_to_multiple_of = int(plan["trainer"].get("pad_to_multiple_of", 0) or 0) or None
 
+    def refusal_token_unlikelihood_loss(logits, labels, rejected_labels=None):
+        if not use_refusal_token_unlikelihood:
+            return None
+        if labels is None:
+            return None
+        token_labels = labels[:, 1:]
+        mask = token_labels.ne(-100)
+        if refusal_token_unlikelihood_scope in {"assistant_prefix", "prefix"} and refusal_token_unlikelihood_prefix_tokens > 0:
+            prefix_positions = mask.long().cumsum(dim=-1)
+            mask = mask & prefix_positions.le(refusal_token_unlikelihood_prefix_tokens)
+        if refusal_token_unlikelihood_requires_rejected:
+            if rejected_labels is None:
+                return None
+            paired_rows = rejected_labels.ne(-100).any(dim=-1)
+            mask = mask & paired_rows.unsqueeze(-1)
+        if not bool(mask.any()):
+            return logits.sum() * 0.0
+        token_ids = torch.tensor(refusal_token_ids, dtype=torch.long, device=logits.device)
+        token_logits = logits[:, :-1, :].float()
+        token_probs = torch.softmax(token_logits, dim=-1).index_select(dim=-1, index=token_ids).sum(dim=-1)
+        unlikelihood = -torch.log(torch.clamp(1.0 - token_probs, min=1e-6))
+        return unlikelihood.masked_select(mask).mean()
+
     class AssistantOnlyCollator:
         def __init__(self, tokenizer, pad_to_multiple_of=None) -> None:
             self.tokenizer = tokenizer
@@ -1090,6 +1145,7 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
             rejected_attention_mask = inputs.pop("rejected_attention_mask", None)
             rejected_labels = inputs.pop("rejected_labels", None)
             rejected_unlikelihood_labels = inputs.pop("rejected_unlikelihood_labels", None)
+            chosen_labels = inputs.get("labels")
             outputs = model(**inputs)
             loss = outputs.loss
             if (
@@ -1112,6 +1168,9 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
                     # Keep DDP ranks in the same forward/backward structure even
                     # when only some ranks receive paired rejected completions.
                     loss = loss + (rejected_outputs.logits.sum() * 0.0)
+            token_loss = refusal_token_unlikelihood_loss(outputs.logits, chosen_labels, rejected_labels)
+            if token_loss is not None:
+                loss = loss + (refusal_token_unlikelihood_weight * token_loss)
             return (loss, outputs) if return_outputs else loss
 
     class PairwisePreferenceTrainer(Trainer):
@@ -1155,6 +1214,9 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
             outputs = model(**inputs)
             loss = outputs.loss * self.sft_weight
             if rejected_input_ids is None or rejected_attention_mask is None or rejected_labels is None or chosen_labels is None:
+                token_loss = refusal_token_unlikelihood_loss(outputs.logits, chosen_labels, rejected_labels)
+                if token_loss is not None:
+                    loss = loss + (refusal_token_unlikelihood_weight * token_loss)
                 return (loss, outputs) if return_outputs else loss
 
             rejected_outputs = model(input_ids=rejected_input_ids, attention_mask=rejected_attention_mask)
@@ -1185,6 +1247,9 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
                 # Keep DDP ranks in the same forward/backward structure even
                 # when only some ranks receive paired preference/unlikelihood rows.
                 loss = loss + (rejected_outputs.logits.sum() * 0.0)
+            token_loss = refusal_token_unlikelihood_loss(outputs.logits, chosen_labels, rejected_labels)
+            if token_loss is not None:
+                loss = loss + (refusal_token_unlikelihood_weight * token_loss)
             return (loss, outputs) if return_outputs else loss
 
     if use_pairwise_preference:
@@ -1253,6 +1318,11 @@ def train(plan: dict[str, Any], dataset_path: Path) -> None:
                 "unlikelihood_weight": unlikelihood_weight,
                 "unlikelihood_scope": unlikelihood_scope,
                 "unlikelihood_prefix_tokens": unlikelihood_prefix_tokens,
+                "refusal_token_unlikelihood_weight": refusal_token_unlikelihood_weight,
+                "refusal_token_unlikelihood_scope": refusal_token_unlikelihood_scope,
+                "refusal_token_unlikelihood_prefix_tokens": refusal_token_unlikelihood_prefix_tokens,
+                "refusal_token_unlikelihood_token_count": len(refusal_token_ids),
+                "refusal_token_unlikelihood_requires_rejected": refusal_token_unlikelihood_requires_rejected,
                 "refusal_unlikelihood": use_unlikelihood,
                 "pairwise_preference": use_pairwise_preference,
                 "preference_weight": float(plan["trainer"].get("preference_weight", 0.0) or 0.0),

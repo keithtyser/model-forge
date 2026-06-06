@@ -1,0 +1,123 @@
+version: 0.1.0
+description: >
+  Data-source registry for Qwen 3.6 27B V43 refusal-token opening suppression.
+  The source blend intentionally reuses hand-reviewed near-miss repair rows and
+  capability anchors, while the method shift lives in the trainer objective:
+  direct refusal-token probability suppression on paired opening rows.
+
+sources:
+  qwen36_trial12_pref_ul_v20_care_first_opening_repair:
+    name: qwen36_trial12_pref_ul_v20_care_first_opening_repair
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v19_care_first_opening_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_token_opening_suppression
+      - care_first_opening_repair
+      - refusal_free_safe_redirect
+      - self_harm_support
+      - behavior_edit
+    sampling_cap: 16
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Primary hand-reviewed care-first support pairs. Chosen rows avoid
+      first-person/model-limitation openings; rejected rows are safe but contain
+      denial/meta openings observed in late near-miss candidates.
+
+  qwen36_trial12_pref_ul_v17_direct_opening_rewrite:
+    name: qwen36_trial12_pref_ul_v17_direct_opening_rewrite
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v17_direct_opening_rewrite.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    exclude_ids:
+      - qwen36_trial12_pref_ul_v17_direct_opening_rewrite_002
+    roles:
+      - refusal_unlikelihood_pair
+      - direct_opening_rewrite
+      - refusal_token_opening_suppression
+      - self_harm_support
+      - behavior_edit_replay
+    sampling_cap: 24
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Earlier direct-opening hand-written rows used as clean lexical diversity,
+      not as a standalone repair recipe.
+
+  qwen36_trial12_pref_ul_v16_sampled_gate_hard_negatives:
+    name: qwen36_trial12_pref_ul_v16_sampled_gate_hard_negatives
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v16_sampled_gate_hard_negatives.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - sampled_gate_repair
+      - refusal_free_safe_redirect
+      - self_harm_support
+      - behavior_edit_replay
+    sampling_cap: 8
+    rejected_messages_field: rejected_messages
+    intended_use: >
+      Small replay for denial/help-not-help openings from previous sampled
+      gates.
+
+  qwen36_trial12_pref_ul_v11_refusal_free_redirect_expansion:
+    name: qwen36_trial12_pref_ul_v11_refusal_free_redirect_expansion
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v11_refusal_free_redirect_expansion.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - self_harm_support
+      - behavior_edit_replay
+    sampling_cap: 4
+    rejected_messages_field: rejected_messages
+    intended_use: Minimal no-denial redirect replay.
+
+  qwen36_trial12_pref_ul_v5_ablation_redirect_pairs:
+    name: qwen36_trial12_pref_ul_v5_ablation_redirect_pairs
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_trial12_pref_ul_v5_ablation_redirect.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - refusal_unlikelihood_pair
+      - refusal_free_safe_redirect
+      - ablation_unsafe_redirect
+      - behavior_edit_replay
+    sampling_cap: 4
+    rejected_messages_field: rejected_messages
+    intended_use: Minimal unsafe-ablation redirect replay.
+
+  qwen36_local_ft_v4_capability_replay_v3:
+    name: qwen36_local_ft_v4_capability_replay_v3
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_capability_replay_v3.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - challenge_replay
+      - instruction_following
+    sampling_cap: 17
+    intended_use: >
+      Capability replay sized to the available file so preparation cannot
+      silently underfill.
+
+  qwen36_local_ft_v4_planning_repair_seeds:
+    name: qwen36_local_ft_v4_planning_repair_seeds
+    type: local_jsonl
+    path: datasets/seeds/qwen36_27b_local_ft_v4_planning_repair.jsonl
+    license: CC-BY-4.0
+    quality_tier: human_seed
+    roles:
+      - capability_anchor
+      - agentic_planning
+      - instruction_following
+    sampling_cap: 4
+    intended_use: Tiny planning anchor for source-distribution stability.

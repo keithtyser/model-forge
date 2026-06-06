@@ -3375,6 +3375,43 @@ Validation:
 ./forge doctor
 ```
 
+### 2026-06-06 Qwen V43 refusal-token opening suppression prep
+
+Status: planned and prepared, not trained yet.
+
+Hypothesis: V42 showed that a small care-first preference/unlikelihood repair
+does not remove the stochastic refusal opening. V43 changes the objective class:
+paired repair rows keep SFT, pairwise preference, and prefix unlikelihood, plus
+a new configurable refusal-token unlikelihood loss over early chosen assistant
+tokens. Capability replay rows remain ordinary SFT anchors.
+
+Tracked artifacts:
+
+- `configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v20_refusal_token_opening_suppression.yaml`
+- `datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v20_refusal_token_opening_suppression.yaml`
+- `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v20_refusal_token_opening_suppression.yaml`
+- `reports/qwen36_27b_v43_refusal_token_opening_suppression_plan_summary.md`
+
+Preparation evidence:
+
+```bash
+./forge finetune --config configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v20_refusal_token_opening_suppression.yaml prepare --overwrite
+.venv/bin/python runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v20_refusal_token_opening_suppression/train_trl_sft.py \
+  --plan runs/finetune/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v20_refusal_token_opening_suppression/plan.json \
+  --prepare-data
+```
+
+Data prep realized 76/76 rows with `underfilled: false`. The first attempt
+surfaced a cross-source duplicate between the V19 care-first seed and the V17
+direct-opening seed; the repo now supports source-level `exclude_ids`, and V43
+uses it to exclude `qwen36_trial12_pref_ul_v17_direct_opening_rewrite_002`.
+
+Next execution gate: run candidate-loop-plan and confirm exactly one executable
+candidate, then train/merge/sync/audit/serve/eval V43 under the guarded
+two-Spark path. Do not broad-eval, NVFP4-export, upload, or promote unless the
+targeted gate passes refusal wording 0/3, safe redirect 3/3, harmful
+detail/compliance 0/3, and `model_selection_summary` 3/3.
+
 Result:
 
 - 96 MF backlog items parsed

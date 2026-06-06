@@ -1016,6 +1016,55 @@ class FinetunePlanTests(unittest.TestCase):
         self.assertIn("Unlikelihood prefix tokens: `80`", method_card)
         self.assertIn("primary_hand_reviewed_care_first_opening_repair", method_card)
 
+    def test_qwen36_trial12_v20_refusal_token_opening_suppression_from_v2(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "finetuning"
+            / "qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v20_refusal_token_opening_suppression.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["run_dir"] = tmp
+            plan = build_plan(config, config_path)
+            outputs = write_artifacts(plan, overwrite=False)
+            trainer_script = Path(outputs["trainer"]).read_text()
+            method_card = Path(outputs["method_card"]).read_text()
+
+        self.assertEqual(plan["family"], "qwen36_27b")
+        self.assertEqual(plan["eval"]["source_variant"], "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v2")
+        self.assertTrue(any(
+            "local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v20_refusal_token_opening_suppression" in command
+            for command in plan["eval"]["commands"]
+        ))
+        self.assertEqual(plan["trainer"]["method"], "qlora_pairwise_preference_unlikelihood_refusal_token_suppression")
+        self.assertEqual(plan["trainer"]["preference_weight"], 0.90)
+        self.assertEqual(plan["trainer"]["unlikelihood_scope"], "assistant_prefix")
+        self.assertEqual(plan["trainer"]["unlikelihood_prefix_tokens"], 40)
+        self.assertEqual(plan["trainer"]["refusal_token_unlikelihood_weight"], 0.85)
+        self.assertEqual(plan["trainer"]["refusal_token_unlikelihood_scope"], "assistant_prefix")
+        self.assertEqual(plan["trainer"]["refusal_token_unlikelihood_prefix_tokens"], 24)
+        self.assertTrue(plan["trainer"]["refusal_token_unlikelihood_requires_rejected"])
+        self.assertIn("can't", plan["trainer"]["refusal_token_unlikelihood_strings"])
+        self.assertIn(" policy", plan["trainer"]["refusal_token_unlikelihood_strings"])
+        self.assertEqual(plan["trainer"]["max_steps"], 96)
+        self.assertEqual(plan["data"]["target_samples"], 76)
+        self.assertTrue(plan["data"]["quality_gates"]["require_target_samples"])
+        self.assertEqual(plan["data"]["quality_gates"]["min_realized_sample_fraction"], 1.0)
+        source_ids = {source["id"] for source in plan["data"]["sources"]}
+        self.assertIn("qwen36_trial12_pref_ul_v20_care_first_opening_repair", source_ids)
+        self.assertIn("qwen36_trial12_pref_ul_v17_direct_opening_rewrite", source_ids)
+        self.assertIn("qwen36_local_ft_v4_capability_replay_v3", source_ids)
+        v17_source = next(source for source in plan["data"]["sources"] if source["id"] == "qwen36_trial12_pref_ul_v17_direct_opening_rewrite")
+        self.assertIn("qwen36_trial12_pref_ul_v17_direct_opening_rewrite_002", v17_source["exclude_ids"])
+        self.assertIn("refusal_token_opening_suppression", plan["data"]["quality_gates"]["target_behavior"])
+        self.assertIn("PairwisePreferenceTrainer", trainer_script)
+        self.assertIn("refusal_token_unlikelihood_loss", trainer_script)
+        self.assertIn("refusal_token_unlikelihood_requires_rejected", trainer_script)
+        self.assertIn("exclude_ids", trainer_script)
+        self.assertIn("Refusal-token unlikelihood weight: `0.85`", method_card)
+        self.assertIn("primary_hand_reviewed_care_first_opening_repair", method_card)
+
     def test_qwen36_trial12_v19_care_first_seed_avoids_refusal_openings(self) -> None:
         import json
 

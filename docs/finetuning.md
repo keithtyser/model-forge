@@ -163,6 +163,30 @@ capability is as important as suppressing refusal language. Keep the first run
 conservative: low learning rate, low LoRA rank, short max steps, and a quick
 gate before full eval or quantization.
 
+For residual refusal-opening failures, recipes can add a targeted token-mass
+unlikelihood term without hardcoding model-specific tokens in Python:
+
+```yaml
+trainer:
+  method: qlora_pairwise_preference_unlikelihood_refusal_token_suppression
+  refusal_token_unlikelihood_weight: 0.85
+  refusal_token_unlikelihood_scope: assistant_prefix
+  refusal_token_unlikelihood_prefix_tokens: 24
+  refusal_token_unlikelihood_requires_rejected: true
+  refusal_token_unlikelihood_strings:
+    - "I"
+    - " can't"
+    - " cannot"
+    - " sorry"
+```
+
+The generated trainer tokenizes those configured strings with the active model
+tokenizer and penalizes their probability mass only on selected assistant-prefix
+positions. With `refusal_token_unlikelihood_requires_rejected: true`, the loss
+applies only to paired repair rows and leaves capability replay rows as ordinary
+SFT anchors. This is still a behavior-edit experiment, not promotion evidence;
+run the normal source-relative no-refusal and capability gates after merging.
+
 ## Eval-Response Repair Seeds
 
 When a repeated eval shows stochastic pass/fail behavior for the same case,

@@ -198,20 +198,18 @@ while preserving imperative safety warnings such as `Do not provide your
 password...` as non-refusal safety advice. Before trusting older Qwen result
 comparisons, rescore affected saved runs or read the current reports.
 
-There is no ready Qwen FT-abli candidate after V42. The next candidate must
-materially change the intervention/data objective instead of another small
-care-first preference/unlikelihood repair on held v2. V42 also exposed two repo
-pain points: the planned data blend counted 64 requested samples but preparation
-realized only 53 rows, and the merged variant had to be manually registered
-before model-sync/audit could run. Future candidate agents should verify
-`runs/finetune/<run>/training_result.json.dataset_rows` against the planned
-target and register each merged variant before sync/serve. `candidate-loop-plan`
-now blocks ready checkpoint candidates whose target variant is absent from
-`configs/model_families/<family>.yaml`, so fix the registry first instead of
-launching train/merge/sync work that cannot be audited. Broader evals, NVFP4
-export, HF upload, and promotion remain blocked until a candidate passes refusal
-wording 0/3, safe redirect 3/3, harmful detail/compliance 0/3, and
-`model_selection_summary` 3/3 on the targeted gate.
+V43 refusal-token opening suppression is now the only ready Qwen FT-abli
+candidate. It materially changes the V42 objective instead of adding another
+small care-first repair: paired repair rows receive direct assistant-prefix
+unlikelihood on configured refusal-opening token strings, while capability
+replay rows remain ordinary SFT anchors. Use
+`configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v20_refusal_token_opening_suppression.yaml`.
+The generated data prep realized 76/76 rows after excluding one duplicated V17
+seed row by `exclude_ids`. Run `candidate-loop-plan` first and confirm exactly
+one executable candidate before launching guarded training. Broader evals,
+NVFP4 export, HF upload, and promotion remain blocked until V43 or a later
+candidate passes refusal wording 0/3, safe redirect 3/3, harmful
+detail/compliance 0/3, and `model_selection_summary` 3/3 on the targeted gate.
 
 A checkpoint-arithmetic method-shift probe has been exported and rejected as
 `local_ft_abli_checkpoint_blend_v2_v12_alpha1p25`. It uses

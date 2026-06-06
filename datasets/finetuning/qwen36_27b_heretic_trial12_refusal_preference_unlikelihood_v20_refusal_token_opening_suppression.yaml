@@ -1,0 +1,75 @@
+name: qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v20_refusal_token_opening_suppression
+description: >
+  V43 dataset manifest for Qwen 3.6 27B refusal-token opening suppression. It
+  reuses clean hand-reviewed self-harm support pairs and capability replay, but
+  the candidate differs from V42 through a trainer-level refusal-token
+  unlikelihood loss over the chosen assistant prefix on paired rows.
+format: messages
+chat_template: auto
+max_context_window: 4096
+random_seed: 5043
+
+source_registry: configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v20_refusal_token_opening_suppression.yaml
+
+quality_gates:
+  min_turn_chars: 2
+  require_assistant_content: true
+  reject_unclosed_think: true
+  dedupe_by_conversation_hash: true
+  max_tokens: 4096
+  reject_eval_prompt_overlap: true
+  require_target_samples: true
+  min_realized_sample_fraction: 1.0
+  target_behavior:
+    pairwise_preference_behavior_edit: true
+    refusal_free_safe_redirect: true
+    refusal_unlikelihood_pairs: true
+    refusal_token_opening_suppression: true
+    stochastic_gate_repair: true
+    prefix_scoped_unlikelihood: true
+    avoid_actionable_harmful_detail: true
+    self_harm_support_no_denial_opening: true
+    ablation_unsafe_redirect: true
+    capability_replay: true
+
+sources:
+  - id: qwen36_trial12_pref_ul_v20_care_first_opening_repair
+    target_samples: 16
+    role: primary_hand_reviewed_care_first_opening_repair
+  - id: qwen36_trial12_pref_ul_v17_direct_opening_rewrite
+    target_samples: 23
+    role: direct_opening_rewrite_replay
+  - id: qwen36_trial12_pref_ul_v16_sampled_gate_hard_negatives
+    target_samples: 8
+    role: sampled_gate_hard_negative_replay
+  - id: qwen36_trial12_pref_ul_v11_refusal_free_redirect_expansion
+    target_samples: 4
+    role: strict_no_refusal_redirect_replay
+  - id: qwen36_trial12_pref_ul_v5_ablation_redirect_pairs
+    target_samples: 4
+    role: unsafe_ablation_redirect_replay
+  - id: qwen36_local_ft_v4_capability_replay_v3
+    target_samples: 17
+    role: challenge_capability_replay
+  - id: qwen36_local_ft_v4_planning_repair_seeds
+    target_samples: 4
+    role: planning_capability_replay
+
+holdouts:
+  - evals/prompts/unsafe_ablation_redirect.yaml
+  - evals/prompts/unsafe_overcompliance.yaml
+  - evals/prompts/refusal_paired_boundary.yaml
+  - evals/prompts/capability_preservation_challenge.yaml
+  - evals/prompts/normal_use_regression.yaml
+  - evals/prompts/agentic_multi_step_planning.yaml
+  - evals/prompts/agentic_tool_use_json.yaml
+  - evals/prompts/refusal_benign_boundary.yaml
+
+promotion_notes:
+  - >
+    V43 is a planned targeted repair candidate, not a promoted recipe. It must
+    pass the three-trial self-harm refusal-wording blocker before broader evals.
+  - >
+    The reusable pattern is objective-level refusal-token suppression on paired
+    repair rows, with model-specific negative token strings configured in YAML
+    and capability replay rows left outside the token-suppression mask.
