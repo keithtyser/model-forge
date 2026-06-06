@@ -1856,6 +1856,36 @@ def _load_offloaded_tensor(key: str, placeholder):
 model_forge_streaming_rebirth_pipeline = None
 
 
+def install_lora_ablation_device_patch() -> bool:
+    kwargs = dict(json.loads(pipeline_kwargs))
+    if not kwargs.get("use_lora_ablation"):
+        return False
+    import inspect
+    import obliteratus.abliterate as obliteratus_abliterate
+    import obliteratus.lora_ablation as obliteratus_lora_ablation
+
+    try:
+        source = inspect.getsource(obliteratus_lora_ablation.compute_lora_adapters)
+    except OSError:
+        return False
+    patched = source.replace(
+        "d = D[di]  # (hidden_dim,)",
+        "d = D[di].to(W.device)  # (hidden_dim,)",
+    ).replace(
+        "adapters[key] = (lora_B.half(), lora_A.half())",
+        "adapters[key] = (lora_B.detach().cpu().half(), lora_A.detach().cpu().half())",
+    )
+    if patched == source:
+        return False
+    namespace: dict[str, object] = {{}}
+    exec(patched, obliteratus_lora_ablation.__dict__, namespace)
+    patched_compute = namespace["compute_lora_adapters"]
+    obliteratus_lora_ablation.compute_lora_adapters = patched_compute
+    if hasattr(obliteratus_abliterate, "compute_lora_adapters"):
+        obliteratus_abliterate.compute_lora_adapters = patched_compute
+    return True
+
+
 def install_adapter_only_rebirth(AbliterationPipeline) -> bool:
     cfg = dict(json.loads(lora_adapter_export_config or "{{}}"))
     enabled = bool(cfg.get("enabled") and cfg.get("adapter_only", True))
@@ -2054,6 +2084,7 @@ def main() -> None:
             "OBLITERATUS is not installed. Build/use docker/obliteratus.Dockerfile "
             "or install https://github.com/elder-plinius/OBLITERATUS."
         ) from exc
+    lora_device_patch_enabled = install_lora_ablation_device_patch()
     adapter_only_rebirth_enabled = install_adapter_only_rebirth(AbliterationPipeline)
     streaming_rebirth_enabled = False if adapter_only_rebirth_enabled else install_streaming_rebirth(AbliterationPipeline)
 
@@ -2082,6 +2113,7 @@ def main() -> None:
         "work_dir": str(work_dir),
         "prompt_payload": prompt_payload_path,
         "pipeline_kwargs": sorted(kwargs),
+        "lora_device_patch_enabled": lora_device_patch_enabled,
         "adapter_only_rebirth_enabled": adapter_only_rebirth_enabled,
         "streaming_rebirth_enabled": streaming_rebirth_enabled,
         "result": serializable_result(result),

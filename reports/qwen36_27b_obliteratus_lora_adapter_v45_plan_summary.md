@@ -43,6 +43,9 @@ The reusable pattern is:
 ## Non-Heavy Validation
 
 - The generated OBLITERATUS runner compiles.
+- The generated runner patches OBLITERATUS LoRA computation to place refusal
+  direction tensors on the same device as each target weight and saves adapter
+  tensors back on CPU half precision.
 - `scripts/convert_obliteratus_lora_to_peft.py` compiles and handles in-place
   conversion where the OBLITERATUS output directory is also the PEFT output
   directory.
@@ -51,6 +54,21 @@ The reusable pattern is:
 - `./forge variants node qwen36_27b local_ft_abli_obliteratus_lora_adapter_v45 --json`
   resolves the planned adapter variant.
 - `./forge doctor` is clean.
+
+## First Launch Note
+
+The first guarded launch reached OBLITERATUS LoRA computation after loading all
+851 Qwen weights, then failed before export with a CPU/CUDA tensor mismatch in
+upstream `compute_lora_adapters`:
+
+```text
+RuntimeError: Expected all tensors to be on the same device, but got mat2 is on cuda:0, different from other tensors on cpu
+```
+
+No adapter directory was written. The model-forge generated runner now
+monkeypatches that backend function for LoRA runs so each direction vector moves
+to the target weight device before multiplication and the resulting adapter
+tensors are returned as CPU FP16 tensors for serialization.
 
 ## Promotion Gate
 

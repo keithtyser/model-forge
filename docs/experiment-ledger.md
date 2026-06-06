@@ -3498,6 +3498,23 @@ in-place PEFT conversion without same-file metadata copy errors, 99 abliteration
 pipeline tests plus the converter tests pass, the variant registry resolves, and
 `./forge doctor` is clean.
 
+First guarded launch result: the run loaded all 851 Qwen weights and reached
+OBLITERATUS LoRA computation, then failed before adapter export with a CPU/CUDA
+tensor mismatch in upstream `compute_lora_adapters` while evaluating `d @ W`.
+No adapter directory was written. Model-forge now patches generated OBLITERATUS
+LoRA runners to move each refusal direction to the current weight device and to
+return CPU FP16 adapter tensors for serialization. Focused validation after the
+patch:
+
+```bash
+.venv/bin/python -m py_compile src/model_forge/pipelines/abliterate.py
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_adapter_v45.yaml sota-prepare --backend obliteratus
+.venv/bin/python -m py_compile artifacts/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_adapter_v45/sota_obliteratus/run_obliteratus.py
+.venv/bin/python -m unittest \
+  tests.test_abliteration_pipeline.AbliterationPlanTests.test_qwen_v45_obliteratus_lora_runner_uses_adapter_only_rebirth \
+  tests.test_obliteratus_lora_converter -v
+```
+
 Execution gate: run only through candidate-loop-plan and the guarded
 OBLITERATUS container with the 5% RAM floor. If adapter export succeeds, sync
 the adapter to the worker, run strict checkpoint/tokenizer/architecture audits,
