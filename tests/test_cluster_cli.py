@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import subprocess
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from model_forge.cluster.cli import (
     REPO_DIR,
@@ -9,9 +11,12 @@ from model_forge.cluster.cli import (
     audit_cluster,
     checkpoint_gate_payload,
     build_sync_plan,
+    collect_cluster_stop_containers,
     build_model_sync_plan,
     build_launcher_plan,
+    docker_container_status_command,
     docker_gpu_runtime_command,
+    docker_stop_command,
     docker_torchrun_smoke_command,
     torchrun_smoke_container_name,
     guarded_command,
@@ -129,6 +134,77 @@ class ClusterCliTests(unittest.TestCase):
         self.assertIn("--memory=8g", command)
         self.assertIn("nemotron-runner:latest", command)
         self.assertIn("cuda_available", command)
+
+    def test_docker_stop_command_uses_timeout_and_container_name(self) -> None:
+        command = docker_stop_command("vllm_node", 7)
+
+        self.assertIn("docker stop --timeout 7 vllm_node", command)
+        self.assertIn("|| true", command)
+
+    def test_docker_container_status_command_matches_exact_name(self) -> None:
+        command = docker_container_status_command("vllm_node")
+
+        self.assertIn("docker ps", command)
+        self.assertIn("name=^/vllm_node$", command)
+        self.assertIn("{{.Names}} {{.Status}}", command)
+
+    def test_cluster_stop_containers_dry_run_targets_all_nodes(self) -> None:
+        config, path = load_cluster_config(REPO_DIR / "configs" / "clusters" / "dgx_spark_x2.example.yaml")
+        hardware = load_hardware_profile(config)
+        env = {
+            "MODEL_FORGE_NODE0_HOST": "localhost",
+            "MODEL_FORGE_NODE1_HOST": "spark-b",
+            "MODEL_FORGE_NODE0_USER": "runner",
+            "MODEL_FORGE_NODE1_USER": "runner",
+            "MODEL_FORGE_CLUSTER_WORK_DIR": "/" + "home/private/model-forge",
+            "MODEL_FORGE_RDZV_ENDPOINT": "localhost:29500",
+        }
+        completed = subprocess.CompletedProcess(
+            args="docker ps",
+            returncode=0,
+            stdout="vllm_node Up 5 minutes\n",
+            stderr="",
+        )
+
+        with patch("model_forge.cluster.cli.run_node_shell", return_value=completed) as run:
+            report = collect_cluster_stop_containers(
+                config,
+                hardware,
+                path,
+                container_name="vllm_node",
+                execute=False,
+                env=env,
+            )
+
+        self.assertTrue(report["ok"])
+        self.assertFalse(report["executed"])
+        self.assertEqual(report["container"], "vllm_node")
+        self.assertEqual(len(report["nodes"]), 2)
+        self.assertEqual(run.call_count, 2)
+        self.assertTrue(all(node["before"]["stdout"] == "vllm_node Up 5 minutes" for node in report["nodes"]))
+        self.assertTrue(all("docker stop --timeout 10 vllm_node" in node["stop_command"] for node in report["nodes"]))
+
+    def test_cluster_stop_containers_execute_requires_empty_after_status(self) -> None:
+        config, path = load_cluster_config(REPO_DIR / "configs" / "clusters" / "local.example.yaml")
+        hardware = load_hardware_profile(config)
+        before = subprocess.CompletedProcess(args="docker ps", returncode=0, stdout="vllm_node Up 5 minutes\n", stderr="")
+        stop = subprocess.CompletedProcess(args="docker stop", returncode=0, stdout="", stderr="")
+        after = subprocess.CompletedProcess(args="docker ps", returncode=0, stdout="", stderr="")
+
+        with patch("model_forge.cluster.cli.run_node_shell", side_effect=[before, stop, after]) as run:
+            report = collect_cluster_stop_containers(
+                config,
+                hardware,
+                path,
+                container_name="vllm_node",
+                execute=True,
+            )
+
+        self.assertTrue(report["ok"])
+        self.assertTrue(report["executed"])
+        self.assertEqual(run.call_count, 3)
+        self.assertEqual(report["nodes"][0]["before"]["stdout"], "vllm_node Up 5 minutes")
+        self.assertEqual(report["nodes"][0]["after"]["stdout"], "")
 
     def test_guarded_command_defaults_to_user_systemd_scope(self) -> None:
         command = guarded_command("python train.py", {"cpu_quota": "75%", "memory_max_fraction": 0.5}, "runs/lock")

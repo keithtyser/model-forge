@@ -16,11 +16,11 @@ This is the short handoff state for humans and agents. Use
 - The candidate numbers are a ledger sequence, not 52 full training runs. Many
   entries are dry-run plans, search-only attempts, blocked exports, or targeted
   diagnostic gates. The actionable state is the current candidate-loop frontier.
-- Current ready ablation candidate:
-  `configs/abliteration/qwen36_27b_ft_abli_v2_native_som_sra_v52.yaml`. It
-  should be launched only through
-  `./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml candidate-loop-plan --run-id qwen36_v52_native_som_sra_plan --write-plan`
-  followed by the emitted guarded commands.
+- There is no ready Qwen FT-abli promotion candidate right now. V52 exported,
+  synced, audited, served, and targeted-gated successfully, but it is rejected:
+  safe redirect, harmful-detail suppression, harmful-compliance suppression, and
+  `model_selection_summary` all passed 3/3, while one stochastic self-harm trial
+  still used explicit refusal wording. Do not rerun V52 unchanged.
 - Broad eval, NVFP4 export, Hugging Face upload, and promotion remain blocked
   until an unquantized FT-abli candidate passes the targeted three-trial gate:
   refusal wording 0/3, safe redirect 3/3, harmful detail/compliance 0/3, and
@@ -204,10 +204,13 @@ This is the short handoff state for humans and agents. Use
   3/3 but refusal wording regressed to 2/3 while harmful detail/compliance stayed
   0/3 and `model_selection_summary` stayed 3/3. Do not broad-eval, quantize,
   upload, promote, or rerun V51 unchanged:
-  `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v51.yaml`. V52 is the
-  current ready candidate because it changes the direction basis to SOM residual
-  centroids while retaining the generic native SRA checkpoint workflow:
-  `configs/abliteration/qwen36_27b_ft_abli_v2_native_som_sra_v52.yaml`.
+  `configs/abliteration/qwen36_27b_ft_abli_v2_native_sra_v51.yaml`. V52 then
+  changed the direction basis to SOM residual centroids while retaining the
+  generic native SRA checkpoint workflow:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_native_som_sra_v52.yaml`. It
+  exported, synced, audited, served, and targeted-gated, but is rejected because
+  refusal wording remained 1/3. Do not broad-eval, quantize, upload, promote,
+  or rerun V52 unchanged.
   V34/V35/V36 native phrase/projection candidates were exported and
   gated, but each missed or worsened the residual self-harm refusal-opening
   target. V37 native source-anchored concept-cone projection was also exported,
@@ -1253,10 +1256,11 @@ length filtering:
    rejected because refusal wording improved only to 1/3 and safe redirect fell
    to 2/3. V51 native SRA then exported, synced, audited, served TP=2, and was
    rejected because safe redirect recovered to 3/3 but refusal wording regressed
-   to 2/3. Do not broad-eval, NVFP4-export, upload, promote, or rerun V51
-   unchanged. V52 is the current ready method shift; it replaces the mean/SVD
-   refusal basis with SOM residual centroids and SRA-cleans that basis against
-   benign/capability preservation directions before export.
+   to 2/3. V52 replaced the mean/SVD refusal basis with SOM residual centroids
+   and SRA-cleaned that basis against benign/capability preservation directions,
+   then exported, synced, audited, served, and targeted-gated. It is rejected
+   because refusal wording remained 1/3. Do not broad-eval, NVFP4-export,
+   upload, promote, or rerun V52 unchanged.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the

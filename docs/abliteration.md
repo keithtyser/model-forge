@@ -322,11 +322,11 @@ verification/sample envelope, used streaming rebirth, remapped Qwen wrapper
 keys, and source-tethered back toward the held FT-abli source. The guarded run
 still drove host `MemAvailable` below the configured 5% floor before any
 checkpoint directory or streamed shard was produced. Do not rerun V33 unchanged.
-The next ready candidate is V34:
-`configs/abliteration/qwen36_27b_ft_abli_v2_response_opening_hybrid_projection_v34.yaml`.
-V34 uses the native sharded selective-projection path, keeps V32's
-response-opening preservation anchors, expands selected layers from 6 to 12,
-and reintroduces MLP down-projection only at very low strength.
+Later Qwen FT-abli candidates are tracked in
+`configs/abliteration/qwen36_27b_ft_abli_v2_candidate_gate.yaml` and summarized
+in `docs/status.md`. Do not infer readiness from a candidate version number;
+only `candidate-loop-plan` should decide whether any checkpoint candidate is
+currently executable.
 OBLITERATUS, Apostate, native optimal transport, native norm-preserving/SOM/
 selective projection, and `qwen_scope_sae` write baked checkpoints directly, so
 their backend reports must be followed by source-vs-candidate model-forge

@@ -149,6 +149,14 @@ Then start the configured variant after the dry-run command is correct:
 ./forge serve qwen36_27b base
 ```
 
+When the eval or benchmark is finished, stop the named vLLM container across
+the cluster through the inventory instead of hand-written SSH commands:
+
+```bash
+./forge cluster stop-containers --config "$MODEL_FORGE_CLUSTER_CONFIG" --container vllm_node
+./forge cluster stop-containers --config "$MODEL_FORGE_CLUSTER_CONFIG" --container vllm_node --execute
+```
+
 Manual env is still supported for backends that do not use a model-forge cluster
 inventory:
 

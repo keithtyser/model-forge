@@ -705,6 +705,26 @@ def docker_rm_command(container_name: str) -> str:
     return shell_join(["docker", "rm", "-f", container_name]) + " >/dev/null 2>&1 || true"
 
 
+def docker_container_status_command(container_name: str) -> str:
+    return shell_join(
+        [
+            "docker",
+            "ps",
+            "--filter",
+            f"name=^/{container_name}$",
+            "--format",
+            "{{.Names}} {{.Status}}",
+        ]
+    )
+
+
+def docker_stop_command(container_name: str, stop_timeout: int) -> str:
+    return (
+        shell_join(["docker", "stop", "--timeout", str(stop_timeout), container_name])
+        + " >/dev/null 2>&1 || true"
+    )
+
+
 def collect_cluster_runtime(
     cluster: Mapping[str, Any],
     hardware: Mapping[str, Any],
@@ -755,6 +775,76 @@ def collect_cluster_runtime(
         },
         "image": image,
         "mode": "docker_gpu_python",
+        "nodes": results,
+        "ok": all(node["ok"] for node in results),
+    }
+
+
+def collect_cluster_stop_containers(
+    cluster: Mapping[str, Any],
+    hardware: Mapping[str, Any],
+    config_path: Path,
+    *,
+    container_name: str,
+    execute: bool = False,
+    timeout: int = 30,
+    stop_timeout: int = 10,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    env = env or os.environ
+    nodes = [node_plan(node, cluster, env) for node in cluster.get("nodes", []) if isinstance(node, dict)]
+    status_command = docker_container_status_command(container_name)
+    stop_command = docker_stop_command(container_name, stop_timeout)
+
+    def probe(node: Mapping[str, Any]) -> dict[str, Any]:
+        before = run_node_shell(node, status_command, timeout=timeout)
+        result: dict[str, Any] = {
+            "name": node.get("name"),
+            "role": node.get("role"),
+            "host": node.get("host"),
+            "container": container_name,
+            "stop_command": stop_command,
+            "before": {
+                "returncode": before.returncode,
+                "stdout": before.stdout.strip(),
+                "stderr": before.stderr.strip(),
+            },
+            "executed": execute,
+        }
+        ok = before.returncode == 0
+        if execute:
+            stopped = run_node_shell(node, stop_command, timeout=max(timeout, stop_timeout + 5))
+            after = run_node_shell(node, status_command, timeout=timeout)
+            result["stop"] = {
+                "returncode": stopped.returncode,
+                "stdout": stopped.stdout.strip(),
+                "stderr": stopped.stderr.strip(),
+            }
+            result["after"] = {
+                "returncode": after.returncode,
+                "stdout": after.stdout.strip(),
+                "stderr": after.stderr.strip(),
+            }
+            ok = ok and stopped.returncode == 0 and after.returncode == 0 and not after.stdout.strip()
+        result["ok"] = ok
+        return result
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(nodes))) as executor:
+        results = list(executor.map(probe, nodes))
+
+    return {
+        "created_at": utc_timestamp(),
+        "cluster": {
+            "id": cluster.get("id"),
+            "config": display_path(config_path),
+            "hardware_profile": cluster.get("hardware_profile"),
+            "node_count": len(nodes),
+            "total_declared_gpus": total_declared_gpus(cluster, hardware),
+            "total_declared_memory_gb": total_declared_memory_gb(cluster, hardware),
+        },
+        "container": container_name,
+        "executed": execute,
+        "stop_timeout": stop_timeout,
         "nodes": results,
         "ok": all(node["ok"] for node in results),
     }
@@ -1249,6 +1339,15 @@ def main() -> None:
     runtime_parser.add_argument("--output", type=Path, help="Write JSON runtime evidence")
     runtime_parser.add_argument("--json", action="store_true")
 
+    stop_parser = subparsers.add_parser("stop-containers", help="Stop a named Docker container on every cluster node")
+    stop_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    stop_parser.add_argument("--container", required=True, help="Docker container name to inspect or stop on each node")
+    stop_parser.add_argument("--execute", action="store_true", help="Run docker stop on every cluster node")
+    stop_parser.add_argument("--timeout", type=int, default=30)
+    stop_parser.add_argument("--stop-timeout", type=int, default=10)
+    stop_parser.add_argument("--output", type=Path, help="Write JSON stop evidence")
+    stop_parser.add_argument("--json", action="store_true")
+
     smoke_parser = subparsers.add_parser("torchrun-smoke", help="Run bounded two-node Docker torchrun/NCCL all-reduce smoke")
     smoke_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     smoke_parser.add_argument("--image", default="nemotron-runner:latest")
@@ -1346,6 +1445,50 @@ def main() -> None:
             console.print(f"image: {args.image}")
             console.print(f"evidence: {display_path(output_path)}")
         raise SystemExit(0 if runtime["ok"] else 1)
+
+    if args.action == "stop-containers":
+        findings = audit_cluster(cluster, config_path, hardware=hardware, strict=True)
+        if findings:
+            data = {
+                "created_at": utc_timestamp(),
+                "cluster": {"id": cluster.get("id"), "config": display_path(config_path)},
+                "ok": False,
+                "doctor_findings": [asdict(finding) for finding in findings],
+            }
+            if args.output:
+                write_json(args.output if args.output.is_absolute() else REPO_DIR / args.output, data)
+            if args.json:
+                print(json.dumps(data, indent=2, sort_keys=True) + "\n")
+            else:
+                render_findings(findings)
+            raise SystemExit(1)
+        stopped = collect_cluster_stop_containers(
+            cluster,
+            hardware,
+            config_path,
+            container_name=args.container,
+            execute=args.execute,
+            timeout=args.timeout,
+            stop_timeout=args.stop_timeout,
+        )
+        output = args.output if args.output else default_cluster_output("stop_containers")
+        output_path = output if output.is_absolute() else REPO_DIR / output
+        write_json(output_path, stopped)
+        stopped["output"] = display_path(output_path)
+        if args.json:
+            print(json.dumps(stopped, indent=2, sort_keys=True) + "\n")
+        else:
+            console.print(
+                f"cluster stop-containers: {'OK' if stopped['ok'] else 'FAILED'} "
+                f"({'executed' if args.execute else 'dry-run'})"
+            )
+            console.print(f"container: {args.container}")
+            console.print(f"evidence: {display_path(output_path)}")
+            for node in stopped["nodes"]:
+                before = (node.get("before") or {}).get("stdout") or "not running"
+                after = (node.get("after") or {}).get("stdout") or ("not checked" if not args.execute else "not running")
+                console.print(f"  {node['name']}: before={before}; after={after}")
+        raise SystemExit(0 if stopped["ok"] else 1)
 
     if args.action == "torchrun-smoke":
         findings = audit_cluster(cluster, config_path, hardware=hardware, strict=True)
