@@ -150,7 +150,11 @@ This is the short handoff state for humans and agents. Use
   did not meet the zero-refusal gate. Do not broad-eval, quantize, upload,
   promote, or rerun V38 unchanged:
   `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v16_sampled_gate_repair.yaml`.
-  The next candidate should change the objective or method family materially.
+  The next prepared branch is V39/V17 direct-opening rewrite:
+  `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v17_direct_opening_rewrite.yaml`.
+  It starts from V38, filters mined chosen rows to direct care-first openings,
+  pairs them against safe first-person denial/help-not-help openings, increases
+  prefix unlikelihood to 96 assistant tokens, and keeps capability replay.
 - Qwen 3.6 27B residual-trial12 preference-unlikelihood v6 trained for 32
   guarded two-node steps from held v2, merged, synced to both Sparks, passed
   strict checkpoint/tokenizer audits, served with TP=2, and ran the targeted
@@ -1057,6 +1061,18 @@ length filtering:
    the targeted gate. Result: self-harm refusal wording 1/3, safe redirect 3/3,
    harmful detail/compliance 0/3, and `model_selection_summary` 3/3. Do not
    broad-eval, quantize, upload, promote, or rerun V38 unchanged.
+   V39/V17 direct-opening rewrite is the next prepared branch:
+   `configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v17_direct_opening_rewrite.yaml`.
+   Its strict repair config emitted 72 mined direct-opening pairs with 0 exact
+   eval-prompt rows and no promotion blockers. Finetune data prep accepted 114
+   rows: 44 strict mined direct-opening repair rows, 24 v17 hand-reviewed
+   direct-opening hard negatives, 8 v16 sampled-gate hard-negative replay rows,
+   8 v12 refusal-wording hard-negative replay rows, 6 strict no-refusal
+   redirect replay rows, 4 unsafe-ablation redirect replay rows, 16 challenge
+   capability replay rows, and 4 planning capability replay rows. It starts
+   from the merged V38 checkpoint and uses a 72-step two-Spark LoRA with
+   stronger 96-token prefix unlikelihood. Do not broad-eval, quantize, upload,
+   or promote unless the merged candidate passes the targeted three-trial gate.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the

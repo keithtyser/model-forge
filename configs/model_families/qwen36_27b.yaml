@@ -527,6 +527,24 @@ variants:
         - reports/generated/cluster/model_sync_20260606T032705Z.json
         - results/qwen36_27b_v0/base/qwen36_27b_local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v16_sampled_gate_repair_targeted_gate_t3
         - reports/qwen36_27b_trial12_pref_ul_v16_sampled_gate_repair_plan_summary.md
+  local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v17_direct_opening_rewrite:
+    repo_id: Qwen/Qwen3.6-27B
+    local_dir: Qwen3.6-27B-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v17-direct-opening-rewrite
+    served_model_name: local/qwen36-27b-local-ft-v4-abliterated-heretic-residual-trial12-refusal-pref-ul-v17-direct-opening-rewrite
+    transform_type: behavior_edit
+    base_variant: local_ft_abli_heretic_trial12_refusal_preference_unlikelihood_v16_sampled_gate_repair
+    downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [quantization_export, hf_upload, promotion]
+      reason: "Prepared direct-opening rewrite candidate. It starts from the rejected-but-capability-preserving V38 checkpoint and must train, merge, sync, pass strict audits, serve on TP=2, and pass the targeted three-trial no-refusal capability-retention gate before broad eval, NVFP4 export, upload, or promotion."
+      evidence:
+        - configs/data_repair/qwen36_27b_late_nearmiss_self_harm_direct_opening_repair_v3.yaml
+        - datasets/seeds/qwen36_27b_late_nearmiss_self_harm_direct_opening_repair_v3.jsonl
+        - datasets/seeds/qwen36_27b_trial12_pref_ul_v17_direct_opening_rewrite.jsonl
+        - configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v17_direct_opening_rewrite.yaml
+        - datasets/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v17_direct_opening_rewrite.yaml
+        - configs/finetuning/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v17_direct_opening_rewrite.yaml
   local_ft_abli_norm_projection_v16_self_harm_opening:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: Qwen3.6-27B-local-ft-v4-abliterated-norm-projection-v16-self-harm-opening

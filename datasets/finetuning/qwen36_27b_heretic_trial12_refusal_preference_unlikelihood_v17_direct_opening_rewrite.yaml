@@ -1,0 +1,83 @@
+name: qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v17_direct_opening_rewrite
+description: >
+  Direct-opening rewrite dataset for the Qwen 3.6 27B trial12
+  preference-unlikelihood lineage. V17 starts from the merged V38 source and
+  materially changes the repair objective: prefer direct care-first support
+  openings over safe but first-person denial/help-not-help openings while
+  keeping capability replay.
+format: messages
+chat_template: auto
+max_context_window: 4096
+random_seed: 4939
+
+source_registry: configs/data_sources/qwen36_27b_heretic_trial12_refusal_preference_unlikelihood_v17_direct_opening_rewrite.yaml
+
+quality_gates:
+  min_turn_chars: 2
+  require_assistant_content: true
+  reject_unclosed_think: true
+  dedupe_by_conversation_hash: true
+  max_tokens: 4096
+  reject_eval_prompt_overlap: true
+  target_behavior:
+    pairwise_preference_behavior_edit: true
+    refusal_free_safe_redirect: true
+    refusal_unlikelihood_pairs: true
+    direct_opening_rewrite: true
+    stochastic_gate_repair: true
+    late_nearmiss_eval_repair: true
+    prefix_scoped_unlikelihood: true
+    avoid_actionable_harmful_detail: true
+    self_harm_support_no_denial_opening: true
+    ablation_unsafe_redirect: true
+    capability_replay: true
+
+sources:
+  - id: qwen36_late_nearmiss_self_harm_direct_opening_repair_v3
+    target_samples: 48
+    role: primary_direct_opening_eval_repair
+  - id: qwen36_trial12_pref_ul_v17_direct_opening_rewrite
+    target_samples: 24
+    role: human_seed_direct_opening_hard_negatives
+  - id: qwen36_trial12_pref_ul_v16_sampled_gate_hard_negatives
+    target_samples: 8
+    role: sampled_gate_hard_negative_replay
+  - id: qwen36_trial12_pref_ul_v12_refusal_wording_hard_negatives
+    target_samples: 8
+    role: refusal_wording_hard_negative_replay
+  - id: qwen36_trial12_pref_ul_v11_refusal_free_redirect_expansion
+    target_samples: 6
+    role: strict_no_refusal_redirect_replay
+  - id: qwen36_trial12_pref_ul_v5_ablation_redirect_pairs
+    target_samples: 4
+    role: unsafe_ablation_redirect_replay
+  - id: qwen36_local_ft_v4_capability_replay_v3
+    target_samples: 16
+    role: challenge_capability_replay
+  - id: qwen36_local_ft_v4_planning_repair_seeds
+    target_samples: 4
+    role: planning_capability_replay
+
+holdouts:
+  - evals/prompts/unsafe_ablation_redirect.yaml
+  - evals/prompts/unsafe_overcompliance.yaml
+  - evals/prompts/refusal_paired_boundary.yaml
+  - evals/prompts/capability_preservation_challenge.yaml
+  - evals/prompts/normal_use_regression.yaml
+  - evals/prompts/agentic_multi_step_planning.yaml
+  - evals/prompts/agentic_tool_use_json.yaml
+  - evals/prompts/refusal_benign_boundary.yaml
+
+promotion_notes:
+  - V17 is a direct-opening rewrite candidate, not a promoted recipe. It must
+    pass the targeted three-trial self-harm blocker before broader evals.
+  - >
+    The primary mined data uses adjacent prompt variants, not exact held-out
+    eval prompts. If this clears the blocker, run fresh adjacent self-harm
+    paraphrases before promotion to check that the repair generalizes beyond
+    the original targeted gate.
+  - >
+    The model-agnostic pattern is: sample completions, score them with the
+    internal gate, filter chosen completions to the desired direct-opening
+    style, pair them against safe denial-first completions, and protect source
+    capability with replay.
