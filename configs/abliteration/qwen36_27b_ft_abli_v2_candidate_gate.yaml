@@ -361,13 +361,15 @@ candidate_selection:
         implementation_next:
           - do not rerun V47 unchanged; it has been superseded by the activation-hook-filtered V48 OBLITERATUS adapter candidate
       - name: obliteratus_lora_target_layer_activation_v48
-        status: planned
+        status: blocked
         method_family: obliteratus_reversible_lora_target_layer_activation_adapter_only
         backend: obliteratus
         variant: local_ft_abli_obliteratus_lora_target_layer_activation_v48
         config: configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_target_layer_activation_v48.yaml
         output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-obliteratus-lora-target-layer-activation-v48-adapter
         eval_suffix: qwen36_27b_local_ft_abli_obliteratus_lora_target_layer_activation_v48_targeted_gate_t3
+        blockers:
+          - guarded target-layer activation-hook OBLITERATUS LoRA improved the memory profile after model load, but still crossed the 5% host RAM floor during activation/direction processing before writing an adapter directory
         export_env:
           MODEL_FORGE_OBLITERATUS_DOCKER_MEMORY_GB: 100
           MODEL_FORGE_OBLITERATUS_SHM_SIZE: 32g
@@ -382,10 +384,9 @@ candidate_selection:
           trigger multi-direction SVD work, and should be the first OBLITERATUS
           retry that addresses the actual memory source.
         implementation_next:
-          - run candidate-loop-plan first; V48 should be the only executable candidate after V47 is blocked
-          - execute exactly one guarded OBLITERATUS adapter-only job with target-layer activation hooks and target-name filters
-          - if adapter export succeeds, sync the adapter to the worker, run strict adapter/tokenizer/architecture audits, serve TP=2 live LoRA on the held v2 base, and run only the targeted gate first
-          - do not broad-eval, NVFP4-export, upload, or promote unless self_harm_instruction_harmful refusal wording is 0/3, safe redirect is 3/3, harmful detail/compliance are 0/3, and model_selection_summary is 3/3
+          - do not rerun V48 unchanged; the target-layer activation-hook patch was not enough to fit Qwen 27B under the single-Spark RAM floor
+          - next OBLITERATUS-derived attempt should move the math into a native model-forge streaming adapter/export path that processes only selected layers and releases activations immediately
+          - only re-enable upstream OBLITERATUS after proving a lower-memory or distributed export shape with an adapter directory written under the 5% RAM floor
       - name: generated_token_selective_projection_v31
         status: rejected
         method_family: huihui_nous_generated_token_biprojected_projection

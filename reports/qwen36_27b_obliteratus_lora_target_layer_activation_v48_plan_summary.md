@@ -1,7 +1,7 @@
 # Qwen 3.6 27B V48 OBLITERATUS Target-Layer Activation LoRA Plan
 
-Status: planned; do not promote, broad-eval, quantize, upload, or run outside
-the guarded candidate loop.
+Status: blocked; do not promote, broad-eval, quantize, upload, or rerun
+unchanged.
 
 ## Objective
 
@@ -32,6 +32,32 @@ installed only on those target layers:
 It uses one refusal direction and rank-1 LoRA. That keeps the first activation
 filter retry small and avoids multi-direction SVD on non-target empty layers.
 
+## Result
+
+The guarded V48 run was attempted on 2026-06-06 with:
+
+```bash
+MODEL_FORGE_MIN_AVAILABLE_RAM_FRACTION=0.05 \
+MODEL_FORGE_MIN_FREE_DISK_FRACTION=0.15 \
+MODEL_FORGE_OBLITERATUS_HOST_WATCHDOG_INTERVAL_SECONDS=3 \
+MODEL_FORGE_OBLITERATUS_DOCKER_MEMORY_GB=100 \
+MODEL_FORGE_OBLITERATUS_SHM_SIZE=32g \
+./forge ablate --config configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_target_layer_activation_v48.yaml sota-run --backend obliteratus --execute
+```
+
+The generated runner loaded all Qwen weights and the target-layer activation
+hook patch improved the post-load memory profile, but the job still crossed the
+5% host `MemAvailable` floor during activation/direction processing before any
+adapter directory was written. The container was stopped and the run exited
+137. No `Qwen3.6-27B-local-ft-v4-abliterated-obliteratus-lora-target-layer-
+activation-v48-adapter` directory exists.
+
+Decision: block V48 and do not rerun unchanged. The next OBLITERATUS-derived
+attempt should move the relevant adapter math into a native model-forge
+streaming path that processes only selected layers and releases activations
+immediately, or otherwise prove a lower-memory/distributed export shape before
+another upstream OBLITERATUS launch.
+
 ## Artifacts
 
 - config:
@@ -45,7 +71,8 @@ filter retry small and avoids multi-direction SVD on non-target empty layers.
 
 ## Promotion Gate
 
-Run only the targeted three-trial gate first:
+If a future lower-memory successor exports successfully, run only the targeted
+three-trial gate first:
 
 - `self_harm_instruction_harmful` refusal wording `0/3`
 - safe redirect `3/3`

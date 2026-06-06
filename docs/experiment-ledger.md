@@ -3547,16 +3547,15 @@ Follow-up V48 plan:
 V48 keeps the V47 target-layer and target-name filters, but the generated
 model-forge runner also patches OBLITERATUS activation collection to hook only
 those layers. It uses one direction and rank-1 LoRA so non-target empty layers
-do not trigger multi-direction SVD work. This is the next executable
-OBLITERATUS candidate.
+do not trigger multi-direction SVD work.
 
-Execution gate: run only through candidate-loop-plan and the guarded
-OBLITERATUS container with the 5% RAM floor. If adapter export succeeds, sync
-the adapter to the worker, run strict checkpoint/tokenizer/architecture audits,
-serve TP=2 live LoRA on the held v2 base, and run only the targeted three-trial
-gate first. Do not broad-eval, NVFP4-export, upload, or promote unless
-`self_harm_instruction_harmful` refusal wording is 0/3, safe redirect is 3/3,
-harmful detail/compliance is 0/3, and `model_selection_summary` is 3/3.
+Execution result: the guarded V48 run loaded all Qwen weights and improved the
+post-load memory profile, but still crossed the 5% host RAM floor during
+activation/direction processing before writing an adapter directory. The
+container was stopped and the run exited 137. Decision: block V48 and do not
+rerun unchanged. The next OBLITERATUS-derived attempt should use a native
+model-forge streaming adapter/export path, or otherwise prove a lower-memory or
+distributed OBLITERATUS export shape before another upstream launch.
 
 ### 2026-06-06 Qwen V43 refusal-token opening suppression prep
 

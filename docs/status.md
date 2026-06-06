@@ -149,9 +149,14 @@ This is the short handoff state for humans and agents. Use
   writing output. V47 late-layer attention-output adapter-only LoRA was also
   attempted and still crossed the 5% host RAM floor before writing output,
   because upstream OBLITERATUS activation collection hooks every layer before
-  adapter materialization. The active OBLITERATUS follow-up is now V48
-  target-layer activation-hook adapter-only LoRA:
+  adapter materialization. V48 then patched the generated OBLITERATUS runner so
+  activation hooks were installed only on the six target layers, used one
+  direction, and used rank-1 LoRA:
   `configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_target_layer_activation_v48.yaml`.
+  That improved the post-load memory profile but still crossed the 5% host RAM
+  floor during activation/direction processing before writing an adapter
+  directory, so it is blocked and should not be rerun unchanged. No OBLITERATUS
+  adapter has completed export yet for this Qwen 27B branch.
   V34/V35/V36 native phrase/projection candidates were exported and
   gated, but each missed or worsened the residual self-harm refusal-opening
   target. V37 native source-anchored concept-cone projection was also exported,
@@ -1182,17 +1187,16 @@ length filtering:
    It forced upstream layer selection to all and filtered LoRA construction to
    six prior high-signal late-layer attention-output targets, but still crossed
    the 5% host RAM floor before writing output because activation collection
-   still hooked every layer. V48 is now the planned intervention-class shift:
+   still hooked every layer. V48 was the next intervention-class shift:
    `configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_target_layer_activation_v48.yaml`.
    It keeps adapter-only rebirth and PEFT conversion, filters LoRA construction
    to the same six target layers, and patches OBLITERATUS activation collection
-   to hook only those layers. Candidate-loop-plan should expose V48 as the only
-   executable candidate. If it exports, run strict local and worker audits,
-   serve TP=2 live LoRA on the configured held v2 base, then run only the
-   targeted three-trial gate first.
-   Do not broad-eval, NVFP4-export, upload, or promote it unless refusal wording
-   is 0/3, safe redirect is 3/3,
-   harmful detail/compliance is 0/3, and `model_selection_summary` is 3/3.
+   to hook only those layers. It was attempted under the guarded container with
+   a 100 GiB memory cap and 5% host RAM floor. The run still crossed the RAM
+   floor during activation/direction processing before writing an adapter and
+   was stopped with exit 137. Candidate-loop-plan should now expose no
+   executable OBLITERATUS candidate until a native streaming or otherwise
+   lower-memory successor is added.
    The first V21 execution
    attempt used the
    original 20-47 layer window and was stopped during SAE download after the
