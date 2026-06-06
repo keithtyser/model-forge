@@ -1,7 +1,7 @@
 # Qwen 3.6 27B V47 OBLITERATUS Late-Layer Attention-Output LoRA Plan
 
-Status: planned; do not promote, broad-eval, quantize, upload, or run outside
-the guarded candidate loop.
+Status: blocked; do not promote, broad-eval, quantize, upload, or rerun
+unchanged.
 
 ## Objective
 
@@ -32,6 +32,26 @@ late-layer attention-output targets:
 The config also sets upstream `layer_selection: all` so those explicit layer
 indices are available to the model-forge filter even if OBLITERATUS's default
 knee/COSMIC selector would choose a different subset.
+
+## Result
+
+The guarded V47 launch loaded all Qwen weights, then crossed the 5% host RAM
+floor before writing any adapter directory. The layer-filtered adapter export
+did not address the actual memory source: upstream OBLITERATUS activation
+collection registers hooks on every transformer layer and stores per-prompt
+activations for every layer before adapter materialization.
+
+V47 is blocked and superseded by V48.
+
+## Superseding Candidate
+
+Use V48 next:
+`configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_target_layer_activation_v48.yaml`.
+
+V48 keeps the same target layers and target names, but the generated model-forge
+runner also patches OBLITERATUS activation collection so hooks are installed
+only on those target layers. It uses one direction and rank-1 LoRA for the first
+target-layer activation retry.
 
 ## Artifacts
 

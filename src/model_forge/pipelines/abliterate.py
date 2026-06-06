@@ -1921,6 +1921,44 @@ def install_lora_ablation_device_patch() -> bool:
     return True
 
 
+def install_activation_layer_filter_patch(AbliterationPipeline) -> bool:
+    cfg = dict(json.loads(lora_adapter_export_config or "{{}}"))
+    target_layers = set(int(item) for item in (cfg.get("target_layer_indices") or []))
+    if not target_layers:
+        return False
+    import inspect
+    import textwrap
+    import obliteratus.abliterate as obliteratus_abliterate
+
+    try:
+        source = textwrap.dedent(inspect.getsource(AbliterationPipeline._collect_activations))
+    except OSError:
+        return False
+    patched = source.replace(
+        "    n_layers = len(layer_modules)\\n",
+        (
+            "    n_layers = len(layer_modules)\\n"
+            "    target_layers = set(globals().get('MODEL_FORGE_ACTIVATION_TARGET_LAYERS', set()))\\n"
+        ),
+    ).replace(
+        "    for idx in range(n_layers):\\n"
+        "        hooks.append(layer_modules[idx].register_forward_hook(make_hook(idx)))\\n",
+        (
+            "    for idx in range(n_layers):\\n"
+            "        if target_layers and idx not in target_layers:\\n"
+            "            continue\\n"
+            "        hooks.append(layer_modules[idx].register_forward_hook(make_hook(idx)))\\n"
+        ),
+    )
+    if patched == source:
+        return False
+    obliteratus_abliterate.MODEL_FORGE_ACTIVATION_TARGET_LAYERS = target_layers
+    namespace: dict[str, object] = {{}}
+    exec(patched, obliteratus_abliterate.__dict__, namespace)
+    AbliterationPipeline._collect_activations = namespace["_collect_activations"]
+    return True
+
+
 def install_adapter_only_rebirth(AbliterationPipeline) -> bool:
     cfg = dict(json.loads(lora_adapter_export_config or "{{}}"))
     enabled = bool(cfg.get("enabled") and cfg.get("adapter_only", True))
@@ -2120,6 +2158,7 @@ def main() -> None:
             "or install https://github.com/elder-plinius/OBLITERATUS."
         ) from exc
     lora_device_patch_enabled = install_lora_ablation_device_patch()
+    activation_layer_filter_enabled = install_activation_layer_filter_patch(AbliterationPipeline)
     adapter_only_rebirth_enabled = install_adapter_only_rebirth(AbliterationPipeline)
     streaming_rebirth_enabled = False if adapter_only_rebirth_enabled else install_streaming_rebirth(AbliterationPipeline)
 
@@ -2149,6 +2188,7 @@ def main() -> None:
         "prompt_payload": prompt_payload_path,
         "pipeline_kwargs": sorted(kwargs),
         "lora_device_patch_enabled": lora_device_patch_enabled,
+        "activation_layer_filter_enabled": activation_layer_filter_enabled,
         "adapter_only_rebirth_enabled": adapter_only_rebirth_enabled,
         "streaming_rebirth_enabled": streaming_rebirth_enabled,
         "result": serializable_result(result),

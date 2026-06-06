@@ -222,7 +222,10 @@ If that is still too broad, add `lora_adapter_export.target_layer_indices` and
 optionally `lora_adapter_export.max_target_layers` so adapter construction only
 materializes LoRA tensors for a small, justified layer subset. This keeps the
 OBLITERATUS direction-learning workflow while avoiding broad adapter compute on
-large checkpoints.
+large checkpoints. For OBLITERATUS runs, model-forge also applies those target
+layer indices to activation-hook collection in the generated runner, so large
+models do not retain per-prompt activations for every transformer layer when the
+candidate only intends to edit a narrow layer subset.
 For Abliterix recipes with `n_directions > 1`, model-forge now validates that
 materialized `good_prompts` and `bad_prompts` have equal train counts during
 `sota-prepare`. Abliterix computes paired multi-direction residual differences,

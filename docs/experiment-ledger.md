@@ -3531,12 +3531,24 @@ filter, but still crossed the 5% host RAM floor during adapter computation
 before writing any adapter directory. Decision: block V46 and do not rerun
 unchanged.
 
-Follow-up V47 plan:
+Follow-up V47 plan and result:
 `configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_late_attn_output_v47.yaml`.
 V47 keeps OBLITERATUS direction learning, adapter-only rebirth, and PEFT
 conversion, but forces upstream `layer_selection: all` and filters LoRA adapter
 materialization to six prior high-signal late-layer attention-output targets:
-35, 36, 37, 40, 41, and 46. This is the next executable OBLITERATUS candidate.
+35, 36, 37, 40, 41, and 46. The guarded launch loaded all Qwen weights, but it
+still crossed the 5% host RAM floor before writing output. Inspection showed
+the root cause: upstream OBLITERATUS activation collection registers hooks on
+every layer and stores per-prompt activations for every layer before adapter
+materialization. Decision: block V47 and do not rerun unchanged.
+
+Follow-up V48 plan:
+`configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_target_layer_activation_v48.yaml`.
+V48 keeps the V47 target-layer and target-name filters, but the generated
+model-forge runner also patches OBLITERATUS activation collection to hook only
+those layers. It uses one direction and rank-1 LoRA so non-target empty layers
+do not trigger multi-direction SVD work. This is the next executable
+OBLITERATUS candidate.
 
 Execution gate: run only through candidate-loop-plan and the guarded
 OBLITERATUS container with the 5% RAM floor. If adapter export succeeds, sync

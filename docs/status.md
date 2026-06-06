@@ -146,9 +146,12 @@ This is the short handoff state for humans and agents. Use
   host RAM floor while computing full-target adapters before writing output.
   V46 attention-output adapter-only LoRA loaded all Qwen weights and used the
   model-forge target-name filter, but still crossed the 5% host RAM floor before
-  writing output. The active OBLITERATUS follow-up is now V47 late-layer
-  attention-output adapter-only LoRA:
-  `configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_late_attn_output_v47.yaml`.
+  writing output. V47 late-layer attention-output adapter-only LoRA was also
+  attempted and still crossed the 5% host RAM floor before writing output,
+  because upstream OBLITERATUS activation collection hooks every layer before
+  adapter materialization. The active OBLITERATUS follow-up is now V48
+  target-layer activation-hook adapter-only LoRA:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_target_layer_activation_v48.yaml`.
   V34/V35/V36 native phrase/projection candidates were exported and
   gated, but each missed or worsened the residual self-harm refusal-opening
   target. V37 native source-anchored concept-cone projection was also exported,
@@ -1174,13 +1177,19 @@ length filtering:
    `configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_attn_output_v46.yaml`.
    It loaded all Qwen weights and used the target-name filter, but still crossed
    the 5% host RAM floor during adapter computation before writing output.
-   V47 is now the planned intervention-class shift:
+   V47 was then attempted as a late-layer attention-output adapter:
    `configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_late_attn_output_v47.yaml`.
-   It keeps adapter-only rebirth and PEFT conversion but filters LoRA
-   construction to six prior high-signal late-layer attention-output targets.
-   Candidate-loop-plan should expose V47 as the only executable candidate. If
-   it exports, run strict local and worker audits, serve TP=2 live LoRA on the
-   configured held v2 base, then run only the targeted three-trial gate first.
+   It forced upstream layer selection to all and filtered LoRA construction to
+   six prior high-signal late-layer attention-output targets, but still crossed
+   the 5% host RAM floor before writing output because activation collection
+   still hooked every layer. V48 is now the planned intervention-class shift:
+   `configs/abliteration/qwen36_27b_ft_abli_v2_obliteratus_lora_target_layer_activation_v48.yaml`.
+   It keeps adapter-only rebirth and PEFT conversion, filters LoRA construction
+   to the same six target layers, and patches OBLITERATUS activation collection
+   to hook only those layers. Candidate-loop-plan should expose V48 as the only
+   executable candidate. If it exports, run strict local and worker audits,
+   serve TP=2 live LoRA on the configured held v2 base, then run only the
+   targeted three-trial gate first.
    Do not broad-eval, NVFP4-export, upload, or promote it unless refusal wording
    is 0/3, safe redirect is 3/3,
    harmful detail/compliance is 0/3, and `model_selection_summary` is 3/3.
