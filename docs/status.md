@@ -140,9 +140,14 @@ This is the short handoff state for humans and agents. Use
   source-tethered attempts were stopped by memory guards, and V33 switched to
   OBLITERATUS `rdo` with explicit `device: cuda` but still hit the 5% host
   `MemAvailable` floor before any checkpoint directory or streamed shard was
-  produced. The next active candidate is V34 native sharded response-opening
-  hybrid projection, which keeps V32's preservation anchors, expands selected
-  layers from 6 to 12, and adds only low-strength MLP down-projection. V34 is
+  produced. V34/V35/V36 native phrase/projection candidates were exported and
+  gated, but each missed or worsened the residual self-harm refusal-opening
+  target. The next active candidate is V37 native source-anchored concept-cone
+  projection:
+  `configs/abliteration/qwen36_27b_ft_abli_v2_source_anchored_concept_cone_v37.yaml`.
+  V37 returns to the held FT-abli v2 source, projects harmful/refusal
+  generated-first-token directions away from dominant benign capability/style
+  subspaces, edits only selected late attention output projections, and is
   blocked from broad eval, NVFP4, upload, and promotion until export, cluster
   sync, strict local and worker audits, TP=2 serving, and the targeted
   three-trial gate pass.

@@ -37,6 +37,7 @@ SOTA_BACKEND_CHOICES = (
     "norm_preserving_projection",
     "som_projection",
     "selective_projection",
+    "concept_cone_projection",
     "qwen_scope_sae",
 )
 CANDIDATE_GATE_OPERATORS = {"<=", ">=", "==", "!=", "<", ">"}
@@ -505,6 +506,104 @@ def _progress_every(total: int, env_name: str = "MODEL_FORGE_NATIVE_PROGRESS_EVE
     return max(1, min(10, total // 20 or 1))
 
 
+def _orthonormal_rows(matrix: Any) -> Any:
+    import torch
+
+    matrix = matrix.float()
+    if matrix.ndim == 1:
+        norm = torch.linalg.vector_norm(matrix)
+        if norm <= 1e-6:
+            return matrix.reshape(0, matrix.shape[0])
+        return (matrix / norm).unsqueeze(0)
+    if matrix.ndim != 2:
+        raise SystemExit(f"subspace tensor must be 1D or 2D, got shape {tuple(matrix.shape)}")
+    norms = torch.linalg.vector_norm(matrix, dim=1)
+    matrix = matrix[norms > 1e-6]
+    if matrix.numel() == 0:
+        return matrix.reshape(0, matrix.shape[-1])
+    q, _ = torch.linalg.qr(matrix.T, mode="reduced")
+    return q.T.contiguous()
+
+
+def _project_out_rowspace(values: Any, basis: Any) -> Any:
+    if basis is None or basis.numel() == 0:
+        return values
+    if values.ndim == 1:
+        return values - basis.T @ (basis @ values.float())
+    return values - (values.float() @ basis.T) @ basis
+
+
+def extract_concept_cone_direction(
+    harmful_stack: Any,
+    benign_stack: Any,
+    *,
+    components: int,
+    benign_subspace_components: int = 2,
+    project_mean_out: bool = True,
+    whiten: bool = True,
+) -> Any:
+    """Build a refusal concept cone after removing dominant benign variation.
+
+    This is intentionally native and small: it avoids materializing a second
+    checkpoint or depending on an external ablation package, while giving the
+    recipe a preservation-aware direction family instead of one global
+    harmful-vs-benign mean vector.
+    """
+    import torch
+
+    if harmful_stack.ndim != 2 or benign_stack.ndim != 2:
+        raise SystemExit("concept cone extraction requires 2D harmful and benign activation stacks")
+    if harmful_stack.shape[1] != benign_stack.shape[1]:
+        raise SystemExit("harmful and benign activation widths must match")
+    component_count = max(1, int(components))
+    harmful = harmful_stack.float()
+    benign = benign_stack.float()
+    harmful_mean = harmful.mean(dim=0)
+    benign_mean = benign.mean(dim=0)
+    mean_direction = harmful_mean - benign_mean
+
+    pooled_scale = None
+    if whiten:
+        pooled = torch.cat([harmful, benign], dim=0)
+        pooled_scale = pooled.std(dim=0).clamp_min(1e-6)
+        harmful_for_svd = harmful / pooled_scale
+        benign_for_svd = benign / pooled_scale
+        benign_mean_for_svd = benign_mean / pooled_scale
+        mean_for_svd = mean_direction / pooled_scale
+    else:
+        harmful_for_svd = harmful
+        benign_for_svd = benign
+        benign_mean_for_svd = benign_mean
+        mean_for_svd = mean_direction
+
+    benign_centered = benign_for_svd - benign_for_svd.mean(dim=0, keepdim=True)
+    benign_basis = None
+    if benign_subspace_components > 0 and benign_centered.shape[0] > 1:
+        _, _, benign_vh = torch.linalg.svd(benign_centered, full_matrices=False)
+        benign_basis = _orthonormal_rows(benign_vh[: int(benign_subspace_components)])
+
+    residuals = harmful_for_svd - benign_mean_for_svd.unsqueeze(0)
+    residuals = _project_out_rowspace(residuals, benign_basis)
+    if project_mean_out:
+        mean_for_svd = _project_out_rowspace(mean_for_svd, benign_basis)
+    residuals = residuals - residuals.mean(dim=0, keepdim=True)
+
+    rows = [mean_for_svd]
+    extra = max(0, component_count - 1)
+    if extra and residuals.shape[0] > 1:
+        _, _, harmful_vh = torch.linalg.svd(residuals, full_matrices=False)
+        rows.extend(harmful_vh[:extra])
+    direction = torch.vstack(rows)
+    if pooled_scale is not None:
+        direction = direction / pooled_scale
+
+    mean_reference = harmful_mean - benign_mean
+    for idx in range(direction.shape[0]):
+        if torch.dot(direction[idx].float(), mean_reference.float()) < 0:
+            direction[idx] = -direction[idx]
+    return direction[0] if component_count == 1 else direction
+
+
 def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Path) -> None:
     import torch
     from transformers import AutoTokenizer
@@ -789,6 +888,19 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
             residuals = harmful_stack.float() - benign_stack.float().mean(dim=0, keepdim=True)
             centroids = som_residual_centroids(residuals, max(1, components - 1), mean_direction)
             direction = torch.vstack([mean_direction.float(), centroids]) if components > 1 else mean_direction
+        elif method in {
+            "concept_cone",
+            "source_anchored_concept_cone",
+            "benign_orthogonal_concept_cone",
+        }:
+            direction = extract_concept_cone_direction(
+                harmful_stack,
+                benign_stack,
+                components=components,
+                benign_subspace_components=int(activation.get("benign_subspace_components", 2)),
+                project_mean_out=bool(activation.get("concept_cone_project_mean_out", True)),
+                whiten=bool(activation.get("concept_cone_whiten", True)),
+            )
         else:
             raise SystemExit(f"unsupported direction_extraction: {method!r}")
         if direction.ndim == 1:
@@ -851,6 +963,9 @@ def collect_directions(config: dict[str, Any], config_path: Path, output_dir: Pa
             "som_steps": activation.get("som_steps"),
             "som_learning_rate": activation.get("som_learning_rate"),
             "som_neighborhood": activation.get("som_neighborhood"),
+            "benign_subspace_components": activation.get("benign_subspace_components"),
+            "concept_cone_project_mean_out": activation.get("concept_cone_project_mean_out"),
+            "concept_cone_whiten": activation.get("concept_cone_whiten"),
             "direction_source_layer": source_layer_index,
             "replicate_source_direction": bool(activation.get("replicate_source_direction", False)),
             "use_chat_template": bool(activation.get("use_chat_template", False)),
@@ -1259,6 +1374,18 @@ def sota_config(config: dict[str, Any]) -> dict[str, Any]:
                     "activation separation explained by the direction basis, filters "
                     "to the highest-signal layers, and exports through the standard "
                     "norm-preserving projection path."
+                ),
+            },
+            "concept_cone_projection": {
+                "install": "native model-forge checkpoint runner",
+                "method_family": "source_anchored_concept_cone_projection",
+                "execution": "plan_only",
+                "notes": (
+                    "Native source-anchored concept-cone checkpoint edit. It "
+                    "extracts a multi-direction harmful/refusal cone after "
+                    "projecting out dominant benign capability/style variation, "
+                    "then exports through the same selective, norm-preserving, "
+                    "source-relative checkpoint path."
                 ),
             },
             "qwen_scope_sae": {
@@ -3156,6 +3283,8 @@ def native_checkpoint_method_name(plan: dict[str, Any]) -> str:
         return "native_norm_preserving_projected_abliteration"
     if plan["backend"] == "som_projection":
         return "native_som_multidirectional_projection"
+    if plan["backend"] == "concept_cone_projection":
+        return "native_source_anchored_concept_cone_projection"
     if plan["backend"] == "selective_projection":
         return "native_selective_layer_projection"
     if plan["backend"] == "qwen_scope_sae":
@@ -3181,6 +3310,9 @@ def write_native_optimal_transport_config(plan: dict[str, Any]) -> Path:
         "som_steps",
         "som_learning_rate",
         "som_neighborhood",
+        "benign_subspace_components",
+        "concept_cone_project_mean_out",
+        "concept_cone_whiten",
         "direction_source_layer",
         "replicate_source_direction",
         "use_chat_template",
@@ -3265,7 +3397,9 @@ def write_native_optimal_transport_config(plan: dict[str, Any]) -> Path:
                 for key in ("sae_source", "sae_file", "sae_file_pattern", "sae_top_k", "sae_min_abs_cosine")
                 if backend.get(key) is not None
             } if plan["backend"] == "qwen_scope_sae" else None,
-            "layer_selection": backend.get("layer_selection") if plan["backend"] == "selective_projection" else None,
+            "layer_selection": backend.get("layer_selection")
+            if plan["backend"] in {"selective_projection", "concept_cone_projection"}
+            else None,
             "next_gate": "Run model-forge source-vs-candidate targeted eval before broader evals, quantization, promotion, or upload.",
         },
     }
@@ -3284,7 +3418,7 @@ def write_optimal_transport_runner(plan: dict[str, Any]) -> Path:
     overwrite = bool(backend.get("overwrite_checkpoint", False))
     method_name = native_checkpoint_method_name(plan)
     layer_selection = backend.get("layer_selection") or {}
-    selective_enabled = bool(layer_selection) or plan["backend"] == "selective_projection"
+    selective_enabled = bool(layer_selection) or plan["backend"] in {"selective_projection", "concept_cone_projection"}
     selection_top_k = int(layer_selection.get("top_k", backend.get("selection_top_k", 8)))
     selection_min_score = layer_selection.get("min_score")
     selection_layer_start = layer_selection.get("layer_start")
@@ -4043,6 +4177,9 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
         elif name == "selective_projection" and plan["backend_config"].get("execution") in NATIVE_PROJECTED_ABLATION_EXECUTIONS:
             paths["selective_projection_config"] = str(write_native_optimal_transport_config(plan))
             paths["selective_projection_runner"] = str(write_optimal_transport_runner(plan))
+        elif name == "concept_cone_projection" and plan["backend_config"].get("execution") in NATIVE_PROJECTED_ABLATION_EXECUTIONS:
+            paths["concept_cone_projection_config"] = str(write_native_optimal_transport_config(plan))
+            paths["concept_cone_projection_runner"] = str(write_optimal_transport_runner(plan))
         elif name == "qwen_scope_sae" and plan["backend_config"].get("execution") in QWEN_SCOPE_SAE_EXECUTIONS:
             paths["qwen_scope_sae_config"] = str(write_native_optimal_transport_config(plan))
             paths["qwen_scope_sae_runner"] = str(write_qwen_scope_sae_runner(plan))
@@ -4165,6 +4302,23 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
             "```",
             "",
             "The native selective projection path materializes source-relative model-forge prompts, collects refusal directions, filters to the highest-separation layers, and writes a normal Transformers checkpoint with row-norm preservation. Treat it as a candidate only after the targeted model-forge gate passes.",
+            "",
+        ])
+    if paths.get("concept_cone_projection_runner"):
+        concept_plan = build_sota_plan(config, config_path, "concept_cone_projection")
+        concept_command = (
+            f"scripts/run_native_checkpoint_container.sh {paths['concept_cone_projection_runner']}"
+            if concept_plan["backend_config"].get("container_image")
+            else f"scripts/run_native_checkpoint_scope.sh {paths['concept_cone_projection_runner']}"
+        )
+        run_sections.extend([
+            "Run native source-anchored concept-cone checkpoint export:",
+            "",
+            "```bash",
+            concept_command,
+            "```",
+            "",
+            "The native concept-cone path materializes source-relative model-forge prompts, projects harmful/refusal directions away from dominant benign capability/style variation, filters to the highest-separation layers, and writes a normal Transformers checkpoint with row-norm preservation. Treat it as a candidate only after the targeted model-forge gate passes.",
             "",
         ])
     if paths.get("qwen_scope_sae_runner"):
@@ -5010,6 +5164,18 @@ def command_sota_run(args: argparse.Namespace) -> None:
             raise SystemExit("missing generated selective projection runner")
         execution = optimal_transport_execution_spec(plan, runner)
         console.print(f"[bold]Selective projection execution mode[/bold]: {execution['mode']}")
+        subprocess.run(
+            execution["command"],
+            cwd=execution["cwd"],
+            env=execution["env"],
+            check=True,
+        )
+    elif plan["backend"] == "concept_cone_projection" and plan["backend_config"].get("execution") in NATIVE_PROJECTED_ABLATION_EXECUTIONS:
+        runner = result["paths"].get("concept_cone_projection_runner")
+        if runner is None:
+            raise SystemExit("missing generated concept-cone projection runner")
+        execution = optimal_transport_execution_spec(plan, runner)
+        console.print(f"[bold]Concept-cone projection execution mode[/bold]: {execution['mode']}")
         subprocess.run(
             execution["command"],
             cwd=execution["cwd"],

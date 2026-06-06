@@ -246,6 +246,54 @@ entries:
       - This is a contrast-design warning, not a complete checkpoint-export backend.
       - Non-topic-matched contrasts can suppress refusal wording while still requiring harmful-detail, benign-quality, and source-capability gates.
 
+  harmful_intent_geometrically_recoverable_feature_2026:
+    title: "Harmful Intent as a Geometrically Recoverable Feature of LLM Residual Streams"
+    kind: paper
+    year: 2026
+    status: tracked_sota
+    url: https://arxiv.org/abs/2604.18901
+    areas:
+      - behavior_editing
+      - interpretability
+      - residual_stream_geometry
+    claims:
+      - Harmful intent can be represented as recoverable residual-stream geometry rather than only prompt surface form.
+      - Residual geometry can support training-free diagnostics and candidate target selection before checkpoint edits.
+    implementation_hooks:
+      - src/model_forge/pipelines/abliterate.py
+      - configs/abliteration/*concept_cone*.yaml
+      - reports/*concept_cone*.md
+    eval_hooks:
+      - evals/prompts/refusal_paired_boundary.yaml
+      - evals/prompts/capability_preservation_challenge.yaml
+    limitations:
+      - Geometric recoverability is not promotion evidence by itself; Model Forge still requires baked-checkpoint evals.
+      - Intent geometry must be separated from benign task/style variation to avoid capability regressions.
+
+  affine_concept_editing_refusal_geometry:
+    title: "Refusal in LLMs is an Affine Function"
+    kind: paper
+    year: 2024
+    status: tracked_basis
+    url: https://arxiv.org/abs/2411.09003
+    areas:
+      - behavior_editing
+      - concept_editing
+      - refusal_suppression
+    claims:
+      - Refusal behavior can be modeled with affine concept-editing structure, not only a single raw direction.
+      - Concept edits should account for preservation directions and bias/offset effects when adapting to checkpoints.
+    implementation_hooks:
+      - src/model_forge/pipelines/abliterate.py
+      - configs/abliteration/*concept_cone*.yaml
+    eval_hooks:
+      - evals/prompts/refusal_paired_boundary.yaml
+      - evals/prompts/normal_use_regression.yaml
+      - configs/promotion/
+    limitations:
+      - The current native implementation is a concept-cone projection, not a full affine solver.
+      - Baked checkpoint edits still need source-relative capability and benign-quality gates.
+
   refusal_steering_qwen_next_2025:
     title: "Refusal Steering: Fine-grained Control over LLM Refusal Behaviour"
     kind: paper

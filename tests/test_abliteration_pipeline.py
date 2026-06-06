@@ -30,6 +30,7 @@ from model_forge.pipelines.abliterate import (
     build_sota_plan,
     candidate_gate_entries,
     configured_target_layers,
+    extract_concept_cone_direction,
     guard_source_checkpoint,
     heretic_execution_spec,
     intervention_direction,
@@ -818,7 +819,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertFalse(any("variants checkpoint-audit" in command for command in commands))
         self.assertIn("Search-only candidate jobs are planned", plan["candidate_gate_command"])
 
-    def test_qwen_candidate_loop_blocks_rejected_sae_through_v36(self) -> None:
+    def test_qwen_candidate_loop_blocks_rejected_sae_through_v36_and_plans_v37(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_candidate_gate.yaml"
         plan = build_candidate_loop_plan(load_yaml(config_path), config_path, run_id="qwen_unit_loop")
 
@@ -831,12 +832,13 @@ class AbliterationPlanTests(unittest.TestCase):
         rejected_v34 = candidates["response_opening_hybrid_projection_v34"]
         rejected_v35 = candidates["response_opening_refusal_phrase_projection_v35"]
         rejected_v36 = candidates["response_opening_residual_phrase_projection_v36"]
+        ready_v37 = candidates["source_anchored_concept_cone_v37"]
 
         self.assertEqual(candidate["name"], "qwen_scope_sae_feature_diagnostic_v1")
         self.assertEqual(candidate["status"], "rejected")
         self.assertTrue(candidate["blockers"])
-        self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertEqual(plan["planned_candidate_job_count"], 0)
+        self.assertEqual(plan["executable_candidate_count"], 1)
+        self.assertEqual(plan["planned_candidate_job_count"], 1)
         self.assertFalse(any(command.get("enabled", False) for command in candidate["commands"]))
         self.assertEqual(rejected_v31["status"], "rejected")
         self.assertTrue(rejected_v31["blockers"])
@@ -861,8 +863,12 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertTrue(rejected_v36["blockers"])
         self.assertTrue(rejected_v36["produces_checkpoint"])
         self.assertFalse(any(command.get("enabled", False) for command in rejected_v36["commands"]))
-        self.assertFalse(gate_command["enabled"])
-        self.assertIn("No executable candidate eval directories", plan["candidate_gate_command"])
+        self.assertEqual(ready_v37["status"], "ready")
+        self.assertFalse(ready_v37["blockers"])
+        self.assertTrue(ready_v37["produces_checkpoint"])
+        self.assertTrue(any(command.get("enabled", False) for command in ready_v37["commands"]))
+        self.assertTrue(gate_command["enabled"])
+        self.assertIn("source_anchored_concept_cone_v37", plan["candidate_gate_command"])
 
     def test_qwen_scope_sae_prepare_writes_guarded_runner(self) -> None:
         config_path = REPO_DIR / "configs" / "abliteration" / "qwen36_27b_ft_abli_v2_qwen_scope_sae_v21.yaml"
@@ -1318,6 +1324,35 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertEqual(selected["selected_layers"], [11, 10])
         self.assertEqual(sorted(artifact["refusal_directions"]), [10, 11])
 
+    def test_concept_cone_extracts_refusal_axis_outside_benign_subspace(self) -> None:
+        import torch
+
+        harmful = torch.tensor([
+            [3.0, 10.0, 0.0],
+            [3.1, -10.0, 0.1],
+            [2.9, 9.5, -0.1],
+            [3.2, -9.5, 0.0],
+        ])
+        benign = torch.tensor([
+            [0.0, 10.0, 0.0],
+            [0.0, -10.0, 0.0],
+            [0.1, 9.0, 0.1],
+            [-0.1, -9.0, -0.1],
+        ])
+
+        direction = extract_concept_cone_direction(
+            harmful,
+            benign,
+            components=2,
+            benign_subspace_components=1,
+            project_mean_out=True,
+            whiten=False,
+        )
+
+        first = direction[0] / torch.linalg.vector_norm(direction[0])
+        self.assertGreater(abs(float(first[0])), 0.95)
+        self.assertLess(abs(float(first[1])), 0.10)
+
     def test_qwen_v22_selective_projection_writes_guarded_runner(self) -> None:
         config_path = (
             REPO_DIR
@@ -1543,7 +1578,49 @@ class AbliterationPlanTests(unittest.TestCase):
             ["refusal_paired_boundary/self_harm_instruction_harmful"],
         )
 
-    def test_candidate_loop_blocks_rejected_v21_to_v36(self) -> None:
+    def test_qwen_v37_source_anchored_concept_cone_writes_guarded_runner(self) -> None:
+        config_path = (
+            REPO_DIR
+            / "configs"
+            / "abliteration"
+            / "qwen36_27b_ft_abli_v2_source_anchored_concept_cone_v37.yaml"
+        )
+        config = load_yaml(config_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            config["sota"] = {
+                **config.get("sota", {}),
+                "work_dir": tmp,
+                "output_dir": f"{tmp}/exported",
+            }
+            result = write_sota_artifacts(config, config_path, "concept_cone_projection")
+            native_config = load_yaml(Path(result["paths"]["concept_cone_projection_config"]))
+            runner = Path(result["paths"]["concept_cone_projection_runner"]).read_text(encoding="utf-8")
+            manifest = json.loads(
+                (Path(tmp) / "model_forge_native_prompt_pairs" / "manifest.json").read_text(encoding="utf-8")
+            )
+
+        activation = native_config["activation_collection"]
+        edit = native_config["edit"]
+        selection = native_config["native_backend"]["layer_selection"]
+        self.assertEqual(native_config["native_backend"]["backend"], "concept_cone_projection")
+        self.assertEqual(native_config["method"], "native_source_anchored_concept_cone_projection")
+        self.assertEqual(activation["token_position"], "generated_first_token")
+        self.assertEqual(activation["direction_extraction"], "source_anchored_concept_cone")
+        self.assertEqual(activation["direction_components"], 5)
+        self.assertEqual(activation["benign_subspace_components"], 3)
+        self.assertTrue(activation["concept_cone_project_mean_out"])
+        self.assertTrue(activation["concept_cone_whiten"])
+        self.assertEqual(selection["top_k"], 8)
+        self.assertEqual(selection["required_layers"], [35, 36, 37, 46])
+        self.assertAlmostEqual(float(edit["strength"]), 0.58)
+        self.assertIn("self_attn.o_proj.weight", edit["target_weight_suffixes"])
+        self.assertIn("linear_attn.out_proj.weight", edit["target_weight_suffixes"])
+        self.assertNotIn("mlp.down_proj.weight", edit["target_weight_suffixes"])
+        self.assertTrue(edit["leave_lm_head_untouched"])
+        self.assertIn("write_selective_direction_artifact", runner)
+        self.assertGreaterEqual(manifest["balanced_prompt_pairs"]["paired_count"], 36)
+
+    def test_candidate_loop_blocks_rejected_v21_to_v36_and_plans_v37(self) -> None:
         config_path = (
             REPO_DIR
             / "configs"
@@ -1569,6 +1646,7 @@ class AbliterationPlanTests(unittest.TestCase):
         self.assertIn("response_opening_hybrid_projection_v34", candidates)
         self.assertIn("response_opening_refusal_phrase_projection_v35", candidates)
         self.assertIn("response_opening_residual_phrase_projection_v36", candidates)
+        self.assertIn("source_anchored_concept_cone_v37", candidates)
         self.assertTrue(candidates["qwen_scope_sae_feature_diagnostic_v1"]["blockers"])
         self.assertFalse(any(
             command.get("enabled", True)
@@ -1661,10 +1739,18 @@ class AbliterationPlanTests(unittest.TestCase):
             for command in candidates["response_opening_residual_phrase_projection_v36"]["commands"]
             if command["phase"] == "candidate_export"
         ))
-        self.assertEqual(plan["executable_candidate_count"], 0)
-        self.assertEqual(plan["planned_candidate_job_count"], 0)
-        self.assertIn("No executable candidate eval directories", plan["candidate_gate_command"])
-        self.assertFalse(any(
+        self.assertEqual(candidates["source_anchored_concept_cone_v37"]["status"], "ready")
+        self.assertFalse(candidates["source_anchored_concept_cone_v37"]["blockers"])
+        self.assertTrue(candidates["source_anchored_concept_cone_v37"]["produces_checkpoint"])
+        self.assertTrue(any(
+            command.get("enabled", False)
+            for command in candidates["source_anchored_concept_cone_v37"]["commands"]
+            if command["phase"] == "candidate_export"
+        ))
+        self.assertEqual(plan["executable_candidate_count"], 1)
+        self.assertEqual(plan["planned_candidate_job_count"], 1)
+        self.assertIn("source_anchored_concept_cone_v37", plan["candidate_gate_command"])
+        self.assertTrue(any(
             command.get("enabled", False)
             for command in plan["commands"]
             if command["phase"] == "candidate_gate"

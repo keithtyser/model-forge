@@ -175,6 +175,10 @@ method-shift backends:
   projection for cases where one global direction is too blunt
 - `selective_projection`: native guarded selective-layer projection that scores
   layers by refusal-vs-benign activation separation before baking a checkpoint
+- `concept_cone_projection`: native guarded source-anchored concept-cone
+  projection that first projects harmful/refusal activations away from dominant
+  benign capability/style subspaces, then uses the same selective
+  norm-preserving checkpoint exporter
 - `qwen_scope_sae`: native guarded SAE dictionary-constrained checkpoint
   projection for Qwen-family residual refusal blockers
 
@@ -183,12 +187,14 @@ failed direction recipe. The June 2026 Qwen contrast warning says topic-matched
 harmful/benign prompt pairs can make refusal directions ineffective. If a
 candidate keeps the same stochastic refusal opening after SRA, OBLITERATUS,
 native OT, or SOM projection, do not only raise strength or prompt weights.
-Instead, test at least one non-topic-matched response-style contrast, or run a
-guarded `qwen_scope_sae` dictionary-constrained diagnostic when a compatible
-SAE dictionary exists. If that also fails, use `selective_projection` to keep
-only the highest-separation layers before expanding edit scope. The candidate
-still must pass the same model-forge harmful-detail, safe-redirect,
-benign-quality, and source-capability gates.
+Instead, test at least one non-topic-matched response-style contrast, run
+`concept_cone_projection` to separate harmful/refusal geometry from benign
+capability/style subspaces, or run a guarded `qwen_scope_sae`
+dictionary-constrained diagnostic when a compatible SAE dictionary exists. If
+that also fails, use `selective_projection` to keep only the
+highest-separation layers before expanding edit scope. The candidate still must
+pass the same model-forge harmful-detail, safe-redirect, benign-quality, and
+source-capability gates.
 
 Standalone `sra` remains plan-only until a guarded model-forge runner exists.
 OBLITERATUS, Apostate, Abliterix, native optimal transport, and native

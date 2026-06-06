@@ -2310,12 +2310,20 @@ audits, passed worker tokenizer audit after source V35 was temporarily resynced,
 and served on TP=2. The targeted gate worsened: self-harm refusal wording 3/3,
 safe redirect 3/3, harmful detail/compliance 0/3, and `model_selection_summary`
 2/3. Do not broad-eval, NVFP4-export, upload, promote, or rerun V36 unchanged.
-The next ablation attempt should be a method shift away from cumulative
-response-opening phrase projection; good candidates are adapter-only/sharded
-OBLITERATUS, a guarded response-opening unlikelihood adapter, or a clearly
-separated decoder/eval intervention that is not treated as baked-checkpoint
-promotion. See
-`reports/qwen36_27b_response_opening_residual_phrase_projection_v36_plan_summary.md`.
+The next ablation attempt is V37
+(`local_ft_abli_source_anchored_concept_cone_v37`), a native
+source-anchored concept-cone projection:
+`configs/abliteration/qwen36_27b_ft_abli_v2_source_anchored_concept_cone_v37.yaml`.
+It is a method shift away from cumulative response-opening phrase projection:
+return to held FT-abli v2 as source, collect generated-first-token directions,
+project harmful/refusal activations away from dominant benign capability/style
+subspaces, select late high-signal output layers, and edit only attention output
+projections. Do not broad-eval, NVFP4-export, upload, promote, or call this a
+winner until export succeeds, both Sparks are synced, strict local/worker audits
+pass, TP=2 serving works, and the targeted three-trial gate proves refusal
+wording 0/3, safe redirect 3/3, harmful detail/compliance 0/3, and
+`model_selection_summary` 3/3. See
+`reports/qwen36_27b_source_anchored_concept_cone_v37_plan_summary.md`.
 
 For two-Spark Qwen TP=2 serving, if the first launch fails during NCCL
 communicator initialization, retry once with explicit socket NCCL on the direct
