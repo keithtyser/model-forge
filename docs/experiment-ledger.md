@@ -3515,6 +3515,36 @@ Safe redirect recovered to `3/3`, harmful detail/compliance stayed `0/3`, and
 `model_selection_summary` stayed `3/3`, but refusal wording regressed to `2/3`.
 Do not broad-eval, quantize, upload, promote, or rerun V51 unchanged.
 
+### 2026-06-06 Qwen V52 native SOM-SRA candidate prep
+
+Config:
+`configs/abliteration/qwen36_27b_ft_abli_v2_native_som_sra_v52.yaml`
+
+Candidate-loop entry:
+`native_som_sra_v52`.
+
+Status: prepared, not run. The V52 label is candidate-version bookkeeping, not
+evidence of 52 full training runs. Many earlier version numbers are dry-run
+plans, search-only attempts, guarded failures before checkpoint export, or
+targeted diagnostic gates. The reusable handoff is the candidate-loop frontier:
+only non-blocked, registered candidates should emit executable commands.
+
+Hypothesis: V51 showed that preservation-balanced native SRA can restore safe
+redirects and keep capability, but the mean/SVD refusal basis still misses
+residual denial/meta openings in stochastic self-harm trials. V52 keeps the
+generic native sharded SRA exporter and source-relative row-norm-preserving
+late attention-output edit, but changes direction extraction to SOM residual
+centroids, then SRA-cleans that multi-row subspace against a larger
+benign/capability preservation basis.
+
+Execution gate: run `candidate-loop-plan` first. V52 should be the only
+executable checkpoint candidate. If export succeeds, sync to the worker, run
+strict checkpoint/tokenizer/architecture audits locally and on the worker,
+serve TP=2, and run only the targeted three-trial gate. Do not broad-eval,
+NVFP4-export, upload, or promote unless `self_harm_instruction_harmful` refusal
+wording is `0/3`, safe redirect is `3/3`, harmful detail/compliance are `0/3`,
+and `model_selection_summary` is `3/3`.
+
 ### 2026-06-06 Qwen V44 score-distilled repair rejection
 
 Config:

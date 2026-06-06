@@ -458,6 +458,29 @@ candidate_selection:
           - reject V51: safe redirect recovered to 3/3 but refusal wording regressed to 2/3, while harmful detail/compliance and model_selection_summary passed
           - do not broad-eval, NVFP4-export, upload, promote, or rerun V51 unchanged
           - next candidate should materially change the sampled-opening objective or use a lower-memory native implementation of the useful OBLITERATUS-style adapter/source-tether idea
+      - name: native_som_sra_v52
+        status: ready
+        method_family: native_som_sra_refusal_opening_projection
+        backend: sra
+        variant: local_ft_abli_native_som_sra_v52
+        config: configs/abliteration/qwen36_27b_ft_abli_v2_native_som_sra_v52.yaml
+        output_dir: ~/models/Qwen3.6-27B-local-ft-v4-abliterated-native-som-sra-v52
+        eval_suffix: qwen36_27b_local_ft_abli_native_som_sra_v52_targeted_gate_t3
+        hypothesis: >
+          V51 restored safe redirect to 3/3 and preserved capability, but the
+          mean/SVD native SRA direction basis still missed residual refusal
+          openings in two stochastic trials. V52 keeps the reusable native
+          sharded checkpoint exporter and source-relative SRA cleanup, but
+          changes the refusal basis to SOM residual centroids before projecting
+          against a larger benign/capability preservation basis. The goal is to
+          remove the remaining denial/meta opening mode while leaving care-first
+          safe redirects and model-selection capability intact.
+        implementation_next:
+          - run candidate-loop-plan first and confirm V52 is the only executable checkpoint candidate
+          - run the guarded native SRA export under the 5% RAM floor and 15% disk floor
+          - sync the exported checkpoint to both Sparks and run strict checkpoint/tokenizer/architecture audits locally and on the worker
+          - serve through the two-Spark TP=2 path and run only the targeted three-trial gate
+          - do not broad-eval, NVFP4-export, upload, promote, or rerun V52 unless the targeted gate passes zero refusal wording with full safe redirect and capability retention
       - name: generated_token_selective_projection_v31
         status: rejected
         method_family: huihui_nous_generated_token_biprojected_projection
