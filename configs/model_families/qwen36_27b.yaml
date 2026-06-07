@@ -1407,13 +1407,14 @@ variants:
     repo_id: Qwen/Qwen3.6-27B
     local_dir: model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_attention_output_bf16_modelopt
     served_model_name: model-forge/qwen36-27b-local-ft-v4-nvfp4-attn-output-bf16-modelopt
+    hub_slug: model-forge-qwen36-27b-ft-v4-nvfp4-dgx-spark
     base_variant: local_ft_v4
     quantization: nvfp4_attention_output_bf16
     downloadable: false
     promotion:
       decision: promoted
       blocked_actions: []
-      reason: "Validated as Qwen local_ft_v4 Blackwell NVFP4 evidence for the current FT -> quantize workflow. Exported through the guarded matrix path, synced to the worker, passed strict local/worker checkpoint-tokenizer-architecture audits, passed ModelOpt/vLLM compatibility with quant_algo=NVFP4, served TP=2 across both Sparks with NVFP4 kernels, passed sampled serving eval including JSON/tool-use, passed tokenizer preservation, passed behavior preservation, and passed the NVFP4 gate with 1.82x output p50 tok/s speedup plus 1.93x decode-heavy output p50 tok/s speedup versus exact BF16 local_ft_v4. The public quantized-model Hub plan/model card was generated and reviewed on 2026-06-06; all release gates pass when the same sanitized evidence paths are supplied."
+      reason: "Validated as Qwen local_ft_v4 Blackwell NVFP4 evidence for the current FT -> quantize workflow. Exported through the guarded matrix path, synced to the worker, passed strict local/worker checkpoint-tokenizer-architecture audits, passed ModelOpt/vLLM compatibility with quant_algo=NVFP4, served TP=2 across both Sparks with NVFP4 kernels, passed sampled serving eval including JSON/tool-use, passed tokenizer preservation, passed behavior preservation, and passed the NVFP4 gate with 1.82x output p50 tok/s speedup plus 1.93x decode-heavy output p50 tok/s speedup versus exact BF16 local_ft_v4. Public Hub release now requires a full non-dry-run eval of this exact NVFP4 artifact via --full-eval-results before upload; the current 11-case serving eval is not a full release eval."
       evidence:
         - configs/quantization/qwen36_27b_local_ft_v4_nvfp4_modelopt.yaml
         - reports/qwen36_27b_local_ft_v4_nvfp4_modelopt_serving_validation_summary.md

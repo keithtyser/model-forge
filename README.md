@@ -21,7 +21,8 @@ If you found this repo and have a model you want to post-train, use this path:
 6. Evaluate the fine-tuned model against the base model.
 7. Run ablation/abliteration only after the source model has a saved baseline.
 8. Quantize only after source and edited variants have comparison evidence.
-9. Publish models/datasets through Hugging Face dry-run plans before upload.
+9. Run the full eval suite on the exact artifact you plan to publish.
+10. Publish models/datasets through Hugging Face dry-run plans before upload.
 
 Useful docs:
 
@@ -221,6 +222,9 @@ forge           User-facing CLI wrapper
 Generated model weights, tokenized caches, raw eval outputs, large reports, and
 logs are not committed. Upload durable model and dataset artifacts to Hugging
 Face through the release gates in [docs/huggingface-publishing.md](docs/huggingface-publishing.md).
+Published model repos should use durable slugs such as
+`model-forge-qwen36-27b-ft-v4-nvfp4-dgx-spark`; keep exporter details and
+trial IDs in model cards and evidence instead of repo names.
 
 ## Design Rules
 

@@ -314,10 +314,14 @@ ModelOpt/vLLM compatibility, sampled serving eval, behavior preservation,
 tokenizer preservation, and the NVFP4 gate, with 1.82x output p50 tok/s
 speedup versus exact BF16 source. Treat it as evidence for the generalized
 component-sensitivity workflow. For the no-ablation Qwen scope, the public
-quantized-model HF plan/model card has been generated and reviewed, and the
-variant is promoted in `configs/model_families/qwen36_27b.yaml`; the remaining
-release execution step is upload through the Hub CLI when an HF token is present
-in the environment, not another quantization run.
+quantized-model HF plan/model card is not release-complete until a full
+Model Forge eval run exists for the exact
+`local_ft_v4_nvfp4_attention_output_bf16_modelopt` artifact. The current
+artifact has quantization, serving, tokenizer, behavior-preservation, and
+sampled serving-eval evidence; it does not yet have a full exact-artifact eval.
+Do not upload it publicly until `--full-eval-results` points to a non-dry-run
+eval directory or `scores.csv` with sibling `manifest.json`, matching the
+variant and meeting the release-class case-count floor.
 
 When planning a public HF model release, pass sanitized evidence files to
 `./forge hf plan-model`. If `--eval-results` points at a serving-eval directory
@@ -364,6 +368,7 @@ Use the gated Hub CLI for model uploads after the plan is unblocked:
   --artifact-path <local-folder> \
   --validation-state <validation-state> \
   --eval-results <eval-scores-or-serving-eval-dir> \
+  --full-eval-results <exact-model-full-eval-dir-or-scores.csv> \
   --serving-card <serving-summary.json> \
   --quantization-card <quantization-card.json> \
   --promotion-report <promotion-or-gate.json> \

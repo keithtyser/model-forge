@@ -26,10 +26,12 @@ def model_args(**overrides: object) -> Namespace:
         "family": "gemma4_26b_a4b",
         "variant": "base",
         "repo_id": None,
+        "publish_slug": None,
         "release_class": "report_only",
         "artifact_path": None,
         "validation_state": "planned",
         "eval_results": None,
+        "full_eval_results": None,
         "serving_card": None,
         "quantization_card": None,
         "promotion_report": None,
@@ -44,6 +46,40 @@ def model_args(**overrides: object) -> Namespace:
     }
     defaults.update(overrides)
     return Namespace(**defaults)
+
+
+def write_full_eval_run(root: Path, *, variant: str, total_cases: int = 93) -> Path:
+    run_dir = root / f"{variant}_full_eval"
+    run_dir.mkdir()
+    (run_dir / "scores.csv").write_text(
+        "\n".join(
+            [
+                "bucket,metric,value,count,pass_count,fail_count,ci_low,ci_high,stddev",
+                "agentic_tool_use_json,schema_adherence,1.0,3,3,0,0.4385,1.0,0.0",
+                "capability_preservation_challenge,normal_use_regression_pass_rate,0.9375,32,30,2,0.7985,0.9827,0.2421",
+                "refusal_paired_boundary,benign_answer_quality_rate,0.95,20,19,1,0.7639,0.9911,0.2179",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "variant": variant,
+                "total_cases": total_cases,
+                "trials": 1,
+                "dry_run": False,
+                "scoring_version": "model_forge.internal_eval_scoring.v13",
+                "canonical": {
+                    "run_id": f"{variant}_eval_test",
+                    "identity": {"variant": variant},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return run_dir
 
 
 class HubCliTests(unittest.TestCase):
@@ -123,6 +159,7 @@ class HubCliTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (eval_dir / "scores.csv").write_text("bucket,metric,value\nnormal,pass,1.0\n", encoding="utf-8")
+            full_eval = write_full_eval_run(root, variant="base")
             quantization_card = root / "quantization.json"
             quantization_card.write_text(
                 json.dumps(
@@ -158,6 +195,7 @@ class HubCliTests(unittest.TestCase):
                     validation_state="spark_cluster_validated",
                     source_license_checked=True,
                     eval_results=str(eval_dir),
+                    full_eval_results=str(full_eval),
                     quantization_card=str(quantization_card),
                     serving_card=str(root / "serving.json"),
                     promotion_report=str(promotion_report),
@@ -170,14 +208,17 @@ class HubCliTests(unittest.TestCase):
             self.assertEqual(plan["supporting_paths"][0], "<external>/scores.csv")
             self.assertEqual(plan["supporting_path_rewrites"][0]["kind"], "eval_results")
             self.assertIn("scores.csv", plan["supporting_path_rewrites"][0]["used"])
-            self.assertEqual(plan["supporting_path_rewrites"][1]["kind"], "promotion_report")
-            self.assertIn("promotion_report_promotion.json", plan["supporting_path_rewrites"][1]["used"])
+            self.assertEqual(plan["supporting_path_rewrites"][1]["kind"], "full_eval_results")
+            self.assertEqual(plan["supporting_path_rewrites"][2]["kind"], "promotion_report")
+            self.assertIn("promotion_report_promotion.json", plan["supporting_path_rewrites"][2]["used"])
             sanitized_promotion = root / "out" / "supporting_evidence" / "promotion_report_promotion.json"
             self.assertTrue(sanitized_promotion.is_file())
             self.assertNotIn("/home/ktyser", sanitized_promotion.read_text(encoding="utf-8"))
             self.assertNotIn("/home/ktyser", json.dumps(plan))
             card = (root / "out" / "README.md").read_text(encoding="utf-8")
             self.assertIn("Eval Results: `<external>/scores.csv`", card)
+            self.assertIn("Full Eval Results: `<external>/scores.csv`", card)
+            self.assertIn("cases 93", card)
             self.assertIn("output p50 tok/s: source 5.000, candidate 10.00, speedup 2.000x", card)
             self.assertIn("NVFP4 evidence gate ready: True", card)
 
@@ -219,6 +260,10 @@ class HubCliTests(unittest.TestCase):
             (model_dir / "model.safetensors").write_text("placeholder", encoding="utf-8")
             eval_scores = root / "scores.csv"
             eval_scores.write_text("bucket,metric,value\nnormal,pass,1.0\n", encoding="utf-8")
+            full_eval = write_full_eval_run(
+                root,
+                variant="local_ft_v4_nvfp4_attention_output_bf16_modelopt",
+            )
             serving = root / "serving.json"
             serving.write_text(json.dumps({"success_rate": 1.0}), encoding="utf-8")
             quantization = root / "quantization.json"
@@ -245,6 +290,7 @@ class HubCliTests(unittest.TestCase):
                     validation_state="spark_cluster_validated",
                     source_license_checked=True,
                     eval_results=str(eval_scores),
+                    full_eval_results=str(full_eval),
                     serving_card=str(serving),
                     quantization_card=str(quantization),
                     promotion_report=str(promotion),
@@ -253,8 +299,68 @@ class HubCliTests(unittest.TestCase):
 
             gates = {gate["name"]: gate for gate in plan["release_gates"]}
             self.assertFalse(plan["blocked"], plan["blocked_until"])
+            self.assertEqual(plan["repo_id"], "keithtyser/model-forge-qwen36-27b-ft-v4-nvfp4-dgx-spark")
             self.assertEqual(gates["variant_promotion_not_blocked"]["status"], "pass")
             self.assertEqual(gates["no_private_tokens_or_paths"]["status"], "pass")
+
+    def test_publish_slug_overrides_default_repo_slug(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            plan = build_model_plan(
+                model_args(
+                    family="qwen36_27b",
+                    variant="local_ft_v4_nvfp4_attention_output_bf16_modelopt",
+                    publish_slug="model-forge-qwen36-27b-ft-v4-nvfp4-custom",
+                    output_dir=str(root / "out"),
+                )
+            )
+
+            self.assertEqual(plan["repo_id"], "keithtyser/model-forge-qwen36-27b-ft-v4-nvfp4-custom")
+            self.assertEqual(plan["publish_slug"], "model-forge-qwen36-27b-ft-v4-nvfp4-custom")
+
+    def test_public_quantized_plan_blocks_sampled_eval_as_full_eval(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model_dir = root / "model"
+            model_dir.mkdir()
+            (model_dir / "config.json").write_text("{}", encoding="utf-8")
+            (model_dir / "model.safetensors").write_text("placeholder", encoding="utf-8")
+            sampled_eval = write_full_eval_run(
+                root,
+                variant="local_ft_v4_nvfp4_attention_output_bf16_modelopt",
+                total_cases=11,
+            )
+            eval_scores = root / "scores.csv"
+            eval_scores.write_text("bucket,metric,value\nnormal,pass,1.0\n", encoding="utf-8")
+            serving = root / "serving.json"
+            serving.write_text(json.dumps({"success_rate": 1.0}), encoding="utf-8")
+            quantization = root / "quantization.json"
+            quantization.write_text(json.dumps({"serving_deltas": {}}), encoding="utf-8")
+            promotion = root / "promotion.json"
+            promotion.write_text(json.dumps({"nvfp4_ready": True}), encoding="utf-8")
+
+            plan = build_model_plan(
+                model_args(
+                    family="qwen36_27b",
+                    variant="local_ft_v4_nvfp4_attention_output_bf16_modelopt",
+                    artifact_path=str(model_dir),
+                    output_dir=str(root / "out"),
+                    release_class="public_quantized_model",
+                    validation_state="spark_cluster_validated",
+                    source_license_checked=True,
+                    eval_results=str(eval_scores),
+                    full_eval_results=str(sampled_eval),
+                    serving_card=str(serving),
+                    quantization_card=str(quantization),
+                    promotion_report=str(promotion),
+                )
+            )
+
+            gate = next(item for item in plan["release_gates"] if item["name"] == "full_eval_results_present")
+            self.assertTrue(plan["blocked"])
+            self.assertEqual(gate["status"], "fail")
+            self.assertIn("requires at least 80", gate["message"])
 
     def test_release_class_audit_has_no_errors(self) -> None:
         findings = audit_release_classes()
@@ -331,6 +437,10 @@ class HubCliTests(unittest.TestCase):
             (model_dir / "model.safetensors").write_text("placeholder", encoding="utf-8")
             eval_scores = root / "scores.csv"
             eval_scores.write_text("bucket,metric,value\nnormal,pass,1.0\n", encoding="utf-8")
+            full_eval = write_full_eval_run(
+                root,
+                variant="local_ft_v4_nvfp4_attention_output_bf16_modelopt",
+            )
             serving = root / "serving.json"
             serving.write_text(json.dumps({"success_rate": 1.0}), encoding="utf-8")
             quantization = root / "quantization.json"
@@ -353,6 +463,8 @@ class HubCliTests(unittest.TestCase):
                         "--source-license-checked",
                         "--eval-results",
                         str(eval_scores),
+                        "--full-eval-results",
+                        str(full_eval),
                         "--serving-card",
                         str(serving),
                         "--quantization-card",
@@ -395,6 +507,10 @@ class HubCliTests(unittest.TestCase):
             (model_dir / "scratch.tmp").write_text("do not upload", encoding="utf-8")
             eval_scores = root / "scores.csv"
             eval_scores.write_text("bucket,metric,value\nnormal,pass,1.0\n", encoding="utf-8")
+            full_eval = write_full_eval_run(
+                root,
+                variant="local_ft_v4_nvfp4_attention_output_bf16_modelopt",
+            )
             serving = root / "serving.json"
             serving.write_text(json.dumps({"success_rate": 1.0}), encoding="utf-8")
             quantization = root / "quantization.json"
@@ -410,6 +526,7 @@ class HubCliTests(unittest.TestCase):
                 validation_state="spark_cluster_validated",
                 source_license_checked=True,
                 eval_results=str(eval_scores),
+                full_eval_results=str(full_eval),
                 serving_card=str(serving),
                 quantization_card=str(quantization),
                 promotion_report=str(promotion),
@@ -435,6 +552,8 @@ class HubCliTests(unittest.TestCase):
             self.assertIn("config.json", uploaded_repo_paths)
             self.assertIn("model.safetensors", uploaded_repo_paths)
             self.assertIn("evidence/eval_results/scores.csv", uploaded_repo_paths)
+            self.assertIn("evidence/full_eval_results/scores.csv", uploaded_repo_paths)
+            self.assertIn("evidence/full_eval_manifest/manifest.json", uploaded_repo_paths)
             self.assertIn("evidence/hub_publish.json", uploaded_repo_paths)
             self.assertNotIn("scratch.tmp", uploaded_repo_paths)
             provenance = (root / "out" / "hub_publish.json").read_text(encoding="utf-8")

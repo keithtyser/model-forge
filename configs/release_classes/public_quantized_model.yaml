@@ -7,10 +7,12 @@ publish_reports: true
 publish_raw_outputs: false
 allow_public_checkpoint: true
 minimum_validation_state: spark_single_node_validated
+minimum_full_eval_cases: 80
 requires:
   - model_card_complete
   - source_license_checked
   - eval_results_present
+  - full_eval_results_present
   - quantization_card_present
   - serving_card_present
   - unsafe_examples_redacted

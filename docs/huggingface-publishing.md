@@ -28,6 +28,7 @@ Execute a model upload only after the dry run is unblocked:
   --artifact-path <local-artifact-dir> \
   --validation-state spark_cluster_validated \
   --eval-results <serving-eval-dir-or-scores.csv> \
+  --full-eval-results <exact-model-full-eval-dir-or-scores.csv> \
   --serving-card <serve-bench-summary.json> \
   --quantization-card <quantization-card.json> \
   --promotion-report <promotion-or-gate.json> \
@@ -37,6 +38,28 @@ Execute a model upload only after the dry run is unblocked:
 
 `publish-model --execute` defaults to environment tokens only. It will not use a
 cached Hugging Face token unless `--token-source cache` is passed explicitly.
+
+## Model Names
+
+Published model repos use clean, durable names. The default convention is:
+
+```text
+<owner>/model-forge-<family>-<size>-<posttrain-stage>-<precision>-<target>
+```
+
+Examples:
+
+```text
+keithtyser/model-forge-qwen36-27b-ft-v4-nvfp4-dgx-spark
+keithtyser/model-forge-gemma4-26b-a4b-ft-abli-r7-nvfp4-dgx-spark
+```
+
+Do not put exporter implementation details, layer-policy minutiae, local path
+names, trial IDs, or long config names in the public repo slug. Put those in the
+model card, variant metadata, and evidence files. A variant can declare
+`hub_slug` in `configs/model_families/<family>.yaml`; callers can use
+`--publish-slug` for a one-off override. `--repo-id` remains the escape hatch
+when publishing to an existing repo.
 
 Plan a public dataset release through the dataset factory:
 
@@ -94,6 +117,10 @@ Every model plan records `release_gates` in `hub_publish.json`. Common gates:
 - source license and provenance were explicitly checked
 - eval results, quantization cards, serving cards, promotion reports, or risk
   reports are present when required
+- public model releases include `--full-eval-results` for the exact checkpoint
+  being published; the evidence must be a Model Forge eval run directory or
+  `scores.csv` with sibling `manifest.json`, non-dry-run, matching the variant,
+  and meeting the release class case-count floor
 - raw unsafe outputs are excluded from public plans
 - planned upload files do not contain secret-like tokens or private absolute
   paths

@@ -30,14 +30,16 @@ This is the short handoff state for humans and agents. Use
   passed tokenizer and behavior-preservation reports, and passed the NVFP4 gate
   with 1.82x output p50 tok/s speedup plus 1.93x decode-heavy output p50 tok/s
   speedup versus exact BF16 `local_ft_v4`. This proves the current FT-source
-  Blackwell-quantization leg. The public quantized-model Hub plan/model card has
-  now been generated and reviewed; all release gates pass when the sanitized
-  evidence paths are supplied. The Hub planner rewrites a serving-eval directory
-  passed via `--eval-results` to its sanitized `scores.csv`, materializes
-  sanitized JSON evidence when local private paths appear in generated reports,
-  and generated model cards include supplied evidence paths plus NVFP4
-  speedup/readiness summaries. No HF upload was attempted in this session
-  because no Hugging Face token was present in the process environment.
+  Blackwell-quantization leg. Public release is now blocked until a full
+  non-dry-run Model Forge eval exists for the exact
+  `local_ft_v4_nvfp4_attention_output_bf16_modelopt` artifact and is passed via
+  `--full-eval-results`; the current evidence is quantization/serving plus an
+  11-case sampled serving eval, not a full release eval. The Hub planner rewrites
+  eval directories passed via `--eval-results` or `--full-eval-results` to their
+  sanitized `scores.csv`, materializes sanitized JSON evidence when local
+  private paths appear in generated reports, includes full-eval `scores.csv` and
+  manifest evidence, and generated model cards include supplied evidence paths
+  plus NVFP4 speedup/readiness and full-eval metric summaries.
 
 ## Validated So Far
 
@@ -91,10 +93,13 @@ This is the short handoff state for humans and agents. Use
   source-relative NVFP4 gate with 1.82x output p50 tok/s speedup and 1.93x
   decode-heavy output p50 tok/s speedup while preserving sampled quality and
   JSON/tool-use behavior. Keep this as the promoted FT-source Blackwell NVFP4
-  candidate for the current no-ablation scope. Its public quantized-model Hub
-  plan/model card passed all release gates on 2026-06-06; actual upload still
-  requires `HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN` in the environment. The
-  remaining component-sensitivity fallback is
+  candidate for the current no-ablation scope. A public upload attempt was
+  interrupted before model weights committed after we tightened the release
+  requirements; the partial Hub repo was deleted. The planned clean public slug
+  is `keithtyser/model-forge-qwen36-27b-ft-v4-nvfp4-dgx-spark`. Actual upload
+  still requires a full exact-artifact eval plus `HF_TOKEN` or
+  `HUGGINGFACE_HUB_TOKEN` in the environment. The remaining
+  component-sensitivity fallback is
   `local_ft_v4_nvfp4_mlp_only_modelopt`, which keeps attention modules in BF16
   while quantizing MLPs. The matrix default worker is portable `local`; set
   `MODEL_FORGE_QUANT_WORKERS` for a specific cluster.

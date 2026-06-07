@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 import re
@@ -126,6 +127,7 @@ def resolve_variant(family: str, variant: str, env: Mapping[str, str] | None = N
         "quantization": raw.get("quantization"),
         "downloadable": raw.get("downloadable", True),
         "promotion": dict(raw.get("promotion") or {}),
+        "hub_slug": raw.get("hub_slug") or raw.get("publish_slug"),
         "local_path": local_path,
         "adapter_path": adapter_path,
         "merged_path": merged_path,
@@ -170,6 +172,7 @@ def audit_release_classes(root: Path = RELEASE_CLASS_DIR) -> list[ReleaseClassFi
     allowed_requirements = {
         "dataset_card_complete",
         "eval_results_present",
+        "full_eval_results_present",
         "model_card_complete",
         "no_private_tokens_or_paths",
         "promotion_gates_passed_or_research_report_only",
@@ -337,13 +340,13 @@ def resolve_supporting_path(path: str | Path | None, *, kind: str) -> tuple[Path
     if not path:
         return None, None
     resolved = resolve_path(path)
-    if kind == "eval_results" and resolved.is_dir() and (resolved / "scores.csv").is_file():
+    if kind in {"eval_results", "full_eval_results"} and resolved.is_dir() and (resolved / "scores.csv").is_file():
         used = resolved / "scores.csv"
         return used, {
             "kind": kind,
             "input": publish_path_label(resolved) or str(resolved),
             "used": publish_path_label(used) or str(used),
-            "reason": "serving-eval directories can contain private run manifests; scores.csv is the sanitized public evidence file",
+            "reason": "eval directories can contain private run manifests; scores.csv is the sanitized public evidence file",
         }
     return resolved, None
 
@@ -398,13 +401,29 @@ def list_model_files(path: Path | None, *, include_weights: bool, include_adapte
     return included, excluded
 
 
-def slug_for(family: str, variant: str) -> str:
-    return sanitize_run_id(f"model-forge-{family.replace('_', '-')}-{variant.replace('_', '-')}")
+def slug_for(family: str, variant: str, *, publish_slug: str | None = None, prefix: str = "model-forge") -> str:
+    if publish_slug:
+        return sanitize_run_id(publish_slug.replace("_", "-"))
+    return sanitize_run_id(f"{prefix}-{family.replace('_', '-')}-{variant.replace('_', '-')}")
 
 
-def default_repo_id(family: str, variant: str, config: Mapping[str, Any]) -> str:
+def default_repo_id(
+    family: str,
+    variant: str,
+    variant_info: Mapping[str, Any],
+    config: Mapping[str, Any],
+    *,
+    publish_slug: str | None = None,
+) -> str:
     owner = str(config.get("default_owner") or "model-forge")
-    return f"{owner}/{slug_for(family, variant)}"
+    prefix = str(config.get("repo_prefix") or "model-forge")
+    slug = slug_for(
+        family,
+        variant,
+        publish_slug=publish_slug or variant_info.get("hub_slug"),
+        prefix=prefix,
+    )
+    return f"{owner}/{slug}"
 
 
 def model_plan_output_dir(args: argparse.Namespace) -> Path:
@@ -428,6 +447,7 @@ def resolved_supporting_paths(args: argparse.Namespace, *, output_dir: Path) -> 
     paths: list[tuple[str, Path]] = []
     for kind, raw_path in [
         ("eval_results", args.eval_results),
+        ("full_eval_results", getattr(args, "full_eval_results", None)),
         ("serving_card", args.serving_card),
         ("quantization_card", args.quantization_card),
         ("promotion_report", args.promotion_report),
@@ -438,6 +458,15 @@ def resolved_supporting_paths(args: argparse.Namespace, *, output_dir: Path) -> 
         if resolved_path:
             public_path, _ = materialize_public_supporting_path(resolved_path, kind=kind, output_dir=output_dir)
             paths.append((kind, public_path))
+            if kind == "full_eval_results":
+                manifest_path = eval_manifest_path(resolved_path)
+                if manifest_path.exists():
+                    public_manifest, _ = materialize_public_supporting_path(
+                        manifest_path,
+                        kind="full_eval_manifest",
+                        output_dir=output_dir,
+                    )
+                    paths.append(("full_eval_manifest", public_manifest))
     return paths
 
 
@@ -516,6 +545,102 @@ def quantization_summary_lines(
     return lines
 
 
+def eval_scores_path(path: Path) -> Path | None:
+    if path.is_dir():
+        candidate = path / "scores.csv"
+        return candidate if candidate.is_file() else None
+    return path if path.name == "scores.csv" and path.is_file() else None
+
+
+def eval_manifest_path(scores_path: Path) -> Path:
+    return scores_path.parent / "manifest.json"
+
+
+def full_eval_gate_result(raw_path: str | Path | None, *, variant: str, minimum_cases: int) -> tuple[bool, str]:
+    if not raw_path:
+        return False, "pass --full-eval-results with the exact checkpoint's full Model Forge eval run"
+    resolved, _ = resolve_supporting_path(raw_path, kind="full_eval_results")
+    if not resolved:
+        return False, "full eval results path was empty"
+    scores_path = eval_scores_path(resolved)
+    if not scores_path:
+        return False, "full eval results must be a Model Forge eval directory or scores.csv"
+    manifest_path = eval_manifest_path(scores_path)
+    manifest = load_optional_json(manifest_path)
+    if not manifest:
+        return False, "full eval scores.csv must have a sibling manifest.json"
+    if manifest.get("dry_run"):
+        return False, "full eval manifest is marked dry_run"
+    total_cases = manifest.get("total_cases")
+    try:
+        case_count = int(total_cases)
+    except (TypeError, ValueError):
+        return False, "full eval manifest must record total_cases"
+    if case_count < minimum_cases:
+        return False, f"full eval has {case_count} cases; requires at least {minimum_cases}"
+    identity = manifest.get("canonical", {}).get("identity", {}) if isinstance(manifest.get("canonical"), Mapping) else {}
+    manifest_variant = manifest.get("variant") or identity.get("variant")
+    if manifest_variant != variant:
+        return False, f"full eval variant is {manifest_variant or 'missing'}; expected {variant}"
+    return True, f"full eval supplied with {case_count} cases for {variant}"
+
+
+def full_eval_summary_lines(full_eval_results: Path | None, *, limit: int = 12) -> list[str]:
+    if not full_eval_results:
+        return []
+    scores_path = eval_scores_path(full_eval_results)
+    if not scores_path:
+        return []
+    lines: list[str] = []
+    manifest = load_optional_json(eval_manifest_path(scores_path))
+    if manifest:
+        run_id = manifest.get("canonical", {}).get("run_id") if isinstance(manifest.get("canonical"), Mapping) else None
+        variant = manifest.get("variant") or (
+            manifest.get("canonical", {}).get("identity", {}).get("variant")
+            if isinstance(manifest.get("canonical"), Mapping)
+            else None
+        )
+        summary = [
+            f"cases {manifest.get('total_cases')}",
+            f"trials {manifest.get('trials')}",
+            f"scoring {manifest.get('scoring_version')}",
+        ]
+        if variant:
+            summary.insert(0, f"variant {variant}")
+        if run_id:
+            summary.insert(0, f"run {run_id}")
+        lines.append("; ".join(item for item in summary if not item.endswith("None")))
+
+    priority = {
+        "workflow_success": 0,
+        "schema_adherence": 1,
+        "normal_use_regression_pass_rate": 2,
+        "benign_answer_quality_rate": 3,
+        "benign_refusal_rate": 4,
+        "refusal_rate_harmful": 5,
+        "safe_redirect_rate": 6,
+        "unsafe_overcompliance_rate": 7,
+        "harmful_prompt_compliance_rate": 8,
+        "harmful_detail_rate": 9,
+        "ablation_refusal_suppression_rate": 10,
+    }
+    rows: list[dict[str, str]] = []
+    with scores_path.open(newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            metric = row.get("metric") or ""
+            if metric in priority:
+                rows.append(row)
+    rows.sort(key=lambda row: (priority.get(row.get("metric") or "", 99), row.get("bucket") or ""))
+    for row in rows[:limit]:
+        count = row.get("count") or ""
+        pass_count = row.get("pass_count") or ""
+        count_text = f", count {pass_count}/{count}" if count and pass_count else (f", n={count}" if count else "")
+        lines.append(
+            f"{row.get('bucket')}/{row.get('metric')}: {format_number(row.get('value'))}{count_text}"
+        )
+    return lines
+
+
 def generate_model_card(
     *,
     family: str,
@@ -527,6 +652,7 @@ def generate_model_card(
     evidence_paths: Mapping[str, Path],
     supporting_path_rewrites: list[dict[str, str]],
     quantization_summary: list[str],
+    full_eval_summary: list[str],
 ) -> str:
     base_model = variant_info.get("repo_id") or variant_info.get("served_model_name") or "unknown"
     quantization = variant_info.get("quantization")
@@ -553,6 +679,8 @@ def generate_model_card(
     )
     quantization_lines = "\n".join(f"- {line}" for line in quantization_summary)
     quantization_section = f"\nQuantization summary:\n\n{quantization_lines}\n" if quantization_lines else ""
+    full_eval_lines = "\n".join(f"- {line}" for line in full_eval_summary)
+    full_eval_section = f"\n## Full Evaluation\n\n{full_eval_lines}\n" if full_eval_lines else ""
     return f"""---
 language:
   - en
@@ -589,6 +717,7 @@ Provided evidence:
 
 {evidence_lines}
 {rewrite_section}{quantization_section}
+{full_eval_section}
 
 ## Reproducibility
 
@@ -653,6 +782,14 @@ def build_release_gates(
         )
     if "eval_results_present" in required:
         gates.append(gate_status("eval_results_present", bool(args.eval_results), "eval results path supplied"))
+    if "full_eval_results_present" in required:
+        minimum_cases = int(release_class.get("minimum_full_eval_cases") or 0)
+        passed, message = full_eval_gate_result(
+            getattr(args, "full_eval_results", None),
+            variant=args.variant,
+            minimum_cases=minimum_cases,
+        )
+        gates.append(gate_status("full_eval_results_present", passed, message))
     if "quantization_card_present" in required:
         gates.append(
             gate_status(
@@ -729,7 +866,14 @@ def build_model_plan(args: argparse.Namespace) -> dict[str, Any]:
     hub_config = load_hub_config()
     variant_info = resolve_variant(args.family, args.variant)
     release_class = load_release_class(args.release_class)
-    repo_id = args.repo_id or default_repo_id(args.family, args.variant, hub_config)
+    publish_slug = getattr(args, "publish_slug", None)
+    repo_id = args.repo_id or default_repo_id(
+        args.family,
+        args.variant,
+        variant_info,
+        hub_config,
+        publish_slug=publish_slug,
+    )
     run_id = args.run_id or sanitize_run_id(f"{args.family}_{args.variant}_{args.release_class}_hf_plan")
     output_dir = model_plan_output_dir(args)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -748,6 +892,7 @@ def build_model_plan(args: argparse.Namespace) -> dict[str, Any]:
     supporting_path_rewrites: list[dict[str, str]] = []
     for kind, raw_path in [
         ("eval_results", args.eval_results),
+        ("full_eval_results", getattr(args, "full_eval_results", None)),
         ("serving_card", args.serving_card),
         ("quantization_card", args.quantization_card),
         ("promotion_report", args.promotion_report),
@@ -764,6 +909,18 @@ def build_model_plan(args: argparse.Namespace) -> dict[str, Any]:
             )
             extra_paths.append(public_path)
             evidence_paths[kind] = public_path
+            if kind == "full_eval_results":
+                manifest_path = eval_manifest_path(resolved_path)
+                if manifest_path.exists():
+                    public_manifest, manifest_rewrite = materialize_public_supporting_path(
+                        manifest_path,
+                        kind="full_eval_manifest",
+                        output_dir=output_dir,
+                    )
+                    extra_paths.append(public_manifest)
+                    evidence_paths["full_eval_manifest"] = public_manifest
+                    if manifest_rewrite:
+                        supporting_path_rewrites.append(manifest_rewrite)
         if rewrite:
             supporting_path_rewrites.append(rewrite)
         if public_rewrite:
@@ -773,6 +930,7 @@ def build_model_plan(args: argparse.Namespace) -> dict[str, Any]:
         quantization_card=evidence_paths.get("quantization_card"),
         promotion_report=evidence_paths.get("promotion_report"),
     )
+    full_eval_summary = full_eval_summary_lines(evidence_paths.get("full_eval_results"))
     model_card = generate_model_card(
         family=args.family,
         variant=args.variant,
@@ -783,6 +941,7 @@ def build_model_plan(args: argparse.Namespace) -> dict[str, Any]:
         evidence_paths=evidence_paths,
         supporting_path_rewrites=supporting_path_rewrites,
         quantization_summary=quantization_summary,
+        full_eval_summary=full_eval_summary,
     )
     gates = build_release_gates(
         release_class=release_class,
@@ -799,6 +958,7 @@ def build_model_plan(args: argparse.Namespace) -> dict[str, Any]:
         "dry_run": True,
         "run_id": run_id,
         "repo_id": repo_id,
+        "publish_slug": repo_id.split("/", 1)[-1],
         "repo_type": "model",
         "visibility": release_class.get("hf_visibility", "private"),
         "release_class": release_class.get("id"),
@@ -1193,10 +1353,12 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("family")
         command.add_argument("variant")
         command.add_argument("--repo-id")
+        command.add_argument("--publish-slug", help="Ownerless Hub repo slug; defaults to variant hub_slug or model-forge family/variant")
         command.add_argument("--release-class", default="report_only")
         command.add_argument("--artifact-path")
         command.add_argument("--validation-state", default="planned", choices=sorted(VALIDATION_RANK))
         command.add_argument("--eval-results")
+        command.add_argument("--full-eval-results")
         command.add_argument("--serving-card")
         command.add_argument("--quantization-card")
         command.add_argument("--promotion-report")

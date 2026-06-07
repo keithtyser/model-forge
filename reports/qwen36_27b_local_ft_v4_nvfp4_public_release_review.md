@@ -2,8 +2,8 @@
 
 Date: 2026-06-06
 
-Status: public quantized-model Hub plan reviewed and unblocked for the
-no-ablation Qwen workflow.
+Status: public quantized-model Hub plan reviewed, then blocked pending a full
+non-dry-run eval of the exact NVFP4 artifact.
 
 ## Scope
 
@@ -23,7 +23,7 @@ It does not cover the paused FT-ablation/behavior-edit branch.
   `~/models/model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_attention_output_bf16_modelopt`
 - Release class: `public_quantized_model`
 - Planned Hub repo:
-  `keithtyser/model-forge-qwen36-27b-local-ft-v4-nvfp4-attention-output-bf16-modelopt`
+  `keithtyser/model-forge-qwen36-27b-ft-v4-nvfp4-dgx-spark`
 
 ## Evidence Reviewed
 
@@ -33,6 +33,7 @@ It does not cover the paused FT-ablation/behavior-edit branch.
   `reports/generated/serve_bench/qwen36_27b_local_ft_v4_nvfp4_attention_output_bf16_modelopt_tp2_core_20260606/summary.json`
 - Serving eval scores:
   `reports/generated/serving_evals/qwen36_27b_local_ft_v4_nvfp4_attention_output_bf16_modelopt_tp2_serving_eval_20260606/scores.csv`
+  This is an 11-case sampled serving eval, not the full release eval.
 - Quantization card:
   `reports/generated/quantization/qwen36_local_ft_v4_bf16_vs_nvfp4_attention_output_bf16_modelopt_20260606/quantization_card.json`
 - NVFP4 evidence gate:
@@ -51,6 +52,7 @@ It does not cover the paused FT-ablation/behavior-edit branch.
   --artifact-path ~/models/model-forge-quantized/qwen36_27b/local_ft_v4_nvfp4_attention_output_bf16_modelopt \
   --validation-state spark_cluster_validated \
   --eval-results reports/generated/serving_evals/qwen36_27b_local_ft_v4_nvfp4_attention_output_bf16_modelopt_tp2_serving_eval_20260606 \
+  --full-eval-results <exact-nvfp4-full-eval-dir> \
   --serving-card reports/generated/serve_bench/qwen36_27b_local_ft_v4_nvfp4_attention_output_bf16_modelopt_tp2_core_20260606/summary.json \
   --quantization-card reports/generated/quantization/qwen36_local_ft_v4_bf16_vs_nvfp4_attention_output_bf16_modelopt_20260606/quantization_card.json \
   --promotion-report reports/generated/quantization/qwen36_local_ft_v4_bf16_vs_nvfp4_attention_output_bf16_modelopt_20260606/nvfp4_evidence_gate.json \
@@ -61,12 +63,27 @@ It does not cover the paused FT-ablation/behavior-edit branch.
 
 ## Gate Result
 
-The reviewed plan returned `blocked: false` with all release gates passing:
+The original reviewed plan returned `blocked: false` before public model
+releases required `--full-eval-results`. The Hub CLI now requires full eval
+evidence for public quantized checkpoints and public adapters. With the current
+evidence set, the release is blocked by:
+
+- `full_eval_results_present`
+
+The full eval evidence must be a Model Forge eval directory or `scores.csv` with
+sibling `manifest.json`, `dry_run: false`, matching
+`local_ft_v4_nvfp4_attention_output_bf16_modelopt`, and at least 80 cases for
+the current release class. The 11-case serving eval is retained as serving
+quality evidence but does not satisfy this gate.
+
+The remaining reviewed gates are expected to pass when the same sanitized
+evidence paths are supplied:
 
 - `validation_state`
 - `model_card_complete`
 - `source_license_checked`
 - `eval_results_present`
+- `full_eval_results_present` after the exact full eval is run
 - `quantization_card_present`
 - `serving_card_present`
 - `promotion_gates_passed_or_research_report_only`
@@ -83,10 +100,12 @@ paths.
 ## Decision
 
 Promote `local_ft_v4_nvfp4_attention_output_bf16_modelopt` as the validated
-Qwen FT-source Blackwell NVFP4 candidate for the no-ablation workflow. It is
-eligible for HF upload through the Hub CLI when `HF_TOKEN` or
-`HUGGINGFACE_HUB_TOKEN` is present in the environment. Do not embed tokens in
-commands, docs, reports, or Git history.
+Qwen FT-source Blackwell NVFP4 candidate for the no-ablation workflow, but do
+not publish it as a public model until the exact NVFP4 artifact has a full eval
+run attached through `--full-eval-results`.
 
-No upload was attempted in this review because no Hugging Face token was present
-in the process environment.
+On 2026-06-06, an upload to the older over-specific repo name was interrupted
+before model weights committed after the naming and full-eval issue was caught.
+The partial Hub repo contained only small metadata files and was deleted. Future
+upload should use the clean repo slug above and include the full-eval evidence
+in the model card.

@@ -183,9 +183,10 @@ decode-heavy output p50 tok/s speedup versus exact BF16 `local_ft_v4`.
 
 Decision: keep `local_ft_v4_nvfp4_attention_output_bf16_modelopt` as validated
 public-release evidence for the FT-source Blackwell quantization leg. The
-public quantized-model release plan/model card has now been generated and
-reviewed; all release gates pass when the sanitized evidence paths are
-supplied. The remaining component-sensitivity fallback is
+public quantized-model release plan/model card now requires a full non-dry-run
+eval of this exact NVFP4 artifact through `--full-eval-results`; the sampled
+11-case serving eval is not enough for public upload. The remaining
+component-sensitivity fallback is
 `local_ft_v4_nvfp4_mlp_only_modelopt`; run it only if more Qwen FT-source
 quantization sensitivity data is needed. The Qwen matrix now defaults to
 `workers: local` for open-source portability; set `MODEL_FORGE_QUANT_WORKERS`
@@ -9371,4 +9372,38 @@ PYTHONPATH=src python3 -m unittest \
   tests.test_abliteration_pipeline.AbliterationPlanTests.test_qwen_candidate_loop_blocks_rejected_sae_through_v42_and_has_no_ready_candidate \
   tests.test_abliteration_pipeline.AbliterationPlanTests.test_candidate_loop_blocks_rejected_v21_to_v42_and_has_no_ready_candidate -v
 ./forge doctor
+```
+
+### 2026-06-06 Qwen NVFP4 Hub release naming and full-eval gate
+
+Hypothesis: public model releases need stable names and exact-artifact full eval
+evidence. The previous default repo slug mirrored the long internal variant name
+and the Qwen NVFP4 card only had quantization/serving plus an 11-case sampled
+serving eval. That is enough to validate the quantization recipe, but not enough
+for a public model card.
+
+Changes:
+
+- Added variant-level `hub_slug` plus CLI `--publish-slug`; Qwen public target
+  is now `keithtyser/model-forge-qwen36-27b-ft-v4-nvfp4-dgx-spark`.
+- Added `--full-eval-results` to `forge hf plan-model|publish-model`.
+- Public quantized checkpoints and public adapters now require
+  `full_eval_results_present`.
+- The full-eval gate requires a Model Forge eval directory or `scores.csv` with
+  sibling `manifest.json`, `dry_run: false`, matching variant metadata, and at
+  least 80 cases for the current public release classes.
+- Generated model cards summarize key full-eval metrics when full eval evidence
+  is supplied, and uploads include both full-eval `scores.csv` and manifest
+  evidence.
+
+Operational note: an upload to the older over-specific Qwen repo name was
+interrupted before model weights committed after the release issue was caught.
+The partial Hub repo contained only small metadata files and was deleted. Do not
+resume that upload. Run the exact NVFP4 full eval first, then publish to the
+clean slug.
+
+Validation:
+
+```bash
+.venv/bin/python -m unittest tests.test_hub_cli
 ```

@@ -11,9 +11,10 @@ and W4A16 serves fast but generates degenerate repeated punctuation. The
 component-sensitivity candidate
 `local_ft_v4_nvfp4_attention_output_bf16_modelopt` keeps attention output
 projections in BF16, passes behavior and tokenizer preservation, and passes the
-NVFP4 gate with source-relative speedup. The public quantized-model release
-plan/model card has been generated and reviewed; all release gates pass with the
-sanitized evidence paths supplied.
+NVFP4 gate with source-relative speedup. Public model upload now requires a full
+non-dry-run eval of this exact NVFP4 artifact via `--full-eval-results`; the
+current 11-case sampled serving eval remains serving-quality evidence, not a
+full release eval.
 
 ## Hypothesis
 
