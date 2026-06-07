@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from model_forge.evals.compare_runs import compare_runs, load_run
+from model_forge.evals.compare_runs import compare_runs, load_run, print_terminal_results
 
 
 def write_scores(path: Path, rows: list[dict[str, object]]) -> None:
@@ -252,6 +252,33 @@ class CompareReportV2Tests(unittest.TestCase):
         self.assertEqual(recommendation["decision"], "hold_primary_goal_not_met")
         self.assertFalse(recommendation["primary_goal"]["passed"])
         self.assertEqual(recommendation["primary_goal"]["value"], 0.4)
+
+    def test_terminal_results_handles_candidate_only_metric_without_delta(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_run(root / "base", variant="base", alias="base", git_commit="a" * 40, config_sha="same")
+            write_run(root / "candidate", variant="candidate", alias="candidate", git_commit="a" * 40, config_sha="same")
+            with (root / "candidate" / "scores.csv").open("a", newline="") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=["bucket", "metric", "value", "count", "pass_count", "fail_count", "ci_low", "ci_high", "stddev"],
+                )
+                writer.writerow(
+                    {
+                        "bucket": "candidate_only",
+                        "metric": "tokens_per_second",
+                        "value": 10.0,
+                        "count": 1,
+                    }
+                )
+            comparison = compare_runs(
+                {
+                    "base": load_run("base", root / "base"),
+                    "candidate": load_run("candidate", root / "candidate"),
+                }
+            )
+
+            print_terminal_results(comparison, ["base", "candidate"], root / "out")
 
     def test_zero_refusal_objective_uses_flat_primary_metric(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -1401,7 +1401,10 @@ def print_terminal_results(comparison: dict[str, Any], variant_names: list[str],
                 continue
             cells.append(f"{value:g}")
             if name != "base":
-                delta = row[f"{name}_delta"]
+                delta = row.get(f"{name}_delta")
+                if not isinstance(delta, (int, float)):
+                    cells.append("")
+                    continue
                 classification = classify_delta(row["metric"], delta) if base_value is not None else "flat"
                 style = "green" if classification == "improvement" else "red" if classification == "regression" else "dim"
                 cells.append(f"[{style}]{delta:+g}[/{style}]")
