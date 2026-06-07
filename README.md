@@ -8,6 +8,10 @@ publish enough evidence that the result is reproducible.
 The repo is model-family driven. Gemma 4 26B-A4B is the first fully worked
 family. Qwen and Llama configs are present as generalization targets so new
 architectures can follow the same workflow without becoming one-off scripts.
+The current Qwen 3.6 27B release path is intentionally no-ablation:
+`base -> local_ft_v4 -> local_ft_v4_nvfp4_attention_output_bf16_modelopt`.
+Treat Qwen FT-ablation notes as historical research unless a new task
+explicitly re-enables behavior editing.
 
 ## Start Here
 
@@ -19,8 +23,9 @@ If you found this repo and have a model you want to post-train, use this path:
 4. Create a fine-tune plan and dataset plan.
 5. Run a bounded fine-tune.
 6. Evaluate the fine-tuned model against the base model.
-7. Run ablation/abliteration only after the source model has a saved baseline.
-8. Quantize only after source and edited variants have comparison evidence.
+7. If behavior editing is part of your objective, run ablation/abliteration
+   only after the source model has a saved baseline.
+8. Quantize only after the source variant has comparison evidence.
 9. Run the full eval suite on the exact artifact you plan to publish.
 10. Publish models/datasets through Hugging Face dry-run plans before upload.
 
@@ -229,7 +234,8 @@ trial IDs in model cards and evidence instead of repo names.
 ## Design Rules
 
 - Compare every edited model against the source checkpoint it came from.
-- Treat ablation success as lower refusal plus retained capability.
+- When ablation is in scope, treat success as lower configured refusal behavior
+  plus retained capability.
 - Report unsafe overcompliance separately from capability.
 - Treat fine-tune success as better capability and format quality without
   regressions.

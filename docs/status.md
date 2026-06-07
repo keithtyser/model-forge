@@ -30,16 +30,16 @@ This is the short handoff state for humans and agents. Use
   passed tokenizer and behavior-preservation reports, and passed the NVFP4 gate
   with 1.82x output p50 tok/s speedup plus 1.93x decode-heavy output p50 tok/s
   speedup versus exact BF16 `local_ft_v4`. This proves the current FT-source
-  Blackwell-quantization leg. Public release is now blocked until a full
-  non-dry-run Model Forge eval exists for the exact
-  `local_ft_v4_nvfp4_attention_output_bf16_modelopt` artifact and is passed via
-  `--full-eval-results`; the current evidence is quantization/serving plus an
-  11-case sampled serving eval, not a full release eval. The Hub planner rewrites
-  eval directories passed via `--eval-results` or `--full-eval-results` to their
-  sanitized `scores.csv`, materializes sanitized JSON evidence when local
-  private paths appear in generated reports, includes full-eval `scores.csv` and
-  manifest evidence, and generated model cards include supplied evidence paths
-  plus NVFP4 speedup/readiness and full-eval metric summaries.
+  Blackwell-quantization leg. The exact-artifact full internal eval is complete
+  at
+  `results/qwen36_27b_v0/base/qwen36_27b_local_ft_v4_nvfp4_attention_output_bf16_modelopt_dgx_spark_rescored_v2`
+  with 96 non-dry-run cases and variant
+  `local_ft_v4_nvfp4_attention_output_bf16_modelopt`. The public release plan
+  uses the no-ablation slug
+  `keithtyser/model-forge-qwen36-27b-ft-v4-nvfp4-dgx-spark` and generated model
+  cards include supplied evidence paths plus NVFP4 speedup/readiness and
+  full-eval metric summaries. Check the Hub repo before resuming; a large-file
+  upload may be in progress or already complete.
 
 ## Validated So Far
 

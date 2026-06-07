@@ -55,6 +55,19 @@ variants:
     served_model_name: local/qwen35-9b-local-ft-abliterated-v0
     base_variant: local_ft
     downloadable: false
+  base_nvfp4_modelopt:
+    repo_id: Qwen/Qwen3.5-9B
+    local_dir: model-forge-quantized/qwen35_9b/base_nvfp4_modelopt
+    served_model_name: model-forge/qwen35-9b-base-nvfp4-modelopt
+    base_variant: base
+    quantization: nvfp4
+    downloadable: false
+    promotion:
+      decision: inconclusive
+      blocked_actions: [hf_upload, promotion]
+      reason: "Qwen 3.5 9B base NVFP4 is a portable small-model validation target; export, serving, eval, and NVFP4 evidence gates are required before release."
+      evidence:
+        - configs/quantization/qwen35_9b_nvfp4_modelopt.yaml
 
 serve:
   script: scripts/dgx_spark_serve_qwen.sh

@@ -1,0 +1,121 @@
+schema_version: model_forge.quantization.v1
+name: qwen35_9b_nvfp4_modelopt
+description: >
+  Self-quantize Qwen 3.5 9B (base) to Blackwell NVFP4 with NVIDIA TensorRT Model
+  Optimizer on a single DGX Spark (GB10), then compare the quantized checkpoint
+  against the unquantized base. Small-model target for fast end-to-end validation.
+family: qwen35_9b
+source_variant: base
+target_variant: base_nvfp4_modelopt
+method: nvfp4
+backend: modelopt
+objective: quantized_quality_retention
+hardware_profile: dgx_spark
+
+calibration:
+  dataset: cnn_dailymail
+  samples: 256
+  seq_len: 1024
+  batch_size: 4
+  smoke_samples: 16
+  smoke_seq_len: 512
+  production_samples: 512
+  production_seq_len: 2048
+  notes: >
+    Public calibration data (cnn_dailymail) for portability. Record exact dataset
+    revision, sequence length, and sample counts on promotion.
+
+exclusions:
+  apply_recommended_keep_patterns: true
+  modules:
+    - lm_head
+    - embed_tokens
+    - router
+    - expert
+
+export:
+  image: model-forge-modelopt-nvfp4:0.43.0
+  dockerfile: docker/modelopt-nvfp4.Dockerfile
+  base_image: vllm-node-tf5:latest
+  modelopt_version: 0.43.0
+  output_root: ~/models/model-forge-quantized/qwen35_9b
+  output_subdir: "{target_variant}"
+  start_if_memory_available_above_fraction: 0.05
+  stop_if_memory_available_below_fraction: 0.05
+  watchdog_poll_seconds: 2
+  require_disk_free_fraction: 0.10
+  systemd_scope:
+    enabled: true
+    user: true
+    CPUQuota: "80%"
+    MemoryMax: "85%"
+    IOWeight: 100
+  docker:
+    cpus: 8
+    omp_num_threads: 8
+    memory_gb: 80
+    memory_swap_gb: 80
+    shm_size_gb: 24
+    nice: 10
+  ptq:
+    strategy: qwen_text_modelopt
+    script: scripts/quantization/qwen_text_modelopt.py
+    qformat: nvfp4
+    dataset: cnn_dailymail
+    calib_size: 256
+    calib_seq: 1024
+    batch_size: 4
+    tensor_parallel: 1
+    pipeline_parallel: 1
+    gpu_max_mem_percentage: 0.70
+    kv_cache_qformat: fp8_cast
+    low_memory_mode: true
+    use_seq_device_map: true
+    trust_remote_code: true
+    skip_generate: true
+
+runtime:
+  served_model_name: model-forge/qwen35-9b-base-nvfp4-modelopt
+  container: vllm-node-tf5
+  host: 0.0.0.0
+  port: 8019
+  tensor_parallel: 1
+  gpu_memory_utilization: 0.70
+  max_model_len: 8192
+  max_num_seqs: 4
+  max_num_batched_tokens: 8192
+  launch:
+    container_name: model_forge_qwen35_9b_nvfp4
+    no_ray: true
+    non_privileged: true
+    mem_limit_gb: 96
+    mem_swap_limit_gb: 96
+    shm_size_gb: 24
+  env:
+    VLLM_NVFP4_GEMM_BACKEND: marlin
+  vllm_flags:
+    trust_remote_code: true
+    quantization: modelopt
+    kv_cache_dtype: fp8
+    load_format: auto
+
+matrix:
+  variants:
+    - source_variant: base
+      target_variant: base_nvfp4_modelopt
+      baseline_eval: results/qwen35_9b_v0/base
+
+outputs:
+  reports_dir: reports/generated/quantization
+  models_dir: ~/models/model-forge-quantized/qwen35_9b
+
+evals:
+  required:
+    - ./forge quantize calibration-manifest qwen35_9b base --config configs/quantization/qwen35_9b_nvfp4_modelopt.yaml --write-manifest
+    - ./forge quantize export qwen35_9b base --config configs/quantization/qwen35_9b_nvfp4_modelopt.yaml --execute
+    - ./forge serve qwen35_9b base_nvfp4_modelopt
+    - ./forge eval qwen35_9b base_nvfp4_modelopt --internal
+    - ./forge quantize nvfp4-gate --config configs/quantization/qwen35_9b_nvfp4_modelopt.yaml
+  card_metrics:
+    - normal_use_regression.normal_use_regression_pass_rate
+    - overall.latency_seconds_median

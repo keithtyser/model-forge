@@ -105,11 +105,12 @@ class VariantGraphTests(unittest.TestCase):
 
     def test_qwen_family_configs_are_graph_ready(self) -> None:
         qwen35 = variant_graph("qwen35_9b")
-        self.assertEqual(qwen35["node_count"], 4)
+        self.assertEqual(qwen35["node_count"], 5)
         self.assertEqual(ancestry(qwen35, "local_ft_abli"), ["base", "local_ft", "local_ft_abli"])
         targets = {edge["target"]: edge for edge in qwen35["edges"]}
         self.assertEqual(targets["local_abli"]["transform"]["type"], "behavior_edit")
         self.assertEqual(targets["local_ft"]["transform"]["type"], "fine_tune")
+        self.assertEqual(targets["base_nvfp4_modelopt"]["transform"]["type"], "quantize")
 
         qwen36 = variant_graph("qwen36_27b")
         self.assertGreaterEqual(qwen36["node_count"], 41)

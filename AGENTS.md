@@ -10,6 +10,14 @@ Do not treat any workflow as Gemma- or Qwen-specific. Existing Gemma, Qwen, and
 Llama configs are examples of a family-driven pattern that should generalize to
 new architectures.
 
+Current Qwen handoff: the user explicitly removed ablation from the active
+goal. Treat the active Qwen 3.6 27B path as
+`base -> local_ft_v4 -> local_ft_v4_nvfp4_attention_output_bf16_modelopt`.
+Do not resume Qwen FT-ablation searches, require zero-refusal gates, or describe
+the Qwen FT v4 NVFP4 release as ablated unless the user explicitly re-enables
+that objective. Historical ablation results remain in docs and reports only for
+auditability.
+
 ## Read First
 
 - `README.md`: concise user workflow.
@@ -314,14 +322,10 @@ ModelOpt/vLLM compatibility, sampled serving eval, behavior preservation,
 tokenizer preservation, and the NVFP4 gate, with 1.82x output p50 tok/s
 speedup versus exact BF16 source. Treat it as evidence for the generalized
 component-sensitivity workflow. For the no-ablation Qwen scope, the public
-quantized-model HF plan/model card is not release-complete until a full
-Model Forge eval run exists for the exact
-`local_ft_v4_nvfp4_attention_output_bf16_modelopt` artifact. The current
-artifact has quantization, serving, tokenizer, behavior-preservation, and
-sampled serving-eval evidence; it does not yet have a full exact-artifact eval.
-Do not upload it publicly until `--full-eval-results` points to a non-dry-run
-eval directory or `scores.csv` with sibling `manifest.json`, matching the
-variant and meeting the release-class case-count floor.
+quantized-model HF plan/model card must use the exact-artifact full eval at
+`results/qwen36_27b_v0/base/qwen36_27b_local_ft_v4_nvfp4_attention_output_bf16_modelopt_dgx_spark_rescored_v2`
+or a successor full eval with the same variant identity. Do not substitute
+sampled serving evals for this release-class gate.
 
 When planning a public HF model release, pass sanitized evidence files to
 `./forge hf plan-model`. If `--eval-results` points at a serving-eval directory
