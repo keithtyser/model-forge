@@ -21,20 +21,56 @@ from rich.panel import Panel
 from rich.table import Table
 
 from model_forge.data.sources import registry_summary
+from model_forge.registry import load_yaml, resolve_repo_path
+
+
+__all__ = [
+    "EVAL_REPAIR_DATASET_SCHEMA_VERSION",
+    "GenerationProvider",
+    "OpenAICompatibleProvider",
+    "PACK_PROMOTION_GATES_SCHEMA_VERSION",
+    "REPO_DIR",
+    "TRAINING_EVIDENCE_GATE_SCHEMA_VERSION",
+    "TemplateGenerationProvider",
+    "build_eval_repair_dataset",
+    "build_feedback_proposal",
+    "build_gap_report",
+    "build_generation_report",
+    "build_pack_promotion_gates",
+    "build_plan",
+    "build_provider",
+    "build_review_report",
+    "build_training_evidence_gate",
+    "command_filter",
+    "command_gaps",
+    "command_generate",
+    "command_judge",
+    "command_pack",
+    "command_plan",
+    "command_propose",
+    "command_publish",
+    "command_repair_from_eval",
+    "command_review",
+    "command_seed",
+    "command_training_gate",
+    "command_verify",
+    "load_holdout_prompts",
+    "load_json",
+    "load_release_class",
+    "load_seed_rows",
+    "load_yaml",
+    "main",
+    "rejection_reasons",
+    "write_jsonl",
+    "write_redacted_publish_bundle",
+    "write_yaml",
+]
 
 REPO_DIR = Path(__file__).resolve().parents[3]
 console = Console()
 TRAINING_EVIDENCE_GATE_SCHEMA_VERSION = "model_forge.dataset_training_evidence_gate.v1"
 PACK_PROMOTION_GATES_SCHEMA_VERSION = "model_forge.dataset_pack_promotion_gates.v1"
 EVAL_REPAIR_DATASET_SCHEMA_VERSION = "model_forge.eval_repair_dataset.v1"
-
-
-def load_yaml(path: Path) -> dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
-        data = yaml.safe_load(handle) or {}
-    if not isinstance(data, dict):
-        raise ValueError(f"expected mapping in {path}")
-    return data
 
 
 def write_yaml(path: Path, data: dict[str, Any]) -> None:
@@ -73,11 +109,6 @@ def load_json(path: Path) -> dict[str, Any]:
     return data
 
 
-def resolve_repo_path(value: str | Path) -> Path:
-    path = Path(value).expanduser()
-    if not path.is_absolute():
-        path = REPO_DIR / path
-    return path
 
 
 def display_path(path: Path) -> str:

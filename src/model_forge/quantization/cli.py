@@ -21,10 +21,73 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from model_forge.gates import all_required_pass, check as status_check
 from model_forge.hardware import detect_hardware_profile, recommended_quantization_env
+from model_forge.registry import (
+    load_family,
+    load_yaml,
+    models_dir,
+    resolve_repo_path,
+    resolve_variant,
+)
 from model_forge.runs.manifest import REPO_DIR, display_path, redact_value, sanitize_run_id
 from model_forge.variants.checkpoint_audit import build_checkpoint_audit
 from model_forge.variants.tokenizer_audit import compare_records, live_round_trip, tokenizer_record
+
+
+__all__ = [
+    "BEHAVIOR_REPORT_SCHEMA_VERSION",
+    "CALIBRATION_MANIFEST_SCHEMA_VERSION",
+    "CARD_SCHEMA_VERSION",
+    "CONFIG_SCHEMA_VERSION",
+    "DEFAULT_CONFIG",
+    "FP8_KV_REPORT_SCHEMA_VERSION",
+    "MODELOPT_RUNTIME_COMPAT_SCHEMA_VERSION",
+    "NVFP4_GATE_SCHEMA_VERSION",
+    "PLAN_SCHEMA_VERSION",
+    "QuantizationConfig",
+    "QuantizationSource",
+    "SENSITIVITY_REPORT_SCHEMA_VERSION",
+    "TOKENIZER_REPORT_SCHEMA_VERSION",
+    "build_behavior_report",
+    "build_calibration_manifest",
+    "build_card",
+    "build_export_command",
+    "build_fp8_kv_report",
+    "build_gguf_export_command",
+    "build_modelopt_export_command",
+    "build_modelopt_runtime_compat_report",
+    "build_nvfp4_gate_report",
+    "build_plan",
+    "build_runtime_command",
+    "build_sensitivity_report",
+    "build_tokenizer_report",
+    "config_from_matrix_entry",
+    "deep_merge_mappings",
+    "export_execution_lock",
+    "filter_matrix_entries",
+    "guard_export",
+    "load_json",
+    "load_optional_json",
+    "load_quantization_config",
+    "load_scores",
+    "main",
+    "matrix_entries",
+    "matrix_workers",
+    "resolve_source",
+    "write_behavior_report_outputs",
+    "write_calibration_manifest_outputs",
+    "write_card_markdown",
+    "write_card_outputs",
+    "write_export_plan",
+    "write_fp8_kv_report_outputs",
+    "write_modelopt_runtime_compat_outputs",
+    "write_nvfp4_gate_outputs",
+    "write_plan_card",
+    "write_plan_outputs",
+    "write_sensitivity_report_outputs",
+    "write_tokenizer_report_outputs",
+]
 
 
 DEFAULT_CONFIG = REPO_DIR / "configs" / "quantization" / "nvfp4_blackwell_runtime.yaml"
@@ -86,20 +149,6 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def resolve_repo_path(value: str | Path) -> Path:
-    path = Path(str(value)).expanduser()
-    if path.is_absolute():
-        return path
-    return REPO_DIR / path
-
-
-def load_yaml(path: Path) -> dict[str, Any]:
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise ValueError(f"expected YAML mapping in {display_path(path)}")
-    return data
-
-
 def load_quantization_config(path: Path) -> QuantizationConfig:
     raw = load_yaml(path)
     if raw.get("schema_version") != CONFIG_SCHEMA_VERSION:
@@ -125,31 +174,10 @@ def load_quantization_config(path: Path) -> QuantizationConfig:
     )
 
 
-def load_family(name: str) -> dict[str, Any]:
-    path = REPO_DIR / "configs" / "model_families" / f"{name}.yaml"
-    if not path.exists():
-        raise ValueError(f"unknown family {name!r}; expected {display_path(path)}")
-    return load_yaml(path)
-
-
-def models_dir(family_config: Mapping[str, Any], env: Mapping[str, str]) -> Path:
-    env_name = str(family_config.get("models_dir_env") or "MODEL_FORGE_MODELS_DIR")
-    raw = env.get(env_name) or family_config.get("default_models_dir") or "~/models"
-    return Path(str(raw)).expanduser()
-
-
 def resolve_family_variant(family: str, variant: str, env: Mapping[str, str]) -> QuantizationSource:
-    family_config = load_family(family)
-    variants = family_config.get("variants") or {}
-    if variant not in variants:
-        raise ValueError(f"unknown variant {variant!r} for family {family!r}; valid: {', '.join(sorted(variants))}")
-    raw_variant = variants[variant]
+    resolved = resolve_variant(family, variant, env)
+    raw_variant = resolved.raw
     local_dir = str(raw_variant.get("merged_local_dir") or raw_variant.get("local_dir") or "")
-    local_path = None
-    if local_dir:
-        local_path = Path(local_dir).expanduser()
-        if not local_path.is_absolute():
-            local_path = models_dir(family_config, env) / local_path
     model_id = str(raw_variant.get("repo_id") or raw_variant.get("served_model_name") or local_dir)
     served_model_name = str(raw_variant.get("served_model_name") or model_id)
     if not model_id:
@@ -159,7 +187,7 @@ def resolve_family_variant(family: str, variant: str, env: Mapping[str, str]) ->
         variant=variant,
         model_id=model_id,
         served_model_name=served_model_name,
-        local_path=local_path,
+        local_path=resolved.local_path,
         promotion=dict(raw_variant.get("promotion") or {}),
     )
 
@@ -1417,15 +1445,6 @@ def build_card(
     }
 
 
-def status_check(name: str, passed: bool, message: str, *, required: bool = True) -> dict[str, Any]:
-    return {
-        "name": name,
-        "status": "pass" if passed else ("fail" if required else "missing"),
-        "required": required,
-        "message": message,
-    }
-
-
 def build_fp8_kv_report(
     config: QuantizationConfig,
     *,
@@ -1500,7 +1519,7 @@ def build_fp8_kv_report(
             "serving_deltas": serving_deltas,
             "sampled_eval_deltas": sampled,
             "checks": checks,
-            "behavior_ready": all(check["status"] == "pass" for check in checks if check["required"]),
+            "behavior_ready": all_required_pass(checks),
             "output_dir": display_path(output_dir),
             "notes": [
                 "FP8 KV reports compare completed source and candidate endpoint evidence.",
@@ -1581,7 +1600,7 @@ def build_behavior_report(
             "sampled_eval_deltas": sampled,
             "serving_deltas": serving,
             "checks": checks,
-            "behavior_preserved": all(check["status"] == "pass" for check in checks if check["required"]),
+            "behavior_preserved": all_required_pass(checks),
             "output_dir": display_path(output_dir),
             "notes": [
                 "Behavior preservation is evaluated against quantized_quality_retention tolerances.",
@@ -1818,7 +1837,7 @@ def build_modelopt_runtime_compat_report(
             f"runtime={runtime_name} quant_algo={quant_algo} supported={supported_algos}",
         ),
     ]
-    passed = all(check["status"] == "pass" for check in checks if check["required"])
+    passed = all_required_pass(checks)
     return redact_value(
         {
             "schema_version": MODELOPT_RUNTIME_COMPAT_SCHEMA_VERSION,
@@ -1906,7 +1925,7 @@ def sensitivity_candidate_summary(
         run_id=run_id,
     )
     checks = [behavior_metric_check(metric, values) for metric, values in card["sampled_eval_deltas"].items()]
-    behavior_preserved = all(check["status"] == "pass" for check in checks if check["required"])
+    behavior_preserved = all_required_pass(checks)
     throughput = card["serving_deltas"].get("output_tokens_per_second_p50") or {}
     decode_heavy = card["serving_deltas"].get("decode_heavy_output_tokens_per_second_p50") or {}
     latency = card["serving_deltas"].get("total_latency_p50") or {}
@@ -2171,7 +2190,7 @@ def build_nvfp4_gate_report(
                 ),
             ),
         )
-    ready = all(check["status"] == "pass" for check in checks if check["required"])
+    ready = all_required_pass(checks)
     return redact_value(
         {
             "schema_version": NVFP4_GATE_SCHEMA_VERSION,

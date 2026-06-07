@@ -9,6 +9,7 @@ from typing import Any, Mapping
 import yaml
 
 from model_forge.objectives import IMPLEMENTATION_STATUSES, VALIDATION_STATES
+from model_forge.registry import family_config_path, load_family as _load_family, load_yaml
 from model_forge.runs.manifest import REPO_DIR, display_path, git_metadata, redact_value, sanitize_run_id
 
 
@@ -22,23 +23,9 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def load_yaml(path: Path) -> dict[str, Any]:
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise ValueError(f"expected YAML mapping in {display_path(path)}")
-    return data
-
-
-def family_config_path(family: str) -> Path:
-    return REPO_DIR / "configs" / "model_families" / f"{family}.yaml"
-
-
 def load_family(family: str) -> dict[str, Any]:
-    path = family_config_path(family)
-    if not path.exists():
-        raise ValueError(f"unknown family {family!r}; expected {display_path(path)}")
-    config = load_yaml(path)
-    config["_path"] = display_path(path)
+    config = _load_family(family)
+    config["_path"] = display_path(family_config_path(family))
     return config
 
 

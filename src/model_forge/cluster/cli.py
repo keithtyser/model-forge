@@ -17,7 +17,37 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from model_forge.diagnostics import severity_exit_code
+from model_forge.registry import load_yaml, resolve_repo_path
 from model_forge.variants.checkpoint_audit import build_checkpoint_audit
+
+
+__all__ = [
+    "DEFAULT_CONFIG",
+    "Finding",
+    "REPO_DIR",
+    "apply_health_consistency",
+    "audit_cluster",
+    "build_launcher_plan",
+    "build_model_sync_plan",
+    "build_sync_plan",
+    "checkpoint_gate_payload",
+    "collect_cluster_stop_containers",
+    "command_stdout",
+    "docker_container_status_command",
+    "docker_gpu_runtime_command",
+    "docker_stop_command",
+    "docker_torchrun_smoke_command",
+    "guarded_command",
+    "json_lines",
+    "load_cluster_config",
+    "load_hardware_profile",
+    "main",
+    "torchrun_smoke_container_name",
+    "total_declared_gpus",
+    "total_declared_memory_gb",
+    "write_json",
+]
 
 
 REPO_DIR = Path(__file__).resolve().parents[3]
@@ -51,13 +81,6 @@ def utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def resolve_repo_path(value: str | Path) -> Path:
-    path = Path(str(value)).expanduser()
-    if path.is_absolute():
-        return path
-    return REPO_DIR / path
-
-
 def display_path(path: str | Path) -> str:
     path = Path(path)
     try:
@@ -67,13 +90,6 @@ def display_path(path: str | Path) -> str:
             return str(path.relative_to(REPO_DIR))
         except ValueError:
             return str(path)
-
-
-def load_yaml(path: Path) -> dict[str, Any]:
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise ValueError(f"expected YAML mapping in {path}")
-    return data
 
 
 def load_cluster_config(path: str | Path) -> tuple[dict[str, Any], Path]:
@@ -1387,7 +1403,7 @@ def main() -> None:
             print(json.dumps([asdict(finding) for finding in findings], indent=2, sort_keys=True) + "\n")
         else:
             render_findings(findings)
-        raise SystemExit(1 if any(finding.severity == "error" for finding in findings) else 0)
+        raise SystemExit(severity_exit_code(findings))
 
     if args.action == "health":
         findings = audit_cluster(cluster, config_path, hardware=hardware, strict=True)
@@ -1660,7 +1676,7 @@ def main() -> None:
             if non_error_findings:
                 console.print()
                 render_findings(non_error_findings)
-        raise SystemExit(1 if any(finding.severity == "error" for finding in findings) else 0)
+        raise SystemExit(severity_exit_code(findings))
 
 
 if __name__ == "__main__":

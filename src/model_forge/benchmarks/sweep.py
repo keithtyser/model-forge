@@ -14,6 +14,7 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from model_forge.diagnostics import has_errors, severity_exit_code
 from model_forge.benchmarks.serve import load_config as load_serve_config
 from model_forge.cluster.cli import (
     audit_cluster,
@@ -419,11 +420,11 @@ def main() -> None:
             print(json.dumps([asdict(finding) for finding in findings], indent=2, sort_keys=True) + "\n")
         else:
             render_findings(findings)
-        raise SystemExit(1 if any(finding.severity == "error" for finding in findings) else 0)
+        raise SystemExit(severity_exit_code(findings))
 
     if args.action == "plan":
         findings = audit_sweep_config(config, config_path, strict=True)
-        if any(finding.severity == "error" for finding in findings):
+        if has_errors(findings):
             if args.json:
                 print(json.dumps({"doctor_findings": [asdict(finding) for finding in findings]}, indent=2, sort_keys=True) + "\n")
             else:

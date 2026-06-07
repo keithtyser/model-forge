@@ -14,7 +14,40 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from model_forge.gates import Gate, failing_gates, gate_status, optional_gate
+from model_forge.registry import (
+    load_family,
+    load_yaml,
+    models_dir as models_root,
+    resolve_repo_path as resolve_path,
+    resolve_variant as _resolve_variant,
+)
 from model_forge.runs.manifest import REPO_DIR, display_path, redact_value, sanitize_run_id
+
+
+__all__ = [
+    "DATASET_PLAN_SCHEMA_VERSION",
+    "DEFAULT_HUB_CONFIG",
+    "DEFAULT_OUTPUT_ROOT",
+    "RELEASE_CLASS_DIR",
+    "ReleaseClassFinding",
+    "SCHEMA_VERSION",
+    "audit_release_classes",
+    "build_dataset_plan",
+    "build_model_plan",
+    "build_parser",
+    "build_release_gates",
+    "entrypoint",
+    "execute_model_publish",
+    "full_eval_gate_result",
+    "full_eval_summary_lines",
+    "hf_status",
+    "load_hub_config",
+    "load_optional_json",
+    "load_release_class",
+    "main",
+    "scan_text_file",
+]
 
 
 SCHEMA_VERSION = "model_forge.hub_publish_plan.v1"
@@ -42,13 +75,6 @@ console = Console(stderr=True)
 
 
 @dataclass(frozen=True)
-class Gate:
-    name: str
-    status: str
-    message: str
-
-
-@dataclass(frozen=True)
 class ReleaseClassFinding:
     severity: str
     check: str
@@ -61,13 +87,6 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def resolve_path(path: str | Path) -> Path:
-    candidate = Path(path).expanduser()
-    if candidate.is_absolute():
-        return candidate
-    return REPO_DIR / candidate
-
-
 def publish_path_label(path: Path | None) -> str | None:
     if path is None:
         return None
@@ -78,60 +97,25 @@ def publish_path_label(path: Path | None) -> str | None:
         return f"<external>/{resolved.name}"
 
 
-def load_yaml(path: Path) -> dict[str, Any]:
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise ValueError(f"expected YAML mapping in {display_path(path)}")
-    return data
-
-
-def load_family(family: str) -> dict[str, Any]:
-    path = REPO_DIR / "configs" / "model_families" / f"{family}.yaml"
-    if not path.exists():
-        raise ValueError(f"unknown model family {family!r}; expected {display_path(path)}")
-    return load_yaml(path)
-
-
-def models_root(family_config: Mapping[str, Any], env: Mapping[str, str] | None = None) -> Path:
-    env = env or os.environ
-    env_name = str(family_config.get("models_dir_env") or "MODEL_FORGE_MODELS_DIR")
-    return Path(str(env.get(env_name) or family_config.get("default_models_dir") or "~/models")).expanduser()
-
-
 def resolve_variant(family: str, variant: str, env: Mapping[str, str] | None = None) -> dict[str, Any]:
-    family_config = load_family(family)
-    variants = family_config.get("variants") or {}
-    if variant not in variants:
-        raise ValueError(f"unknown variant {variant!r} for {family!r}; valid: {', '.join(sorted(variants))}")
-    raw = dict(variants[variant])
-    root = models_root(family_config, env)
-
-    def variant_path(key: str) -> Path | None:
-        local_dir = str(raw.get(key) or "")
-        if not local_dir:
-            return None
-        candidate = Path(local_dir).expanduser()
-        return candidate if candidate.is_absolute() else root / candidate
-
-    adapter_path = variant_path("local_dir")
-    merged_path = variant_path("merged_local_dir")
-    local_path = merged_path or adapter_path
+    """Hub-shaped view of a resolved variant (see :func:`model_forge.registry.resolve_variant`)."""
+    v = _resolve_variant(family, variant, env)
     return {
-        "family": family,
-        "family_display_name": family_config.get("display_name") or family,
-        "variant": variant,
-        "repo_id": raw.get("repo_id"),
-        "served_model_name": raw.get("served_model_name") or raw.get("repo_id"),
-        "base_variant": raw.get("base_variant"),
-        "adapter": bool(raw.get("adapter", False)),
-        "quantization": raw.get("quantization"),
-        "downloadable": raw.get("downloadable", True),
-        "promotion": dict(raw.get("promotion") or {}),
-        "hub_slug": raw.get("hub_slug") or raw.get("publish_slug"),
-        "local_path": local_path,
-        "adapter_path": adapter_path,
-        "merged_path": merged_path,
-        "raw": raw,
+        "family": v.family,
+        "family_display_name": v.family_display_name,
+        "variant": v.variant,
+        "repo_id": v.repo_id,
+        "served_model_name": v.served_model_name,
+        "base_variant": v.base_variant,
+        "adapter": v.adapter,
+        "quantization": v.quantization,
+        "downloadable": v.downloadable,
+        "promotion": v.promotion,
+        "hub_slug": v.hub_slug,
+        "local_path": v.local_path,
+        "adapter_path": v.adapter_path,
+        "merged_path": v.merged_path,
+        "raw": v.raw,
     }
 
 
@@ -732,14 +716,6 @@ release-class gates and write `hub_publish.json` provenance.
 """
 
 
-def gate_status(name: str, passed: bool, message: str) -> Gate:
-    return Gate(name=name, status="pass" if passed else "fail", message=message)
-
-
-def optional_gate(name: str, passed: bool, message: str) -> Gate:
-    return Gate(name=name, status="pass" if passed else "warn", message=message)
-
-
 def validation_state_passes(actual: str, minimum: str) -> bool:
     return VALIDATION_RANK.get(actual, -1) >= VALIDATION_RANK.get(minimum, 0)
 
@@ -951,7 +927,7 @@ def build_model_plan(args: argparse.Namespace) -> dict[str, Any]:
         validation_state=args.validation_state,
         args=args,
     )
-    blocking_failures = [gate for gate in gates if gate.status == "fail"]
+    blocking_failures = failing_gates(gates)
     plan = {
         "schema_version": SCHEMA_VERSION,
         "created_at": utc_now().isoformat(),
@@ -1238,7 +1214,7 @@ def build_dataset_plan(args: argparse.Namespace) -> dict[str, Any]:
         include_raw_outputs=args.include_raw_outputs,
     )
     gates.insert(0, gate_status("dataset_path_exists", dataset_path.exists(), f"path={publish_path_label(dataset_path)}"))
-    blocking_failures = [gate for gate in gates if gate.status == "fail"]
+    blocking_failures = failing_gates(gates)
     plan = {
         "schema_version": DATASET_PLAN_SCHEMA_VERSION,
         "created_at": utc_now().isoformat(),
