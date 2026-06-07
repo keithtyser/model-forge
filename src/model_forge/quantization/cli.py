@@ -21,6 +21,7 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from model_forge.gates import all_required_pass, check as status_check
 from model_forge.hardware import detect_hardware_profile, recommended_quantization_env
 from model_forge.registry import (
     load_family,
@@ -1389,15 +1390,6 @@ def build_card(
     }
 
 
-def status_check(name: str, passed: bool, message: str, *, required: bool = True) -> dict[str, Any]:
-    return {
-        "name": name,
-        "status": "pass" if passed else ("fail" if required else "missing"),
-        "required": required,
-        "message": message,
-    }
-
-
 def build_fp8_kv_report(
     config: QuantizationConfig,
     *,
@@ -1472,7 +1464,7 @@ def build_fp8_kv_report(
             "serving_deltas": serving_deltas,
             "sampled_eval_deltas": sampled,
             "checks": checks,
-            "behavior_ready": all(check["status"] == "pass" for check in checks if check["required"]),
+            "behavior_ready": all_required_pass(checks),
             "output_dir": display_path(output_dir),
             "notes": [
                 "FP8 KV reports compare completed source and candidate endpoint evidence.",
@@ -1553,7 +1545,7 @@ def build_behavior_report(
             "sampled_eval_deltas": sampled,
             "serving_deltas": serving,
             "checks": checks,
-            "behavior_preserved": all(check["status"] == "pass" for check in checks if check["required"]),
+            "behavior_preserved": all_required_pass(checks),
             "output_dir": display_path(output_dir),
             "notes": [
                 "Behavior preservation is evaluated against quantized_quality_retention tolerances.",
@@ -1790,7 +1782,7 @@ def build_modelopt_runtime_compat_report(
             f"runtime={runtime_name} quant_algo={quant_algo} supported={supported_algos}",
         ),
     ]
-    passed = all(check["status"] == "pass" for check in checks if check["required"])
+    passed = all_required_pass(checks)
     return redact_value(
         {
             "schema_version": MODELOPT_RUNTIME_COMPAT_SCHEMA_VERSION,
@@ -1878,7 +1870,7 @@ def sensitivity_candidate_summary(
         run_id=run_id,
     )
     checks = [behavior_metric_check(metric, values) for metric, values in card["sampled_eval_deltas"].items()]
-    behavior_preserved = all(check["status"] == "pass" for check in checks if check["required"])
+    behavior_preserved = all_required_pass(checks)
     throughput = card["serving_deltas"].get("output_tokens_per_second_p50") or {}
     decode_heavy = card["serving_deltas"].get("decode_heavy_output_tokens_per_second_p50") or {}
     latency = card["serving_deltas"].get("total_latency_p50") or {}
@@ -2143,7 +2135,7 @@ def build_nvfp4_gate_report(
                 ),
             ),
         )
-    ready = all(check["status"] == "pass" for check in checks if check["required"])
+    ready = all_required_pass(checks)
     return redact_value(
         {
             "schema_version": NVFP4_GATE_SCHEMA_VERSION,

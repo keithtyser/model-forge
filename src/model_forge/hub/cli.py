@@ -14,6 +14,7 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from model_forge.gates import Gate, failing_gates, gate_status, optional_gate
 from model_forge.registry import (
     load_family,
     load_yaml,
@@ -46,13 +47,6 @@ ABSOLUTE_PRIVATE_PATH_RE = re.compile(r"(?<![A-Za-z0-9_])/(home|Users)/[A-Za-z0-
 ABSOLUTE_PRIVATE_PATH_VALUE_RE = re.compile(r"(?<![A-Za-z0-9_])/(home|Users)/[^\s\"'<>]+")
 
 console = Console(stderr=True)
-
-
-@dataclass(frozen=True)
-class Gate:
-    name: str
-    status: str
-    message: str
 
 
 @dataclass(frozen=True)
@@ -697,14 +691,6 @@ release-class gates and write `hub_publish.json` provenance.
 """
 
 
-def gate_status(name: str, passed: bool, message: str) -> Gate:
-    return Gate(name=name, status="pass" if passed else "fail", message=message)
-
-
-def optional_gate(name: str, passed: bool, message: str) -> Gate:
-    return Gate(name=name, status="pass" if passed else "warn", message=message)
-
-
 def validation_state_passes(actual: str, minimum: str) -> bool:
     return VALIDATION_RANK.get(actual, -1) >= VALIDATION_RANK.get(minimum, 0)
 
@@ -916,7 +902,7 @@ def build_model_plan(args: argparse.Namespace) -> dict[str, Any]:
         validation_state=args.validation_state,
         args=args,
     )
-    blocking_failures = [gate for gate in gates if gate.status == "fail"]
+    blocking_failures = failing_gates(gates)
     plan = {
         "schema_version": SCHEMA_VERSION,
         "created_at": utc_now().isoformat(),
@@ -1203,7 +1189,7 @@ def build_dataset_plan(args: argparse.Namespace) -> dict[str, Any]:
         include_raw_outputs=args.include_raw_outputs,
     )
     gates.insert(0, gate_status("dataset_path_exists", dataset_path.exists(), f"path={publish_path_label(dataset_path)}"))
-    blocking_failures = [gate for gate in gates if gate.status == "fail"]
+    blocking_failures = failing_gates(gates)
     plan = {
         "schema_version": DATASET_PLAN_SCHEMA_VERSION,
         "created_at": utc_now().isoformat(),

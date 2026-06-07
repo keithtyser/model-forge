@@ -21,6 +21,7 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from model_forge.gates import all_required_pass, check as evidence_status
 from model_forge.runs.manifest import (
     REPO_DIR,
     build_canonical_manifest,
@@ -1084,15 +1085,6 @@ def load_json_object(path: Path) -> dict[str, Any]:
     return data
 
 
-def evidence_status(name: str, passed: bool, message: str, *, required: bool = True) -> dict[str, Any]:
-    return {
-        "name": name,
-        "status": "pass" if passed else ("fail" if required else "missing"),
-        "required": required,
-        "message": message,
-    }
-
-
 def resolve_evidence_path(path: Path | None, base_dir: Path, default_name: str) -> Path:
     if path:
         return resolve_repo_path(path)
@@ -1192,7 +1184,7 @@ def evaluate_serving_evidence(
                 f"eval target model={target.get('model')} base_url={target.get('base_url')}",
             )
         )
-    completion_ready = all(check["status"] == "pass" for check in checks if check["required"])
+    completion_ready = all_required_pass(checks)
     return redact_value(
         {
             "schema_version": EVIDENCE_SCHEMA_VERSION,
