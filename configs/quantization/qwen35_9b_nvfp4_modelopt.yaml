@@ -75,6 +75,7 @@ export:
     skip_generate: true
 
 runtime:
+  extra_args_env: MODEL_FORGE_VLLM_EXTRA
   served_model_name: model-forge/qwen35-9b-base-nvfp4-modelopt
   container: vllm-node-tf5
   host: 0.0.0.0
@@ -119,3 +120,8 @@ evals:
   card_metrics:
     - normal_use_regression.normal_use_regression_pass_rate
     - overall.latency_seconds_median
+
+gates:
+  nvfp4:
+    min_output_speedup: 1.3
+    min_decode_heavy_output_speedup: 1.3

@@ -63,8 +63,8 @@ variants:
     quantization: nvfp4
     downloadable: false
     promotion:
-      decision: inconclusive
-      blocked_actions: [hf_upload, promotion]
+      decision: release_approved
+      blocked_actions: []
       reason: "Qwen 3.5 9B base NVFP4 is a portable small-model validation target; export, serving, eval, and NVFP4 evidence gates are required before release."
       evidence:
         - configs/quantization/qwen35_9b_nvfp4_modelopt.yaml
