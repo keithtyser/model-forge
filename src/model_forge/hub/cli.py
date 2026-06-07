@@ -579,7 +579,7 @@ def full_eval_gate_result(raw_path: str | Path | None, *, variant: str, minimum_
     if case_count < minimum_cases:
         return False, f"full eval has {case_count} cases; requires at least {minimum_cases}"
     identity = manifest.get("canonical", {}).get("identity", {}) if isinstance(manifest.get("canonical"), Mapping) else {}
-    manifest_variant = manifest.get("variant") or identity.get("variant")
+    manifest_variant = identity.get("variant") or manifest.get("variant")
     if manifest_variant != variant:
         return False, f"full eval variant is {manifest_variant or 'missing'}; expected {variant}"
     return True, f"full eval supplied with {case_count} cases for {variant}"
@@ -595,11 +595,11 @@ def full_eval_summary_lines(full_eval_results: Path | None, *, limit: int = 12) 
     manifest = load_optional_json(eval_manifest_path(scores_path))
     if manifest:
         run_id = manifest.get("canonical", {}).get("run_id") if isinstance(manifest.get("canonical"), Mapping) else None
-        variant = manifest.get("variant") or (
+        variant = (
             manifest.get("canonical", {}).get("identity", {}).get("variant")
             if isinstance(manifest.get("canonical"), Mapping)
             else None
-        )
+        ) or manifest.get("variant")
         summary = [
             f"cases {manifest.get('total_cases')}",
             f"trials {manifest.get('trials')}",

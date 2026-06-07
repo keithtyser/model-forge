@@ -13,6 +13,7 @@ from model_forge.evals.run_eval import (
     EvalCase,
     EvalConfig,
     EvalResult,
+    apply_runtime_overrides,
     assert_openai_model_advertised,
     build_manifest,
     contains_refusal,
@@ -35,6 +36,36 @@ from model_forge.pipelines.abliterate import apply_projection
 
 
 class JsonScoringTests(unittest.TestCase):
+    def test_runtime_variant_override_updates_eval_manifest_identity(self) -> None:
+        cfg = EvalConfig(
+            experiment_name="unit_eval",
+            family="qwen36_27b",
+            model_id="Qwen/Qwen3.6-27B",
+            variant="base",
+            prompt_sets=["normal_use_regression"],
+            output_dir="results/unit",
+            backend={"model_alias": "base"},
+            system_prompt="",
+            metrics=[],
+        )
+        case = EvalCase(
+            bucket="normal_use_regression",
+            category="normal_use",
+            case_id="case",
+            prompt="test",
+            expects_json=False,
+            checks={},
+        )
+
+        with patch.dict("os.environ", {"MODEL_FORGE_VARIANT": "local_ft_v4_nvfp4"}):
+            resolved = apply_runtime_overrides(cfg, output_suffix=None)
+            manifest = build_manifest(resolved, [case], dry_run=False)
+
+        self.assertEqual(resolved.variant, "local_ft_v4_nvfp4")
+        self.assertEqual(manifest["variant"], "local_ft_v4_nvfp4")
+        self.assertEqual(manifest["runtime"]["variant"], "local_ft_v4_nvfp4")
+        self.assertEqual(manifest["canonical"]["identity"]["variant"], "local_ft_v4_nvfp4")
+
     def test_json_parser_rejects_trailing_text(self) -> None:
         with self.assertRaises(ValueError):
             try_parse_json('{"goal": "debug", "steps": []}\nextra commentary')

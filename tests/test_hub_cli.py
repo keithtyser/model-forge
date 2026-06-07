@@ -15,6 +15,8 @@ from model_forge.hub.cli import (
     build_dataset_plan,
     build_model_plan,
     execute_model_publish,
+    full_eval_gate_result,
+    full_eval_summary_lines,
     hf_status,
     main,
     scan_text_file,
@@ -361,6 +363,26 @@ class HubCliTests(unittest.TestCase):
             self.assertTrue(plan["blocked"])
             self.assertEqual(gate["status"], "fail")
             self.assertIn("requires at least 80", gate["message"])
+
+    def test_full_eval_gate_prefers_canonical_variant_over_legacy_field(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_dir = write_full_eval_run(root, variant="local_ft_v4_nvfp4_attention_output_bf16_modelopt")
+            manifest_path = run_dir / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["variant"] = "base"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            passed, message = full_eval_gate_result(
+                run_dir,
+                variant="local_ft_v4_nvfp4_attention_output_bf16_modelopt",
+                minimum_cases=80,
+            )
+            summary = full_eval_summary_lines(run_dir)
+
+            self.assertTrue(passed, message)
+            self.assertIn("local_ft_v4_nvfp4_attention_output_bf16_modelopt", message)
+            self.assertIn("variant local_ft_v4_nvfp4_attention_output_bf16_modelopt", summary[0])
 
     def test_release_class_audit_has_no_errors(self) -> None:
         findings = audit_release_classes()

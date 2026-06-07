@@ -236,6 +236,7 @@ def load_config(path: Path) -> EvalConfig:
 def apply_runtime_overrides(cfg: EvalConfig, output_suffix: str | None) -> EvalConfig:
     backend = dict(cfg.backend)
     family = os.getenv("MODEL_FORGE_FAMILY", cfg.family)
+    variant = resolved_variant(cfg)
     if os.getenv("MODEL_FORGE_BASE_URL"):
         backend["base_url"] = os.environ["MODEL_FORGE_BASE_URL"]
     if os.getenv("MODEL_FORGE_MODEL"):
@@ -257,7 +258,11 @@ def apply_runtime_overrides(cfg: EvalConfig, output_suffix: str | None) -> EvalC
     if output_suffix:
         output_dir = str(Path(output_dir) / output_suffix)
 
-    return replace(cfg, family=family, backend=backend, output_dir=output_dir)
+    return replace(cfg, family=family, variant=variant, backend=backend, output_dir=output_dir)
+
+
+def resolved_variant(cfg: EvalConfig) -> str:
+    return os.getenv("MODEL_FORGE_VARIANT") or cfg.variant
 
 
 def load_prompt_set(path: Path) -> list[EvalCase]:
@@ -760,7 +765,7 @@ def collect_runtime_metadata(cfg: EvalConfig, dry_run: bool) -> dict[str, Any]:
         "hostname": platform.node(),
         "platform": platform.platform(),
         "python_version": platform.python_version(),
-        "variant": os.getenv("MODEL_FORGE_VARIANT", cfg.variant),
+        "variant": resolved_variant(cfg),
         "hardware_label": os.getenv("MODEL_FORGE_HARDWARE_LABEL", ""),
         "quantization": os.getenv("MODEL_FORGE_QUANT", ""),
         "context_length": os.getenv("MODEL_FORGE_CONTEXT_LENGTH", ""),
@@ -791,11 +796,12 @@ def build_manifest(
         "eval_provenance_card_json": "eval_provenance_card.json",
         "eval_provenance_card_md": "eval_provenance_card.md",
     }
+    variant = resolved_variant(cfg)
     canonical = build_canonical_manifest(
         run_type="eval",
         status="completed",
         family=cfg.family or None,
-        variant=os.getenv("MODEL_FORGE_VARIANT", cfg.variant),
+        variant=variant,
         command=command or [],
         config_paths=[config_path] if config_path else [],
         output_dir=cfg.output_dir,
@@ -813,7 +819,7 @@ def build_manifest(
         "experiment_name": cfg.experiment_name,
         "family": cfg.family,
         "model_id": cfg.model_id,
-        "variant": cfg.variant,
+        "variant": variant,
         "backend": cfg.backend,
         "prompt_counts": bucket_counts,
         "total_prompts": len(cases),
