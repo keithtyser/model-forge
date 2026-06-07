@@ -17,6 +17,7 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from model_forge.registry import load_yaml, resolve_repo_path
 from model_forge.variants.checkpoint_audit import build_checkpoint_audit
 
 
@@ -51,13 +52,6 @@ def utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def resolve_repo_path(value: str | Path) -> Path:
-    path = Path(str(value)).expanduser()
-    if path.is_absolute():
-        return path
-    return REPO_DIR / path
-
-
 def display_path(path: str | Path) -> str:
     path = Path(path)
     try:
@@ -67,13 +61,6 @@ def display_path(path: str | Path) -> str:
             return str(path.relative_to(REPO_DIR))
         except ValueError:
             return str(path)
-
-
-def load_yaml(path: Path) -> dict[str, Any]:
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise ValueError(f"expected YAML mapping in {path}")
-    return data
 
 
 def load_cluster_config(path: str | Path) -> tuple[dict[str, Any], Path]:

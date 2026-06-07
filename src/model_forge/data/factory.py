@@ -21,20 +21,13 @@ from rich.panel import Panel
 from rich.table import Table
 
 from model_forge.data.sources import registry_summary
+from model_forge.registry import load_yaml, resolve_repo_path
 
 REPO_DIR = Path(__file__).resolve().parents[3]
 console = Console()
 TRAINING_EVIDENCE_GATE_SCHEMA_VERSION = "model_forge.dataset_training_evidence_gate.v1"
 PACK_PROMOTION_GATES_SCHEMA_VERSION = "model_forge.dataset_pack_promotion_gates.v1"
 EVAL_REPAIR_DATASET_SCHEMA_VERSION = "model_forge.eval_repair_dataset.v1"
-
-
-def load_yaml(path: Path) -> dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
-        data = yaml.safe_load(handle) or {}
-    if not isinstance(data, dict):
-        raise ValueError(f"expected mapping in {path}")
-    return data
 
 
 def write_yaml(path: Path, data: dict[str, Any]) -> None:
@@ -73,11 +66,6 @@ def load_json(path: Path) -> dict[str, Any]:
     return data
 
 
-def resolve_repo_path(value: str | Path) -> Path:
-    path = Path(value).expanduser()
-    if not path.is_absolute():
-        path = REPO_DIR / path
-    return path
 
 
 def display_path(path: Path) -> str:

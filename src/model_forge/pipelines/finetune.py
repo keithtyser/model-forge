@@ -16,6 +16,7 @@ from rich.table import Table
 
 from model_forge.data.sources import resolve_sources
 from model_forge.hardware import detect_hardware_profile, recommended_training_env
+from model_forge.registry import resolve_repo_path
 
 
 REPO_DIR = Path(__file__).resolve().parents[3]
@@ -28,13 +29,6 @@ def load_yaml(path: Path) -> dict[str, Any]:
 
 def expand_path(value: str | Path) -> Path:
     return Path(str(value)).expanduser()
-
-
-def resolve_repo_path(value: str | Path) -> Path:
-    path = expand_path(value)
-    if path.is_absolute():
-        return path
-    return REPO_DIR / path
 
 
 def training_run_dir(config: dict[str, Any]) -> Path:

@@ -19,6 +19,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from model_forge.hardware import detect_hardware_profile, recommended_training_env
+from model_forge.registry import resolve_repo_path
 from model_forge.variants.checkpoint_audit import CheckpointFinding, audit_full_checkpoint
 
 console = Console()
@@ -246,13 +247,6 @@ def load_yaml(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise SystemExit(f"config must be a mapping: {path}")
     return data
-
-
-def resolve_repo_path(raw: str | Path, base: Path | None = None) -> Path:
-    path = Path(str(raw)).expanduser()
-    if path.is_absolute():
-        return path
-    return (base or REPO_DIR) / path
 
 
 def display_path(path: str | Path) -> str:

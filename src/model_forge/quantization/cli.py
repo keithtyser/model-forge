@@ -22,6 +22,13 @@ from rich.console import Console
 from rich.table import Table
 
 from model_forge.hardware import detect_hardware_profile, recommended_quantization_env
+from model_forge.registry import (
+    load_family,
+    load_yaml,
+    models_dir,
+    resolve_repo_path,
+    resolve_variant,
+)
 from model_forge.runs.manifest import REPO_DIR, display_path, redact_value, sanitize_run_id
 from model_forge.variants.checkpoint_audit import build_checkpoint_audit
 from model_forge.variants.tokenizer_audit import compare_records, live_round_trip, tokenizer_record
@@ -86,20 +93,6 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def resolve_repo_path(value: str | Path) -> Path:
-    path = Path(str(value)).expanduser()
-    if path.is_absolute():
-        return path
-    return REPO_DIR / path
-
-
-def load_yaml(path: Path) -> dict[str, Any]:
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise ValueError(f"expected YAML mapping in {display_path(path)}")
-    return data
-
-
 def load_quantization_config(path: Path) -> QuantizationConfig:
     raw = load_yaml(path)
     if raw.get("schema_version") != CONFIG_SCHEMA_VERSION:
@@ -125,31 +118,10 @@ def load_quantization_config(path: Path) -> QuantizationConfig:
     )
 
 
-def load_family(name: str) -> dict[str, Any]:
-    path = REPO_DIR / "configs" / "model_families" / f"{name}.yaml"
-    if not path.exists():
-        raise ValueError(f"unknown family {name!r}; expected {display_path(path)}")
-    return load_yaml(path)
-
-
-def models_dir(family_config: Mapping[str, Any], env: Mapping[str, str]) -> Path:
-    env_name = str(family_config.get("models_dir_env") or "MODEL_FORGE_MODELS_DIR")
-    raw = env.get(env_name) or family_config.get("default_models_dir") or "~/models"
-    return Path(str(raw)).expanduser()
-
-
 def resolve_family_variant(family: str, variant: str, env: Mapping[str, str]) -> QuantizationSource:
-    family_config = load_family(family)
-    variants = family_config.get("variants") or {}
-    if variant not in variants:
-        raise ValueError(f"unknown variant {variant!r} for family {family!r}; valid: {', '.join(sorted(variants))}")
-    raw_variant = variants[variant]
+    resolved = resolve_variant(family, variant, env)
+    raw_variant = resolved.raw
     local_dir = str(raw_variant.get("merged_local_dir") or raw_variant.get("local_dir") or "")
-    local_path = None
-    if local_dir:
-        local_path = Path(local_dir).expanduser()
-        if not local_path.is_absolute():
-            local_path = models_dir(family_config, env) / local_path
     model_id = str(raw_variant.get("repo_id") or raw_variant.get("served_model_name") or local_dir)
     served_model_name = str(raw_variant.get("served_model_name") or model_id)
     if not model_id:
@@ -159,7 +131,7 @@ def resolve_family_variant(family: str, variant: str, env: Mapping[str, str]) ->
         variant=variant,
         model_id=model_id,
         served_model_name=served_model_name,
-        local_path=local_path,
+        local_path=resolved.local_path,
         promotion=dict(raw_variant.get("promotion") or {}),
     )
 
