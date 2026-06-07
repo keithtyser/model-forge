@@ -23,6 +23,49 @@ from rich.table import Table
 from model_forge.data.sources import registry_summary
 from model_forge.registry import load_yaml, resolve_repo_path
 
+
+__all__ = [
+    "EVAL_REPAIR_DATASET_SCHEMA_VERSION",
+    "GenerationProvider",
+    "OpenAICompatibleProvider",
+    "PACK_PROMOTION_GATES_SCHEMA_VERSION",
+    "REPO_DIR",
+    "TRAINING_EVIDENCE_GATE_SCHEMA_VERSION",
+    "TemplateGenerationProvider",
+    "build_eval_repair_dataset",
+    "build_feedback_proposal",
+    "build_gap_report",
+    "build_generation_report",
+    "build_pack_promotion_gates",
+    "build_plan",
+    "build_provider",
+    "build_review_report",
+    "build_training_evidence_gate",
+    "command_filter",
+    "command_gaps",
+    "command_generate",
+    "command_judge",
+    "command_pack",
+    "command_plan",
+    "command_propose",
+    "command_publish",
+    "command_repair_from_eval",
+    "command_review",
+    "command_seed",
+    "command_training_gate",
+    "command_verify",
+    "load_holdout_prompts",
+    "load_json",
+    "load_release_class",
+    "load_seed_rows",
+    "load_yaml",
+    "main",
+    "rejection_reasons",
+    "write_jsonl",
+    "write_redacted_publish_bundle",
+    "write_yaml",
+]
+
 REPO_DIR = Path(__file__).resolve().parents[3]
 console = Console()
 TRAINING_EVIDENCE_GATE_SCHEMA_VERSION = "model_forge.dataset_training_evidence_gate.v1"

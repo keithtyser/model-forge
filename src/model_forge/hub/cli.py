@@ -25,6 +25,31 @@ from model_forge.registry import (
 from model_forge.runs.manifest import REPO_DIR, display_path, redact_value, sanitize_run_id
 
 
+__all__ = [
+    "DATASET_PLAN_SCHEMA_VERSION",
+    "DEFAULT_HUB_CONFIG",
+    "DEFAULT_OUTPUT_ROOT",
+    "RELEASE_CLASS_DIR",
+    "ReleaseClassFinding",
+    "SCHEMA_VERSION",
+    "audit_release_classes",
+    "build_dataset_plan",
+    "build_model_plan",
+    "build_parser",
+    "build_release_gates",
+    "entrypoint",
+    "execute_model_publish",
+    "full_eval_gate_result",
+    "full_eval_summary_lines",
+    "hf_status",
+    "load_hub_config",
+    "load_optional_json",
+    "load_release_class",
+    "main",
+    "scan_text_file",
+]
+
+
 SCHEMA_VERSION = "model_forge.hub_publish_plan.v1"
 DATASET_PLAN_SCHEMA_VERSION = "model_forge.hub_dataset_publish_plan.v1"
 DEFAULT_HUB_CONFIG = REPO_DIR / "configs" / "hub.yaml"

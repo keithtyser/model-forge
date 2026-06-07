@@ -22,6 +22,34 @@ from model_forge.registry import load_yaml, resolve_repo_path
 from model_forge.variants.checkpoint_audit import build_checkpoint_audit
 
 
+__all__ = [
+    "DEFAULT_CONFIG",
+    "Finding",
+    "REPO_DIR",
+    "apply_health_consistency",
+    "audit_cluster",
+    "build_launcher_plan",
+    "build_model_sync_plan",
+    "build_sync_plan",
+    "checkpoint_gate_payload",
+    "collect_cluster_stop_containers",
+    "command_stdout",
+    "docker_container_status_command",
+    "docker_gpu_runtime_command",
+    "docker_stop_command",
+    "docker_torchrun_smoke_command",
+    "guarded_command",
+    "json_lines",
+    "load_cluster_config",
+    "load_hardware_profile",
+    "main",
+    "torchrun_smoke_container_name",
+    "total_declared_gpus",
+    "total_declared_memory_gb",
+    "write_json",
+]
+
+
 REPO_DIR = Path(__file__).resolve().parents[3]
 DEFAULT_CONFIG = REPO_DIR / "configs" / "clusters" / "local.example.yaml"
 PRIVATE_PATH_PATTERN = re.compile(r"^/(home|Users)/[^/]+/")
