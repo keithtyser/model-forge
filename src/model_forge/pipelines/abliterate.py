@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -4650,90 +4651,83 @@ def write_sota_artifacts(config: dict[str, Any], config_path: Path, backend: str
     return {"plan": selected_plan, "paths": paths, "readme": str(readme)}
 
 
-def heretic_execution_spec(plan: dict[str, Any], runner: str | Path) -> dict[str, Any]:
-    backend = plan["backend_config"]
+@dataclass(frozen=True)
+class SubprocessBackend:
+    """A behavior-edit backend that runs a runner script either in a guarded
+    container (when ``container_image`` is set) or as host Python.
+
+    The four host/container backends differed only in three values: the env var
+    that carries the container image, the container launcher script, and an
+    optional host-Python override env var. Those differences live here; the run
+    logic lives once in :func:`subprocess_execution_spec`.
+    """
+
+    name: str
+    image_env: str
+    container_script: str
+    python_env: str | None = None
+
+
+SUBPROCESS_BEHAVIOR_EDIT_BACKENDS: dict[str, SubprocessBackend] = {
+    "heretic": SubprocessBackend(
+        "heretic", "MODEL_FORGE_HERETIC_IMAGE", "run_heretic_direct_container.sh"
+    ),
+    "obliteratus": SubprocessBackend(
+        "obliteratus", "MODEL_FORGE_OBLITERATUS_IMAGE", "run_obliteratus_container.sh"
+    ),
+    "abliterix": SubprocessBackend(
+        "abliterix",
+        "MODEL_FORGE_ABLITERIX_IMAGE",
+        "run_abliterix_search_container.sh",
+        "MODEL_FORGE_ABLITERIX_PYTHON",
+    ),
+    "apostate": SubprocessBackend(
+        "apostate",
+        "MODEL_FORGE_APOSTATE_IMAGE",
+        "run_apostate_container.sh",
+        "MODEL_FORGE_APOSTATE_PYTHON",
+    ),
+}
+
+
+def subprocess_execution_spec(
+    plan: dict[str, Any], runner: str | Path, backend: SubprocessBackend
+) -> dict[str, Any]:
+    """Container-or-host execution spec for a host/container backend."""
     runner_path = resolve_repo_path(runner)
-    image = backend.get("container_image")
+    image = plan["backend_config"].get("container_image")
     if image:
         env = os.environ.copy()
-        env["MODEL_FORGE_HERETIC_IMAGE"] = str(image)
+        env[backend.image_env] = str(image)
         return {
             "mode": "guarded_container",
-            "command": [str(REPO_DIR / "scripts" / "run_heretic_direct_container.sh"), str(runner_path)],
+            "command": [str(REPO_DIR / "scripts" / backend.container_script), str(runner_path)],
             "cwd": REPO_DIR,
             "env": env,
         }
+    python_bin = os.environ.get(backend.python_env, sys.executable) if backend.python_env else sys.executable
     return {
         "mode": "host_python",
-        "command": [sys.executable, str(runner_path)],
+        "command": [python_bin, str(runner_path)],
         "cwd": Path(plan["work_dir"]),
         "env": None,
     }
+
+
+def heretic_execution_spec(plan: dict[str, Any], runner: str | Path) -> dict[str, Any]:
+    return subprocess_execution_spec(plan, runner, SUBPROCESS_BEHAVIOR_EDIT_BACKENDS["heretic"])
 
 
 def obliteratus_execution_spec(plan: dict[str, Any], runner: str | Path) -> dict[str, Any]:
-    backend = plan["backend_config"]
-    runner_path = resolve_repo_path(runner)
-    image = backend.get("container_image")
-    if image:
-        env = os.environ.copy()
-        env["MODEL_FORGE_OBLITERATUS_IMAGE"] = str(image)
-        return {
-            "mode": "guarded_container",
-            "command": [str(REPO_DIR / "scripts" / "run_obliteratus_container.sh"), str(runner_path)],
-            "cwd": REPO_DIR,
-            "env": env,
-        }
-    return {
-        "mode": "host_python",
-        "command": [sys.executable, str(runner_path)],
-        "cwd": Path(plan["work_dir"]),
-        "env": None,
-    }
+    return subprocess_execution_spec(plan, runner, SUBPROCESS_BEHAVIOR_EDIT_BACKENDS["obliteratus"])
 
 
 def abliterix_execution_spec(plan: dict[str, Any], runner: str | Path) -> dict[str, Any]:
-    backend = plan["backend_config"]
-    runner_path = resolve_repo_path(runner)
-    image = backend.get("container_image")
-    if image:
-        env = os.environ.copy()
-        env["MODEL_FORGE_ABLITERIX_IMAGE"] = str(image)
-        return {
-            "mode": "guarded_container",
-            "command": [str(REPO_DIR / "scripts" / "run_abliterix_search_container.sh"), str(runner_path)],
-            "cwd": REPO_DIR,
-            "env": env,
-        }
-    python_bin = os.environ.get("MODEL_FORGE_ABLITERIX_PYTHON", sys.executable)
-    return {
-        "mode": "host_python",
-        "command": [python_bin, str(runner_path)],
-        "cwd": Path(plan["work_dir"]),
-        "env": None,
-    }
+    return subprocess_execution_spec(plan, runner, SUBPROCESS_BEHAVIOR_EDIT_BACKENDS["abliterix"])
 
 
 def apostate_execution_spec(plan: dict[str, Any], runner: str | Path) -> dict[str, Any]:
-    backend = plan["backend_config"]
-    runner_path = resolve_repo_path(runner)
-    image = backend.get("container_image")
-    if image:
-        env = os.environ.copy()
-        env["MODEL_FORGE_APOSTATE_IMAGE"] = str(image)
-        return {
-            "mode": "guarded_container",
-            "command": [str(REPO_DIR / "scripts" / "run_apostate_container.sh"), str(runner_path)],
-            "cwd": REPO_DIR,
-            "env": env,
-        }
-    python_bin = os.environ.get("MODEL_FORGE_APOSTATE_PYTHON", sys.executable)
-    return {
-        "mode": "host_python",
-        "command": [python_bin, str(runner_path)],
-        "cwd": Path(plan["work_dir"]),
-        "env": None,
-    }
+    return subprocess_execution_spec(plan, runner, SUBPROCESS_BEHAVIOR_EDIT_BACKENDS["apostate"])
 
 
 def _as_float(value: Any) -> float | None:
