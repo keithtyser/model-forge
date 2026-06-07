@@ -52,7 +52,9 @@ candidate
 `local_ft_v4_nvfp4_attention_output_bf16_modelopt` keeps attention output
 projections in BF16, passed export/sync/audit/serve/bench/eval/report/gate
 evidence, and is promoted as the public-release candidate for the current FT ->
-NVFP4 Blackwell path after the public Hub plan/model card passed review.
+NVFP4 Blackwell path after the public Hub plan/model card passed review. The
+published no-ablation model repo is
+`keithtyser/model-forge-qwen36-27b-ft-v4-nvfp4-dgx-spark`.
 
 Hypothesis: ModelOpt NVFP4 should preserve the promoted Qwen local FT v4
 serving behavior closely enough for continued validation while improving tok/s
@@ -109,6 +111,10 @@ Evidence:
 - attention-output-BF16 quantization card, behavior report, tokenizer report,
   and NVFP4 gate:
   `reports/generated/quantization/qwen36_local_ft_v4_bf16_vs_nvfp4_attention_output_bf16_modelopt_20260606`
+- exact-artifact full internal eval:
+  `results/qwen36_27b_v0/base/qwen36_27b_local_ft_v4_nvfp4_attention_output_bf16_modelopt_dgx_spark_rescored_v2`
+- published Hugging Face model:
+  `https://huggingface.co/keithtyser/model-forge-qwen36-27b-ft-v4-nvfp4-dgx-spark`
 
 Result: the core serving benchmark completed 9/9 requests at success rate 1.0,
 13.0560 mean output tok/s, 13.9418 mean decode tok/s, 33.2008 mean total tok/s,
@@ -182,35 +188,34 @@ and the NVFP4 gate passed with 1.82x output p50 tok/s speedup plus 1.93x
 decode-heavy output p50 tok/s speedup versus exact BF16 `local_ft_v4`.
 
 Decision: keep `local_ft_v4_nvfp4_attention_output_bf16_modelopt` as validated
-public-release evidence for the FT-source Blackwell quantization leg. The
-public quantized-model release plan/model card now requires a full non-dry-run
-eval of this exact NVFP4 artifact through `--full-eval-results`; the sampled
-11-case serving eval is not enough for public upload. The remaining
+public-release evidence for the FT-source Blackwell quantization leg. The exact
+NVFP4 artifact completed a full non-dry-run Model Forge eval with 96 cases,
+variant identity `local_ft_v4_nvfp4_attention_output_bf16_modelopt`, and
+release-class full-eval gate passing. The model is published on Hugging Face as
+`keithtyser/model-forge-qwen36-27b-ft-v4-nvfp4-dgx-spark`. The remaining
 component-sensitivity fallback is
 `local_ft_v4_nvfp4_mlp_only_modelopt`; run it only if more Qwen FT-source
 quantization sensitivity data is needed. The Qwen matrix now defaults to
 `workers: local` for open-source portability; set `MODEL_FORGE_QUANT_WORKERS`
 on a specific cluster when distributing exports.
 
-HF release planning: the dry-run public quantized-model plan was tested after
-the no-ablation scope change. The first pass exposed a release-planning
+HF release planning/publishing: the public quantized-model plan was tested
+after the no-ablation scope change. The first pass exposed a release-planning
 generalization pain point: passing the full serving-eval directory as
 `--eval-results` failed the no-private-path gate because `manifest.json`
 contains private absolute paths. The Hub planner now rewrites serving-eval
 directories that contain `scores.csv` to that sanitized evidence file and
-records the rewrite in `supporting_path_rewrites`. The real Qwen dry run now
-passes the no-private-path gate and generates a model card linking back to
-`https://github.com/keithtyser/model-forge` even when the caller passes the full
-serving-eval directory. The generated model card now includes supplied evidence
-paths plus NVFP4 speedup/readiness summaries from the quantization card and gate
-JSON when those reports are provided. A second dry run after the variant
-metadata review returned `blocked: false` with every public quantized-model gate
-passing, including `variant_promotion_not_blocked` and
-`no_private_tokens_or_paths`. The tracked release review is
-`reports/qwen36_27b_local_ft_v4_nvfp4_public_release_review.md`. This session
-does not have `HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN` in the process environment,
-so no upload was attempted. Do not upload from an ad hoc command that embeds a
-token literal.
+records the rewrite in `supporting_path_rewrites`. The real Qwen plan passed
+all public quantized-model gates, including `variant_promotion_not_blocked`,
+`full_eval_required`, and `no_private_tokens_or_paths`, and generated a model
+card linking back to `https://github.com/keithtyser/model-forge`. Uploading the
+single 21.7 GB `model.safetensors` stalled twice in Hub pre-upload, including
+one run with Xet disabled. The successful publish path wrote a separate
+Hub-staging copy with six sharded safetensors files plus
+`model.safetensors.index.json`, uploaded it with
+`HF_HUB_DISABLE_XET=1 HF_HUB_ENABLE_HF_TRANSFER=1`, verified the Hub file list,
+and deleted the temporary sharded staging copy to restore disk headroom. Do not
+commit or log Hugging Face tokens.
 
 ## Qwen 3.6 27B: Native OT Diagnostic Path
 

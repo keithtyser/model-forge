@@ -36,10 +36,10 @@ This is the short handoff state for humans and agents. Use
   with 96 non-dry-run cases and variant
   `local_ft_v4_nvfp4_attention_output_bf16_modelopt`. The public release plan
   uses the no-ablation slug
-  `keithtyser/model-forge-qwen36-27b-ft-v4-nvfp4-dgx-spark` and generated model
-  cards include supplied evidence paths plus NVFP4 speedup/readiness and
-  full-eval metric summaries. Check the Hub repo before resuming; a large-file
-  upload may be in progress or already complete.
+  `keithtyser/model-forge-qwen36-27b-ft-v4-nvfp4-dgx-spark`; it has been
+  uploaded to Hugging Face with six sharded safetensors files plus
+  `model.safetensors.index.json`, full eval `scores.csv`, serving evidence,
+  quantization evidence, and sanitized promotion evidence.
 
 ## Validated So Far
 
@@ -93,12 +93,12 @@ This is the short handoff state for humans and agents. Use
   source-relative NVFP4 gate with 1.82x output p50 tok/s speedup and 1.93x
   decode-heavy output p50 tok/s speedup while preserving sampled quality and
   JSON/tool-use behavior. Keep this as the promoted FT-source Blackwell NVFP4
-  candidate for the current no-ablation scope. A public upload attempt was
-  interrupted before model weights committed after we tightened the release
-  requirements; the partial Hub repo was deleted. The planned clean public slug
-  is `keithtyser/model-forge-qwen36-27b-ft-v4-nvfp4-dgx-spark`. Actual upload
-  still requires a full exact-artifact eval plus `HF_TOKEN` or
-  `HUGGINGFACE_HUB_TOKEN` in the environment. The remaining
+  candidate for the current no-ablation scope. The public Hub release is
+  `keithtyser/model-forge-qwen36-27b-ft-v4-nvfp4-dgx-spark`. The first
+  single-file upload path stalled in Hub socket `CLOSE-WAIT` while trying to
+  pre-upload a 21.7 GB `model.safetensors`; the successful release sharded the
+  checkpoint into six safetensors files and uploaded with `HF_HUB_DISABLE_XET=1`
+  plus `HF_HUB_ENABLE_HF_TRANSFER=1`. The remaining
   component-sensitivity fallback is
   `local_ft_v4_nvfp4_mlp_only_modelopt`, which keeps attention modules in BF16
   while quantizing MLPs. The matrix default worker is portable `local`; set
