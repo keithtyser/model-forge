@@ -22,7 +22,7 @@ GPUS="${MODEL_FORGE_GPUS:-all}"
 if [[ $# -lt 1 ]]; then echo "usage: run_in_container.sh <executable> [args...]" >&2; exit 2; fi
 # dotcache overlays a writable dir at the container HOME/.cache, so libraries that ignore
 # XDG_CACHE_HOME (e.g. flashinfer/vllm) still write somewhere unprivileged.
-mkdir -p "$HF_CACHE" "$MODELS_DIR" "$HF_CACHE/dotcache"
+mkdir -p "$HF_CACHE" "$MODELS_DIR" "$HF_CACHE/dotcache" "$HF_CACHE/dotconfig" "$HF_CACHE/dotlocal"
 exec docker run --rm --gpus "$GPUS" \
   --user "$(id -u):$(id -g)" -e HOME="$HOME" --shm-size="${MODEL_FORGE_SHM_SIZE:-16g}" \
   -e HF_HOME="$HF_CACHE" -e HF_DATASETS_CACHE="$HF_CACHE/datasets" -e HF_HUB_DISABLE_XET=1 \
