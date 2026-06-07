@@ -16,6 +16,7 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from model_forge.diagnostics import severity_exit_code
 from model_forge.runs.manifest import REPO_DIR, display_path, redact_value, sanitize_run_id
 
 
@@ -576,7 +577,7 @@ def main() -> None:
             print(json.dumps([asdict(finding) for finding in findings], indent=2) + "\n")
         else:
             render_findings(findings)
-        raise SystemExit(1 if any(finding.severity == "error" for finding in findings) else 0)
+        raise SystemExit(severity_exit_code(findings))
 
     if args.command == "plan":
         plan = build_plan(config, config_path, candidate_id=args.candidate, run_id=args.run_id)

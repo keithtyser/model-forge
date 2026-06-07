@@ -14,6 +14,7 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from model_forge.diagnostics import Finding, severity_exit_code
 from model_forge.runs.manifest import REPO_DIR, display_path, redact_value, sanitize_run_id
 
 
@@ -25,14 +26,6 @@ SECRET_PATTERN = re.compile(r"(hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,})")
 PRIVATE_PATH_PATTERN = re.compile(r"^/(home|Users)/[^/]+/")
 
 console = Console()
-
-
-@dataclass(frozen=True)
-class Finding:
-    severity: str
-    check: str
-    message: str
-    path: str | None = None
 
 
 def utc_timestamp() -> str:
@@ -387,7 +380,7 @@ def main() -> None:
             print(json.dumps([asdict(finding) for finding in findings], indent=2) + "\n")
         else:
             render_findings(findings)
-        raise SystemExit(1 if any(finding.severity == "error" for finding in findings) else 0)
+        raise SystemExit(severity_exit_code(findings))
 
     if args.command == "plan":
         config, config_path = load_config(args.config)

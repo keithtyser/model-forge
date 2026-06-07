@@ -17,6 +17,7 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from model_forge.diagnostics import severity_exit_code
 from model_forge.registry import load_yaml, resolve_repo_path
 from model_forge.variants.checkpoint_audit import build_checkpoint_audit
 
@@ -1374,7 +1375,7 @@ def main() -> None:
             print(json.dumps([asdict(finding) for finding in findings], indent=2, sort_keys=True) + "\n")
         else:
             render_findings(findings)
-        raise SystemExit(1 if any(finding.severity == "error" for finding in findings) else 0)
+        raise SystemExit(severity_exit_code(findings))
 
     if args.action == "health":
         findings = audit_cluster(cluster, config_path, hardware=hardware, strict=True)
@@ -1647,7 +1648,7 @@ def main() -> None:
             if non_error_findings:
                 console.print()
                 render_findings(non_error_findings)
-        raise SystemExit(1 if any(finding.severity == "error" for finding in findings) else 0)
+        raise SystemExit(severity_exit_code(findings))
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from model_forge.diagnostics import has_errors, severity_exit_code
 from model_forge.runs.manifest import REPO_DIR, display_path, redact_value, sanitize_run_id
 from model_forge.scoring.noncompliance_taxonomy import metric_classification
 
@@ -534,10 +535,10 @@ def main() -> None:
             print(json.dumps([asdict(finding) for finding in findings], indent=2, sort_keys=True) + "\n")
         else:
             render_findings(findings)
-        raise SystemExit(1 if any(finding.severity == "error" for finding in findings) else 0)
+        raise SystemExit(severity_exit_code(findings))
     if args.command == "score":
         findings = audit_config(config, config_path, strict=True)
-        if any(finding.severity == "error" for finding in findings):
+        if has_errors(findings):
             render_findings(findings)
             raise SystemExit(1)
         profile_name = args.profile or next(iter(config.get("profiles", {})), "")
@@ -552,7 +553,7 @@ def main() -> None:
             render_scorecard(scorecard)
     if args.command == "frontier":
         findings = audit_config(config, config_path, strict=True)
-        if any(finding.severity == "error" for finding in findings):
+        if has_errors(findings):
             render_findings(findings)
             raise SystemExit(1)
         profile_name = args.profile or next(iter(config.get("profiles", {})), "")
@@ -567,7 +568,7 @@ def main() -> None:
             console.print(render_frontier_markdown(report))
     if args.command == "risk-report":
         findings = audit_config(config, config_path, strict=True)
-        if any(finding.severity == "error" for finding in findings):
+        if has_errors(findings):
             render_findings(findings)
             raise SystemExit(1)
         profile_name = args.profile or next(iter(config.get("profiles", {})), "")
