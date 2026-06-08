@@ -46,6 +46,7 @@ Usage:
   ./forge golden-summary <family> [output-json]
   ./forge golden-check <family> [baseline-json]
   ./forge doctor [--json]
+  ./forge model describe <path> [--json]
   ./forge families
 
 Examples:
@@ -432,6 +433,9 @@ PY
     ;;
   doctor)
     "$PYTHON" -m model_forge.doctor "$@"
+    ;;
+  model)
+    "$PYTHON" -m model_forge.introspect "$@"
     ;;
   families)
     find "$REPO_DIR/configs/model_families" -maxdepth 1 -name '*.yaml' -printf '%f\n' | sed 's/[.]yaml$//' | sort
