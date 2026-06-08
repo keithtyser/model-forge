@@ -595,6 +595,22 @@ class QuantizationCliTests(unittest.TestCase):
         self.assertIsNone(export["calibration"]["recipe"])
         self.assertIn("quantization_export.lock", export["resource_policy"]["lock_path"])
 
+    def test_modelopt_export_supports_int8_and_awq_for_ampere(self) -> None:
+        import dataclasses
+
+        base = load_quantization_config(Path("configs/quantization/gemma4_26b_a4b_nvfp4_modelopt.yaml"))
+        source = resolve_source(base, "gemma4_26b_a4b", "base", {"MODEL_FORGE_MODELS_DIR": "/models-host"})
+        for method, expected_qformat in (("int8", "int8_sq"), ("awq", "int4_awq")):
+            ptq = {k: v for k, v in (base.export.get("ptq") or {}).items() if k != "qformat"}
+            cfg = dataclasses.replace(base, method=method, export={**base.export, "ptq": ptq})
+            with tempfile.TemporaryDirectory() as tmp:
+                export = build_modelopt_export_command(
+                    cfg, source, output_dir=Path(tmp), run_id=f"unit_{method}",
+                    env={"MODEL_FORGE_MODELS_DIR": "/models-host", "HF_HOME": "/hf-cache"},
+                )
+            self.assertEqual(export["method"], method)
+            self.assertIn(f"--qformat {expected_qformat}", " ".join(export["command"]))
+
     def test_quantization_export_blocks_rejected_source_variant(self) -> None:
         config = load_quantization_config(Path("configs/quantization/qwen36_27b_nvfp4_modelopt.yaml"))
         source = resolve_source(

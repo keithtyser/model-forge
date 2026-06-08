@@ -299,6 +299,18 @@ def sanitize_relative_subpath(value: str) -> Path:
     return Path(*parts) if parts else Path("output")
 
 
+# Quant method -> the ModelOpt qformat that exports it. nvfp4 needs Blackwell FP4; fp8 needs
+# Hopper/Ada; int8 (SmoothQuant) and int4 AWQ run on Ampere+ -- so every modern NVIDIA GPU has a
+# real path. All are produced by the same ModelOpt hf_ptq exporter.
+_METHOD_QFORMAT = {
+    "nvfp4": "nvfp4",
+    "fp8": "fp8",
+    "fp8_w8a8": "fp8",
+    "int8": "int8_sq",
+    "awq": "int4_awq",
+}
+
+
 def method_notes(method: str, backend: str) -> list[str]:
     notes = []
     if method == "nvfp4_runtime":
@@ -312,6 +324,12 @@ def method_notes(method: str, backend: str) -> list[str]:
     elif method == "fp8_w8a8":
         notes.append("FP8 W8A8 checkpoint creation must record calibration data, backend versions, exported loader format, and source deltas.")
         notes.append("Promotion requires source-vs-FP8 W8A8 serving and sampled behavior evidence for the same family/variant.")
+    elif method == "int8":
+        notes.append("INT8 SmoothQuant (W8A8) runs on Ampere+ where FP8/NVFP4 are unavailable; record calibration + source deltas.")
+        notes.append("Promotion requires source-vs-INT8 serving and sampled behavior evidence for the same family/variant.")
+    elif method == "awq":
+        notes.append("INT4 AWQ (weight-only) runs broadly on Ampere+; record calibration, exported loader format, and source deltas.")
+        notes.append("Promotion requires source-vs-AWQ serving and sampled behavior evidence for the same family/variant.")
     elif method.startswith("gguf"):
         notes.append("GGUF export must preserve tokenizer/chat-template metadata and prove llama.cpp load plus benchmark evidence.")
         notes.append("Promotion requires comparing the GGUF candidate against the same source variant with behavior and tokenizer reports.")
@@ -369,8 +387,9 @@ def build_modelopt_export_command(
     env = env or os.environ
     if config.backend != "modelopt":
         raise ValueError(f"export currently supports backend=modelopt, got {config.backend!r}")
-    if config.method not in {"nvfp4", "fp8", "fp8_w8a8"}:
-        raise ValueError(f"export currently supports nvfp4/fp8 ModelOpt recipes, got {config.method!r}")
+    if config.method not in _METHOD_QFORMAT:
+        raise ValueError(
+            f"export supports {sorted(_METHOD_QFORMAT)} ModelOpt recipes, got {config.method!r}")
 
     export = dict(config.export)
     docker = dict(export.get("docker") or {})
@@ -390,7 +409,7 @@ def build_modelopt_export_command(
     container_output = f"{container_output_root}/{output_path.name}"
     image = str(export.get("image") or "model-forge-modelopt-nvfp4:0.43.0")
     container_name = sanitize_run_id(f"model_forge_quantize_{run_id}")
-    qformat = str(ptq.get("qformat") or ("fp8" if config.method.startswith("fp8") else "nvfp4"))
+    qformat = str(ptq.get("qformat") or _METHOD_QFORMAT.get(config.method) or "nvfp4")
     recipe = str(ptq.get("recipe") or "")
     strategy = str(ptq.get("strategy") or export.get("strategy") or "hf_ptq")
     batch_size = int(ptq.get("batch_size") or config.calibration.get("batch_size") or 1)
