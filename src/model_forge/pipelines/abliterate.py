@@ -1061,6 +1061,28 @@ def missing_direction_layers(edit: dict[str, Any], directions: dict[int, Any]) -
     return [layer for layer in configured_target_layers(edit) if layer not in directions]
 
 
+def align_edit_layers_to_directions(edit: dict[str, Any], directions: dict[int, Any]) -> None:
+    """Clamp/derive the edit layer window to the layers that actually have collected
+    directions. Without this, an edit window wider than what collection produced makes export
+    refuse AFTER the (expensive) collection step. Deriving when unset and clamping otherwise
+    means a run edits exactly the layers it has directions for. Mutates ``edit`` in place."""
+    available = sorted(int(k) for k in directions)
+    if not available:
+        return
+    lo, hi = available[0], available[-1]
+    cur_start = edit.get("layer_start")
+    cur_end = edit.get("layer_end")
+    new_start = lo if cur_start is None else max(int(cur_start), lo)
+    new_end = hi if cur_end is None else min(int(cur_end), hi)
+    if (cur_start, cur_end) != (new_start, new_end):
+        console.print(
+            f"[yellow]aligning edit layers to collected directions: layer_start "
+            f"{cur_start}->{new_start}, layer_end {cur_end}->{new_end} (directions cover {lo}..{hi})[/yellow]"
+        )
+    edit["layer_start"] = new_start
+    edit["layer_end"] = new_end
+
+
 def projection_target_layers(weight_map: dict[str, str], edit: dict[str, Any]) -> list[int]:
     layers = {
         layer
@@ -5524,6 +5546,7 @@ def export_projection(
     weight_map = index["weight_map"]
     artifact = load_direction_artifact(directions_path)
     directions = artifact["refusal_directions"]
+    align_edit_layers_to_directions(edit, directions)
     missing_layers = missing_direction_layers(edit, directions)
     if missing_layers and edit.get("require_all_target_directions", True):
         raise SystemExit(

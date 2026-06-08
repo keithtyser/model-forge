@@ -21,6 +21,7 @@ from model_forge.pipelines.abliterate import (
     _projection_delta,
     _progress_every,
     abliterix_execution_spec,
+    align_edit_layers_to_directions,
     apostate_execution_spec,
     analyze_abliterix_search_journal,
     analyze_heretic_search_journal,
@@ -3086,6 +3087,25 @@ class AbliterationPlanTests(unittest.TestCase):
         edit = {"layer_start": 5, "layer_end": 29}
         directions = {layer: object() for layer in range(5, 29)}
         self.assertEqual(missing_direction_layers(edit, directions), [29])
+
+    def test_align_edit_layers_clamps_window_to_collected(self) -> None:
+        # the field bug: edit targets 4..24 but collection only produced 4..21
+        directions = {layer: object() for layer in range(4, 22)}
+        edit = {"layer_start": 4, "layer_end": 24}
+        align_edit_layers_to_directions(edit, directions)
+        self.assertEqual((edit["layer_start"], edit["layer_end"]), (4, 21))
+        self.assertEqual(missing_direction_layers(edit, directions), [])
+
+    def test_align_edit_layers_derives_window_when_unset(self) -> None:
+        directions = {layer: object() for layer in range(4, 22)}
+        edit = {}
+        align_edit_layers_to_directions(edit, directions)
+        self.assertEqual((edit["layer_start"], edit["layer_end"]), (4, 21))
+
+    def test_align_edit_layers_noop_without_directions(self) -> None:
+        edit = {"layer_start": 4, "layer_end": 24}
+        align_edit_layers_to_directions(edit, {})
+        self.assertEqual((edit["layer_start"], edit["layer_end"]), (4, 24))
 
     def test_module_strengths_and_layer_multipliers_compose(self) -> None:
         edit = {
